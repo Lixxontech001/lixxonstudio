@@ -51,7 +51,7 @@ export default function CTA() {
           </MagneticButton>
 
           <MagneticButton
-            href="https://wa.me/?text=Hi%20Lixxon%20Studio!%20I'd%20like%20to%20discuss%20my%20website."
+            href="https://wa.me/2349040057383?text=Hi%20Lixxon%20Studio!%20I'd%20like%20to%20discuss%20my%20website."
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-3 px-8 py-5 glass border border-white/20 text-white font-semibold text-lg rounded-2xl hover:bg-white/15 transition-all duration-300"
