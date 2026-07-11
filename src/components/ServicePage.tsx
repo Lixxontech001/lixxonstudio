@@ -62,14 +62,14 @@ export default function ServicePage({ slug }: { slug: string }) {
 
               <div className="flex flex-col sm:flex-row gap-4">
                 <a
-                  href="#free-preview"
+                  href="https://wa.me/2349040057383?text=Hi%20Lixxon%20Studio!%20I'd%20like%20a%20free%20homepage%20preview%20for%20my%20business"
                   className="group inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-accent-500 to-secondary-500 text-white font-semibold rounded-2xl shadow-xl shadow-accent-500/30 hover:shadow-accent-500/50 hover:-translate-y-1 transition-all duration-300"
                 >
                   <span>Get My Free Homepage Preview</span>
                   <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                 </a>
                 <a
-                  href="https://wa.me/?text=Hi%20Lixxon%20Studio!%20I'm%20interested%20in%20your%20"
+                  href="https://wa.me/2349040057383?text=Hi%20Lixxon%20Studio!%20I'm%20interested%20in%20your%20"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 glass border border-white/20 text-white font-semibold rounded-2xl hover:bg-white/15 transition-all duration-300"
@@ -303,7 +303,7 @@ export default function ServicePage({ slug }: { slug: string }) {
             Get a free homepage preview for your {service.title.toLowerCase()} project. No commitment, no pressure.
           </p>
           <a
-            href="https://wa.me/?text=Hi%20Lixxon%20Studio!%20I'd%20like%20a%20free%20homepage%20preview%20for%20my%20business."
+            href="https://wa.me/2349040057383?text=Hi%20Lixxon%20Studio!%20I'd%20like%20a%20free%20homepage%20preview%20for%20my%20business."
             target="_blank"
             rel="noopener noreferrer"
             className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-primary font-bold text-lg rounded-2xl shadow-2xl hover:-translate-y-1 transition-all duration-300"
