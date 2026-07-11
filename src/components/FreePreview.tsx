@@ -87,7 +87,7 @@ export default function FreePreview() {
             </div>
 
             <MagneticButton
-              href="https://wa.me/?text=Hi%20Lixxon%20Studio!%20I'd%20like%20a%20free%20homepage%20preview%20for%20my%20business."
+              href="https://www.facebook.com/profile.php?id=61591696896659&mibextid=ZbWKwL"
               target="_blank"
               rel="noopener noreferrer"
               className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-accent-500 to-secondary-500 text-white font-semibold rounded-2xl shadow-xl shadow-accent-500/30 hover:shadow-accent-500/50 transition-all duration-300"
