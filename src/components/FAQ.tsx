@@ -73,7 +73,7 @@ export default function FAQ() {
         <div className={`mt-12 text-center section-reveal reveal-delay-4 ${isVisible ? 'revealed' : ''}`}>
           <p className="text-gray-500">Still have questions?</p>
           <a
-            href="https://wa.me/?text=Hi%20Lixxon%20Studio!%20I%20have%20a%20question."
+            href="https://wa.me/2349040057383?text=Hi%20Lixxon%20Studio!%20I%20have%20a%20question."
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-flex items-center gap-2 text-accent-600 font-semibold hover:underline"
