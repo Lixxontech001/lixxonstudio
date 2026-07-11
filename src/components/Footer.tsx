@@ -42,9 +42,9 @@ export default function Footer() {
 
             <div className="flex items-center gap-3">
               {[
-                { icon: Facebook, href: '#', label: 'Facebook' },
+                { icon: Facebook, href: 'https://www.facebook.com/profile.php?id=61591696896659&mibextid=ZbWKwL', label: 'Facebook' },
                 { icon: Instagram, href: '#', label: 'Instagram' },
-                { icon: MessageCircle, href: 'https://wa.me/', label: 'WhatsApp' },
+                { icon: MessageCircle, href: 'https://wa.me/2349040057383', label: 'WhatsApp' },
               ].map(({ icon: Icon, href, label }) => (
                 <a
                   key={label}
@@ -101,18 +101,18 @@ export default function Footer() {
             <h4 className="font-semibold text-sm tracking-widest uppercase text-white/40 mb-5">Get In Touch</h4>
 
             <div className="space-y-4 mb-6">
-              <a href="mailto:hello@lixxonstudio.com" className="flex items-center gap-3 group">
+              <a href="mailto:lixxonstudio@gmail.com" className="flex items-center gap-3 group">
                 <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-accent-500 group-hover:border-accent-500 transition-all">
                   <Mail size={15} className="text-white/50 group-hover:text-white transition-colors" />
                 </div>
                 <div>
                   <div className="text-white/30 text-[10px] uppercase tracking-wider">Email</div>
-                  <div className="text-white/70 text-sm group-hover:text-white transition-colors">hello@lixxonstudio.com</div>
+                  <div className="text-white/70 text-sm group-hover:text-white transition-colors">lixxonstudio@gmail.com</div>
                 </div>
               </a>
 
               <a
-                href="https://wa.me/?text=Hi%20Lixxon%20Studio!"
+                href="https://wa.me/2349040057383?text=Hi%20Lixxon%20Studio!"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 group"
@@ -143,7 +143,7 @@ export default function Footer() {
           </p>
           <div className="flex items-center gap-1 text-white/20 text-xs">
             <span>Crafted with</span>
-            <span className="text-rose-400 mx-1">heart</span>
+            <span className="text-rose-400 mx-1">Unity</span>
             <span>for businesses who deserve better.</span>
           </div>
           <div className="flex items-center gap-4">
