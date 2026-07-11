@@ -287,7 +287,7 @@ export default function ProjectPage({ slug }: { slug: string }) {
             Get a free homepage preview for your business today. No commitment, no pressure.
           </p>
           <a
-            href="https://wa.me/?text=Hi%20Lixxon%20Studio!%20I'd%20like%20a%20free%20homepage%20preview%20for%20my%20business."
+            href="https://wa.me/2349040057383?text=Hi%20Lixxon%20Studio!%20I'd%20like%20a%20free%20homepage%20preview%20for%20my%20business."
             target="_blank"
             rel="noopener noreferrer"
             className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-primary font-bold text-lg rounded-2xl shadow-2xl hover:-translate-y-1 transition-all duration-300"
