@@ -4,6 +4,7 @@ import Footer from './components/Footer';
 import { HomePage, CategoryPage, AboutPage, PrivacyPage, TermsPage, ContactPage } from './components/Pages';
 import ArticleReader from './components/ArticleReader';
 import NotFoundPage from './components/NotFoundPage';
+import { Analytics } from '@vercel/analytics/react';
 
 export default function App() {
   const { route } = useNavigation();
@@ -36,6 +37,7 @@ export default function App() {
       <Header />
       {renderPage()}
       <Footer />
+      <Analytics />
     </div>
   );
 }
