@@ -70,7 +70,7 @@ export default function Hero({ featuredPosts }: { featuredPosts: PostWithRelatio
           >
             <span className="text-xs md:text-sm tracking-editorial uppercase font-medium">Read Feature Story</span>
             <span className="w-10 md:w-12 h-[1px] bg-charcoal group-hover:w-16 md:group-hover:w-20 group-hover:bg-bronze transition-all duration-500" />
-            <ArrowRight size={18 md:20} strokeWidth={1.5} className="group-hover:translate-x-1 transition-transform duration-300" />
+            <ArrowRight size={18} strokeWidth={1.5} className="group-hover:translate-x-1 transition-transform duration-300" />
           </button>
 
           {/* Secondary picks */}
