@@ -1,5 +1,6 @@
 import { HelmetProvider } from 'react-helmet-async';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { useNavigation } from './context/NavigationContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
