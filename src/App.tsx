@@ -1,6 +1,6 @@
 import { HelmetProvider } from 'react-helmet-async';
 import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/next';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { useNavigation } from './context/NavigationContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -69,6 +69,7 @@ export default function App() {
         {renderPage()}
         <Footer />
         <Analytics />
+        <SpeedInsights />
       </div>
     </HelmetProvider>
   );
