@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, rows } from '../lib/supabaseClient';
 import type { Product, ShopCategory, Collection, Order, DownloadEntitlement, NewsletterSubscriber } from '../lib/types';
 
 // ==================== PUBLIC COMMERCE HOOKS ====================
@@ -185,7 +185,7 @@ export function useArticleProducts(postId: string | null) {
         .eq('post_id', postId)
         .order('sort_order', { ascending: true });
       if (cancelled) return;
-      const items = (data || []).map((r: { product: Product }) => r.product).filter(Boolean) as Product[];
+      const items = rows<{ product: Product | null }>(data).map((r) => r.product).filter((p): p is Product => !!p);
       setProducts(items);
       setLoading(false);
     };
@@ -201,51 +201,42 @@ export function useArticleProducts(postId: string | null) {
 export function useCustomerOrders(email: string | null) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!email) { setLoading(false); return; }
-    let cancelled = false;
-    const fetch = async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from('orders')
-        .select('*, items:order_items(*)')
-        .eq('customer_email', email)
-        .order('created_at', { ascending: false });
-      if (cancelled) return;
-      setOrders((data || []) as Order[]);
-      setLoading(false);
-    };
-    fetch();
-    return () => { cancelled = true; };
+  const fetchOrders = useCallback(async () => {
+    if (!email) { setOrders([]); setLoading(false); return; }
+    setLoading(true);
+    // RLS: orders_self_read — the JWT email must match; the filter below is only an optimisation
+    const { data, error: qErr } = await supabase
+      .from('orders')
+      .select('*, items:order_items(*)')
+      .order('created_at', { ascending: false });
+    setOrders((data || []) as Order[]);
+    setError(qErr?.message || null);
+    setLoading(false);
   }, [email]);
 
-  return { orders, loading };
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  return { orders, loading, error, refetch: fetchOrders };
 }
 
 export function useDownloadEntitlements(email: string | null) {
   const [entitlements, setEntitlements] = useState<DownloadEntitlement[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!email) { setLoading(false); return; }
-    let cancelled = false;
-    const fetch = async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from('download_entitlements')
-        .select('*, product:products(*)')
-        .eq('customer_email', email)
-        .order('created_at', { ascending: false });
-      if (cancelled) return;
-      setEntitlements((data || []) as DownloadEntitlement[]);
-      setLoading(false);
-    };
-    fetch();
-    return () => { cancelled = true; };
+  const fetchEnts = useCallback(async () => {
+    if (!email) { setEntitlements([]); setLoading(false); return; }
+    setLoading(true);
+    const { data } = await supabase
+      .from('download_entitlements')
+      .select('*, product:products(id, name, slug, image_url)')
+      .order('created_at', { ascending: false });
+    setEntitlements((data || []) as DownloadEntitlement[]);
+    setLoading(false);
   }, [email]);
 
-  return { entitlements, loading };
+  useEffect(() => { fetchEnts(); }, [fetchEnts]);
+  return { entitlements, loading, refetch: fetchEnts };
 }
 
 export function trackArticleView(postId: string) {
@@ -387,7 +378,7 @@ export function useAdminAnalytics() {
       const [viewsR, likesR, commentsR, clicksR] = await Promise.all([
         supabase.from('article_views').select('*', { count: 'exact', head: true }),
         supabase.from('article_likes').select('*', { count: 'exact', head: true }),
-        supabase.from('comments').select('*', { count: 'exact', head: true }),
+        supabase.from('admin_comments').select('id', { count: 'exact', head: true }),
         supabase.from('product_clicks').select('*', { count: 'exact', head: true }),
       ]);
 
@@ -399,7 +390,7 @@ export function useAdminAnalytics() {
         .limit(500);
 
       const viewCounts = new Map<string, { title: string; slug: string; views: number }>();
-      (topData || []).forEach((r: { post_id: string; post?: { title: string; slug: string } }) => {
+      rows<{ post_id: string; post?: { title: string; slug: string } | null }>(topData).forEach((r) => {
         if (!r.post_id || !r.post) return;
         const existing = viewCounts.get(r.post_id);
         if (existing) {

@@ -47,6 +47,67 @@ export interface Post {
   updated_at: string;
   category?: Category | null;
   author?: Author | null;
+  // v3
+  takeaways?: string[] | null;
+  alt_title?: string | null;
+  faq?: { q: string; a: string }[] | null;
+  series_id?: string | null;
+  series_order?: number | null;
+  allow_comments?: boolean;
+  view_count?: number;
+}
+
+export interface ArticleSeries {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  cover_image: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface GlossaryTerm {
+  id: string;
+  term: string;
+  slug: string;
+  definition: string;
+  category: string | null;
+  created_at: string;
+}
+
+export interface ArticleQuestion {
+  id: string;
+  post_id: string;
+  author_name: string;
+  author_email?: string;
+  question: string;
+  answer: string | null;
+  answered_by: string | null;
+  answered_at: string | null;
+  is_public: boolean;
+  upvotes: number;
+  created_at: string;
+}
+
+export interface UserProfile {
+  user_id: string;
+  display_name: string | null;
+  handle: string | null;
+  bio: string | null;
+  is_public: boolean;
+  preferred_categories: string[];
+  font_size: string;
+  theme: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SiteSetting {
+  key: string;
+  value: Record<string, unknown>;
+  is_public: boolean;
+  updated_at?: string;
 }
 
 export interface MediaItem {
@@ -105,6 +166,23 @@ export interface Product {
   disclosure_text: string | null;
   created_at: string;
   tags: string[] | null;
+  // v3
+  price_cents?: number | null;
+  pay_what_you_want?: boolean;
+  min_price_cents?: number | null;
+  compare_attributes?: Record<string, string | number | boolean> | null;
+  stock_status?: 'in_stock' | 'low' | 'out_of_stock' | 'coming_soon';
+  gallery?: string[] | null;
+}
+
+export interface ProductBundle {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  bundle_price: number;
+  is_active: boolean;
+  items?: { product: Product }[];
 }
 
 export interface Comment {
@@ -162,6 +240,13 @@ export interface Order {
   payment_provider: string;
   amount: number;
   currency: string;
+  subtotal?: number | null;
+  discount_amount?: number;
+  promo_code?: string | null;
+  gift_card_code?: string | null;
+  gift_card_amount?: number;
+  paid_at?: string | null;
+  meta?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   items?: OrderItem[];
@@ -235,7 +320,7 @@ export interface PromoCode {
 export interface ProductReview {
   id: string;
   product_id: string;
-  customer_email: string;
+  customer_email?: string; // admin-only (column revoked from public roles)
   author_name: string;
   rating: number;
   content: string | null;

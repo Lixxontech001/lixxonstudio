@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, rows } from '../lib/supabaseClient';
+import { submitForm } from '../lib/api';
 
 // ==================== FINGERPRINT (shared) ====================
 function getFingerprint(): string {
@@ -16,13 +17,15 @@ function getFingerprint(): string {
 
 // ==================== READING LISTS ====================
 export function useReadingLists() {
-  const [lists, setLists] = useState<{ id: string; name: string; description: string | null; is_public: boolean; created_at: string }[]>([]);
+  const [lists, setLists] = useState<{ id: string; name: string; description: string | null; is_public: boolean; share_token: string | null; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(async () => {
     setLoading(true);
     const fp = getFingerprint();
-    const { data } = await supabase.from('reading_lists').select('*').eq('fingerprint', fp).order('created_at', { ascending: false });
+    const { data: { session } } = await supabase.auth.getSession();
+    const q = supabase.from('reading_lists').select('*').order('created_at', { ascending: false });
+    const { data } = await (session?.user ? q.or(`fingerprint.eq.${fp},user_id.eq.${session.user.id}`) : q.eq('fingerprint', fp));
     setLists((data || []) as typeof lists);
     setLoading(false);
   }, []);
@@ -31,7 +34,8 @@ export function useReadingLists() {
 
   const createList = useCallback(async (name: string, description?: string) => {
     const fp = getFingerprint();
-    const { data, error } = await supabase.from('reading_lists').insert({ fingerprint: fp, name: name.trim(), description: description?.trim() || null }).select().single();
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data, error } = await supabase.from('reading_lists').insert({ fingerprint: fp, name: name.trim(), description: description?.trim() || null, user_id: session?.user?.id || null }).select().single();
     if (!error && data) { await refetch(); return data; }
     return null;
   }, [refetch]);
@@ -57,7 +61,7 @@ export function useReadingListItems(listId: string | null) {
         .select('id, post_id, sort_order, post:posts(id, title, slug, cover_image, excerpt, reading_time_minutes)')
         .eq('list_id', listId).order('sort_order', { ascending: true });
       if (cancelled) return;
-      setItems((data || []) as typeof items);
+      setItems(rows<typeof items[number]>(data));
       setLoading(false);
     };
     fetch();
@@ -284,13 +288,12 @@ export function useSubmitFeedback() {
   const submit = useCallback(async (type: string, message: string, email?: string) => {
     setSubmitting(true); setSuccess(false);
     const fp = getFingerprint();
-    const { error } = await supabase.from('user_feedback').insert({
-      type, message: message.trim(), email: email?.trim() || null, fingerprint: fp,
-      page_url: window.location.href,
-    });
-    setSubmitting(false);
-    if (!error) { setSuccess(true); return true; }
-    return false;
+    try {
+      await submitForm('feedback', { type, message: message.trim(), email: email?.trim() || null, fingerprint: fp, page_url: window.location.href });
+      setSubmitting(false); setSuccess(true); return true;
+    } catch {
+      setSubmitting(false); return false;
+    }
   }, []);
 
   return { submit, submitting, success };
@@ -485,7 +488,7 @@ export function useAdminProductReviews() {
 
   const refetch = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('product_reviews').select('*, product:products(name)').order('created_at', { ascending: false });
+    const { data } = await supabase.from('admin_reviews').select('*, product:products(name)').order('created_at', { ascending: false });
     setReviews((data || []) as typeof reviews);
     setLoading(false);
   }, []);
@@ -562,7 +565,7 @@ export function useAdminRefundRequests() {
 
 // ==================== ADMIN: ABANDONED CARTS ====================
 export function useAdminAbandonedCarts() {
-  const [carts, setCarts] = useState<{ id: string; fingerprint: string; cart_data: string; email: string | null; recovered: boolean; created_at: string }[]>([]);
+  const [carts, setCarts] = useState<{ id: string; fingerprint: string; cart_data: string; email: string | null; recovered: boolean; created_at: string; updated_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(async () => {
@@ -707,7 +710,7 @@ export function useMostReadThisWeek() {
       if (cancelled) return;
       const viewCount: Record<string, number> = {};
       const postMap: Record<string, { id: string; title: string; slug: string; cover_image: string | null; category: { name: string; slug: string } | null }> = {};
-      (data || []).forEach((v: { post_id: string; post: { id: string; title: string; slug: string; cover_image: string | null; category: { name: string; slug: string } | null } }) => {
+      rows<{ post_id: string; post: { id: string; title: string; slug: string; cover_image: string | null; category: { name: string; slug: string } | null } | null }>(data).forEach((v) => {
         if (!v.post) return;
         viewCount[v.post_id] = (viewCount[v.post_id] || 0) + 1;
         postMap[v.post_id] = v.post;

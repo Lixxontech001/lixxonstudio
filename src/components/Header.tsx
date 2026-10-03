@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Menu, X, ShoppingBag, Heart, User, Moon, Sun, Bookmark, Clock, Calendar, List } from 'lucide-react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useNavigation, Link } from '../context/NavigationContext';
 import { useCategories } from '../hooks/useSupabase';
 import { useCart } from '../context/CartContext';
@@ -19,6 +20,8 @@ export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
+  const mobilePanelRef = useFocusTrap<HTMLDivElement>(mobileOpen, closeMobile);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { suggestions, loading: suggestionsLoading } = useLiveSearch(searchQuery);
@@ -233,7 +236,13 @@ export default function Header() {
           onClick={() => setMobileOpen(false)}
         />
         <div
-          className={`absolute top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white flex flex-col transition-transform duration-400 ${mobileOpen ? 'translate-x-0' : 'translate-x-full'} dark:bg-charcoal`}
+          ref={mobilePanelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu"
+          aria-hidden={!mobileOpen}
+          tabIndex={-1}
+          className={`absolute top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white flex flex-col transition-transform duration-400 outline-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'} dark:bg-charcoal`}
         >
           <div className="flex items-center justify-between p-6 border-b border-taupe/40 dark:border-white/10">
             <Logo showText={false} />

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import {useEffect, useState, useMemo} from 'react';
 import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { usePostBySlug, usePosts } from '../hooks/useSupabase';
@@ -18,15 +18,25 @@ import EmailArticleButton from './EmailArticleButton';
 import RandomArticleButton from './RandomArticleButton';
 import { trackSocialShare } from '../hooks/usePlatform';
 import { trackArticleView } from '../hooks/useCommerce';
-import { recordReadingHistory, useReadingStreak, getFingerprint } from '../hooks/useFeatures';
+import {recordReadingHistory, useReadingStreak} from '../hooks/useFeatures';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { Helmet } from 'react-helmet-async';
 import type { PostWithRelations } from '../lib/types';
+import { renderMarkdown } from '../lib/markdown';
+import { useGlossary } from '../hooks/useGlossary';
+import { useNavigation } from '../context/NavigationContext';
+import { useCloudBookmarks, pickHeadline, trackHeadline, useSiteSettings } from '../hooks/useV3';
+import KeyTakeaways from './article/KeyTakeaways';
+import SeriesNav from './article/SeriesNav';
+import AskEditor from './article/AskEditor';
+import ShareQuote from './article/ShareQuote';
+import ArticleFaq from './article/ArticleFaq';
 
 export default function ArticleReader({ slug }: { slug: string }) {
   const { post, loading } = usePostBySlug(slug);
   const { posts } = usePosts();
+  const { glossary } = useGlossary();
   const [copied, setCopied] = useState(false);
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState('');
@@ -37,8 +47,41 @@ export default function ArticleReader({ slug }: { slug: string }) {
   const { showToast } = useToast();
   const { fontSize, setFontSize } = useFontSize();
   const { recordReadingDay } = useReadingStreak();
+  const { navigate } = useNavigation();
+  const { toggle: toggleCloudBookmark } = useCloudBookmarks();
+  const flags = (useSiteSettings().features || {}) as Record<string, boolean>;
 
-  useEffect(() => { window.scrollTo(0, 0); }, [slug]);
+  // "Continue reading": restore the last scroll position for this article (kept for 7 days)
+  useEffect(() => {
+    if (loading || !post) return;
+    let y = 0;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(`resume_${post.id}`) || localStorage.getItem(`resume_${post.id}`) || 'null');
+      if (saved && Date.now() - saved.t < 7 * 864e5 && saved.y > 400) y = saved.y;
+    } catch { /* ignore */ }
+    window.scrollTo(0, 0);
+    if (y) {
+      const id = window.setTimeout(() => { window.scrollTo({ top: y, behavior: 'smooth' }); showToast('Resumed where you left off', 'info'); }, 350);
+      return () => window.clearTimeout(id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post?.id, loading]);
+
+  useEffect(() => {
+    if (!post) return;
+    const save = () => {
+      const y = window.scrollY;
+      const doc = document.documentElement;
+      const done = y + window.innerHeight >= doc.scrollHeight - 200;
+      try {
+        if (done) { localStorage.removeItem(`resume_${post.id}`); }
+        else localStorage.setItem(`resume_${post.id}`, JSON.stringify({ y, t: Date.now() }));
+      } catch { /* quota */ }
+    };
+    const t = window.setInterval(save, 4000);
+    window.addEventListener('beforeunload', save);
+    return () => { window.clearInterval(t); window.removeEventListener('beforeunload', save); save(); };
+  }, [post]);
 
   useEffect(() => {
     if (post) {
@@ -52,8 +95,10 @@ export default function ArticleReader({ slug }: { slug: string }) {
         tags: post.tags,
         cover_image: post.cover_image,
       });
-      recordReadingDay();
+      recordReadingDay(post.id);
       setTimeRemaining(post.reading_time_minutes);
+      const hl = pickHeadline(post);
+      if (post.alt_title) trackHeadline(post.id, hl.variant, 'click');
     }
   }, [post, recordReadingDay]);
 
@@ -104,6 +149,20 @@ export default function ArticleReader({ slug }: { slug: string }) {
       });
   }, [post]);
 
+  useEffect(() => {
+    if (!post) return;
+    const onKey = (e: Event) => {
+      const key = (e as CustomEvent<string>).detail;
+      if (key === 'b') { document.getElementById('bookmark-btn')?.click(); return; }
+      const idx = posts.findIndex(p => p.id === post.id);
+      if (idx === -1) return;
+      const target = key === 'j' ? posts[idx + 1] : key === 'k' ? posts[idx - 1] : null;
+      if (target) navigate({ name: 'article', slug: target.slug });
+    };
+    window.addEventListener('lixxon:key', onKey);
+    return () => window.removeEventListener('lixxon:key', onKey);
+  }, [post, posts, navigate]);
+
   const recommended = useMemo(() => {
     if (!post) return [];
     return getRecommended(post, posts, 4);
@@ -141,8 +200,12 @@ export default function ArticleReader({ slug }: { slug: string }) {
     const isBookmarked = localStorage.getItem(key) === '1';
     if (isBookmarked) {
       localStorage.removeItem(key);
+      const saved = JSON.parse(localStorage.getItem('lixxon_bookmarks') || '[]').filter((s: { id: string }) => s.id !== post.id);
+      localStorage.setItem('lixxon_bookmarks', JSON.stringify(saved));
+      toggleCloudBookmark(post.id, false);
       setBookmarked(false);
     } else {
+      toggleCloudBookmark(post.id, true);
       localStorage.setItem(key, '1');
       const saved = JSON.parse(localStorage.getItem('lixxon_bookmarks') || '[]');
       if (!saved.find((s: { id: string }) => s.id === post.id)) {
@@ -154,58 +217,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
     }
   };
 
-  const renderContent = (content: string | null) => {
-    if (!content) return '';
-    const lines = content.split('\n');
-    const html: string[] = [];
-    let inUl = false, inOl = false;
-    const closeLists = () => {
-      if (inUl) { html.push('</ul>'); inUl = false; }
-      if (inOl) { html.push('</ol>'); inOl = false; }
-    };
-    const inline = (text: string): string =>
-      text.replace(/!\[(.+?)\]\((.+?)\)/g, '<img src="$2" alt="$1" loading="lazy" />')
-          .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" rel="noopener noreferrer">$1</a>')
-          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\*(.+?)\*/g, '<em>$1</em>')
-          .replace(/`(.+?)`/g, '<code>$1</code>');
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) { closeLists(); continue; }
-      if (trimmed.startsWith('---')) {
-        closeLists();
-        html.push('<hr />');
-      } else if (trimmed.startsWith('# ')) {
-        closeLists();
-        html.push(`<h1>${inline(trimmed.slice(2))}</h1>`);
-      } else if (trimmed.startsWith('## ')) {
-        closeLists();
-        const heading = inline(trimmed.slice(3));
-        const id = heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        html.push(`<h2 id="${id}">${heading}</h2>`);
-      } else if (trimmed.startsWith('### ')) {
-        closeLists();
-        html.push(`<h3>${inline(trimmed.slice(4))}</h3>`);
-      } else if (trimmed.startsWith('> ')) {
-        closeLists();
-        html.push(`<blockquote>${inline(trimmed.slice(2))}</blockquote>`);
-      } else if (/^\d+\.\s/.test(trimmed)) {
-        if (inUl) { html.push('</ul>'); inUl = false; }
-        if (!inOl) { html.push('<ol>'); inOl = true; }
-        html.push(`<li>${inline(trimmed.replace(/^\d+\.\s/, ''))}</li>`);
-      } else if (trimmed.startsWith('- ')) {
-        if (inOl) { html.push('</ol>'); inOl = false; }
-        if (!inUl) { html.push('<ul>'); inUl = true; }
-        html.push(`<li>${inline(trimmed.slice(2))}</li>`);
-      } else {
-        closeLists();
-        html.push(`<p>${inline(trimmed)}</p>`);
-      }
-    }
-    closeLists();
-    return html.join('');
-  };
+  const renderContent = (content: string | null) => renderMarkdown(content, { glossary });
 
   return (
     <article>
@@ -217,11 +229,11 @@ export default function ArticleReader({ slug }: { slug: string }) {
         <meta property="og:description" content={post.excerpt || ''} />
         <meta property="og:url" content={articleUrl} />
         <meta property="og:type" content="article" />
-        {post.cover_image && <meta property="og:image" content={post.cover_image} />}
+        <meta property="og:image" content={post.cover_image || `${window.location.origin}/api/og?slug=${encodeURIComponent(post.slug)}`} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={post.title} />
         <meta name="twitter:description" content={post.excerpt || ''} />
-        {post.cover_image && <meta name="twitter:image" content={post.cover_image} />}
+        <meta name="twitter:image" content={post.cover_image || `${window.location.origin}/api/og?slug=${encodeURIComponent(post.slug)}`} />
         {post.tags && post.tags.length > 0 && (
           <meta name="article:tag" content={post.tags.join(', ')} />
         )}
@@ -236,9 +248,29 @@ export default function ArticleReader({ slug }: { slug: string }) {
           image: post.cover_image,
           datePublished: post.published_at,
           author: { '@type': 'Organization', name: post.author?.name || 'Lixxon Studio' },
-          publisher: { '@type': 'Organization', name: 'Lixxon Studio' },
+          publisher: { '@type': 'Organization', name: 'Lixxon Studio', logo: { '@type': 'ImageObject', url: `${window.location.origin}/icon-512.png` } },
+          mainEntityOfPage: articleUrl,
+          dateModified: post.updated_at,
+          wordCount: post.content ? post.content.split(/\s+/).length : undefined,
         })}</script>
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: window.location.origin },
+            ...(post.category ? [{ '@type': 'ListItem', position: 2, name: post.category.name, item: `${window.location.origin}/category/${post.category.slug}` }] : []),
+            { '@type': 'ListItem', position: post.category ? 3 : 2, name: post.title, item: articleUrl },
+          ],
+        })}</script>
+        {post.faq && post.faq.length > 0 && (
+          <script type="application/ld+json">{JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            mainEntity: post.faq.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+          })}</script>
+        )}
       </Helmet>
+      <ShareQuote postId={post.id} title={post.title} url={articleUrl} />
 
       {/* Reading Progress Bar */}
       <div className="fixed top-0 left-0 right-0 z-50 h-[3px] bg-taupe/20">
@@ -343,7 +375,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
               <Printer size={14} strokeWidth={1.5} />
             </button>
             <div className="w-[1px] h-12 bg-taupe mt-2" />
-            <button onClick={toggleBookmark} className={`w-10 h-10 rounded-full border border-taupe flex items-center justify-center transition-all duration-300 ${bookmarked ? 'bg-bronze text-white border-bronze' : 'text-charcoal-muted hover:text-bronze'}`} aria-label="Bookmark article">
+            <button id="bookmark-btn" onClick={toggleBookmark} aria-pressed={bookmarked} className={`w-10 h-10 rounded-full border border-taupe flex items-center justify-center transition-all duration-300 ${bookmarked ? 'bg-bronze text-white border-bronze' : 'text-charcoal-muted hover:text-bronze'}`} aria-label="Bookmark article">
               <Bookmark size={14} strokeWidth={1.5} fill={bookmarked ? 'currentColor' : 'none'} />
             </button>
           </div>
@@ -376,7 +408,11 @@ export default function ArticleReader({ slug }: { slug: string }) {
               </div>
             )}
 
+            <SeriesNav seriesId={post.series_id} currentPostId={post.id} />
+            <KeyTakeaways items={post.takeaways} />
             <div className={`article-prose max-w-none font-${fontSize}`} dangerouslySetInnerHTML={{ __html: renderContent(post.content) }} />
+            <ArticleFaq faq={post.faq} />
+            <SeriesNav seriesId={post.series_id} currentPostId={post.id} variant="bottom" />
 
             {/* Article Poll */}
             <ArticlePollComponent postId={post.id} />
@@ -460,10 +496,19 @@ export default function ArticleReader({ slug }: { slug: string }) {
           <ShopThisArticle postId={post.id} />
         </div>
 
+        {/* Reader Q&A */}
+        {flags.qa !== false && (
+          <div className="container-narrow">
+            <AskEditor postId={post.id} />
+          </div>
+        )}
+
         {/* Comments */}
-        <div className="container-narrow mt-12">
-          <Comments postId={post.id} />
-        </div>
+        {post.allow_comments !== false && flags.comments !== false && (
+          <div className="container-narrow mt-12">
+            <Comments postId={post.id} />
+          </div>
+        )}
       </div>
 
       {/* Continue Reading - Premium Related Articles */}

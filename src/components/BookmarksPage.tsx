@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Bookmark, ArrowRight, Clock } from 'lucide-react';
-import { Link, useNavigation } from '../context/NavigationContext';
+import { Link } from '../context/NavigationContext';
 import { Helmet } from 'react-helmet-async';
 
 interface BookmarkItem {
@@ -12,8 +12,6 @@ interface BookmarkItem {
 
 export default function BookmarksPage() {
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
-  const { navigate } = useNavigation();
-
   useEffect(() => {
     window.scrollTo(0, 0);
     try {
@@ -22,7 +20,7 @@ export default function BookmarksPage() {
     } catch { /* ignore */ }
   }, []);
 
-  const removeBookmark = (id: string, title: string) => {
+  const removeBookmark = (id: string) => {
     localStorage.removeItem(`bookmark_${id}`);
     const stored = JSON.parse(localStorage.getItem('lixxon_bookmarks') || '[]');
     const filtered = stored.filter((b: BookmarkItem) => b.id !== id);
@@ -68,7 +66,7 @@ export default function BookmarksPage() {
                 </div>
               </Link>
               <button
-                onClick={() => removeBookmark(item.id, item.title)}
+                onClick={() => removeBookmark(item.id)}
                 className="w-9 h-9 rounded-full border border-taupe flex items-center justify-center text-charcoal-muted hover:text-red-500 hover:border-red-300 transition-all flex-shrink-0"
                 aria-label="Remove bookmark"
               >

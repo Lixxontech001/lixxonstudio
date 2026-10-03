@@ -3,7 +3,7 @@ import { Clock, Trash2, BookOpen, ArrowRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { useReadingHistory } from '../hooks/useFeatures';
 import { Helmet } from 'react-helmet-async';
-import EmptyState from './EmptyState';
+
 
 export default function ReadingHistoryPage() {
   const { history, clearHistory } = useReadingHistory();

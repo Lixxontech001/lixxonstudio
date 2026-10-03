@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, Plus, Trash2, X } from 'lucide-react';
+import {ArrowLeft, Save, Plus, X} from 'lucide-react';
 import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
 import type { Post } from '../../lib/types';
@@ -13,13 +13,11 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
   const { navigate } = useNavigation();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [savedId, setSavedId] = useState<string | null>(null);
 
   const [form, setForm] = useState<CollectionForm>({
     title: '', slug: '', description: '', cover_image: '', is_featured: false, is_active: true, sort_order: 0,
   });
 
-  const [articles, setArticles] = useState<Post[]>([]);
   const [articleSearch, setArticleSearch] = useState('');
   const [searchResults, setSearchResults] = useState<Post[]>([]);
   const [selectedArticles, setSelectedArticles] = useState<{ id: string; title: string; sort_order: number }[]>([]);
@@ -30,7 +28,7 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
         if (data) setForm({ title: data.title, slug: data.slug, description: data.description || '', cover_image: data.cover_image || '', is_featured: data.is_featured, is_active: data.is_active, sort_order: data.sort_order || 0 });
       });
       supabase.from('collection_items').select('post_id, sort_order, post:posts(id, title)').eq('collection_id', collectionId).order('sort_order').then(({ data }) => {
-        if (data) setSelectedArticles(data.map((d: { post_id: string; sort_order: number; post: { id: string; title: string } }) => ({ id: d.post_id, title: d.post.title, sort_order: d.sort_order })));
+        if (data) setSelectedArticles((data as unknown as { post_id: string; sort_order: number; post: { id: string; title: string } | null }[]).map((d) => ({ id: d.post_id, title: d.post?.title || 'Untitled', sort_order: d.sort_order })));
       });
     }
   }, [collectionId, isNew]);
@@ -61,7 +59,6 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
         const { data, error: e } = await supabase.from('collections').insert({ ...form, slug }).select().single();
         if (e) throw e;
         id = data.id;
-        setSavedId(id);
       } else {
         const { error: e } = await supabase.from('collections').update({ ...form, slug, updated_at: new Date().toISOString() }).eq('id', collectionId);
         if (e) throw e;

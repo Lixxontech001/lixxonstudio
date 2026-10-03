@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Clock, Calendar, ArrowRight, Mail } from 'lucide-react';
+import {Clock, Calendar, ArrowRight} from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { useWeeklyDigest } from '../hooks/useFeatures';
 import { FeedSkeleton } from './Skeletons';

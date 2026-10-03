@@ -17,6 +17,7 @@ export default function CookieConsent() {
 
   const handleAccept = () => {
     localStorage.setItem(CONSENT_KEY, 'accepted');
+    window.dispatchEvent(new Event('lixxon:consent'));
     setVisible(false);
   };
 
@@ -34,7 +35,7 @@ export default function CookieConsent() {
           <Cookie size={20} className="text-bronze flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm leading-relaxed text-white/80">
-              We use minimal cookies to improve your reading experience. By continuing, you agree to our use of cookies.
+              We use a few essential cookies, and optional analytics cookies only if you accept. Nothing is tracked until you do.
             </p>
             <div className="flex items-center gap-3 mt-4">
               <button
@@ -42,6 +43,9 @@ export default function CookieConsent() {
                 className="px-5 py-2 bg-bronze text-white text-xs tracking-editorial uppercase font-medium rounded-sm hover:bg-bronze-dark transition-all"
               >
                 Accept
+              </button>
+              <button onClick={handleDismiss} className="px-4 py-2 border border-white/20 text-white/70 text-xs tracking-editorial uppercase rounded-sm hover:border-white/50 transition-all">
+                Essential only
               </button>
               <Link to={{ name: 'privacy' }} className="text-xs text-white/50 hover:text-bronze transition-colors" onClick={handleDismiss}>
                 Learn more

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ShoppingBag, Search, Heart, ArrowRight, ExternalLink } from 'lucide-react';
-import { Link, useNavigation } from '../../context/NavigationContext';
+import { Link } from '../../context/NavigationContext';
 import { useShopProducts, useShopCategories, useFeaturedShopProducts } from '../../hooks/useCommerce';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -16,8 +16,6 @@ export default function ShopPage() {
   const { toggleItem, hasItem } = useWishlist();
   const [search, setSearch] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null);
-  const { navigate } = useNavigation();
-
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const filtered = products.filter(p => {

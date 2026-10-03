@@ -1,6 +1,7 @@
 import { useDashboardStats, usePosts } from '../../hooks/useSupabase';
 import { useAdminOrders } from '../../hooks/useCommerce';
 import { useNavigation } from '../../context/NavigationContext';
+import LivePanel from '../components/LivePanel';
 import { FileText, CheckCircle, Clock, Calendar, FolderTree, MessageSquare, Plus, Package, DollarSign } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -44,6 +45,8 @@ export default function AdminDashboard() {
           <Plus size={16} /> New Article
         </button>
       </div>
+
+      <div className="mb-8"><LivePanel /></div>
 
       {loading ? (
         <div className="text-gray-400 text-sm">Loading stats...</div>

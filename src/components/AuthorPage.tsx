@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Clock, ArrowRight, Twitter, Instagram, Linkedin, Globe } from 'lucide-react';
+import {Clock, Twitter, Instagram, Linkedin, Globe} from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { useAuthorPosts } from '../hooks/useFeatures';
 import { HeroSkeleton } from './Skeletons';

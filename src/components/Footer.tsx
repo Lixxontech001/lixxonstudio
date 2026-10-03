@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Loader2 } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
+import CurrencySelector from './CurrencySelector';
 import Logo from './Logo';
-import { supabase } from '../lib/supabaseClient';
+import { submitForm } from '../lib/api';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
@@ -15,8 +16,9 @@ export default function Footer() {
       return;
     }
     setStatus('submitting');
-    const { error } = await supabase.from('newsletter_subscribers').insert({ email: email.trim() });
-    if (error && error.code !== '23505') {
+    try {
+      await submitForm('newsletter', { email: email.trim(), source: 'footer' });
+    } catch {
       setStatus('error');
       return;
     }
@@ -112,6 +114,10 @@ export default function Footer() {
                 Weekly Digest
               </Link>
             </li>
+            <li><Link to={{ name: 'series-index' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Series</Link></li>
+            <li><Link to={{ name: 'glossary' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Glossary</Link></li>
+            <li><Link to={{ name: 'gift-cards' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Gift Cards</Link></li>
+            <li><Link to={{ name: 'order-tracking', orderNumber: '' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Track an Order</Link></li>
             <li>
               <Link to={{ name: 'about' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">
                 About
@@ -143,7 +149,11 @@ export default function Footer() {
       <div className="border-t border-white/10">
         <div className="container-wide py-6 flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-3 text-center sm:text-left">
           <p className="text-white/30 text-xs tracking-wider">© 2026 Lixxon Studio. All rights reserved.</p>
-          <p className="text-white/30 text-xs tracking-wider">Crafted with intention.</p>
+          <div className="flex items-center gap-4">
+            <CurrencySelector />
+            <button onClick={() => window.dispatchEvent(new CustomEvent('lixxon:shortcuts'))} className="hidden sm:inline text-white/30 text-xs tracking-wider hover:text-bronze" aria-label="Keyboard shortcuts">Press ? for shortcuts</button>
+            <p className="text-white/30 text-xs tracking-wider">Crafted with intention.</p>
+          </div>
         </div>
       </div>
     </footer>

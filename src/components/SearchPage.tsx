@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, ArrowRight, Clock, X, History } from 'lucide-react';
+import {Search, ArrowRight, Clock, History} from 'lucide-react';
 import { useNavigation, Link } from '../context/NavigationContext';
 import { useSearchPosts } from '../hooks/useSupabase';
 import { useSearchHistory } from '../hooks/usePlatform';

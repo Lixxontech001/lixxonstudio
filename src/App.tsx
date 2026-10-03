@@ -1,12 +1,12 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { Analytics } from '@vercel/analytics/react';
-import { useNavigation } from './context/NavigationContext';
+import { useNavigation, routeToPath } from './context/NavigationContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import BackToTop from './components/BackToTop';
 import SEO from './components/SEO';
-import { HeroSkeleton, FeedSkeleton } from './components/Skeletons';
+import {FeedSkeleton} from './components/Skeletons';
 import CartDrawer from './components/shop/CartDrawer';
 import CookieConsent from './components/CookieConsent';
 import FeedbackWidget from './components/FeedbackWidget';
@@ -14,8 +14,11 @@ import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ToastProvider } from './context/ToastContext';
+import { ToastProvider, useToast } from './context/ToastContext';
 import { HomePage, CategoryPage, AboutPage, PrivacyPage, TermsPage, ContactPage } from './components/Pages';
+import { SkipLink, AnnouncementBar, MaintenanceGate } from './components/SiteChrome';
+import ShortcutsHelp from './components/ShortcutsHelp';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 const ArticleReader = lazy(() => import('./components/ArticleReader'));
 const ProductDetail = lazy(() => import('./components/ProductDetail'));
@@ -39,13 +42,30 @@ const TagPage = lazy(() => import('./components/TagPage'));
 const WeeklyDigestPage = lazy(() => import('./components/WeeklyDigestPage'));
 const NewsletterPreferencesPage = lazy(() => import('./components/NewsletterPreferencesPage'));
 const ReadingListsPage = lazy(() => import('./components/ReadingListsPage'));
-const MostReadThisWeek = lazy(() => import('./components/MostReadThisWeek'));
+const GiftCardsPage = lazy(() => import('./components/shop/GiftCardsPage'));
+const OrderTrackingPage = lazy(() => import('./components/shop/OrderTrackingPage'));
+const ProductComparisonPage = lazy(() => import('./components/pages/ProductComparisonPage'));
+const SeriesPage = lazy(() => import('./components/pages/SeriesPage'));
+const SeriesIndexPage = lazy(() => import('./components/pages/SeriesPage').then(m => ({ default: m.SeriesIndexPage })));
+const GlossaryPage = lazy(() => import('./components/pages/GlossaryPage'));
+const NewsletterStatusPage = lazy(() => import('./components/pages/NewsletterStatusPage'));
+const AccountProfilePage = lazy(() => import('./components/shop/AccountProfilePage'));
+const AccountRefundsPage = lazy(() => import('./components/shop/AccountRefundsPage'));
+const ReaderProfilePage = lazy(() => import('./components/pages/ReaderProfilePage'));
+const SharedListPage = lazy(() => import('./components/pages/ReaderProfilePage').then(m => ({ default: m.SharedListPage })));
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 
 const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
 
+/** GA only loads after the visitor accepts cookies (consent-gated; see CookieConsent). */
 function GA4() {
-  if (!GA_MEASUREMENT_ID) return null;
+  const [consented, setConsented] = useState(() => localStorage.getItem('lixxon_cookie_consent') === 'accepted');
+  useEffect(() => {
+    const h = () => setConsented(localStorage.getItem('lixxon_cookie_consent') === 'accepted');
+    window.addEventListener('lixxon:consent', h);
+    return () => window.removeEventListener('lixxon:consent', h);
+  }, []);
+  if (!GA_MEASUREMENT_ID || !consented) return null;
   return (
     <>
       <script async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} />
@@ -60,10 +80,16 @@ function LazyFallback() {
 
 function AppContent() {
   const { route } = useNavigation();
-  const routeKey = route.name + (route.slug || '') + (route.tag || '') + (route.page || 1);
+  const routeKey = routeToPath(route);
+  useKeyboardShortcuts();
+  const { showToast } = useToast();
+  useEffect(() => {
+    const h = () => showToast('A new version of Lixxon Studio is available — refresh to update.', 'info');
+    window.addEventListener('lixxon:update-ready', h);
+    return () => window.removeEventListener('lixxon:update-ready', h);
+  }, [showToast]);
 
   useEffect(() => {
-    const key = route.name + (route.slug || '') + (route.tag || '') + (route.page || 1);
     const main = document.querySelector('main');
     if (main) {
       main.classList.remove('page-enter');
@@ -136,6 +162,30 @@ function AppContent() {
         return <NewsletterPreferencesPage />;
       case 'reading-lists':
         return <ReadingListsPage />;
+      case 'gift-cards':
+        return <GiftCardsPage />;
+      case 'order-tracking':
+        return <OrderTrackingPage orderNumber={route.orderNumber} />;
+      case 'product-comparison':
+        return <ProductComparisonPage />;
+      case 'series':
+        return <SeriesPage slug={route.slug} />;
+      case 'series-index':
+        return <SeriesIndexPage />;
+      case 'glossary':
+        return <GlossaryPage />;
+      case 'newsletter-confirm':
+        return <NewsletterStatusPage mode="confirm" token={route.token} />;
+      case 'newsletter-unsubscribe':
+        return <NewsletterStatusPage mode="unsubscribe" token={route.token} />;
+      case 'account-profile':
+        return <AccountProfilePage />;
+      case 'account-refunds':
+        return <AccountRefundsPage />;
+      case 'reader':
+        return <ReaderProfilePage handle={route.handle} />;
+      case 'shared-list':
+        return <SharedListPage token={route.token} />;
       case 'notFound':
         return <NotFoundPage />;
       default:
@@ -144,9 +194,11 @@ function AppContent() {
   };
 
   return (
-    <>
+    <MaintenanceGate>
+      <SkipLink />
       <SEO />
       <GA4 />
+      <AnnouncementBar />
       <Header />
       <Suspense fallback={<LazyFallback />}>
         {renderPage()}
@@ -156,8 +208,9 @@ function AppContent() {
       <CartDrawer />
       <CookieConsent />
       <FeedbackWidget />
+      <ShortcutsHelp />
       <Analytics />
-    </>
+    </MaintenanceGate>
   );
 }
 

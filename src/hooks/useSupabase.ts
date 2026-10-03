@@ -394,8 +394,10 @@ export function useAdminAuthors() {
   return { authors, loading };
 }
 
+export type AdminComment = Comment & { post: { title: string; slug: string } | null };
+
 export function useAdminComments(page: number) {
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<AdminComment[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -406,12 +408,12 @@ export function useAdminComments(page: number) {
       const from = (page - 1) * 20;
       const to = from + 19;
       const { data, count } = await supabase
-        .from('comments')
+        .from('admin_comments')
         .select('*, post:posts(title,slug)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to);
       if (cancelled) return;
-      setComments(data || []);
+      setComments((data || []) as unknown as AdminComment[]);
       setTotal(count || 0);
       setLoading(false);
     };
@@ -469,7 +471,7 @@ export function useDashboardStats() {
         supabase.from('posts').select('*', { count: 'exact', head: true }).eq('status', 'draft'),
         supabase.from('posts').select('*', { count: 'exact', head: true }).eq('status', 'scheduled'),
         supabase.from('categories').select('*', { count: 'exact', head: true }),
-        supabase.from('comments').select('*', { count: 'exact', head: true }).eq('is_approved', false),
+        supabase.from('admin_comments').select('id', { count: 'exact', head: true }).eq('is_approved', false),
       ]);
       if (cancelled) return;
       setStats({

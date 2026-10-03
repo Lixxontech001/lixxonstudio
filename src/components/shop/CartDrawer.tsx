@@ -1,10 +1,12 @@
 import { X, ShoppingBag, Plus, Minus, Trash2 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useNavigation, Link } from '../../context/NavigationContext';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQuantity, subtotal, count } = useCart();
   const { navigate } = useNavigation();
+  const panelRef = useFocusTrap<HTMLDivElement>(isOpen, closeCart);
 
   const handleCheckout = () => {
     closeCart();
@@ -18,7 +20,13 @@ export default function CartDrawer() {
         onClick={closeCart}
       />
       <div
-        className={`absolute top-0 right-0 bottom-0 w-full max-w-md bg-porcelain flex flex-col transition-transform duration-400 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Shopping cart"
+        aria-hidden={!isOpen}
+        tabIndex={-1}
+        className={`absolute top-0 right-0 bottom-0 w-full max-w-md bg-porcelain flex flex-col transition-transform duration-400 outline-none ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="flex items-center justify-between p-6 border-b border-taupe/40">
           <div className="flex items-center gap-2">

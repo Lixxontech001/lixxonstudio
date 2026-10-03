@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import {useState} from 'react';
 import { Star } from 'lucide-react';
 import { useArticleRating } from '../hooks/usePlatform';
 import { useToast } from '../context/ToastContext';

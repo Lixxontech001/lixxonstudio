@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import {useEffect} from 'react';
 import { Heart, ShoppingBag, ArrowRight, Trash2 } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { useCart } from '../../context/CartContext';

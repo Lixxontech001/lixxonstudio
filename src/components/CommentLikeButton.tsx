@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { ThumbsUp } from 'lucide-react';
 import { useCommentLikes } from '../hooks/usePlatform';
 

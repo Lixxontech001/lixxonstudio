@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, Reply, Send, Loader2, AlertCircle, ArrowUpDown } from 'lucide-react';
+import { MessageCircle, Reply, Send, Loader2, AlertCircle, ArrowUpDown, Flag } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { submitForm, ApiError } from '../lib/api';
+import { getFingerprint } from '../hooks/useFeatures';
 import CommentLikeButton from './CommentLikeButton';
 
 interface Comment {
@@ -8,7 +10,7 @@ interface Comment {
   post_id: string;
   parent_id: string | null;
   author_name: string;
-  author_email: string;
+  author_email?: string;
   content: string;
   is_visible: boolean;
   created_at: string;
@@ -43,6 +45,48 @@ function getAvatarColor(name: string): string {
   return avatarColors[hash % avatarColors.length];
 }
 
+function rememberMyComment(id?: string) {
+  if (!id) return;
+  const ids = JSON.parse(localStorage.getItem('lx_my_comments') || '[]') as string[];
+  localStorage.setItem('lx_my_comments', JSON.stringify([...ids, id].slice(-50)));
+}
+
+function EditButton({ comment }: { comment: Comment }) {
+  const mine = (JSON.parse(localStorage.getItem('lx_my_comments') || '[]') as string[]).includes(comment.id);
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(comment.content);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [left, setLeft] = useState(() => Math.max(0, 15 * 60 * 1000 - (Date.now() - new Date(comment.created_at).getTime())));
+  useEffect(() => { if (!mine || left <= 0) return; const t = setInterval(() => setLeft(l => Math.max(0, l - 1000)), 1000); return () => clearInterval(t); }, [mine, left <= 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!mine || left <= 0) return saved ? <span className="text-xs text-charcoal-muted italic">edited</span> : null;
+  const save = async () => {
+    try { await submitForm('comment_edit', { comment_id: comment.id, content: text.trim(), fingerprint: getFingerprint() }); comment.content = text.trim(); setSaved(text.trim()); setOpen(false); }
+    catch (e) { alert(e instanceof ApiError ? e.message : 'Could not save edit.'); }
+  };
+  return (
+    <>
+      <button onClick={() => setOpen(o => !o)} className="text-xs text-charcoal-muted hover:text-bronze transition-colors">Edit ({Math.ceil(left / 60000)}m left)</button>
+      {open && (
+        <div className="w-full mt-2">
+          <textarea value={text} onChange={e => setText(e.target.value)} rows={3} className="w-full bg-white border border-taupe px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze" />
+          <div className="flex gap-3 mt-1"><button onClick={save} className="text-xs text-bronze">Save</button><button onClick={() => setOpen(false)} className="text-xs text-charcoal-muted">Cancel</button></div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ReportButton({ commentId }: { commentId: string }) {
+  const [done, setDone] = useState(() => localStorage.getItem(`reported_${commentId}`) === '1');
+  const report = async () => {
+    const reason = window.prompt('Why are you reporting this comment? (optional)') ;
+    if (reason === null) return;
+    try { await submitForm('comment_report', { comment_id: commentId, reason }); } catch { /* ignore */ }
+    localStorage.setItem(`reported_${commentId}`, '1'); setDone(true);
+  };
+  return <button onClick={report} disabled={done} className="flex items-center gap-1.5 text-xs text-charcoal-muted hover:text-red-600 disabled:opacity-60 transition-colors"><Flag size={12} strokeWidth={1.5} /> {done ? 'Reported' : 'Report'}</button>;
+}
+
 function CommentItem({ comment, postId, onReply }: {
   comment: Comment;
   postId: string;
@@ -53,25 +97,18 @@ function CommentItem({ comment, postId, onReply }: {
   const [replyEmail, setReplyEmail] = useState('');
   const [replyContent, setReplyContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [liked, setLiked] = useState(false);
 
   const handleReplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyName.trim() || !replyContent.trim() || !replyEmail.includes('@')) return;
     setSubmitting(true);
-    const { error } = await supabase.from('comments').insert({
-      post_id: postId,
-      parent_id: comment.id,
-      author_name: replyName.trim(),
-      author_email: replyEmail.trim(),
-      content: replyContent.trim(),
-      is_visible: true,
-    });
-    if (!error) {
+    try {
+      const res = await submitForm<{ id?: string }>('comment', { post_id: postId, parent_id: comment.id, author_name: replyName.trim(), author_email: replyEmail.trim(), content: replyContent.trim(), fingerprint: getFingerprint() });
+      rememberMyComment(res?.id);
       setReplyContent('');
       setShowReplyForm(false);
       onReply();
-    }
+    } catch { /* keep the form open so the reader can retry */ }
     setSubmitting(false);
   };
 
@@ -96,6 +133,8 @@ function CommentItem({ comment, postId, onReply }: {
           >
             <Reply size={13} strokeWidth={1.5} /> Reply
           </button>
+          <ReportButton commentId={comment.id} />
+          <EditButton comment={comment} />
         </div>
 
         {showReplyForm && (
@@ -172,7 +211,7 @@ export default function Comments({ postId }: CommentsProps) {
   const fetchComments = useCallback(async () => {
     const { data, error } = await supabase
       .from('comments')
-      .select('*')
+      .select('id, post_id, parent_id, author_name, content, created_at, edited_at, is_pinned, is_approved, is_visible, admin_reply, report_count')
       .eq('post_id', postId)
       .eq('is_visible', true)
       .order('created_at', { ascending: sortOrder === 'oldest' });
@@ -217,25 +256,18 @@ export default function Comments({ postId }: CommentsProps) {
       return;
     }
     setSubmitting(true);
-    const { error: insertError } = await supabase.from('comments').insert({
-      post_id: postId,
-      parent_id: null,
-      author_name: name.trim(),
-      author_email: email.trim(),
-      content: content.trim(),
-      is_visible: true,
-    });
-
-    setSubmitting(false);
-
-    if (insertError) {
-      setError('Could not post your comment. Please try again.');
+    try {
+      const res = await submitForm<{ id?: string }>('comment', { post_id: postId, parent_id: null, author_name: name.trim(), author_email: email.trim(), content: content.trim(), fingerprint: getFingerprint() });
+      rememberMyComment(res?.id);
+    } catch (err) {
+      setSubmitting(false);
+      setError(err instanceof ApiError ? err.message : 'Could not post your comment. Please try again.');
       return;
     }
-
+    setSubmitting(false);
     setContent('');
     setSuccess(true);
-    setTimeout(() => setSuccess(false), 4000);
+    setTimeout(() => setSuccess(false), 8000);
     fetchComments();
   };
 
@@ -310,7 +342,7 @@ export default function Comments({ postId }: CommentsProps) {
         )}
         {success && (
           <div className="flex items-center gap-2 mt-4 text-sm text-green-600">
-            <MessageCircle size={14} /> Your comment has been posted. Thank you for joining the conversation!
+            <MessageCircle size={14} /> Thank you! Your comment is awaiting moderation and will appear shortly.
           </div>
         )}
       </form>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Gift, Plus, Trash2, Loader2 } from 'lucide-react';
+import {Plus, Trash2, Loader2} from 'lucide-react';
 import { useAdminGiftCards } from '../../hooks/usePlatform';
 
 export default function AdminGiftCards() {

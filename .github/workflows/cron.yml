@@ -1,0 +1,39 @@
+# Free scheduler for things Supabase Free can't trigger over HTTP itself.
+# Secrets needed (Settings → Secrets → Actions): SUPABASE_FUNCTIONS_URL, INTERNAL_FN_SECRET, SITE_URL
+name: Scheduled jobs
+on:
+  schedule:
+    - cron: '*/20 * * * *'   # drain the email queue (Resend free tier: 100/day, fn caps itself)
+    - cron: '15 3 * * *'     # daily: FX rates
+    - cron: '0 */6 * * *'    # keep-alive ping so the free project never pauses
+  workflow_dispatch:
+jobs:
+  send-emails:
+    if: github.event.schedule == '*/20 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Drain email queue
+        run: |
+          curl -fsS -X POST "$URL/send-emails" -H "x-internal-secret: $SECRET" -H "content-type: application/json" -d '{}'
+        env:
+          URL: ${{ secrets.SUPABASE_FUNCTIONS_URL }}
+          SECRET: ${{ secrets.INTERNAL_FN_SECRET }}
+  refresh-rates:
+    if: github.event.schedule == '15 3 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh currency rates
+        run: curl -fsS -X POST "$URL/refresh-rates" -H "x-internal-secret: $SECRET"
+        env:
+          URL: ${{ secrets.SUPABASE_FUNCTIONS_URL }}
+          SECRET: ${{ secrets.INTERNAL_FN_SECRET }}
+  keep-alive:
+    if: github.event.schedule == '0 */6 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping site + sitemap (also warms the feeds cache)
+        run: |
+          curl -fsS -o /dev/null -w "site %{http_code}\n" "$SITE/"
+          curl -fsS -o /dev/null -w "sitemap %{http_code}\n" "$SITE/sitemap.xml"
+        env:
+          SITE: ${{ secrets.SITE_URL || 'https://lixxonstudio.vercel.app' }}

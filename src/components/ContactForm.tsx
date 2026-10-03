@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { submitForm, ApiError } from '../lib/api';
 
 const SUBJECTS = [
   'General Inquiry',
@@ -38,15 +38,11 @@ export default function ContactForm() {
       return;
     }
     setStatus('submitting');
-    const { error } = await supabase.from('contact_messages').insert({
-      name: form.name.trim(),
-      email: form.email.trim(),
-      topic: form.subject,
-      message: form.message.trim(),
-    });
-    if (error) {
+    try {
+      await submitForm('contact', { name: form.name.trim(), email: form.email.trim(), topic: form.subject, message: form.message.trim() });
+    } catch (err) {
       setStatus('error');
-      setErrorMsg('Something went wrong. Please try again in a moment.');
+      setErrorMsg(err instanceof ApiError ? err.message : 'Something went wrong. Please try again in a moment.');
       return;
     }
     setStatus('success');

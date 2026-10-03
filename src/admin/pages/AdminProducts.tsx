@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import {useState} from 'react';
 import { Plus, Edit, Trash2, ShoppingBag } from 'lucide-react';
 import { useAdminProducts } from '../../hooks/useCommerce';
 import { useNavigation } from '../../context/NavigationContext';

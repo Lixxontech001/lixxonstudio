@@ -1,0 +1,47 @@
+name: CI
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx tsc --noEmit -p tsconfig.app.json
+      - run: npx tsc --noEmit -p supabase/functions/tsconfig.json
+      - run: npx tsc --noEmit -p api/tsconfig.json
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder
+      - name: Database migrations + RLS assertions (embedded Postgres)
+        run: |
+          pip install --quiet pgserver
+          python3 scripts/db-test.py
+  lighthouse:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci && npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder
+      - name: Lighthouse CI (performance budget)
+        run: |
+          npm i -g @lhci/cli@0.14.x
+          lhci autorun --collect.staticDistDir=./dist --collect.numberOfRuns=1 \
+            --assert.assertions.categories:performance=warn:0.85 \
+            --assert.assertions.categories:accessibility=error:0.9 \
+            --assert.assertions.categories:best-practices=warn:0.9 \
+            --assert.assertions.categories:seo=error:0.9 \
+            --upload.target=temporary-public-storage

@@ -1,2 +1,19 @@
+# Edge function settings. All public-facing functions validate input + rate-limit themselves;
+# JWT verification is off because guests (anon key) must be able to call them.
 [functions.verify-payment]
+verify_jwt = false
+[functions.create-order]
+verify_jwt = false
+[functions.download-file]
+verify_jwt = false
+[functions.submit-form]
+verify_jwt = false
+[functions.order-status]
+verify_jwt = false
+[functions.feeds]
+verify_jwt = false
+# internal — protected by x-internal-secret header
+[functions.send-emails]
+verify_jwt = false
+[functions.refresh-rates]
 verify_jwt = false

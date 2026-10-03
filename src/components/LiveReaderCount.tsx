@@ -1,4 +1,4 @@
-import { Users } from 'lucide-react';
+
 import { useLiveReaderCount } from '../hooks/useFeatures';
 
 export default function LiveReaderCount({ postId }: { postId: string }) {

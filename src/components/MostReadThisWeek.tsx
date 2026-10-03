@@ -1,4 +1,4 @@
-import { TrendingUp, Clock } from 'lucide-react';
+import {TrendingUp} from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { useMostReadThisWeek } from '../hooks/usePlatform';
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useReviewHelpfulness } from '../hooks/usePlatform';
 
