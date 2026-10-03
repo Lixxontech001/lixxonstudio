@@ -1,0 +1,169 @@
+import { type ReactNode, useState } from 'react';
+import { useNavigation } from '../context/NavigationContext';
+import { useAuth } from '../context/AuthContext';
+import {
+  LayoutDashboard, FileText, FolderTree, Users, MessageSquare,
+  Image, Star, Settings, LogOut, PenLine, ExternalLink,
+  ShoppingBag, Package, UserCircle, FolderHeart, Mail,
+  BarChart3, ShieldCheck, ChevronDown, ChevronRight, Inbox,
+  Tag, RotateCcw, ShoppingCart,
+  Activity, FileCode, Gift, Share2, Calendar
+} from 'lucide-react';
+
+interface NavItem {
+  label: string;
+  route: { name: string };
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'Editorial',
+    items: [
+      { label: 'Dashboard', route: { name: 'admin-dashboard' }, icon: LayoutDashboard },
+      { label: 'Articles', route: { name: 'admin-articles' }, icon: FileText },
+      { label: 'Categories', route: { name: 'admin-categories' }, icon: FolderTree },
+      { label: 'Authors', route: { name: 'admin-authors' }, icon: Users },
+      { label: 'Comments', route: { name: 'admin-comments' }, icon: MessageSquare },
+      { label: 'Messages', route: { name: 'admin-messages' }, icon: Inbox },
+      { label: 'Media', route: { name: 'admin-media' }, icon: Image },
+      { label: 'Featured', route: { name: 'admin-featured' }, icon: Star },
+      { label: 'Settings', route: { name: 'admin-settings' }, icon: Settings },
+    ],
+  },
+  {
+    title: 'Commerce',
+    items: [
+      { label: 'Products', route: { name: 'admin-products' }, icon: ShoppingBag },
+      { label: 'Orders', route: { name: 'admin-orders' }, icon: Package },
+      { label: 'Customers', route: { name: 'admin-customers' }, icon: UserCircle },
+      { label: 'Promo Codes', route: { name: 'admin-promo-codes' }, icon: Tag },
+      { label: 'Gift Cards', route: { name: 'admin-gift-cards' }, icon: Gift },
+      { label: 'Reviews', route: { name: 'admin-reviews' }, icon: Star },
+      { label: 'Refunds', route: { name: 'admin-refunds' }, icon: RotateCcw },
+      { label: 'Abandoned Carts', route: { name: 'admin-abandoned-carts' }, icon: ShoppingCart },
+    ],
+  },
+  {
+    title: 'Marketing',
+    items: [
+      { label: 'Collections', route: { name: 'admin-collections' }, icon: FolderHeart },
+      { label: 'Newsletter', route: { name: 'admin-newsletter' }, icon: Mail },
+      { label: 'Subscriber Prefs', route: { name: 'admin-subscribers-prefs' }, icon: Calendar },
+      { label: 'Sponsored', route: { name: 'admin-sponsored' }, icon: ShieldCheck },
+      { label: 'Polls', route: { name: 'admin-polls' }, icon: BarChart3 },
+      { label: 'Social Shares', route: { name: 'admin-social-shares' }, icon: Share2 },
+    ],
+  },
+  {
+    title: 'Analytics',
+    items: [
+      { label: 'Content Performance', route: { name: 'admin-analytics' }, icon: BarChart3 },
+      { label: 'Activity Log', route: { name: 'admin-activity-log' }, icon: Activity },
+    ],
+  },
+  {
+    title: 'Tools',
+    items: [
+      { label: 'Content Templates', route: { name: 'admin-content-templates' }, icon: FileCode },
+      { label: 'Feedback', route: { name: 'admin-feedback' }, icon: MessageSquare },
+    ],
+  },
+];
+
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  const { route, navigate } = useNavigation();
+  const { signOut } = useAuth();
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['Editorial', 'Commerce', 'Marketing', 'Analytics']));
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate({ name: 'admin-login' });
+  };
+
+  const toggleSection = (title: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title);
+      else next.add(title);
+      return next;
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
+      <aside className="lg:w-60 bg-gray-900 text-white flex-shrink-0 lg:min-h-screen sticky top-0 z-30">
+        <div className="p-5 border-b border-gray-800">
+          <div className="flex items-center gap-2">
+            <PenLine size={18} strokeWidth={1.5} className="text-bronze" />
+            <span className="font-serif text-lg">Lixxon Studio</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1 tracking-wider uppercase">Editorial CMS</p>
+        </div>
+
+        <nav className="p-3 space-y-1 overflow-x-auto lg:overflow-x-hidden flex lg:flex-col gap-0.5">
+          {NAV_SECTIONS.map(section => {
+            const isExpanded = expandedSections.has(section.title);
+            return (
+              <div key={section.title} className="lg:space-y-0.5">
+                <button
+                  onClick={() => toggleSection(section.title)}
+                  className="hidden lg:flex items-center gap-1.5 w-full px-3 py-1.5 text-[10px] tracking-editorial uppercase text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                  {section.title}
+                </button>
+                <div className={`lg:${isExpanded ? 'block' : 'hidden'} flex lg:block gap-0.5`}>
+                  {section.items.map(item => {
+                    const isActive = route.name === item.route.name;
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.route.name}
+                        onClick={() => navigate(item.route as never)}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors whitespace-nowrap ${
+                          isActive ? 'bg-bronze text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                        }`}
+                      >
+                        <Icon size={16} strokeWidth={1.5} />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="p-3 mt-auto border-t border-gray-800 hidden lg:block">
+          <button
+            onClick={() => navigate({ name: 'home', page: 1 })}
+            className="flex items-center gap-3 px-3 py-2.5 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors w-full"
+          >
+            <ExternalLink size={16} strokeWidth={1.5} />
+            View Site
+          </button>
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-3 px-3 py-2.5 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors w-full"
+          >
+            <LogOut size={16} strokeWidth={1.5} />
+            Sign Out
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 min-w-0">
+        <div className="max-w-6xl mx-auto p-6 lg:p-10">
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}

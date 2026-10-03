@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /search
+
+Sitemap: https://lixxonstudio.vercel.app/sitemap.xml

@@ -1,0 +1,527 @@
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash } from 'lucide-react';
+import { Link } from '../context/NavigationContext';
+import { usePostBySlug, usePosts } from '../hooks/useSupabase';
+import { HeroSkeleton } from './Skeletons';
+import EmptyState from './EmptyState';
+import Comments from './Comments';
+import ArticleReactions from './ArticleReactions';
+import ArticlePollComponent from './ArticlePoll';
+import ShopThisArticle from './ShopThisArticle';
+import TextToSpeech from './TextToSpeech';
+import { FontSizeControl, useFontSize } from './FontSizeControl';
+import LiveReaderCount from './LiveReaderCount';
+import ReadingStreakBadge from './ReadingStreakBadge';
+import ArticleRating from './ArticleRating';
+import ReadingListButton from './ReadingListButton';
+import EmailArticleButton from './EmailArticleButton';
+import RandomArticleButton from './RandomArticleButton';
+import { trackSocialShare } from '../hooks/usePlatform';
+import { trackArticleView } from '../hooks/useCommerce';
+import { recordReadingHistory, useReadingStreak, getFingerprint } from '../hooks/useFeatures';
+import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
+import { Helmet } from 'react-helmet-async';
+import type { PostWithRelations } from '../lib/types';
+
+export default function ArticleReader({ slug }: { slug: string }) {
+  const { post, loading } = usePostBySlug(slug);
+  const { posts } = usePosts();
+  const [copied, setCopied] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [activeHeading, setActiveHeading] = useState('');
+  const [pinterestHovered, setPinterestHovered] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const { theme, toggleTheme } = useTheme();
+  const { showToast } = useToast();
+  const { fontSize, setFontSize } = useFontSize();
+  const { recordReadingDay } = useReadingStreak();
+
+  useEffect(() => { window.scrollTo(0, 0); }, [slug]);
+
+  useEffect(() => {
+    if (post) {
+      trackArticleView(post.id);
+      setBookmarked(localStorage.getItem(`bookmark_${post.id}`) === '1');
+      recordReadingHistory({
+        id: post.id,
+        title: post.title,
+        slug: post.slug,
+        category_id: post.category_id,
+        tags: post.tags,
+        cover_image: post.cover_image,
+      });
+      recordReadingDay();
+      setTimeRemaining(post.reading_time_minutes);
+    }
+  }, [post, recordReadingDay]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const article = document.querySelector('article');
+      if (!article) return;
+      const rect = article.getBoundingClientRect();
+      const total = rect.height - window.innerHeight;
+      const scrolled = Math.max(0, -rect.top);
+      setProgress(Math.min(100, (scrolled / total) * 100));
+
+      const headings = document.querySelectorAll('.article-prose h2');
+      let current = '';
+      headings.forEach(h => {
+        const r = h.getBoundingClientRect();
+        if (r.top < 120) current = h.id;
+      });
+      setActiveHeading(current);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [post]);
+
+  useEffect(() => {
+    if (!post || timeRemaining === null) return;
+    const onScroll = () => {
+      const article = document.querySelector('article');
+      if (!article) return;
+      const rect = article.getBoundingClientRect();
+      const total = rect.height - window.innerHeight;
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(1, Math.max(0, scrolled / total));
+      setTimeRemaining(Math.max(0, Math.ceil(post.reading_time_minutes * (1 - pct))));
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [post, timeRemaining === null]);
+
+  const headings = useMemo(() => {
+    if (!post?.content) return [];
+    return post.content.split('\n')
+      .filter(l => l.trim().startsWith('## '))
+      .map(l => {
+        const text = l.trim().slice(3);
+        const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        return { id, text };
+      });
+  }, [post]);
+
+  const recommended = useMemo(() => {
+    if (!post) return [];
+    return getRecommended(post, posts, 4);
+  }, [post, posts]);
+
+  if (loading) return <HeroSkeleton />;
+  if (!post) return <EmptyState message="Article not found" />;
+
+  const articleUrl = `${window.location.origin}/blog/${post.slug}`;
+  const shareText = encodeURIComponent(post.title);
+  const shareUrl = encodeURIComponent(articleUrl);
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(articleUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  };
+
+  const nativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post.title, url: articleUrl, text: post.excerpt || '' });
+        trackSocialShare(post.id, 'native');
+      } catch { /* user cancelled */ }
+    } else {
+      copyLink();
+    }
+  };
+
+  const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${shareUrl}&media=${encodeURIComponent(post.cover_image || '')}&description=${shareText}`;
+
+  const toggleBookmark = () => {
+    if (!post) return;
+    const key = `bookmark_${post.id}`;
+    const isBookmarked = localStorage.getItem(key) === '1';
+    if (isBookmarked) {
+      localStorage.removeItem(key);
+      setBookmarked(false);
+    } else {
+      localStorage.setItem(key, '1');
+      const saved = JSON.parse(localStorage.getItem('lixxon_bookmarks') || '[]');
+      if (!saved.find((s: { id: string }) => s.id === post.id)) {
+        saved.push({ id: post.id, title: post.title, slug: post.slug, saved_at: Date.now() });
+        localStorage.setItem('lixxon_bookmarks', JSON.stringify(saved));
+      }
+      setBookmarked(true);
+      showToast('Article saved to bookmarks', 'success');
+    }
+  };
+
+  const renderContent = (content: string | null) => {
+    if (!content) return '';
+    const lines = content.split('\n');
+    const html: string[] = [];
+    let inUl = false, inOl = false;
+    const closeLists = () => {
+      if (inUl) { html.push('</ul>'); inUl = false; }
+      if (inOl) { html.push('</ol>'); inOl = false; }
+    };
+    const inline = (text: string): string =>
+      text.replace(/!\[(.+?)\]\((.+?)\)/g, '<img src="$2" alt="$1" loading="lazy" />')
+          .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" rel="noopener noreferrer">$1</a>')
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          .replace(/`(.+?)`/g, '<code>$1</code>');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) { closeLists(); continue; }
+      if (trimmed.startsWith('---')) {
+        closeLists();
+        html.push('<hr />');
+      } else if (trimmed.startsWith('# ')) {
+        closeLists();
+        html.push(`<h1>${inline(trimmed.slice(2))}</h1>`);
+      } else if (trimmed.startsWith('## ')) {
+        closeLists();
+        const heading = inline(trimmed.slice(3));
+        const id = heading.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        html.push(`<h2 id="${id}">${heading}</h2>`);
+      } else if (trimmed.startsWith('### ')) {
+        closeLists();
+        html.push(`<h3>${inline(trimmed.slice(4))}</h3>`);
+      } else if (trimmed.startsWith('> ')) {
+        closeLists();
+        html.push(`<blockquote>${inline(trimmed.slice(2))}</blockquote>`);
+      } else if (/^\d+\.\s/.test(trimmed)) {
+        if (inUl) { html.push('</ul>'); inUl = false; }
+        if (!inOl) { html.push('<ol>'); inOl = true; }
+        html.push(`<li>${inline(trimmed.replace(/^\d+\.\s/, ''))}</li>`);
+      } else if (trimmed.startsWith('- ')) {
+        if (inOl) { html.push('</ol>'); inOl = false; }
+        if (!inUl) { html.push('<ul>'); inUl = true; }
+        html.push(`<li>${inline(trimmed.slice(2))}</li>`);
+      } else {
+        closeLists();
+        html.push(`<p>${inline(trimmed)}</p>`);
+      }
+    }
+    closeLists();
+    return html.join('');
+  };
+
+  return (
+    <article>
+      <Helmet>
+        <title>{post.title} | Lixxon Studio</title>
+        <meta name="description" content={post.excerpt || post.title} />
+        <link rel="canonical" href={articleUrl} />
+        <meta property="og:title" content={post.title} />
+        <meta property="og:description" content={post.excerpt || ''} />
+        <meta property="og:url" content={articleUrl} />
+        <meta property="og:type" content="article" />
+        {post.cover_image && <meta property="og:image" content={post.cover_image} />}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={post.title} />
+        <meta name="twitter:description" content={post.excerpt || ''} />
+        {post.cover_image && <meta name="twitter:image" content={post.cover_image} />}
+        {post.tags && post.tags.length > 0 && (
+          <meta name="article:tag" content={post.tags.join(', ')} />
+        )}
+        <meta property="article:published_time" content={post.published_at} />
+        <meta property="article:author" content={post.author?.name || 'Lixxon Studio'} />
+        <meta property="article:section" content={post.category?.name || ''} />
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Article',
+          headline: post.title,
+          description: post.excerpt,
+          image: post.cover_image,
+          datePublished: post.published_at,
+          author: { '@type': 'Organization', name: post.author?.name || 'Lixxon Studio' },
+          publisher: { '@type': 'Organization', name: 'Lixxon Studio' },
+        })}</script>
+      </Helmet>
+
+      {/* Reading Progress Bar */}
+      <div className="fixed top-0 left-0 right-0 z-50 h-[3px] bg-taupe/20">
+        <div className="h-full bg-bronze transition-all duration-100" style={{ width: `${progress}%` }} />
+      </div>
+
+      {/* Article Header */}
+      <div className="container-narrow pt-12 pb-8">
+        <Link to={{ name: 'home', page: 1 }} className="inline-flex items-center gap-2 text-xs tracking-editorial uppercase text-charcoal-muted hover:text-bronze transition-colors mb-8">
+          <ArrowLeft size={14} strokeWidth={1.5} /> Back to Magazine
+        </Link>
+
+        {post.category && (
+          <Link to={{ name: 'category', slug: post.category.slug, page: 1 }} className="text-[10px] tracking-ultra-wide uppercase text-bronze mb-5 inline-block hover:underline">
+            {post.category.name}
+          </Link>
+        )}
+
+        <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl text-charcoal font-light leading-[1.05] text-balance">
+          {post.title}
+        </h1>
+
+        {post.excerpt && (
+          <p className="text-charcoal-muted text-lg md:text-xl leading-relaxed mt-6 font-light italic">
+            {post.excerpt}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-4 mt-8 pb-8 border-b border-taupe/50">
+          {post.author && (
+            <Link to={{ name: 'author', slug: post.author.slug }} className="flex items-center gap-3 group">
+              {post.author.avatar_url && (
+                <img src={post.author.avatar_url} alt={post.author.name} className="w-10 h-10 rounded-full object-cover" loading="lazy" />
+              )}
+              <div>
+                <p className="text-sm text-charcoal font-medium group-hover:text-bronze transition-colors">{post.author.name}</p>
+                {post.author.role && <p className="text-xs text-charcoal-muted">{post.author.role}</p>}
+              </div>
+            </Link>
+          )}
+          <div className="flex items-center gap-4 text-xs text-charcoal-muted ml-auto">
+            <span className="flex items-center gap-1.5"><Calendar size={12} strokeWidth={1.5} /> {new Date(post.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+            <span className="text-taupe-dark">·</span>
+            <span className="flex items-center gap-1.5"><Clock size={12} strokeWidth={1.5} /> {post.reading_time_minutes} min read</span>
+            {timeRemaining !== null && timeRemaining > 0 && timeRemaining < post.reading_time_minutes && (
+              <span className="text-bronze text-xs hidden sm:inline">{timeRemaining} min left</span>
+            )}
+            <ReadingStreakBadge />
+            <LiveReaderCount postId={post.id} />
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-charcoal-muted hover:text-bronze transition-colors"
+              aria-label="Toggle dark mode"
+            >
+              {theme === 'light' ? <Moon size={14} strokeWidth={1.5} /> : <Sun size={14} strokeWidth={1.5} />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Cover Image with Pinterest Save */}
+      {post.cover_image && (
+        <div className="container-wide mb-12">
+          <div
+            className="rounded-sm overflow-hidden luxury-shadow-lg aspect-[16/9] lg:aspect-[2/1] relative group"
+            onMouseEnter={() => setPinterestHovered(true)}
+            onMouseLeave={() => setPinterestHovered(false)}
+          >
+            <img src={post.cover_image} alt={post.title} className="w-full h-full object-cover" fetchPriority="high" />
+            <a
+              href={pinterestUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`absolute top-4 right-4 bg-white text-charcoal px-4 py-2 rounded-sm text-xs font-medium flex items-center gap-2 luxury-shadow transition-all duration-300 ${pinterestHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12c0 5 3 9.4 7.4 11.3-.1-.9-.2-2.4 0-3.4.2-.9 1.3-5.7 1.3-5.7s-.3-.7-.3-1.6c0-1.5.9-2.7 2-2.7.9 0 1.4.7 1.4 1.5 0 .9-.6 2.3-.9 3.6-.3 1.1.5 2 1.6 2 1.9 0 3.4-2 3.4-5 0-2.6-1.9-4.4-4.5-4.4-3.1 0-4.9 2.3-4.9 4.7 0 .9.4 1.9.8 2.5.1.1.1.2 0 .3l-.3 1.1c0 .2-.2.2-.3.1-1.2-.5-1.9-2.2-1.9-3.6 0-2.9 2.1-5.6 6.2-5.6 3.2 0 5.8 2.3 5.8 5.4 0 3.2-2 5.8-4.8 5.8-1 0-1.9-.5-2.2-1.1l-.6 2.3c-.2.9-.8 2-1.2 2.6C9.5 23.8 10.7 24 12 24c6.6 0 12-5.4 12-12S18.6 0 12 0z"/></svg>
+              Save
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Article Body + Sidebar */}
+      <div className="container-wide relative">
+        <div className="flex gap-8 lg:gap-16 max-w-4xl mx-auto">
+          {/* Sticky Social Share */}
+          <div className="hidden lg:flex flex-col items-center gap-3 sticky top-32 self-start flex-shrink-0">
+            <p className="text-[9px] tracking-editorial uppercase text-charcoal-muted/50 [writing-mode:vertical-lr] rotate-180 mb-2">Share</p>
+            <a href={`https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`} target="_blank" rel="noopener noreferrer" onClick={() => trackSocialShare(post.id, 'twitter')} className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal hover:bg-charcoal hover:text-white transition-all duration-300" aria-label="Share on X">
+              <Twitter size={14} strokeWidth={1.5} />
+            </a>
+            <a href={`https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`} target="_blank" rel="noopener noreferrer" onClick={() => trackSocialShare(post.id, 'facebook')} className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal hover:bg-charcoal hover:text-white transition-all duration-300" aria-label="Share on Facebook">
+              <Facebook size={14} strokeWidth={1.5} />
+            </a>
+            <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`} target="_blank" rel="noopener noreferrer" onClick={() => trackSocialShare(post.id, 'linkedin')} className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal hover:bg-charcoal hover:text-white transition-all duration-300" aria-label="Share on LinkedIn">
+              <Linkedin size={14} strokeWidth={1.5} />
+            </a>
+            <button onClick={copyLink} className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal hover:bg-charcoal hover:text-white transition-all duration-300" aria-label="Copy link">
+              {copied ? <Check size={14} strokeWidth={1.5} /> : <Link2 size={14} strokeWidth={1.5} />}
+            </button>
+            <button onClick={() => window.print()} className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal hover:bg-charcoal hover:text-white transition-all duration-300" aria-label="Print">
+              <Printer size={14} strokeWidth={1.5} />
+            </button>
+            <div className="w-[1px] h-12 bg-taupe mt-2" />
+            <button onClick={toggleBookmark} className={`w-10 h-10 rounded-full border border-taupe flex items-center justify-center transition-all duration-300 ${bookmarked ? 'bg-bronze text-white border-bronze' : 'text-charcoal-muted hover:text-bronze'}`} aria-label="Bookmark article">
+              <Bookmark size={14} strokeWidth={1.5} fill={bookmarked ? 'currentColor' : 'none'} />
+            </button>
+          </div>
+
+          {/* Content + TOC */}
+          <div className="flex-1 min-w-0">
+            {/* TTS + Font Size controls */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+              <TextToSpeech postId={post.id} title={post.title} content={post.content} />
+              <FontSizeControl fontSize={fontSize} setFontSize={setFontSize} />
+            </div>
+
+            {headings.length > 2 && (
+              <div className="mb-10 p-6 bg-taupe-light/40 rounded-sm border border-taupe/30">
+                <div className="flex items-center gap-2 mb-4">
+                  <List size={14} strokeWidth={1.5} className="text-bronze" />
+                  <p className="text-[10px] tracking-editorial uppercase text-bronze">Table of Contents</p>
+                </div>
+                <nav className="space-y-1.5">
+                  {headings.map(h => (
+                    <a
+                      key={h.id}
+                      href={`#${h.id}`}
+                      className={`block text-sm leading-snug transition-colors duration-200 ${activeHeading === h.id ? 'text-bronze font-medium' : 'text-charcoal-muted hover:text-charcoal'}`}
+                    >
+                      {h.text}
+                    </a>
+                  ))}
+                </nav>
+              </div>
+            )}
+
+            <div className={`article-prose max-w-none font-${fontSize}`} dangerouslySetInnerHTML={{ __html: renderContent(post.content) }} />
+
+            {/* Article Poll */}
+            <ArticlePollComponent postId={post.id} />
+
+            {/* Reactions + Share bottom bar */}
+            <div className="flex flex-wrap items-center gap-4 mt-12 pt-8 border-t border-taupe/50">
+              <ArticleReactions postId={post.id} />
+              <button onClick={nativeShare} className="inline-flex items-center gap-2 px-6 py-3 border border-taupe rounded-sm text-charcoal text-sm hover:border-bronze transition-all" aria-label="Share article">
+                <Share2 size={16} strokeWidth={1.5} /> Share
+              </button>
+              <a href={pinterestUrl} target="_blank" rel="noopener noreferrer" onClick={() => trackSocialShare(post.id, 'pinterest')} className="inline-flex items-center gap-2 px-6 py-3 border border-taupe rounded-sm text-charcoal text-sm hover:border-bronze transition-all">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12c0 5 3 9.4 7.4 11.3-.1-.9-.2-2.4 0-3.4.2-.9 1.3-5.7 1.3-5.7s-.3-.7-.3-1.6c0-1.5.9-2.7 2-2.7.9 0 1.4.7 1.4 1.5 0 .9-.6 2.3-.9 3.6-.3 1.1.5 2 1.6 2 1.9 0 3.4-2 3.4-5 0-2.6-1.9-4.4-4.5-4.4-3.1 0-4.9 2.3-4.9 4.7 0 .9.4 1.9.8 2.5.1.1.1.2 0 .3l-.3 1.1c0 .2-.2.2-.3.1-1.2-.5-1.9-2.2-1.9-3.6 0-2.9 2.1-5.6 6.2-5.6 3.2 0 5.8 2.3 5.8 5.4 0 3.2-2 5.8-4.8 5.8-1 0-1.9-.5-2.2-1.1l-.6 2.3c-.2.9-.8 2-1.2 2.6C9.5 23.8 10.7 24 12 24c6.6 0 12-5.4 12-12S18.6 0 12 0z"/></svg>
+                Save to Pinterest
+              </a>
+              <ReadingListButton postId={post.id} />
+              <EmailArticleButton title={post.title} url={articleUrl} />
+              <RandomArticleButton />
+            </div>
+
+            {/* Article Rating */}
+            <div className="mt-8">
+              <ArticleRating postId={post.id} />
+            </div>
+
+            {/* Pinterest CTA */}
+            <p className="text-charcoal-muted text-sm italic mt-6 leading-relaxed">
+              If this was useful, save it to your Pinterest board so you can come back to it later.
+            </p>
+          </div>
+        </div>
+
+        {/* Mobile Share Bar */}
+        <div className="container-narrow flex lg:hidden items-center gap-3 mt-10 pt-8 border-t border-taupe/50">
+          <a href={`https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal" aria-label="Share on X">
+            <Twitter size={14} strokeWidth={1.5} />
+          </a>
+          <a href={`https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal" aria-label="Share on Facebook">
+            <Facebook size={14} strokeWidth={1.5} />
+          </a>
+          <button onClick={copyLink} className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal" aria-label="Copy link">
+            {copied ? <Check size={14} strokeWidth={1.5} /> : <Link2 size={14} strokeWidth={1.5} />}
+          </button>
+          <button onClick={nativeShare} className="ml-auto px-5 py-2.5 bg-bronze text-white text-xs tracking-editorial uppercase font-medium rounded-sm hover:bg-bronze-dark transition-all" aria-label="Share">
+            Share
+          </button>
+        </div>
+
+        {/* Tags */}
+        {post.tags && post.tags.length > 0 && (
+          <div className="container-narrow mt-10 pt-8 border-t border-taupe/50">
+            <div className="flex flex-wrap gap-2">
+              {post.tags.map(tag => (
+                <Link key={tag} to={{ name: 'tag', tag, page: 1 }} className="inline-flex items-center gap-1 px-4 py-2 bg-taupe-light/60 text-charcoal-muted text-xs rounded-full border border-taupe/30 hover:border-bronze hover:text-bronze transition-all">
+                  <Hash size={10} strokeWidth={1.5} />
+                  {tag}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Author Bio */}
+        {post.author && (
+          <div className="container-narrow mt-12 pt-10 border-t border-taupe/50">
+            <div className="flex flex-col sm:flex-row gap-5 items-start">
+              {post.author.avatar_url && (
+                <img src={post.author.avatar_url} alt={post.author.name} className="w-16 h-16 rounded-full object-cover" loading="lazy" />
+              )}
+              <div>
+                <p className="text-[10px] tracking-editorial uppercase text-bronze mb-1">Written By</p>
+                <h4 className="font-serif text-xl text-charcoal">{post.author.name}</h4>
+                {post.author.role && <p className="text-sm text-charcoal-muted mt-0.5">{post.author.role}</p>}
+                {post.author.bio && <p className="text-charcoal-muted text-sm mt-3 leading-relaxed max-w-lg">{post.author.bio}</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Shop This Article */}
+        <div className="container-narrow mt-12">
+          <ShopThisArticle postId={post.id} />
+        </div>
+
+        {/* Comments */}
+        <div className="container-narrow mt-12">
+          <Comments postId={post.id} />
+        </div>
+      </div>
+
+      {/* Continue Reading - Premium Related Articles */}
+      {recommended.length > 0 && (
+        <section className="bg-taupe-light/40 py-20 mt-12 border-t border-taupe/30">
+          <div className="container-wide">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 mb-3">
+                <Sparkles size={16} strokeWidth={1.5} className="text-bronze" />
+                <p className="text-[10px] tracking-ultra-wide uppercase text-bronze">Keep Reading</p>
+              </div>
+              <h3 className="font-serif text-3xl md:text-4xl font-light text-charcoal">Stories You Might Love</h3>
+              <p className="text-charcoal-muted text-sm mt-3 max-w-md mx-auto">Hand-picked based on what you are reading now.</p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+              {recommended.map(r => (
+                <Link
+                  key={r.id}
+                  to={{ name: 'article', slug: r.slug }}
+                  className="group text-left bg-white rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500 flex flex-col"
+                >
+                  <div className="img-zoom aspect-[4/5] overflow-hidden">
+                    {r.cover_image && <img src={r.cover_image} alt={r.title} className="w-full h-full object-cover" loading="lazy" />}
+                  </div>
+                  <div className="p-5 flex flex-col flex-1">
+                    <span className="text-[10px] tracking-editorial uppercase text-bronze">{r.category?.name}</span>
+                    <h4 className="font-serif text-base text-charcoal mt-2 leading-snug group-hover:text-bronze transition-colors duration-300 line-clamp-2">{r.title}</h4>
+                    {r.excerpt && (
+                      <p className="text-charcoal-muted text-sm mt-2 leading-relaxed line-clamp-2 flex-1">{r.excerpt}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-4 text-xs text-charcoal-muted">
+                      <Clock size={10} strokeWidth={1.5} /> {r.reading_time_minutes} min read
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+    </article>
+  );
+}
+
+function getRecommended(current: PostWithRelations, all: PostWithRelations[], count: number): PostWithRelations[] {
+  const currentTags = new Set(current.tags || []);
+  const scored = all
+    .filter(p => p.id !== current.id)
+    .map(p => {
+      let score = 0;
+      if (p.category_id === current.category_id) score += 10;
+      const sharedTags = (p.tags || []).filter(t => currentTags.has(t)).length;
+      score += sharedTags * 5;
+      if (p.featured) score += 2;
+      if (p.editors_pick) score += 2;
+      score += Math.max(0, 3 - Math.abs(new Date(p.published_at).getTime() - new Date(current.published_at).getTime()) / (1000 * 60 * 60 * 24 * 30));
+      return { post: p, score };
+    })
+    .sort((a, b) => b.score - a.score);
+  return scored.slice(0, count).map(s => s.post);
+}
