@@ -54,3 +54,22 @@ jobs:
       - name: Deploy edge functions
         if: github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'functions'
         run: supabase functions deploy --project-ref "$REF"
+      - name: Verify deployment (migrations applied + functions answer)
+        env:
+          FN: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1
+          SECRET: ${{ secrets.INTERNAL_FN_SECRET }}
+        run: |
+          {
+            echo "## Supabase deploy verification"
+            echo '```'
+            echo "### Migrations (local | remote)"; supabase migration list 2>&1 | tail -n 30
+            echo
+            echo "### Edge functions"
+            for f in feeds?type=sitemap order-status submit-form create-order download-file verify-payment; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$FN/$f"); echo "GET  $f -> $code"
+            done
+            echo "POST refresh-rates -> $(curl -s -o /tmp/r.txt -w '%{http_code}' -X POST "$FN/refresh-rates" -H "x-internal-secret: $SECRET") $(head -c 200 /tmp/r.txt)"
+            echo "POST send-emails   -> $(curl -s -o /tmp/e.txt -w '%{http_code}' -X POST "$FN/send-emails" -H "x-internal-secret: $SECRET" -H 'content-type: application/json' -d '{}') $(head -c 200 /tmp/e.txt)"
+            echo "POST send-emails (wrong secret, expect 401/403) -> $(curl -s -o /dev/null -w '%{http_code}' -X POST "$FN/send-emails" -H 'x-internal-secret: nope')"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
