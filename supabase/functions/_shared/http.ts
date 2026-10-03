@@ -4,6 +4,18 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.5
 // C0 control characters (except \t \n \r) plus DEL — stripped from all free-text input.
 const CONTROL_CHARS = new RegExp("[" + String.fromCharCode(0) + "-" + String.fromCharCode(8) + String.fromCharCode(11) + String.fromCharCode(12) + String.fromCharCode(14) + "-" + String.fromCharCode(31) + String.fromCharCode(127) + "]", "g");
 
+/**
+ * Read an env var, trying each name in order and returning the first truthy value.
+ * Lets the same code work across Supabase CLI, Vercel integration, Railway, etc.
+ */
+export function env(...names: string[]): string | undefined {
+  for (const n of names) {
+    const v = Deno.env.get(n);
+    if (v) return v;
+  }
+  return undefined;
+}
+
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -23,8 +35,8 @@ export function preflight(req: Request): Response | null {
 }
 
 export function serviceClient(): SupabaseClient {
-  const url = Deno.env.get("SUPABASE_URL");
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const url = env("SUPABASE_URL", "SUPABASE_PROJECT_URL");
+  const key = env("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY");
   if (!url || !key) throw new Error("Supabase service credentials not configured");
   return createClient(url, key, { auth: { persistSession: false } });
 }
@@ -33,10 +45,10 @@ export function serviceClient(): SupabaseClient {
 export async function callerUser(req: Request) {
   const auth = req.headers.get("Authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const anonKey = env("SUPABASE_ANON_KEY", "SUPABASE_KEY") || "";
   if (!token || token === anonKey) return null;
   try {
-    const client = createClient(Deno.env.get("SUPABASE_URL")!, anonKey, {
+    const client = createClient(env("SUPABASE_URL", "SUPABASE_PROJECT_URL")!, anonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false },
     });
