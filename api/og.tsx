@@ -6,9 +6,18 @@ export const config = { runtime: 'edge' };
 
 const esc = (s: string) => s.replace(/\s+/g, ' ').trim();
 
+/** Read a process env var, trying each name in order. */
+function env(...names: string[]): string | undefined {
+  for (const n of names) {
+    const v = process.env[n];
+    if (v) return v;
+  }
+  return undefined;
+}
+
 async function loadPost(slug: string) {
-  const base = process.env.VITE_SUPABASE_URL;
-  const anon = process.env.VITE_SUPABASE_ANON_KEY || '';
+  const base = env('VITE_SUPABASE_URL', 'SUPABASE_URL', 'VITE_SUPABASE_PROJECT_URL');
+  const anon = env('VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY', 'VITE_SUPABASE_KEY') || '';
   if (!base) return null;
   const r = await fetch(`${base}/rest/v1/posts?slug=eq.${encodeURIComponent(slug)}&status=eq.published&select=title,excerpt,reading_time_minutes,category:categories(name),author:authors(name)&limit=1`, {
     headers: { apikey: anon, Authorization: `Bearer ${anon}` },
