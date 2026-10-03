@@ -9,6 +9,8 @@ export interface CartItem {
   image_url: string | null;
   is_digital: boolean;
   quantity: number;
+  /** customer-chosen price for pay-what-you-want products (server enforces the floor) */
+  pwyw_price?: number;
 }
 
 interface CartContextType {
@@ -48,9 +50,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems(prev => {
       const existing = prev.find(i => i.id === item.id);
       if (existing) {
-        return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i);
+        return prev.map(i => i.id === item.id ? { ...i, quantity: Math.min(10, i.quantity + quantity), pwyw_price: item.pwyw_price ?? i.pwyw_price } : i);
       }
-      return [...prev, { ...item, quantity }];
+      return [...prev, { ...item, quantity: Math.min(10, quantity) }];
     });
     setIsOpen(true);
   }, []);
@@ -64,14 +66,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setItems(prev => prev.filter(i => i.id !== id));
       return;
     }
-    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity } : i));
+    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.min(10, quantity) } : i));
   }, []);
 
   const clearCart = useCallback(() => { setItems([]); clearAbandonedCart(); }, []);
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const subtotal = items.reduce((sum, i) => sum + (i.pwyw_price ?? i.price) * i.quantity, 0);
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
 
   useEffect(() => {

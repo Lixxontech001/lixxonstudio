@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Mail, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { submitForm } from '../lib/api';
 
 export default function Newsletter() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,18 +15,13 @@ export default function Newsletter() {
       return;
     }
     setStatus('submitting');
-    const { error } = await supabase
-      .from('newsletter_subscribers')
-      .insert({ email: email.trim() });
-    if (error) {
-      if (error.code === '23505') {
-        setStatus('success');
-      } else {
-        setStatus('error');
-        return;
-      }
-    } else {
+    try {
+      const res = await submitForm('newsletter', { email: email.trim(), source: 'homepage' });
+      setMessage(res.message || 'Check your inbox to confirm.');
       setStatus('success');
+    } catch {
+      setStatus('error');
+      return;
     }
     setEmail('');
     setTimeout(() => setStatus('idle'), 5000);
@@ -76,9 +72,7 @@ export default function Newsletter() {
             <p className="text-bronze-light text-sm mt-4 animate-fade-in">Please enter a valid email address.</p>
           )}
           {status === 'success' && (
-            <p className="text-bronze-light text-sm mt-4 animate-fade-in">
-              Welcome to The Daily Reset. Check your inbox for confirmation.
-            </p>
+            <p className="text-bronze-light text-sm mt-4 animate-fade-in">{message || 'Welcome to The Daily Reset. Check your inbox for confirmation.'}</p>
           )}
           <p className="text-white/30 text-xs mt-5">No spam. Unsubscribe anytime.</p>
         </div>

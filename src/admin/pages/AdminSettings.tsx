@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Info, CreditCard, BookOpen, Mail, Key, Check, Copy } from 'lucide-react';
+import {Settings as SettingsIcon, Info, CreditCard, BookOpen, Check, Copy} from 'lucide-react';
+import SiteSettingsPanel from '../components/SiteSettingsPanel';
 
 export default function AdminSettings() {
   const [copied, setCopied] = useState('');
@@ -19,6 +20,8 @@ export default function AdminSettings() {
         <h1 className="font-serif text-3xl text-charcoal font-light">Settings</h1>
         <p className="text-sm text-charcoal-muted mt-1">Site configuration, payment setup, and admin guide</p>
       </div>
+
+      <SiteSettingsPanel />
 
       {/* ==================== PAYMENT CONFIGURATION ==================== */}
       <div className="bg-white border border-taupe/30 rounded-sm p-6 mb-6">

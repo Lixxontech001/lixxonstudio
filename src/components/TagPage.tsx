@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Clock, Hash } from 'lucide-react';
-import { Link, useNavigation } from '../context/NavigationContext';
+import { Link } from '../context/NavigationContext';
 import { useTagPosts } from '../hooks/useFeatures';
 import { FeedSkeleton } from './Skeletons';
 import EmptyState from './EmptyState';
@@ -9,8 +9,6 @@ import { Helmet } from 'react-helmet-async';
 
 export default function TagPage({ tag, page }: { tag: string; page: number }) {
   const { posts, totalPages, loading } = useTagPosts(tag, page);
-  const { navigate } = useNavigation();
-
   useEffect(() => { window.scrollTo(0, 0); }, [tag, page]);
 
   const buildRoute = (p: number) => ({ name: 'tag' as const, tag, page: p });

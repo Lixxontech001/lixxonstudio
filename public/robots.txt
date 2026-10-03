@@ -2,6 +2,11 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /admin/
+Disallow: /account
+Disallow: /account/
+Disallow: /shop/cart
+Disallow: /shop/checkout
 Disallow: /search
+Disallow: /api/
 
-Sitemap: https://lixxonstudio.vercel.app/sitemap.xml
+Sitemap: https://lixxonstudio.com/sitemap.xml

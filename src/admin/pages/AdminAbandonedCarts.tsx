@@ -1,4 +1,4 @@
-import { ShoppingCart, Check, Loader2 } from 'lucide-react';
+import {ShoppingCart, Check} from 'lucide-react';
 import { useAdminAbandonedCarts } from '../../hooks/usePlatform';
 
 export default function AdminAbandonedCarts() {

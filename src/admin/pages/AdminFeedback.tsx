@@ -1,4 +1,4 @@
-import { MessageSquare, Trash2, Bug, Lightbulb, Heart, Loader2 } from 'lucide-react';
+import {MessageSquare, Trash2, Bug, Lightbulb, Heart} from 'lucide-react';
 import { useAdminFeedback } from '../../hooks/usePlatform';
 
 const TYPE_ICONS: Record<string, typeof MessageSquare> = {

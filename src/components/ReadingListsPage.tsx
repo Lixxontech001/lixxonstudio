@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { List, Trash2, Clock, ArrowRight, Plus, X } from 'lucide-react';
+import { List, Trash2, Clock, ArrowRight, Plus, X, Globe, Lock } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { useReadingLists, useReadingListItems } from '../hooks/usePlatform';
 import { useToast } from '../context/ToastContext';
@@ -7,7 +7,7 @@ import { Helmet } from 'react-helmet-async';
 import EmptyState from './EmptyState';
 
 export default function ReadingListsPage() {
-  const { lists, createList, deleteList, loading } = useReadingLists();
+  const { lists, createList, deleteList, loading, refetch } = useReadingLists();
   const { showToast } = useToast();
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [newListName, setNewListName] = useState('');
@@ -85,6 +85,20 @@ export default function ReadingListsPage() {
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-bronze/10">
                   <List size={16} className="text-bronze" />
                 </div>
+                <button
+                  onClick={async () => {
+                    const { supabase } = await import('../lib/supabaseClient');
+                    await supabase.from('reading_lists').update({ is_public: !list.is_public }).eq('id', list.id);
+                    refetch();
+                    showToast(list.is_public ? 'List is now private' : 'List is public — share link copied', 'success');
+                    if (!list.is_public && list.share_token) navigator.clipboard?.writeText(`${window.location.origin}/list/${list.share_token}`);
+                  }}
+                  className={`mr-auto ml-3 inline-flex items-center gap-1 text-[11px] ${list.is_public ? 'text-bronze' : 'text-charcoal-muted hover:text-bronze'}`}
+                  aria-pressed={list.is_public}
+                  title={list.is_public ? 'Public — click to make private' : 'Private — click to share'}
+                >
+                  {list.is_public ? <Globe size={13} /> : <Lock size={13} />} {list.is_public ? 'Shared' : 'Private'}
+                </button>
                 <button
                   onClick={() => handleDelete(list.id, list.name)}
                   className="text-charcoal-muted/40 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"

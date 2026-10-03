@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, rows } from '../lib/supabaseClient';
+import { submitForm, ApiError } from '../lib/api';
 import type { ArticlePoll, ArticleReaction, ProductReview, PromoCode } from '../lib/types';
 
 // ==================== PROMO CODES ====================
@@ -80,7 +81,7 @@ export function useProductReviews(productId: string | null) {
       setLoading(true);
       const { data } = await supabase
         .from('product_reviews')
-        .select('*')
+        .select('id, product_id, author_name, rating, content, verified_purchase, is_approved, created_at')
         .eq('product_id', productId)
         .eq('is_approved', true)
         .order('created_at', { ascending: false });
@@ -106,23 +107,14 @@ export function useSubmitReview() {
     setSubmitting(true);
     setError(null);
     setSuccess(false);
-    const { error: insertError } = await supabase
-      .from('product_reviews')
-      .insert({
-        product_id: productId,
-        customer_email: email.trim(),
-        author_name: name.trim(),
-        rating,
-        content: content.trim() || null,
-        is_approved: true,
-      });
-    setSubmitting(false);
-    if (insertError) {
-      setError('Could not submit your review. Please try again.');
+    try {
+      await submitForm('review', { product_id: productId, customer_email: email.trim(), author_name: name.trim(), rating, content: content.trim() });
+      setSubmitting(false); setSuccess(true); return true;
+    } catch (e) {
+      setSubmitting(false);
+      setError(e instanceof ApiError ? e.message : 'Could not submit your review. Please try again.');
       return false;
     }
-    setSuccess(true);
-    return true;
   }, []);
 
   return { submit, submitting, error, success };
@@ -313,11 +305,12 @@ export function useReadingStreak() {
     return () => { cancelled = true; };
   }, []);
 
-  const recordReadingDay = useCallback(async () => {
+  const recordReadingDay = useCallback(async (postId?: string) => {
     const fp = getFingerprint();
     const today = new Date().toISOString().split('T')[0];
+    const { data: { session } } = await supabase.auth.getSession();
     await supabase.from('reading_sessions')
-      .upsert({ fingerprint: fp, read_date: today }, { onConflict: 'fingerprint,read_date' });
+      .upsert({ fingerprint: fp, read_date: today, post_id: postId || null, user_id: session?.user?.id || null }, { onConflict: 'fingerprint,read_date' });
   }, []);
 
   return { streak, totalDays, recordReadingDay };
@@ -381,7 +374,7 @@ export function useAuthorPosts(authorSlug: string | null) {
           .eq('status', 'published')
           .order('published_at', { ascending: false });
         if (cancelled) return;
-        setPosts((postData || []) as typeof posts);
+        setPosts(rows<typeof posts[number]>(postData));
       }
       setLoading(false);
     };
@@ -454,7 +447,7 @@ export function useLiveSearch(query: string) {
         .order('published_at', { ascending: false })
         .limit(6);
       if (cancelled) return;
-      const items = (data || []).map((d: { title: string; slug: string; category: { name: string } | null }) => ({
+      const items = rows<{ title: string; slug: string; category: { name: string } | null }>(data).map((d) => ({
         title: d.title,
         slug: d.slug,
         category: d.category?.name || null,
@@ -487,7 +480,7 @@ export function useWeeklyDigest() {
         .order('published_at', { ascending: false })
         .limit(12);
       if (cancelled) return;
-      setPosts((data || []) as typeof posts);
+      setPosts(rows<typeof posts[number]>(data));
       setLoading(false);
     };
     fetch();
@@ -515,7 +508,7 @@ export function usePersonalizedRecommendations() {
       const categoryIds = new Set(history.map(h => h.category_id).filter(Boolean) as string[]);
       const tags = new Set(history.flatMap(h => h.tags || []));
 
-      let query = supabase
+      const query = supabase
         .from('posts')
         .select('id, title, slug, excerpt, cover_image, published_at, reading_time_minutes, category:categories(name, slug)')
         .eq('status', 'published')
@@ -524,7 +517,7 @@ export function usePersonalizedRecommendations() {
 
       const { data } = await query;
       if (cancelled) return;
-      const allPosts = (data || []) as typeof posts;
+      const allPosts = rows<typeof posts[number]>(data);
       const unread = allPosts.filter(p => !readIds.has(p.id));
 
       const scored = unread.map(p => {
@@ -578,6 +571,7 @@ export function useNewsletterPreferences(email: string | null) {
   const [preferences, setPreferences] = useState<{ preferred_categories: string[]; frequency: 'daily' | 'weekly' } | null>(null);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!email) return;
@@ -599,15 +593,20 @@ export function useNewsletterPreferences(email: string | null) {
     if (!email) return;
     setLoading(true);
     setSaved(false);
-    await supabase.from('newsletter_preferences')
-      .upsert({ email, ...prefs, updated_at: new Date().toISOString() }, { onConflict: 'email' });
-    setPreferences(prefs);
+    try {
+      await submitForm('newsletter_prefs', { email, ...prefs });
+      setPreferences(prefs);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not save preferences.');
+      setLoading(false);
+      return;
+    }
     setLoading(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 4000);
   }, [email]);
 
-  return { preferences, loading, saved, load, save };
+  return { preferences, loading, saved, error, load, save };
 }
 
 // ==================== HELPERS ====================

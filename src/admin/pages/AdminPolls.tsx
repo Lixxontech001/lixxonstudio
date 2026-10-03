@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { BarChart3, Trash2, Power, Plus, Loader2 } from 'lucide-react';
 import { useAdminPolls } from '../../hooks/usePlatform';
-import { supabase } from '../../lib/supabaseClient';
+
 
 export default function AdminPolls() {
-  const { polls, loading, toggle, remove, create, refetch } = useAdminPolls();
+  const { polls, loading, toggle, remove, create } = useAdminPolls();
   const [showForm, setShowForm] = useState(false);
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);

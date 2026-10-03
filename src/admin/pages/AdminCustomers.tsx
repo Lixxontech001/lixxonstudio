@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import ExportButton from '../components/ExportButton';
 import { Users, Search } from 'lucide-react';
 import { useAdminCustomers } from '../../hooks/useCommerce';
 
@@ -13,7 +14,10 @@ export default function AdminCustomers() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-serif text-3xl text-charcoal font-light">Customers</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="font-serif text-3xl text-charcoal font-light">Customers</h1>
+          <ExportButton filename="customers" load={async () => filtered as unknown as Record<string, unknown>[]} columns={['email', 'name', 'created_at']} />
+        </div>
         <p className="text-sm text-charcoal-muted mt-1">{customers.length} total</p>
       </div>
 

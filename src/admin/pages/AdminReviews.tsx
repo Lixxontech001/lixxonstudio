@@ -1,4 +1,4 @@
-import { Star, Trash2, Check, X, Loader2 } from 'lucide-react';
+import {Star, Trash2, Check, X} from 'lucide-react';
 import { useAdminProductReviews } from '../../hooks/usePlatform';
 
 export default function AdminReviews() {

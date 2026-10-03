@@ -1,5 +1,6 @@
 import { Clock, ArrowUpRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
+import { pickHeadline, trackHeadline } from '../hooks/useV3';
 import type { PostWithRelations, Category } from '../lib/types';
 
 interface MagazineFeedProps {
@@ -60,7 +61,10 @@ export default function MagazineFeed({ posts, categories, activeCategory, onCate
         <p className="text-center text-charcoal-muted py-20 text-lg font-light">No articles in this category yet.</p>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
-          {posts.map((post) => (
+          {posts.map((post) => {
+            const hl = pickHeadline(post);
+            if (post.alt_title) trackHeadline(post.id, hl.variant, 'impression');
+            return (
             <Link
               key={post.id}
               to={{ name: 'article', slug: post.slug }}
@@ -90,7 +94,7 @@ export default function MagazineFeed({ posts, categories, activeCategory, onCate
                   </div>
                 )}
                 <h3 className="font-serif text-xl text-charcoal leading-snug group-hover:text-bronze transition-colors duration-300 line-clamp-3">
-                  {post.title}
+                  {hl.title}
                 </h3>
                 {post.excerpt && (
                   <p className="text-charcoal-muted text-sm mt-2.5 leading-relaxed line-clamp-2">{post.excerpt}</p>
@@ -102,7 +106,8 @@ export default function MagazineFeed({ posts, categories, activeCategory, onCate
                 </div>
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>

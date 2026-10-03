@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Play, Pause, Volume2, Square, Gauge } from 'lucide-react';
+import {Play, Pause, Square, Gauge} from 'lucide-react';
 
 interface TTSProps {
   postId: string;

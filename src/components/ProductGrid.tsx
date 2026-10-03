@@ -1,10 +1,10 @@
+import type { Product } from '../lib/types';
 import { ExternalLink, ArrowRight, Download } from 'lucide-react';
-import { useShopProducts, useFeaturedShopProducts } from '../hooks/useCommerce';
+import { useShopProducts } from '../hooks/useCommerce';
 import { Link } from '../context/NavigationContext';
 
 export default function ProductGrid() {
   const { products, loading } = useShopProducts();
-  const { products: featured } = useFeaturedShopProducts();
 
   if (loading) {
     return (
@@ -27,7 +27,6 @@ export default function ProductGrid() {
 
   const digitalGuides = products.filter(p => p.product_type === 'digital' || p.is_digital);
   const affiliateProducts = products.filter(p => p.product_type === 'affiliate' || (!p.is_digital && p.product_type !== 'digital'));
-  const showcase = featured.length > 0 ? featured : products.slice(0, 4);
 
   if (products.length === 0) return null;
 
@@ -82,7 +81,7 @@ export default function ProductGrid() {
   );
 }
 
-function ProductMiniCard({ product }: { product: any }) {
+function ProductMiniCard({ product }: { product: Product }) {
   const isDigital = product.product_type === 'digital' || product.is_digital;
   const priceNum = parseFloat(product.price || '0');
 

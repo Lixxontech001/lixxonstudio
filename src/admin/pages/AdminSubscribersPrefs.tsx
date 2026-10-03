@@ -1,4 +1,4 @@
-import { Mail, Loader2, Calendar } from 'lucide-react';
+import {Calendar} from 'lucide-react';
 import { useAdminSubscribersWithPrefs } from '../../hooks/usePlatform';
 
 export default function AdminSubscribersPrefs() {

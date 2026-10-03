@@ -20,6 +20,27 @@ export default function AdminArticles() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [search, setSearch] = useState('');
   const { posts, totalPages, loading } = useAdminPosts(page, { status: statusFilter, category: categoryFilter, search });
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkTag, setBulkTag] = useState('');
+  const allSelected = posts.length > 0 && posts.every(p => selected.has(p.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(posts.map(p => p.id)));
+  const toggleOne = (id: string) => setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  const bulk = async (action: 'publish' | 'draft' | 'archive' | 'delete' | 'tag' | 'feature' | 'unfeature') => {
+    const ids = [...selected]; if (!ids.length) return;
+    if (action === 'delete' && !confirm(`Delete ${ids.length} article(s)? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    if (action === 'delete') await supabase.from('posts').delete().in('id', ids);
+    else if (action === 'tag') {
+      const tag = bulkTag.trim().toLowerCase(); if (!tag) { setBulkBusy(false); return; }
+      await Promise.all(posts.filter(p => selected.has(p.id)).map(p => supabase.from('posts').update({ tags: Array.from(new Set([...(p.tags || []), tag])) }).eq('id', p.id)));
+    }
+    else if (action === 'feature' || action === 'unfeature') await supabase.from('posts').update({ featured: action === 'feature' }).in('id', ids);
+    else await supabase.from('posts').update({ status: action === 'publish' ? 'published' : action === 'draft' ? 'draft' : 'archived', ...(action === 'publish' ? { published_at: new Date().toISOString() } : {}) }).in('id', ids);
+    setBulkBusy(false); setSelected(new Set());
+    window.location.reload();
+  };
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
@@ -94,6 +115,20 @@ export default function AdminArticles() {
         </select>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-charcoal text-white rounded text-xs">
+          <span className="font-medium mr-2">{selected.size} selected</span>
+          <button disabled={bulkBusy} onClick={() => bulk('publish')} className="px-3 py-1.5 bg-white/10 rounded hover:bg-bronze">Publish</button>
+          <button disabled={bulkBusy} onClick={() => bulk('draft')} className="px-3 py-1.5 bg-white/10 rounded hover:bg-bronze">Unpublish</button>
+          <button disabled={bulkBusy} onClick={() => bulk('archive')} className="px-3 py-1.5 bg-white/10 rounded hover:bg-bronze">Archive</button>
+          <button disabled={bulkBusy} onClick={() => bulk('feature')} className="px-3 py-1.5 bg-white/10 rounded hover:bg-bronze">Feature</button>
+          <button disabled={bulkBusy} onClick={() => bulk('unfeature')} className="px-3 py-1.5 bg-white/10 rounded hover:bg-bronze">Unfeature</button>
+          <span className="inline-flex"><input value={bulkTag} onChange={e => setBulkTag(e.target.value)} placeholder="add tag…" className="px-2 py-1.5 rounded-l text-charcoal w-28" /><button disabled={bulkBusy} onClick={() => bulk('tag')} className="px-3 py-1.5 bg-white/10 rounded-r hover:bg-bronze">Tag</button></span>
+          <button disabled={bulkBusy} onClick={() => bulk('delete')} className="ml-auto px-3 py-1.5 bg-red-600/80 rounded hover:bg-red-600">Delete</button>
+          <button onClick={() => setSelected(new Set())} className="px-2 py-1.5 text-white/60 hover:text-white">Clear</button>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-gray-400 text-sm">Loading...</p>
       ) : posts.length === 0 ? (
@@ -105,6 +140,7 @@ export default function AdminArticles() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-4 py-3 w-8"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /></th>
                 <th className="text-left px-5 py-3 text-xs text-gray-500 font-medium uppercase tracking-wider">Title</th>
                 <th className="text-left px-5 py-3 text-xs text-gray-500 font-medium uppercase tracking-wider hidden md:table-cell">Category</th>
                 <th className="text-left px-5 py-3 text-xs text-gray-500 font-medium uppercase tracking-wider">Status</th>
@@ -114,7 +150,8 @@ export default function AdminArticles() {
             </thead>
             <tbody>
               {posts.map(post => (
-                <tr key={post.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                <tr key={post.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${selected.has(post.id) ? 'bg-bronze/5' : ''}`}>
+                  <td className="px-4 py-3"><input type="checkbox" checked={selected.has(post.id)} onChange={() => toggleOne(post.id)} aria-label={`Select ${post.title}`} /></td>
                   <td className="px-5 py-3">
                     <button onClick={() => navigate({ name: 'admin-article-edit', id: post.id })} className="text-left">
                       <p className="font-medium text-gray-900 hover:text-bronze transition-colors">{post.title}</p>

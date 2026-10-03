@@ -55,6 +55,21 @@ export type Route =
   | { name: 'gift-cards' }
   | { name: 'order-tracking'; orderNumber: string }
   | { name: 'product-comparison' }
+  | { name: 'series'; slug: string }
+  | { name: 'series-index' }
+  | { name: 'glossary' }
+  | { name: 'account-profile' }
+  | { name: 'account-refunds' }
+  | { name: 'reader'; handle: string }
+  | { name: 'shared-list'; token: string }
+  | { name: 'newsletter-confirm'; token: string }
+  | { name: 'newsletter-unsubscribe'; token: string }
+  | { name: 'admin-glossary' }
+  | { name: 'admin-series' }
+  | { name: 'admin-questions' }
+  | { name: 'admin-team' }
+  | { name: 'admin-backups' }
+  | { name: 'admin-security' }
   | { name: 'admin-promo-codes' }
   | { name: 'admin-reviews' }
   | { name: 'admin-polls' }
@@ -95,6 +110,13 @@ function parsePath(): Route {
   if (parts[0] === 'gift-cards') return { name: 'gift-cards' };
   if (parts[0] === 'order-tracking') return { name: 'order-tracking', orderNumber: params.get('order') || parts[1] || '' };
   if (parts[0] === 'product-comparison') return { name: 'product-comparison' };
+  if (parts[0] === 'series' && parts[1]) return { name: 'series', slug: decodeURIComponent(parts[1]) };
+  if (parts[0] === 'series') return { name: 'series-index' };
+  if (parts[0] === 'glossary') return { name: 'glossary' };
+  if (parts[0] === 'reader' && parts[1]) return { name: 'reader', handle: decodeURIComponent(parts[1]) };
+  if (parts[0] === 'list' && parts[1]) return { name: 'shared-list', token: parts[1] };
+  if (parts[0] === 'newsletter' && parts[1] === 'confirm') return { name: 'newsletter-confirm', token: params.get('token') || '' };
+  if (parts[0] === 'newsletter' && parts[1] === 'unsubscribe') return { name: 'newsletter-unsubscribe', token: params.get('token') || '' };
   if (parts[0] === 'privacy') return { name: 'privacy' };
   if (parts[0] === 'terms') return { name: 'terms' };
   if (parts[0] === 'contact') return { name: 'contact' };
@@ -110,6 +132,8 @@ function parsePath(): Route {
   if (parts[0] === 'account') {
     if (parts[1] === 'orders') return { name: 'account-orders' };
     if (parts[1] === 'downloads') return { name: 'account-downloads' };
+    if (parts[1] === 'profile') return { name: 'account-profile' };
+    if (parts[1] === 'refunds') return { name: 'account-refunds' };
     return { name: 'account' };
   }
   if (parts[0] === 'collections') {
@@ -147,6 +171,12 @@ function parsePath(): Route {
     if (parts[1] === 'activity-log') return { name: 'admin-activity-log' };
     if (parts[1] === 'content-templates') return { name: 'admin-content-templates' };
     if (parts[1] === 'gift-cards') return { name: 'admin-gift-cards' };
+    if (parts[1] === 'glossary') return { name: 'admin-glossary' };
+    if (parts[1] === 'series') return { name: 'admin-series' };
+    if (parts[1] === 'questions') return { name: 'admin-questions' };
+    if (parts[1] === 'team') return { name: 'admin-team' };
+    if (parts[1] === 'backups') return { name: 'admin-backups' };
+    if (parts[1] === 'security') return { name: 'admin-security' };
     if (parts[1] === 'feedback') return { name: 'admin-feedback' };
     if (parts[1] === 'social-shares') return { name: 'admin-social-shares' };
     if (parts[1] === 'subscribers-prefs') return { name: 'admin-subscribers-prefs' };
@@ -227,6 +257,21 @@ export function routeToPath(route: Route): string {
     case 'gift-cards': return '/gift-cards';
     case 'order-tracking': return `/order-tracking?order=${encodeURIComponent(route.orderNumber)}`;
     case 'product-comparison': return '/product-comparison';
+    case 'series': return `/series/${encodeURIComponent(route.slug)}`;
+    case 'series-index': return '/series';
+    case 'glossary': return '/glossary';
+    case 'account-profile': return '/account/profile';
+    case 'account-refunds': return '/account/refunds';
+    case 'reader': return `/reader/${encodeURIComponent(route.handle)}`;
+    case 'shared-list': return `/list/${route.token}`;
+    case 'newsletter-confirm': return `/newsletter/confirm?token=${route.token}`;
+    case 'newsletter-unsubscribe': return `/newsletter/unsubscribe?token=${route.token}`;
+    case 'admin-glossary': return '/admin/glossary';
+    case 'admin-series': return '/admin/series';
+    case 'admin-questions': return '/admin/questions';
+    case 'admin-team': return '/admin/team';
+    case 'admin-backups': return '/admin/backups';
+    case 'admin-security': return '/admin/security';
     case 'admin-promo-codes': return '/admin/promo-codes';
     case 'admin-reviews': return '/admin/reviews';
     case 'admin-polls': return '/admin/polls';

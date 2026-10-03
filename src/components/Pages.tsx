@@ -173,30 +173,44 @@ export function PrivacyPage() {
     <section className="container-narrow py-16 md:py-20">
       <Helmet>
         <title>Privacy Policy | Lixxon Studio</title>
+        <meta name="description" content="How Lixxon Studio collects, uses and protects your personal data — newsletter, accounts, orders, cookies and your rights." />
       </Helmet>
       <p className="text-[10px] tracking-ultra-wide uppercase text-bronze mb-4">Legal</p>
       <h1 className="font-serif text-4xl md:text-5xl text-charcoal font-light">Privacy Policy</h1>
       <div className="article-prose mt-10">
-        <p><em>Last updated: September 2026</em></p>
-        <p>
-          Lixxon Studio respects your privacy. This policy explains what information we collect, how we use it, and the choices you have.
-        </p>
-        <h2>Information We Collect</h2>
-        <p>
-          We collect your email address when you voluntarily subscribe to The Daily Reset newsletter. We also collect name and message content when you submit our contact form. We do not sell, rent, or share your personal information with third parties.
-        </p>
-        <h2>How We Use Your Information</h2>
-        <p>
-          Newsletter subscriptions are used exclusively to deliver our daily editorial content. Contact form submissions are used to respond to your inquiry and are not added to any marketing list.
-        </p>
-        <h2>Cookies</h2>
-        <p>
-          We use minimal cookies to improve site performance and understand reader preferences. We do not use cookies for targeted advertising.
-        </p>
-        <h2>Your Rights</h2>
-        <p>
-          You may unsubscribe from our newsletter at any time. You may request deletion of your data by contacting us at privacy@lixxonstudio.com.
-        </p>
+        <p><em>Last updated: 3 October 2026</em></p>
+        <p>Lixxon Studio ("we", "us") respects your privacy. This policy explains what we collect, why, where it is stored, and the choices and rights you have. It applies to lixxonstudio.com and our newsletter, shop and reader accounts.</p>
+
+        <h2>What we collect and why</h2>
+        <ul>
+          <li><strong>Newsletter</strong> — your email address and the preferences you choose. We use double opt-in: nothing is sent until you confirm the link we email you. Every email contains a one-click unsubscribe link.</li>
+          <li><strong>Reader account</strong> (optional) — your email address, used to send you a passwordless sign-in link, plus the data you create: bookmarks, reading lists, badges, reading history and a display name. You can delete the account at any time from your account page.</li>
+          <li><strong>Orders</strong> — name, email, billing details and the items purchased, retained for as long as required by tax and consumer law. Card and bank details are entered directly with our payment processor (Flutterwave) and never touch our servers.</li>
+          <li><strong>Comments, reviews and questions</strong> — the name you choose, your email (never shown publicly) and the text you submit. A non-identifying device fingerprint is stored to prevent spam and to let you edit your own comment for 15 minutes.</li>
+          <li><strong>Contact and feedback forms</strong> — the content you send us so we can reply.</li>
+          <li><strong>Usage data</strong> — anonymous article view counts and reading-progress signals (no account required, no cross-site tracking).</li>
+        </ul>
+
+        <h2>Cookies and analytics</h2>
+        <p>We set strictly necessary storage for the site to work (cart contents, theme, currency, cookie preferences, and a session token once you sign in). Google Analytics is <strong>only</strong> loaded after you click "Accept" in the cookie banner; declining keeps the site fully functional. You can change your choice at any time from the "Cookie preferences" link in the footer.</p>
+
+        <h2>Emails we send</h2>
+        <p>Transactional emails (order receipts, download links, sign-in links, comment replies you asked to be notified about) are sent because you requested them. Marketing emails (The Daily Reset, weekly digest, restock or series alerts) are sent only with your consent and each one includes an unsubscribe link.</p>
+
+        <h2>Where your data lives</h2>
+        <p>Our database and file storage run on Supabase, our site is served by Vercel, emails are delivered by Resend, and payments are processed by Flutterwave. Each processor only receives the data needed for its task. Errors may be reported to Sentry with personal identifiers removed.</p>
+
+        <h2>Security</h2>
+        <p>Data is encrypted in transit (TLS) and at rest. Access to customer data is restricted by row-level security policies, admin accounts require two-factor authentication, and administrative changes are written to a tamper-evident audit log.</p>
+
+        <h2>Your rights</h2>
+        <p>You may at any time: unsubscribe from any email; export your account data (Account → Profile → Export my data); delete your account and associated data; or ask us to correct, delete or hand over personal data we hold about you. Email <a href="mailto:privacy@lixxonstudio.com">privacy@lixxonstudio.com</a> and we will respond within 30 days.</p>
+
+        <h2>Children</h2>
+        <p>Our services are not directed at children under 16 and we do not knowingly collect their data.</p>
+
+        <h2>Changes</h2>
+        <p>If this policy changes materially we will note it here and, for account holders, by email.</p>
       </div>
     </section>
   );

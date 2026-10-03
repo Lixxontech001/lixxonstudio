@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Package, Search } from 'lucide-react';
 import { useAdminOrders } from '../../hooks/useCommerce';
+import ExportButton from '../components/ExportButton';
+import { supabase } from '../../lib/supabaseClient';
 import type { Order } from '../../lib/types';
 
 export default function AdminOrders() {
@@ -22,7 +24,10 @@ export default function AdminOrders() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="font-serif text-3xl text-charcoal font-light">Orders</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="font-serif text-3xl text-charcoal font-light">Orders</h1>
+          <ExportButton filename="orders" load={async () => { const { data } = await supabase.from('admin_orders_export').select('*').order('created_at', { ascending: false }); return (data || []) as Record<string, unknown>[]; }} />
+        </div>
         <div className="flex gap-6 mt-3 text-sm">
           <span className="text-charcoal-muted">{orders.length} total orders</span>
           <span className="text-charcoal-muted">Revenue: <strong className="text-charcoal">${totalRevenue.toFixed(2)}</strong></span>

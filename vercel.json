@@ -1,27 +1,35 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(self \"https://checkout.flutterwave.com\"), interest-cohort=()" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://checkout.flutterwave.com; script-src 'self' 'unsafe-inline' https://checkout.flutterwave.com https://*.flutterwave.com https://www.googletagmanager.com https://va.vercel-scripts.com https://*.sentry.io; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.flutterwave.com https://checkout.flutterwave.com https://*.flutterwave.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://vitals.vercel-insights.com https://*.sentry.io https://*.ingest.sentry.io https://cdn.jsdelivr.net; frame-src https://checkout.flutterwave.com https://*.flutterwave.com; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
+        }
+      ]
+    },
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/admin(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+    { "source": "/account(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+  ],
   "rewrites": [
-    { "source": "/search", "destination": "/index.html" },
-    { "source": "/blog/:slug", "destination": "/index.html" },
-    { "source": "/category/:slug", "destination": "/index.html" },
-    { "source": "/product/:slug", "destination": "/index.html" },
-    { "source": "/about", "destination": "/index.html" },
-    { "source": "/contact", "destination": "/index.html" },
-    { "source": "/privacy", "destination": "/index.html" },
-    { "source": "/terms", "destination": "/index.html" },
-    { "source": "/not-found", "destination": "/index.html" },
-    { "source": "/shop", "destination": "/index.html" },
-    { "source": "/shop/category/:slug", "destination": "/index.html" },
-    { "source": "/shop/product/:slug", "destination": "/index.html" },
-    { "source": "/shop/cart", "destination": "/index.html" },
-    { "source": "/shop/checkout", "destination": "/index.html" },
-    { "source": "/shop/wishlist", "destination": "/index.html" },
-    { "source": "/account", "destination": "/index.html" },
-    { "source": "/account/orders", "destination": "/index.html" },
-    { "source": "/account/downloads", "destination": "/index.html" },
-    { "source": "/collections", "destination": "/index.html" },
-    { "source": "/collections/:slug", "destination": "/index.html" },
-    { "source": "/admin", "destination": "/index.html" },
-    { "source": "/admin/:path*", "destination": "/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/sitemap.xml", "destination": "/api/feeds?type=sitemap" },
+    { "source": "/rss.xml", "destination": "/api/feeds?type=rss" },
+    { "source": "/feed", "destination": "/api/feeds?type=rss" },
+    {
+      "source": "/blog/:slug",
+      "has": [{ "type": "header", "key": "user-agent", "value": ".*(bot|crawl|spider|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|pinterest|embedly|quora|outbrain|vkshare|w3c_validator|skypeuripreview|applebot|duckduckbot|baiduspider|yandex|google-inspectiontool|lighthouse|chrome-lighthouse).*" }],
+      "destination": "/api/feeds?type=prerender&path=/blog/:slug"
+    },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

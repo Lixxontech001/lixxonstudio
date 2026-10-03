@@ -1,4 +1,4 @@
-import { Activity, Loader2 } from 'lucide-react';
+import {Activity} from 'lucide-react';
 import { useAdminActivityLog } from '../../hooks/usePlatform';
 
 export default function AdminActivityLog() {

@@ -1,0 +1,53 @@
+# One-click Supabase deploy: migrations + edge functions + function secrets.
+# Trigger manually (Actions → "Deploy Supabase" → Run) or via `gh workflow run deploy-supabase.yml`.
+# Required repo secrets: SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD
+# Optional (function secrets; only set if present): FLW_SECRET_KEY, FLW_WEBHOOK_HASH, INTERNAL_FN_SECRET,
+#   RATE_LIMIT_SALT, RESEND_API_KEY, EMAIL_FROM, ADMIN_NOTIFY_EMAIL, SITE_URL, CHECKOUT_CURRENCY, EMAIL_DAILY_CAP
+name: Deploy Supabase
+on:
+  workflow_dispatch:
+    inputs:
+      what:
+        description: "What to deploy"
+        type: choice
+        default: all
+        options: [all, migrations, functions, secrets]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Link project
+        run: supabase link --project-ref "$REF"
+      - name: Push migrations
+        if: inputs.what == 'all' || inputs.what == 'migrations'
+        run: supabase db push --include-all
+      - name: Set function secrets
+        if: inputs.what == 'all' || inputs.what == 'secrets'
+        env:
+          FLW_SECRET_KEY: ${{ secrets.FLW_SECRET_KEY }}
+          FLW_WEBHOOK_HASH: ${{ secrets.FLW_WEBHOOK_HASH }}
+          INTERNAL_FN_SECRET: ${{ secrets.INTERNAL_FN_SECRET }}
+          RATE_LIMIT_SALT: ${{ secrets.RATE_LIMIT_SALT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          ADMIN_NOTIFY_EMAIL: ${{ secrets.ADMIN_NOTIFY_EMAIL }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CHECKOUT_CURRENCY: ${{ secrets.CHECKOUT_CURRENCY }}
+          EMAIL_DAILY_CAP: ${{ secrets.EMAIL_DAILY_CAP }}
+        run: |
+          : > .secrets.env
+          for k in FLW_SECRET_KEY FLW_WEBHOOK_HASH INTERNAL_FN_SECRET RATE_LIMIT_SALT RESEND_API_KEY EMAIL_FROM ADMIN_NOTIFY_EMAIL SITE_URL CHECKOUT_CURRENCY EMAIL_DAILY_CAP; do
+            v="${!k}"; [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> .secrets.env
+          done
+          if [ -s .secrets.env ]; then supabase secrets set --env-file .secrets.env; else echo "no secrets provided"; fi
+          rm -f .secrets.env
+      - name: Deploy edge functions
+        if: inputs.what == 'all' || inputs.what == 'functions'
+        run: supabase functions deploy --project-ref "$REF"

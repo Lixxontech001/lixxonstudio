@@ -41,7 +41,7 @@ export default function AdminComments() {
         </div>
       ) : (
         <div className="space-y-3">
-          {comments.map((comment: any) => (
+          {comments.map((comment) => (
             <div key={comment.id} className="bg-white border border-gray-200 rounded-lg p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -53,7 +53,7 @@ export default function AdminComments() {
                   <p className="text-sm text-gray-700 leading-relaxed">{comment.content}</p>
                   {comment.post && (
                     <button
-                      onClick={() => navigate({ name: 'article', slug: comment.post.slug })}
+                      onClick={() => navigate({ name: 'article', slug: comment.post!.slug })}
                       className="text-xs text-bronze hover:underline mt-2 flex items-center gap-1"
                     >
                       <Eye size={12} /> On: {comment.post.title}

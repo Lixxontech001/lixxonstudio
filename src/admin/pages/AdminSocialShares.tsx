@@ -1,4 +1,4 @@
-import { Share2, Loader2 } from 'lucide-react';
+import {Share2} from 'lucide-react';
 import { useAdminSocialShares } from '../../hooks/usePlatform';
 
 const PLATFORM_LABELS: Record<string, string> = {

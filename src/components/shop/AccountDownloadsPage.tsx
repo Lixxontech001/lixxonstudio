@@ -1,60 +1,32 @@
-import { useEffect, useState } from 'react';
-import { Download, ArrowRight, Lock, Clock } from 'lucide-react';
-import { Link, useNavigation } from '../../context/NavigationContext';
+import { useEffect } from 'react';
+import { Download, ArrowRight, Lock, Clock, Loader2 } from 'lucide-react';
+import { Link } from '../../context/NavigationContext';
 import { useDownloadEntitlements } from '../../hooks/useCommerce';
-import { supabase } from '../../lib/supabaseClient';
 import { Helmet } from 'react-helmet-async';
+import { useAuth } from '../../context/AuthContext';
+import CustomerGate from './CustomerGate';
+import { useDownload } from '../../hooks/useDownload';
 
 export default function AccountDownloadsPage() {
-  const [email] = useState(() => localStorage.getItem('lixxon_customer_email') || '');
-  const { entitlements, loading } = useDownloadEntitlements(email || null);
-  const { navigate } = useNavigation();
+  return <CustomerGate title="My Downloads" intro="Sign in with your purchase email to access your digital products."><DownloadsInner /></CustomerGate>;
+}
+
+function DownloadsInner() {
+  const { email } = useAuth();
+  const { entitlements, loading, refetch } = useDownloadEntitlements(email);
+  const { download, busyToken } = useDownload();
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
-  if (!email) {
-    navigate({ name: 'account' });
-    return null;
-  }
-
-  const handleDownload = async (token: string, entitlementId: string) => {
-    // Fetch a secure, expiring download URL from Supabase Storage
-    const { data, error } = await supabase
-      .from('download_entitlements')
-      .select('file_path, download_count, max_downloads')
-      .eq('download_token', token)
-      .maybeSingle();
-
-    if (error || !data) {
-      alert('Download link is invalid or has expired.');
-      return;
+  // deep link from the receipt email: /account/downloads?token=...
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (token && !loading) {
+      const ent = entitlements.find(e => e.download_token === token);
+      if (ent) { download(token).then(refetch); window.history.replaceState({}, '', '/account/downloads'); }
     }
-
-    if (data.download_count >= data.max_downloads) {
-      alert('You have reached the maximum number of downloads for this product.');
-      return;
-    }
-
-    // Create a signed URL for the file (expires in 1 hour)
-    const { data: urlData, error: urlError } = await supabase
-      .storage
-      .from('digital-products')
-      .createSignedUrl(data.file_path, 3600);
-
-    if (urlError || !urlData) {
-      alert('Could not generate download link. Please try again.');
-      return;
-    }
-
-    // Increment download count
-    await supabase
-      .from('download_entitlements')
-      .update({ download_count: data.download_count + 1 })
-      .eq('id', entitlementId);
-
-    // Open the signed URL
-    window.open(urlData.signedUrl, '_blank', 'noopener,noreferrer');
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   return (
     <main>
@@ -106,11 +78,11 @@ export default function AccountDownloadsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleDownload(ent.download_token, ent.id)}
-                    disabled={isExpired || downloadsLeft <= 0}
+                    onClick={() => download(ent.download_token).then(refetch)}
+                    disabled={!!isExpired || downloadsLeft <= 0 || busyToken === ent.download_token}
                     className="inline-flex items-center gap-2 px-6 py-3 bg-bronze text-white text-xs tracking-editorial uppercase font-medium rounded-sm hover:bg-bronze-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isExpired ? <><Lock size={14} /> Expired</> : <><Download size={14} /> Download</>}
+                    {isExpired ? <><Lock size={14} /> Expired</> : busyToken === ent.download_token ? <><Loader2 size={14} className="animate-spin" /> Preparing</> : <><Download size={14} /> Download</>}
                   </button>
                 </div>
               );

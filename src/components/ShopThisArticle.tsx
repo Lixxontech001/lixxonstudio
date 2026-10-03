@@ -1,6 +1,6 @@
-import { ShoppingBag, ExternalLink } from 'lucide-react';
-import { Link } from '../context/NavigationContext';
-import { useArticleProducts, trackProductClick } from '../hooks/useCommerce';
+import {ShoppingBag} from 'lucide-react';
+
+import {useArticleProducts} from '../hooks/useCommerce';
 import { useCart } from '../context/CartContext';
 import { ProductCard } from './shop/ShopPage';
 import { useWishlist } from '../context/WishlistContext';

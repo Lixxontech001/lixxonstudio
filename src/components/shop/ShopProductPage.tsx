@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, ExternalLink, Heart, Check, ShoppingBag, Download, FileText, BookOpen } from 'lucide-react';
-import { Link, useNavigation } from '../../context/NavigationContext';
+import {useNavigation} from '../../context/NavigationContext';
 import { useShopProduct, useShopProducts, trackProductClick } from '../../hooks/useCommerce';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -11,6 +11,7 @@ import ProductReviews from './ProductReviews';
 import RecentlyViewedProducts from './RecentlyViewedProducts';
 import { trackProductView } from '../../hooks/useFeatures';
 import { Helmet } from 'react-helmet-async';
+import { DisplayPrice, PayWhatYouWant, StockNotice, CompareButton, BundleOffers } from './ProductExtras';
 
 const getPublicStorageUrl = (filePath: string, bucket = 'previews') => {
   if (!filePath) return '';
@@ -29,8 +30,9 @@ export default function ShopProductPage({ slug }: { slug: string }) {
   const { addItem } = useCart();
   const { toggleItem, hasItem } = useWishlist();
   const { navigate } = useNavigation();
+  const [pwyw, setPwyw] = useState(0);
 
-  useEffect(() => { window.scrollTo(0, 0); }, [slug]);
+  useEffect(() => { window.scrollTo(0, 0); setPwyw(0); }, [slug]);
 
   useEffect(() => {
     if (product) {
@@ -45,6 +47,9 @@ export default function ShopProductPage({ slug }: { slug: string }) {
   const isAffiliate = product.product_type === 'affiliate' || (!isDigital && product.affiliate_url && product.affiliate_url !== '#');
   const hasAffiliate = product.affiliate_url && product.affiliate_url !== '#';
   const priceNum = parseFloat(product.price || '0');
+  const pwywFloor = product.pay_what_you_want ? (product.min_price_cents ?? product.price_cents ?? Math.round(priceNum * 100)) / 100 : priceNum;
+  const effectivePrice = product.pay_what_you_want ? Math.max(pwywFloor, pwyw || pwywFloor) : priceNum;
+  const purchasable = isDigital && effectivePrice > 0 && (product.stock_status || 'in_stock') !== 'out_of_stock' && (product.stock_status || 'in_stock') !== 'coming_soon';
   const isWishlisted = hasItem(product.id);
 
   const relatedProducts = products
@@ -61,14 +66,15 @@ export default function ShopProductPage({ slug }: { slug: string }) {
     .slice(0, 3);
 
   const handleAddToCart = () => {
-    if (isDigital && priceNum > 0) {
+    if (purchasable) {
       addItem({
         id: product.id,
         name: product.name,
         slug: product.slug || product.id,
-        price: priceNum,
+        price: effectivePrice,
         image_url: product.image_url,
         is_digital: true,
+        pwyw_price: product.pay_what_you_want ? effectivePrice : undefined,
       });
     }
   };
@@ -108,6 +114,22 @@ export default function ShopProductPage({ slug }: { slug: string }) {
         <meta property="og:title" content={`${product.name} | Lixxon Studio`} />
         <meta property="og:description" content={product.description || ''} />
         <meta property="og:type" content="product" />
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: product.name,
+          description: product.seo_description || product.description || undefined,
+          image: product.image_url || undefined,
+          brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
+          sku: product.sku || undefined,
+          offers: priceNum > 0 ? {
+            '@type': 'Offer',
+            price: effectivePrice.toFixed(2),
+            priceCurrency: product.currency || 'USD',
+            availability: `https://schema.org/${(product.stock_status || 'in_stock') === 'in_stock' || product.stock_status === 'low' ? 'InStock' : product.stock_status === 'coming_soon' ? 'PreOrder' : 'OutOfStock'}`,
+            url: `${window.location.origin}/shop/product/${product.slug}`,
+          } : undefined,
+        })}</script>
         {product.image_url && <meta property="og:image" content={product.image_url} />}
       </Helmet>
 
@@ -152,10 +174,13 @@ export default function ShopProductPage({ slug }: { slug: string }) {
             </h1>
 
             {product.price && (
-              <p className="font-serif text-3xl text-charcoal mt-5">
-                {priceNum > 0 ? `$${priceNum.toFixed(2)} ${product.currency || 'USD'}` : product.price}
+              <p className="font-serif text-3xl text-charcoal mt-5 flex flex-wrap items-baseline gap-3">
+                {priceNum > 0 ? `$${effectivePrice.toFixed(2)} ${product.currency || 'USD'}` : product.price}
+                {priceNum > 0 && <DisplayPrice usd={effectivePrice} className="text-base text-charcoal-muted font-sans" />}
               </p>
             )}
+            <PayWhatYouWant product={product} value={effectivePrice} onChange={setPwyw} />
+            <StockNotice product={product} />
 
             {product.is_sponsored && product.sponsor_name && (
               <div className="mt-4 bg-taupe-light/60 border border-taupe/40 rounded-sm px-4 py-3">
@@ -184,7 +209,7 @@ export default function ShopProductPage({ slug }: { slug: string }) {
             {/* Actions */}
             <div className="flex items-center gap-3 mt-8">
               {/* Digital product: Add to Cart only, no vendor button */}
-              {isDigital && priceNum > 0 && (
+              {purchasable && (
                 <button
                   onClick={handleAddToCart}
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-bronze text-white text-sm tracking-editorial uppercase font-medium hover:bg-bronze-dark transition-all duration-500 rounded-sm flex-1 lg:flex-none"
@@ -220,6 +245,9 @@ export default function ShopProductPage({ slug }: { slug: string }) {
                 <Heart size={18} strokeWidth={1.5} fill={isWishlisted ? 'currentColor' : 'none'} className={isWishlisted ? 'text-bronze' : ''} />
               </button>
             </div>
+
+            <div className="mt-4"><CompareButton product={product} /></div>
+            <BundleOffers product={product} />
 
             {/* Affiliate disclosure */}
             {hasAffiliate && !isDigital && (

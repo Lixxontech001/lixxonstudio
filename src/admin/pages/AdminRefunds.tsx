@@ -1,4 +1,4 @@
-import { Check, X, Loader2, RotateCcw } from 'lucide-react';
+import {Check, X} from 'lucide-react';
 import { useAdminRefundRequests } from '../../hooks/usePlatform';
 
 export default function AdminRefunds() {

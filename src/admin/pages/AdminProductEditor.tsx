@@ -1,3 +1,4 @@
+import type { MediaItem } from '../../lib/types';
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, Upload, FileText, ExternalLink } from 'lucide-react';
 import { useNavigation } from '../../context/NavigationContext';
@@ -32,7 +33,7 @@ export default function AdminProductEditor({ productId, isNew }: { productId?: s
 
   // Add these state variables near the top of AdminProductEditor
 const [showMediaPicker, setShowMediaPicker] = useState(false);
-const [mediaList, setMediaList] = useState<any[]>([]);
+const [mediaList, setMediaList] = useState<MediaItem[]>([]);
 const [uploadingImage, setUploadingImage] = useState(false);
 
 // Function to fetch media library items when picker opens

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { BookmarkPlus, List, X, Trash2, Plus, Clock } from 'lucide-react';
-import { Link } from '../context/NavigationContext';
+import {BookmarkPlus, List, X, Plus} from 'lucide-react';
+
 import { useReadingLists } from '../hooks/usePlatform';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabaseClient';
