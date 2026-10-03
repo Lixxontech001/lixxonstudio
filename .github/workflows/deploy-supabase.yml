@@ -5,6 +5,9 @@
 #   RATE_LIMIT_SALT, RESEND_API_KEY, EMAIL_FROM, ADMIN_NOTIFY_EMAIL, SITE_URL, CHECKOUT_CURRENCY, EMAIL_DAILY_CAP
 name: Deploy Supabase
 on:
+  push:
+    branches: [main]
+    paths: ['supabase/**', '.github/workflows/deploy-supabase.yml']
   workflow_dispatch:
     inputs:
       what:
@@ -26,10 +29,10 @@ jobs:
       - name: Link project
         run: supabase link --project-ref "$REF"
       - name: Push migrations
-        if: inputs.what == 'all' || inputs.what == 'migrations'
+        if: github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'migrations'
         run: supabase db push --include-all
       - name: Set function secrets
-        if: inputs.what == 'all' || inputs.what == 'secrets'
+        if: github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'secrets'
         env:
           FLW_SECRET_KEY: ${{ secrets.FLW_SECRET_KEY }}
           FLW_WEBHOOK_HASH: ${{ secrets.FLW_WEBHOOK_HASH }}
@@ -49,5 +52,5 @@ jobs:
           if [ -s .secrets.env ]; then supabase secrets set --env-file .secrets.env; else echo "no secrets provided"; fi
           rm -f .secrets.env
       - name: Deploy edge functions
-        if: inputs.what == 'all' || inputs.what == 'functions'
+        if: github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'functions'
         run: supabase functions deploy --project-ref "$REF"
