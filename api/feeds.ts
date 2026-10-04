@@ -15,14 +15,34 @@ function env(...names: string[]): string | undefined {
 }
 
 export default async function handler(req: Request): Promise<Response> {
-  const base = env('VITE_SUPABASE_URL', 'SUPABASE_URL', 'VITE_SUPABASE_PROJECT_URL');
-  const anon = env('VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY', 'VITE_SUPABASE_KEY') || '';
+  const base = env(
+    'VITE_SUPABASE_URL',
+    'VITE_PUBLIC_SUPABASE_URL',
+    'SUPABASE_URL',
+    'VITE_SUPABASE_PROJECT_URL',
+  );
+  const anon =
+    env(
+      'VITE_SUPABASE_ANON_KEY',
+      'VITE_PUBLIC_SUPABASE_ANON_KEY',
+      'VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      'VITE_SUPABASE_PUBLISHABLE_KEY',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_PUBLISHABLE_KEY',
+      'VITE_SUPABASE_KEY',
+    ) || '';
   const url = new URL(req.url);
   const type = url.searchParams.get('type') || 'sitemap';
   const path = url.searchParams.get('path') || '/';
   if (!base || !ALLOWED.has(type)) return new Response('Not found', { status: 404 });
   const target = `${base}/functions/v1/feeds?type=${type}&path=${encodeURIComponent(path)}`;
-  const r = await fetch(target, { headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
+  let r: Response;
+  try {
+    r = await fetch(target, { headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
+  } catch {
+    // Supabase unreachable — answer crawlers with a clean error instead of an unhandled stack trace.
+    return new Response('Upstream feed unavailable', { status: 502, headers: { 'Cache-Control': 'no-store' } });
+  }
   const headers = new Headers(r.headers);
   headers.set('Cache-Control', 'public, max-age=600, s-maxage=3600, stale-while-revalidate=86400');
   headers.delete('access-control-allow-origin');

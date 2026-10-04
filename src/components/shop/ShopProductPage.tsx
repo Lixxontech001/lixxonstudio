@@ -12,6 +12,7 @@ import RecentlyViewedProducts from './RecentlyViewedProducts';
 import { trackProductView } from '../../hooks/useFeatures';
 import { Helmet } from 'react-helmet-async';
 import { DisplayPrice, PayWhatYouWant, StockNotice, CompareButton, BundleOffers } from './ProductExtras';
+import { supabaseUrl } from '../../lib/supabaseClient';
 
 const getPublicStorageUrl = (filePath: string, bucket = 'previews') => {
   if (!filePath) return '';
@@ -19,8 +20,8 @@ const getPublicStorageUrl = (filePath: string, bucket = 'previews') => {
     return filePath;
   }
   
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_PROJECT_URL || '';
   const cleanPath = filePath.replace(/^\/+/, '');
+  if (!supabaseUrl) return '';
   return `${supabaseUrl}/storage/v1/object/public/${bucket}/${cleanPath}`;
 };
 

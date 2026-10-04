@@ -3,14 +3,16 @@
  * VITE_SENTRY_DSN is set, and the SDK is only downloaded in that case (dynamic import).
  */
 export async function initMonitoring() {
-  const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+  // VERCEL exposes the DSN as SENTRY_DSN; vite.config.ts re-exposes it (and the commit SHA)
+  // at build time, because Vite alone would only inline VITE_-prefixed variables.
+  const dsn = (import.meta.env.VITE_SENTRY_DSN as string | undefined) || __SENTRY_DSN__;
   if (!dsn || !import.meta.env.PROD) return;
   try {
     const Sentry = await import('@sentry/react');
     Sentry.init({
       dsn,
       environment: import.meta.env.MODE,
-      release: import.meta.env.VITE_COMMIT_SHA as string | undefined,
+      release: (import.meta.env.VITE_COMMIT_SHA as string | undefined) || __COMMIT_SHA__ || undefined,
       sampleRate: 1,
       tracesSampleRate: 0, // keep well inside the free quota
       sendDefaultPii: false,
