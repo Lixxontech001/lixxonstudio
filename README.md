@@ -22,7 +22,12 @@ npm run dev
 | `npx tsc --noEmit -p supabase/functions/tsconfig.json` | Type-check edge functions |
 | `python3 scripts/db-test.py` | Apply every migration to an embedded Postgres and run `scripts/db-assertions.sql` (RLS/privilege checks). Needs `pip install pgserver fasteners platformdirs psutil` (the old tracked `.whl` wheels were removed from the repo). |
 
+| `npm run audit:images` | Content audit: flags broken image URLs (Pexels page-URLs, `http://`, dead links) in posts/products |
+| `npm run audit:contrast` | WCAG-AA contrast audit for both themes (31 pairs, min 4.5:1) |
+
 CI (`.github/workflows/ci.yml`) runs all of the above on every push, plus Lighthouse budgets on PRs.
+
+Docs: [`FEATURES.md`](FEATURES.md) (feature inventory + roadmap) · [`THEME.md`](THEME.md) (palette + contrast) · [`SECURITY.md`](SECURITY.md) (threat model, OWASP mapping, disclosure) · [`PERFORMANCE.md`](PERFORMANCE.md) (budgets + method).
 
 ## Architecture in one minute
 
