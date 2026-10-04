@@ -125,18 +125,48 @@ const short = (value, max = 90) => {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 };
 
+/**
+ * Savings for an audit, across Lighthouse's audit shapes:
+ * `opportunity` details (older), `insight` details and the `*-insight` audits
+ * Lighthouse 12 introduced, which use `metricsSavings`/`overallSavingsMs`.
+ */
+function savingsMs(audit) {
+  const d = audit?.details ?? {};
+  const direct = d.overallSavingsMs ?? d.metricsSavings?.LCP ?? d.metricsSavings?.FCP;
+  if (typeof direct === 'number' && direct > 0) return direct;
+  const items = Array.isArray(d.items) ? d.items : [];
+  let sum = 0;
+  for (const item of items) {
+    const value = item?.overallSavingsMs ?? item?.metricsSavings?.LCP ?? 0;
+    if (typeof value === 'number' && value > 0) sum += value;
+  }
+  return sum;
+}
+
 function opportunities(report, limit = 7) {
   return Object.values(report.audits ?? {})
-    .filter(
-      (audit) =>
-        audit?.details?.type === 'opportunity' &&
-        audit.score !== null &&
-        audit.score < 1 &&
-        (audit.details.overallSavingsMs ?? 0) > 40
-    )
-    .sort((a, b) => (b.details.overallSavingsMs ?? 0) - (a.details.overallSavingsMs ?? 0))
+    .filter((audit) => audit && audit.score !== null && audit.score < 1 && savingsMs(audit) > 40)
+    .sort((a, b) => savingsMs(b) - savingsMs(a))
     .slice(0, limit)
-    .map((audit) => `- ${audit.title} — save **${Math.round(audit.details.overallSavingsMs)} ms**`);
+    .map((audit) => `- ${audit.title} — save **${Math.round(savingsMs(audit))} ms**`);
+}
+
+/** Depth-first search for the first element node Lighthouse recorded. */
+function findNode(value) {
+  if (!value || typeof value !== 'object') return null;
+  if (value.node?.selector || value.node?.snippet) return value.node;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNode(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (const item of Object.values(value)) {
+    const found = findNode(item);
+    if (found) return found;
+  }
+  return null;
 }
 
 function failingAudits(report, categoryId, limit = 6) {
@@ -163,13 +193,16 @@ function heaviestResources(report, limit = 5) {
 }
 
 function diagnosticsFor(report) {
-  const lcpNode = report.audits?.['largest-contentful-paint-element']?.details?.items?.[0]?.items?.[0]?.node;
+  const lcpAudit =
+    report.audits?.['largest-contentful-paint-element'] ??
+    Object.values(report.audits ?? {}).find((audit) => /largest contentful paint|\bLCP\b/i.test(audit?.title ?? ''));
+  const lcpNode = lcpAudit ? findNode(lcpAudit.details) : null;
   const out = {
     lcpElement: lcpNode ? { selector: lcpNode.selector, snippet: short(lcpNode.snippet, 140) } : null,
     lcpLazyLoaded: report.audits?.['lcp-lazy-loaded']?.score === 0,
     opportunities: opportunities(report),
     failing: Object.fromEntries(
-      ['accessibility', 'best-practices', 'seo'].map((id) => [id, failingAudits(report, id)])
+      ['performance', 'accessibility', 'best-practices', 'seo'].map((id) => [id, failingAudits(report, id)])
     ),
     heaviestResources: heaviestResources(report),
   };
