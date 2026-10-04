@@ -12,7 +12,7 @@ Usage:  python3 scripts/db-test.py            # full run
 """
 import glob, os, sys, shutil, subprocess, warnings
 warnings.filterwarnings("ignore")
-import pgserver  # pip install pgserver
+import pgserver  # pip install pgserver fasteners platformdirs psutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DBDIR = os.path.expanduser("~/.cache/lixxon-pgtest")

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { Analytics } from '@vercel/analytics/react';
 import { useNavigation, routeToPath } from './context/NavigationContext';
@@ -19,41 +19,42 @@ import { HomePage, CategoryPage, AboutPage, PrivacyPage, TermsPage, ContactPage 
 import { SkipLink, AnnouncementBar, MaintenanceGate } from './components/SiteChrome';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { lazyWithRetry } from './lib/chunkRecovery';
 
-const ArticleReader = lazy(() => import('./components/ArticleReader'));
-const ProductDetail = lazy(() => import('./components/ProductDetail'));
-const SearchPage = lazy(() => import('./components/SearchPage'));
-const NotFoundPage = lazy(() => import('./components/NotFoundPage'));
-const ShopPage = lazy(() => import('./components/shop/ShopPage'));
-const ShopProductPage = lazy(() => import('./components/shop/ShopProductPage'));
-const ShopCategoryPage = lazy(() => import('./components/shop/ShopCategoryPage'));
-const CartPage = lazy(() => import('./components/shop/CartPage'));
-const CheckoutPage = lazy(() => import('./components/shop/CheckoutPage'));
-const WishlistPage = lazy(() => import('./components/shop/WishlistPage'));
-const AccountPage = lazy(() => import('./components/shop/AccountPage'));
-const AccountOrdersPage = lazy(() => import('./components/shop/AccountOrdersPage'));
-const AccountDownloadsPage = lazy(() => import('./components/shop/AccountDownloadsPage'));
-const CollectionsPage = lazy(() => import('./components/shop/CollectionsPage'));
-const CollectionDetailPage = lazy(() => import('./components/shop/CollectionDetailPage'));
-const ReadingHistoryPage = lazy(() => import('./components/ReadingHistoryPage'));
-const BookmarksPage = lazy(() => import('./components/BookmarksPage'));
-const AuthorPage = lazy(() => import('./components/AuthorPage'));
-const TagPage = lazy(() => import('./components/TagPage'));
-const WeeklyDigestPage = lazy(() => import('./components/WeeklyDigestPage'));
-const NewsletterPreferencesPage = lazy(() => import('./components/NewsletterPreferencesPage'));
-const ReadingListsPage = lazy(() => import('./components/ReadingListsPage'));
-const GiftCardsPage = lazy(() => import('./components/shop/GiftCardsPage'));
-const OrderTrackingPage = lazy(() => import('./components/shop/OrderTrackingPage'));
-const ProductComparisonPage = lazy(() => import('./components/pages/ProductComparisonPage'));
-const SeriesPage = lazy(() => import('./components/pages/SeriesPage'));
-const SeriesIndexPage = lazy(() => import('./components/pages/SeriesPage').then(m => ({ default: m.SeriesIndexPage })));
-const GlossaryPage = lazy(() => import('./components/pages/GlossaryPage'));
-const NewsletterStatusPage = lazy(() => import('./components/pages/NewsletterStatusPage'));
-const AccountProfilePage = lazy(() => import('./components/shop/AccountProfilePage'));
-const AccountRefundsPage = lazy(() => import('./components/shop/AccountRefundsPage'));
-const ReaderProfilePage = lazy(() => import('./components/pages/ReaderProfilePage'));
-const SharedListPage = lazy(() => import('./components/pages/ReaderProfilePage').then(m => ({ default: m.SharedListPage })));
-const AdminApp = lazy(() => import('./admin/AdminApp'));
+const ArticleReader = lazyWithRetry(() => import('./components/ArticleReader'));
+const ProductDetail = lazyWithRetry(() => import('./components/ProductDetail'));
+const SearchPage = lazyWithRetry(() => import('./components/SearchPage'));
+const NotFoundPage = lazyWithRetry(() => import('./components/NotFoundPage'));
+const ShopPage = lazyWithRetry(() => import('./components/shop/ShopPage'));
+const ShopProductPage = lazyWithRetry(() => import('./components/shop/ShopProductPage'));
+const ShopCategoryPage = lazyWithRetry(() => import('./components/shop/ShopCategoryPage'));
+const CartPage = lazyWithRetry(() => import('./components/shop/CartPage'));
+const CheckoutPage = lazyWithRetry(() => import('./components/shop/CheckoutPage'));
+const WishlistPage = lazyWithRetry(() => import('./components/shop/WishlistPage'));
+const AccountPage = lazyWithRetry(() => import('./components/shop/AccountPage'));
+const AccountOrdersPage = lazyWithRetry(() => import('./components/shop/AccountOrdersPage'));
+const AccountDownloadsPage = lazyWithRetry(() => import('./components/shop/AccountDownloadsPage'));
+const CollectionsPage = lazyWithRetry(() => import('./components/shop/CollectionsPage'));
+const CollectionDetailPage = lazyWithRetry(() => import('./components/shop/CollectionDetailPage'));
+const ReadingHistoryPage = lazyWithRetry(() => import('./components/ReadingHistoryPage'));
+const BookmarksPage = lazyWithRetry(() => import('./components/BookmarksPage'));
+const AuthorPage = lazyWithRetry(() => import('./components/AuthorPage'));
+const TagPage = lazyWithRetry(() => import('./components/TagPage'));
+const WeeklyDigestPage = lazyWithRetry(() => import('./components/WeeklyDigestPage'));
+const NewsletterPreferencesPage = lazyWithRetry(() => import('./components/NewsletterPreferencesPage'));
+const ReadingListsPage = lazyWithRetry(() => import('./components/ReadingListsPage'));
+const GiftCardsPage = lazyWithRetry(() => import('./components/shop/GiftCardsPage'));
+const OrderTrackingPage = lazyWithRetry(() => import('./components/shop/OrderTrackingPage'));
+const ProductComparisonPage = lazyWithRetry(() => import('./components/pages/ProductComparisonPage'));
+const SeriesPage = lazyWithRetry(() => import('./components/pages/SeriesPage'));
+const SeriesIndexPage = lazyWithRetry(() => import('./components/pages/SeriesPage').then(m => ({ default: m.SeriesIndexPage })));
+const GlossaryPage = lazyWithRetry(() => import('./components/pages/GlossaryPage'));
+const NewsletterStatusPage = lazyWithRetry(() => import('./components/pages/NewsletterStatusPage'));
+const AccountProfilePage = lazyWithRetry(() => import('./components/shop/AccountProfilePage'));
+const AccountRefundsPage = lazyWithRetry(() => import('./components/shop/AccountRefundsPage'));
+const ReaderProfilePage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage'));
+const SharedListPage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage').then(m => ({ default: m.SharedListPage })));
+const AdminApp = lazyWithRetry(() => import('./admin/AdminApp'));
 
 const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
 
@@ -84,7 +85,13 @@ function AppContent() {
   useKeyboardShortcuts();
   const { showToast } = useToast();
   useEffect(() => {
-    const h = () => showToast('A new version of Lixxon Studio is available — refresh to update.', 'info');
+    const h = () =>
+      showToast(
+        'New version available — reload.',
+        'info',
+        { label: 'Reload', onClick: () => window.location.reload() },
+        15000
+      );
     window.addEventListener('lixxon:update-ready', h);
     return () => window.removeEventListener('lixxon:update-ready', h);
   }, [showToast]);

@@ -105,18 +105,54 @@ export default async function handler(): Promise<Response> {
     report.rest = {
       status: res.status,
       contentRange: res.headers.get('content-range') ?? null,
+      vary: res.headers.get('vary') ?? null,
+      cacheControl: res.headers.get('cache-control') ?? null,
       bodySample: body.slice(0, 300),
     };
     report.ok = res.ok;
     if (!res.ok) report.problem = `PostgREST refused the anon read (HTTP ${res.status}). ${body.slice(0, 200)}`;
-    else if (!res.headers.get('content-range')?.match(/\/[1-9]/)) {
+  } catch (e) {
+    report.rest = { error: String(e) };
+    report.ok = false;
+    report.problem = 'Could not reach the Supabase URL above from Vercel.';
+  }
+
+  // The homepage's exact join query (useSupabase.ts usePaginatedPosts):
+  //   posts.select('*, category:categories(*), author:authors(*)', { count: 'exact' })
+  //        .eq('status', 'published').order('published_at', { ascending: false }).range(0, 0)
+  // Reproducing it here proves the whole path the homepage depends on, and reports the
+  // caching headers (vary / cache-control) the CDN sees for that payload.
+  try {
+    const select = '*,category:categories(*),author:authors(*)';
+    const res = await fetch(
+      `${url.value}/rest/v1/posts?select=${encodeURIComponent(select)}&status=eq.published&order=published_at.desc&limit=1`,
+      { headers: { apikey: key.value, Authorization: `Bearer ${key.value}`, Prefer: 'count=exact' } }
+    );
+    const body = await res.text();
+    const contentRange = res.headers.get('content-range');
+    const total = contentRange ? Number(contentRange.split('/')[1]) : NaN;
+    report.homepageQuery = {
+      select: '*, category:categories(*), author:authors(*)',
+      filters: "status=eq.published, order=published_at.desc, limit=1 (count=exact)",
+      status: res.status,
+      publishedCount: Number.isFinite(total) ? total : null,
+      contentRange: contentRange ?? null,
+      vary: res.headers.get('vary') ?? null,
+      cacheControl: res.headers.get('cache-control') ?? null,
+      bodySample: body.slice(0, 300),
+    };
+    if (!res.ok) {
+      report.ok = false;
+      report.problem = `The homepage join query failed (HTTP ${res.status}). ${body.slice(0, 200)}`;
+    } else if (!contentRange?.match(/\/[1-9]/)) {
       report.problem =
         'Credentials work, but the `posts` table returned 0 rows to the anon role — check that rows exist ' +
         "with status='published' AND RLS grants anon SELECT.";
     }
   } catch (e) {
-    report.rest = { error: String(e) };
-    report.problem = 'Could not reach the Supabase URL above from Vercel.';
+    report.homepageQuery = { error: String(e) };
+    report.ok = false;
+    report.problem = 'Could not run the homepage join query against Supabase from Vercel.';
   }
 
   return json(report, report.ok ? 200 : 503);

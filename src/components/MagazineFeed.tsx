@@ -1,6 +1,7 @@
 import { Clock, ArrowUpRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { pickHeadline, trackHeadline } from '../hooks/useV3';
+import { normalizeImageUrl } from '../lib/images';
 import type { PostWithRelations, Category } from '../lib/types';
 
 interface MagazineFeedProps {
@@ -72,7 +73,7 @@ export default function MagazineFeed({ posts, categories, activeCategory, onCate
             >
               <div className="img-zoom rounded-sm overflow-hidden luxury-shadow relative aspect-[4/5]">
                 {post.cover_image && (
-                  <img src={post.cover_image} alt={post.title} className="w-full h-full object-cover" loading="lazy" />
+                  <img src={normalizeImageUrl(post.cover_image) ?? ''} alt={post.title} className="w-full h-full object-cover" loading="lazy" />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-charcoal/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 {post.category && (

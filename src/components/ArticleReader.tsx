@@ -24,6 +24,7 @@ import { useToast } from '../context/ToastContext';
 import { Helmet } from 'react-helmet-async';
 import type { PostWithRelations } from '../lib/types';
 import { renderMarkdown } from '../lib/markdown';
+import { normalizeImageUrl } from '../lib/images';
 import { useGlossary } from '../hooks/useGlossary';
 import { useNavigation } from '../context/NavigationContext';
 import { useCloudBookmarks, pickHeadline, trackHeadline, useSiteSettings } from '../hooks/useV3';
@@ -93,7 +94,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
         slug: post.slug,
         category_id: post.category_id,
         tags: post.tags,
-        cover_image: post.cover_image,
+        cover_image: normalizeImageUrl(post.cover_image),
       });
       recordReadingDay(post.id);
       setTimeRemaining(post.reading_time_minutes);
@@ -192,7 +193,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
     }
   };
 
-  const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${shareUrl}&media=${encodeURIComponent(post.cover_image || '')}&description=${shareText}`;
+  const pinterestUrl = `https://www.pinterest.com/pin/create/button/?url=${shareUrl}&media=${encodeURIComponent(normalizeImageUrl(post.cover_image) || '')}&description=${shareText}`;
 
   const toggleBookmark = () => {
     if (!post) return;
@@ -229,11 +230,11 @@ export default function ArticleReader({ slug }: { slug: string }) {
         <meta property="og:description" content={post.excerpt || ''} />
         <meta property="og:url" content={articleUrl} />
         <meta property="og:type" content="article" />
-        <meta property="og:image" content={post.cover_image || `${window.location.origin}/api/og?slug=${encodeURIComponent(post.slug)}`} />
+        <meta property="og:image" content={normalizeImageUrl(post.cover_image) || `${window.location.origin}/api/og?slug=${encodeURIComponent(post.slug)}`} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={post.title} />
         <meta name="twitter:description" content={post.excerpt || ''} />
-        <meta name="twitter:image" content={post.cover_image || `${window.location.origin}/api/og?slug=${encodeURIComponent(post.slug)}`} />
+        <meta name="twitter:image" content={normalizeImageUrl(post.cover_image) || `${window.location.origin}/api/og?slug=${encodeURIComponent(post.slug)}`} />
         {post.tags && post.tags.length > 0 && (
           <meta name="article:tag" content={post.tags.join(', ')} />
         )}
@@ -245,7 +246,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
           '@type': 'Article',
           headline: post.title,
           description: post.excerpt,
-          image: post.cover_image,
+          image: normalizeImageUrl(post.cover_image),
           datePublished: post.published_at,
           author: { '@type': 'Organization', name: post.author?.name || 'Lixxon Studio' },
           publisher: { '@type': 'Organization', name: 'Lixxon Studio', logo: { '@type': 'ImageObject', url: `${window.location.origin}/icon-512.png` } },
@@ -339,7 +340,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
             onMouseEnter={() => setPinterestHovered(true)}
             onMouseLeave={() => setPinterestHovered(false)}
           >
-            <img src={post.cover_image} alt={post.title} className="w-full h-full object-cover" fetchPriority="high" />
+            <img src={normalizeImageUrl(post.cover_image) ?? ''} alt={post.title} className="w-full h-full object-cover" fetchPriority="high" />
             <a
               href={pinterestUrl}
               target="_blank"
@@ -531,7 +532,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
                   className="group text-left bg-white rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500 flex flex-col"
                 >
                   <div className="img-zoom aspect-[4/5] overflow-hidden">
-                    {r.cover_image && <img src={r.cover_image} alt={r.title} className="w-full h-full object-cover" loading="lazy" />}
+                    {r.cover_image && <img src={normalizeImageUrl(r.cover_image) ?? ''} alt={r.title} className="w-full h-full object-cover" loading="lazy" />}
                   </div>
                   <div className="p-5 flex flex-col flex-1">
                     <span className="text-[10px] tracking-editorial uppercase text-bronze">{r.category?.name}</span>

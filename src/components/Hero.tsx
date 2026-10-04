@@ -1,5 +1,6 @@
 import { Clock, ArrowRight, ArrowUpRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
+import { normalizeImageUrl } from '../lib/images';
 import type { PostWithRelations } from '../lib/types';
 
 export default function Hero({ featuredPosts }: { featuredPosts: PostWithRelations[] }) {
@@ -14,7 +15,7 @@ export default function Hero({ featuredPosts }: { featuredPosts: PostWithRelatio
       <div className="relative w-full h-[70vh] min-h-[480px] max-h-[700px] overflow-hidden">
         {primary.cover_image && (
           <img
-            src={primary.cover_image}
+            src={normalizeImageUrl(primary.cover_image) ?? ''}
             alt={primary.cover_image_alt || primary.title}
             className="absolute inset-0 w-full h-full object-cover"
             loading="eager"

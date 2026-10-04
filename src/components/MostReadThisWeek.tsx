@@ -1,6 +1,7 @@
 import {TrendingUp} from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { useMostReadThisWeek } from '../hooks/usePlatform';
+import { normalizeImageUrl } from '../lib/images';
 
 export default function MostReadThisWeek() {
   const { posts, loading } = useMostReadThisWeek();
@@ -20,7 +21,7 @@ export default function MostReadThisWeek() {
             <span className="font-serif text-3xl text-bronze/30 font-light leading-none mb-3">{String(i + 1).padStart(2, '0')}</span>
             {post.cover_image && (
               <div className="img-zoom rounded-sm overflow-hidden luxury-shadow aspect-[4/3] bg-taupe-light mb-3">
-                <img src={post.cover_image} alt={post.title} className="w-full h-full object-cover" loading="lazy" />
+                <img src={normalizeImageUrl(post.cover_image) ?? ''} alt={post.title} className="w-full h-full object-cover" loading="lazy" />
               </div>
             )}
             {post.category && <span className="text-[10px] tracking-editorial uppercase text-bronze mb-1">{post.category.name}</span>}
