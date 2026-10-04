@@ -43,8 +43,12 @@ jobs:
           TARGET_URL: ${{ github.event.inputs.url || 'https://lixxonstudio.vercel.app/' }}
           RUNS: ${{ github.event.inputs.runs || '3' }}
         run: |
-          mkdir -p lhci-out
           lhci collect --url="$TARGET_URL" --numberOfRuns="$RUNS" --output=json --outputPath=./lhci-out
+          # lhci writes to .lighthouseci regardless of --outputPath; keep a copy
+          # in the path the summariser and the artifact step expect.
+          mkdir -p lhci-out
+          if [ -d .lighthouseci ]; then cp -r .lighthouseci/. lhci-out/; fi
+          ls -la lhci-out | head -10
 
       - name: Summarise
         run: |
@@ -68,7 +72,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           { echo '<!-- perf-baseline -->'; cat perf-summary.md; } > perf-comment.md
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file perf-comment.md
+          PR="${{ github.event.pull_request.number }}"
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq '[.[] | select(.body | startswith("<!-- perf-baseline -->")) | .id] | last // empty')
+          if [ -n "$COMMENT_ID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+              -f body="$(cat perf-comment.md)" > /dev/null
+            echo "updated existing perf comment ($COMMENT_ID)"
+          else
+            gh pr comment "$PR" --body-file perf-comment.md
+          fi
 
       - name: Upload raw reports
         if: always()
