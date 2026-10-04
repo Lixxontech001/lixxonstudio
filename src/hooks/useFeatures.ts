@@ -303,7 +303,7 @@ export function useReadingStreak() {
 // ==================== LIVE READER COUNT ====================
 
 export function useLiveReaderCount(postId: string | null) {
-  const [count, setCount] = useState(0);
+  const [presence, setPresence] = useState<{ postId: string; count: number } | null>(null);
 
   useEffect(() => {
     if (!postId) return;
@@ -311,24 +311,25 @@ export function useLiveReaderCount(postId: string | null) {
     const fp = getFingerprint();
 
     const heartbeat = async () => {
-      await supabase.from('article_active_readers')
-        .upsert({ post_id: postId, fingerprint: fp, last_heartbeat: new Date().toISOString() }, { onConflict: 'post_id,fingerprint' });
-
-      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      const { count } = await supabase
-        .from('article_active_readers')
-        .select('*', { count: 'exact', head: true })
-        .eq('post_id', postId)
-        .gt('last_heartbeat', fiveMinAgo);
-      if (!cancelled) setCount(count || 0);
+      try {
+        const { data, error } = await supabase.rpc('heartbeat_article_reader', {
+          p_post_id: postId,
+          p_fingerprint: fp,
+        });
+        if (cancelled) return;
+        const nextCount = typeof data === 'number' ? data : Number(data);
+        setPresence({ postId, count: !error && Number.isSafeInteger(nextCount) && nextCount >= 0 ? nextCount : 0 });
+      } catch {
+        if (!cancelled) setPresence({ postId, count: 0 });
+      }
     };
 
-    heartbeat();
-    const interval = setInterval(heartbeat, 30000);
+    void heartbeat();
+    const interval = setInterval(() => { void heartbeat(); }, 30000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [postId]);
 
-  return count;
+  return presence?.postId === postId ? presence.count : 0;
 }
 
 // ==================== AUTHOR PROFILE ====================
