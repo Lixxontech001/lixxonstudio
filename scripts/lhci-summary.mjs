@@ -8,7 +8,7 @@
  *
  * Prints markdown to stdout. Also appends to $GITHUB_STEP_SUMMARY when present.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const dir = process.argv[2];
@@ -24,26 +24,60 @@ if (!dir || !existsSync(dir)) {
   process.exit(1);
 }
 
+/**
+ * Unwrap one parsed JSON blob into Lighthouse reports.
+ * Handles: a bare report, an array of reports, LHCI's collect output
+ * (`[{ lhr: … }]`), and an LHCI results directory walk.
+ */
+function unwrap(parsed) {
+  if (!parsed) return [];
+  if (Array.isArray(parsed)) return parsed.flatMap(unwrap);
+  if (parsed.categories) return [parsed];
+  if (parsed.lhr?.categories) return [parsed.lhr];
+  if (parsed.report?.categories) return [parsed.report];
+  return [];
+}
+
 function findReports(directory) {
   const out = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const full = join(directory, entry.name);
     if (entry.isDirectory()) out.push(...findReports(full));
     else if (entry.name.endsWith('.json') && entry.name !== 'manifest.json') {
-      try {
-        const parsed = JSON.parse(readFileSync(full, 'utf8'));
-        if (parsed?.categories) out.push(parsed);
-      } catch {
-        /* not a Lighthouse report */
-      }
+      out.push(...loadFile(full));
     }
   }
   return out;
 }
 
-const reports = findReports(dir);
+function loadFile(file) {
+  try {
+    return unwrap(JSON.parse(readFileSync(file, 'utf8')));
+  } catch {
+    return [];
+  }
+}
+
+// LHCI writes either a directory of per-run reports or a single JSON file,
+// depending on the --outputPath it was given. Accept both.
+let reports = [];
+if (existsSync(dir)) {
+  if (statSync(dir).isDirectory()) {
+    reports = findReports(dir);
+    if (!reports.length) {
+      for (const candidate of [`${dir}.json`, join(dir, 'lhci-out.json'), join(dir, 'results.json')]) {
+        if (!existsSync(candidate)) continue;
+        reports = loadFile(candidate);
+        if (reports.length) break;
+      }
+    }
+  } else {
+    reports = loadFile(dir);
+  }
+}
+
 if (!reports.length) {
-  console.error(`[lhci-summary] no Lighthouse JSON reports found under ${dir}`);
+  console.error(`[lhci-summary] no Lighthouse JSON reports found at ${dir}`);
   process.exit(1);
 }
 
