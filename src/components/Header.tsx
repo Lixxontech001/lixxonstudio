@@ -7,6 +7,7 @@ import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLiveSearch } from '../hooks/useFeatures';
+import { useSiteConfig } from '../hooks/useSiteConfig';
 import Logo from './Logo';
 
 const announcementText = 'DAILY GLOW RESET • SKINCARE, STYLE & MINIMALIST WELLNESS';
@@ -25,6 +26,11 @@ export default function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { suggestions, loading: suggestionsLoading } = useLiveSearch(searchQuery);
+  const { config } = useSiteConfig();
+  // An owner can replace the built-in menu in Admin → Front end → Navigation; an empty
+  // list keeps the shipped menu below, so the header never renders empty.
+  const dbMenu = Array.isArray(config.nav_menu?.items) ? config.nav_menu!.items! : [];
+  const flags = config.flags || {};
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -81,7 +87,13 @@ export default function Header() {
             <Link to={{ name: 'home', page: 1 }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'home' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
               Home
             </Link>
-            {navCategories.map(cat => (
+            {dbMenu.length > 0 && dbMenu.map(item => (
+              <a key={`${item.label}-${item.href}`} href={item.href}
+                className="text-xs tracking-editorial uppercase font-medium transition-colors duration-300 text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light">
+                {item.label}
+              </a>
+            ))}
+            {dbMenu.length === 0 && navCategories.map(cat => (
               <Link
                 key={cat.slug}
                 to={{ name: 'category', slug: cat.slug, page: 1 }}
@@ -90,21 +102,29 @@ export default function Header() {
                 {cat.name}
               </Link>
             ))}
-            <Link to={{ name: 'about' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'about' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
-              About
-            </Link>
-            <Link to={{ name: 'shop' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'shop' || route.name === 'shop-product' || route.name === 'shop-category' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
-              Shop
-            </Link>
-            <Link to={{ name: 'collections' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'collections' || route.name === 'collection' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
-              Collections
-            </Link>
-            <Link to={{ name: 'weekly-digest' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'weekly-digest' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
-              Digest
-            </Link>
-            <Link to={{ name: 'contact' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'contact' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
-              Contact
-            </Link>
+            {dbMenu.length === 0 && (
+              <Link to={{ name: 'about' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'about' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
+                About
+              </Link>
+            )}
+            {dbMenu.length === 0 && flags.shop !== false && (
+              <Link to={{ name: 'shop' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'shop' || route.name === 'shop-product' || route.name === 'shop-category' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
+                Shop
+              </Link>
+            )}
+            {dbMenu.length === 0 && (
+              <>
+                <Link to={{ name: 'collections' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'collections' || route.name === 'collection' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
+                  Collections
+                </Link>
+                <Link to={{ name: 'weekly-digest' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'weekly-digest' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
+                  Digest
+                </Link>
+                <Link to={{ name: 'contact' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'contact' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
+                  Contact
+                </Link>
+              </>
+            )}
           </nav>
 
           {/* Logo center */}

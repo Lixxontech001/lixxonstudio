@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react';
+import { Fragment, Suspense, useEffect, type ReactNode } from 'react';
 import { usePosts, useCategories, usePaginatedPosts } from '../hooks/useSupabase';
 import Hero from './Hero';
 import Newsletter from './Newsletter';
@@ -16,6 +16,7 @@ import CategoryBanner from './CategoryBanner';
 import Pagination from './Pagination';
 import { HeroSkeleton, FeedSkeleton } from './Skeletons';
 import { useNavigation, Link } from '../context/NavigationContext';
+import { useSiteConfig, enabledSections } from '../hooks/useSiteConfig';
 import { Mail } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import QueryStatusNotice from './QueryStatusNotice';
@@ -24,6 +25,8 @@ export function HomePage({ page }: { page: number }) {
   const { posts, loading, error, retry } = usePosts();
   const { categories } = useCategories();
   const { navigate } = useNavigation();
+  const { config } = useSiteConfig();
+  const flags = config.flags || {};
   const {
     posts: paginatedPosts,
     totalPages,
@@ -41,16 +44,22 @@ export function HomePage({ page }: { page: number }) {
 
   const buildRoute = (p: number) => ({ name: 'home' as const, page: p });
 
+  // Admin → Front end → Homepage decides which blocks render, and in what order.
+  // Unknown ids are ignored, so a future section id never breaks the page.
+  const blocks: Record<string, ReactNode> = {
+    hero: loading ? <HeroSkeleton /> : <Hero featuredPosts={heroPosts} />,
+    newsletter: flags.newsletter === false ? null : <Newsletter />,
+    trending: !loading && trendingPosts.length > 0 ? <TrendingSection posts={trendingPosts} /> : null,
+    editors_picks: flags.picks === false || loading || editorsPicks.length === 0 ? null : <EditorsPicks posts={editorsPicks} />,
+    for_you: !loading && flags.personalisation !== false ? <Suspense fallback={null}><HomePersonalised /></Suspense> : null,
+    latest: !loading ? <MostReadThisWeek /> : null,
+    shop: flags.shop === false ? null : <ProductGrid />,
+  };
+
   return (
     <main>
-      {loading ? <HeroSkeleton /> : <Hero featuredPosts={heroPosts} />}
-      <Newsletter />
+      {enabledSections(config).map(id => <Fragment key={id}>{blocks[id] ?? null}</Fragment>)}
       <QueryStatusNotice loading={loading} hasData={posts.length > 0} error={error} onRetry={retry} />
-      {!loading && trendingPosts.length > 0 && <TrendingSection posts={trendingPosts} />}
-      {!loading && editorsPicks.length > 0 && <EditorsPicks posts={editorsPicks} />}
-      <ProductGrid />
-      {!loading && <MostReadThisWeek />}
-      {!loading && <Suspense fallback={null}><HomePersonalised /></Suspense>}
       {pagLoading && paginatedPosts.length === 0 && <FeedSkeleton />}
       <QueryStatusNotice loading={pagLoading} hasData={paginatedPosts.length > 0} error={pagError} onRetry={retryPaginated} />
       {(!pagLoading || paginatedPosts.length > 0) && !pagError && (

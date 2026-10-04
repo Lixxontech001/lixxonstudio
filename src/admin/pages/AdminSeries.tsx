@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Layers, Plus, Trash2, Pencil, Loader2, GripVertical, X } from 'lucide-react';
 import { supabase, rows } from '../../lib/supabaseClient';
 import type { ArticleSeries } from '../../lib/types';
+import { MarkdownField } from '../components/AdminEditorKit';
 
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 type Part = { id: string; title: string; series_order: number | null; status: string };
@@ -60,7 +61,14 @@ export default function AdminSeries() {
             <label className="text-xs text-charcoal-muted uppercase tracking-wide">Title<input required value={editing.title || ''} onChange={e => setEditing(x => ({ ...x, title: e.target.value }))} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
             <label className="text-xs text-charcoal-muted uppercase tracking-wide">Slug<input value={editing.slug || ''} onChange={e => setEditing(x => ({ ...x, slug: e.target.value }))} placeholder={slugify(editing.title || '') || 'auto'} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
           </div>
-          <label className="text-xs text-charcoal-muted uppercase tracking-wide">Description<textarea rows={2} value={editing.description || ''} onChange={e => setEditing(x => ({ ...x, description: e.target.value }))} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
+          <MarkdownField
+            label="Description"
+            value={editing.description || ''}
+            onChange={v => setEditing(x => ({ ...x, description: v }))}
+            rows={3}
+            max={600}
+            hint="Explain the promise of this series in one or two sentences."
+          />
           <label className="text-xs text-charcoal-muted uppercase tracking-wide">Cover image URL<input value={editing.cover_image || ''} onChange={e => setEditing(x => ({ ...x, cover_image: e.target.value }))} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editing.is_active ?? true} onChange={e => setEditing(x => ({ ...x, is_active: e.target.checked }))} /> Visible to readers</label>
           <div className="flex gap-2"><button disabled={saving} className="px-4 py-2 bg-bronze text-white text-sm rounded-sm disabled:opacity-60">{saving ? <Loader2 size={14} className="animate-spin" /> : 'Save'}</button><button type="button" onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-charcoal-muted">Cancel</button></div>

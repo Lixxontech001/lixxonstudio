@@ -11,6 +11,7 @@ import ProductReviews from './ProductReviews';
 import RecentlyViewedProducts from './RecentlyViewedProducts';
 import { trackProductView } from '../../hooks/useFeatures';
 import { Helmet } from 'react-helmet-async';
+import { renderMarkdown } from '../../lib/markdown';
 import { DisplayPrice, PayWhatYouWant, StockNotice, CompareButton, BundleOffers } from './ProductExtras';
 import { supabaseUrl } from '../../lib/supabaseClient';
 
@@ -193,7 +194,7 @@ export default function ShopProductPage({ slug }: { slug: string }) {
             )}
 
             {product.description && (
-              <p className="text-charcoal-muted text-lg leading-relaxed mt-6">{product.description}</p>
+              <div className="text-charcoal-muted text-lg leading-relaxed mt-6" dangerouslySetInnerHTML={{ __html: renderMarkdown(product.description) }} />
             )}
 
             {/* What's included (digital only) */}

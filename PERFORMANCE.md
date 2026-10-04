@@ -49,14 +49,14 @@ real number, not a memory.
 
 | Chunk | Gzip |
 |---|---|
-| `total-js` | 271.2 kB |
+| `total-js` | 307.2 kB |
 | `react-vendor` | 44.3 kB |
-| `admin-bundle` (lazy, not in entry) | 43.4 kB |
-| `entry` | 42.5 kB |
+| `admin-bundle` (lazy, not in entry) | 62.5 kB |
+| `entry` | 44.5 kB |
 | `supabase` | 33.2 kB |
 | `article-reader` (lazy) | 20.0 kB |
-| `css` | 11.4 kB |
-| `icons` | 9.6 kB |
+| `css` | 12.2 kB |
+| `icons` | 10.5 kB |
 | `sanitize` | 8.9 kB |
 | `helmet` | 6.0 kB |
 | `vercel-analytics` | 1.2 kB |

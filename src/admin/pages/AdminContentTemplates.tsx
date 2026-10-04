@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MarkdownField } from '../components/AdminEditorKit';
 import { FileText, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
 import { useContentTemplates } from '../../hooks/usePlatform';
 
@@ -57,7 +58,14 @@ export default function AdminContentTemplates() {
           </div>
           <div>
             <label className="text-xs text-charcoal-muted uppercase tracking-wide">Template Content (Markdown)</label>
-            <textarea value={content} onChange={e => setContent(e.target.value)} rows={10} placeholder="# Article Title..." required className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm font-mono rounded-sm focus:outline-none focus:border-bronze resize-y" />
+            <MarkdownField
+              label="Template body"
+              value={content}
+              onChange={setContent}
+              rows={10}
+              placeholder="## Section heading&#10;&#10;What goes here…&#10;&#10;- A checklist item"
+              hint="Templates are inserted into the article editor. Markdown, headings, checklists and tables all work."
+            />
           </div>
           <button type="submit" disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 bg-bronze text-white text-sm rounded-sm hover:bg-bronze-dark transition-all disabled:opacity-50">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Save Template

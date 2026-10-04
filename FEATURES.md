@@ -106,12 +106,65 @@ to be re-audited next session (M4 checklist below):
 - **Platform**: PWA manifest + offline page, keyboard shortcuts + help overlay, font-size control, cookie consent (GA consent-gated), currency selector, 404 page, health endpoint, feeds.
 - **Admin (`/admin`, MFA-gated)**: dashboard, articles editor, categories, authors, comments/messages/moderation, media library, featured slots, series, glossary, content templates, polls, reviews, questions, customers, orders, refunds, gift cards, promo codes, abandoned carts, newsletter, feedback, analytics, activity log, backups, security page, site settings — see `src/admin/pages/*`.
 
+## M7 — Editors, autonomous settings, Admin AI and security
+
+| Area | Where | Delivery |
+|---|---|---|
+| Shared editorial kit | `src/admin/components/AdminEditorKit.tsx` | Markdown toolbar, slash commands, preview, find/replace, character counts, quality score ring and reusable long-form fields now power the article, product, collection, template, glossary, category, series and author editors. Product and collection copy renders through the sanitised Markdown renderer without changing the existing field/section semantics. |
+| Product quality workflow | `20261004210000_editor_workflow.sql`, `AdminProductEditor.tsx` | Product scoring, compare-at pricing, SEO/social fields, robots/schema controls, cover media picker, database-persisted quality score and the same quality panel used by articles. |
+| Autonomous front end | `AdminFrontend.tsx`, `20261004203000_admin_frontend_settings.sql` | Homepage ordering, navigation, footer, theme, SEO defaults, redirects, custom head, flags, announcements and maintenance are validated database settings, audited and live without a deploy. |
+| Admin AI control room | `20261004220000_admin_ai.sql`, `AdminAI.tsx` | Live health/growth scan, durable suggestions, safe low-risk automation, workflow proposals for approve/publish/reject/edit, reply drafts, approval/dismissal queue and separate AI capabilities. High-impact actions remain human-approved. |
+| Security hardening v2 | `20261004230000_security_hardening_v2.sql` | Removes anonymous update/delete holes, replaces fingerprint mutations with validated RPCs, adds abandoned-cart uniqueness, capability-gates storage writes and sanitises custom head settings. |
+
+## M8 — Admin AI Autopilot OS
+
+| Area | Where | Delivery |
+|---|---|---|
+| Agent fleet | `20261004240000_admin_ai_autopilot.sql`, `AdminAI.tsx` | Growth, SEO, content, commerce, community, reliability and security agents with independent cadence, action caps, autonomy levels and live run controls. |
+| Autonomous policy | same | Global enable switch, provider mode, daily budget, default autonomy and emergency kill switch. Rules engine works on free tiers; model-backed generation remains edge-function-only and proposal-only. |
+| Missions and workflows | same | Owner-defined growth objectives, metrics, priorities, deadlines, agent teams, workflow steps, manual runs, durable jobs and idempotency. |
+| Action queue | same | Risk-labelled proposals with required capability, diffs, approval/reject/pause/apply decisions, safe auto-apply allow-list and failure tracking. |
+| Memory and learning loop | same | Durable brand/editorial/SEO/commerce/community memory, experiments with variants and conversion events, AI metrics, cost ledger and notifications. |
+| Incident safety | same | Security/reliability incidents, acknowledgement/resolution, pause semantics and full audit coverage across AI objects. |
+
+## M5 — Admin super panel (shipped in this PR)
+
+RBAC-first, with the database as the single source of truth (`docs/ADMIN.md`).
+
+| Feature | Where | Notes |
+|---|---|---|
+| Capability model (34 permissions, roles as rows, per-admin grants/denies) | `supabase/migrations/20261004200000_admin_rbac.sql` | `admin_can()` is the one authority: every RLS policy, RPC and screen goes through it. Seeded roles owner / editor / moderator / analyst / support, plus custom roles created from the panel. |
+| **Ultra-super-admin** | same | The original owner account (`is_founder`) holds everything, cannot be suspended, demoted or deleted, and only it can transfer the flag (`admin_transfer_founder`). Triggers keep at least one active owner (`trg_admin_guard_last_owner`) and protect the founder (`trg_admin_protect_founder`). |
+| Team & access screen | `src/admin/pages/AdminAccess.tsx` | Add/update admins by email, change roles, suspend/restore, remove, force a re-login, edit the role→permission matrix, create roles, and set per-admin grant/deny overrides. |
+| Audit trail v2 | migration `20261004201000`, `src/admin/pages/AdminActivityLog.tsx` | Field-level before/after diffs with actor, role, IP, user-agent, severity and source; 43 tables trigger-audited; searchable (free text + entity/action/severity/actor/date); one-click revert for 19 tables (refuses when the row moved on); 180-day retention job. |
+| Data explorer | migration `20261004202000`, `src/admin/pages/AdminDataExplorer.tsx` | Browse/insert/update/delete any explorable table through PostgREST **as the signed-in admin** (RLS does the enforcement), column-aware editors, CSV export, PII/money badges, read-only for money and team rows. |
+| Read-only SQL console | `admin_run_sql()` | `data.sql` permission; single `SELECT`/`WITH`, keyword + function denylist, 5 s timeout, read-only transaction, 200-row cap, runs under the caller's RLS. |
+| Health & issues, self-healing | `admin_run_checks()`, `admin_fix_issue()`, `src/admin/pages/AdminHealth.tsx` | ~28 checks (database, security, queue, commerce, content, moderation, search, backups, cron) with severity, suggestion and snapshot trend; safe one-click repairs (`requeue_email`, `repair_images`, `backfill_seo`, `backfill_entitlements`, `take_backup`, `prune_audit`, `analyze`). |
+| Advisor | `admin_suggestions()`, `src/admin/pages/AdminAdvisor.tsx` | Scored, permission-aware suggestions computed from live rows (impact, effort, route, optional fix). |
+| Growth & SEO suite | `admin_growth_report()`, `src/admin/pages/AdminGrowth.tsx` | Traffic with previous-period deltas, content pipeline + SEO gaps, search demand and zero-result briefs, audience and commerce — all in one 7/30/90/180/365-day report. |
+| Scaling view | `admin_system_metrics()` | Database size vs free-tier limit, cache hit ratio, connections, largest tables, dead tuples, never-used indexes. |
+| Front end edited from the database | migration `20261004203000`, `src/admin/pages/AdminFrontend.tsx`, `src/hooks/useSiteConfig.ts` | `site_settings` drives nav menu, footer columns + note, homepage section order/visibility, theme accent pair, SEO defaults, redirects, custom `<head>` (sanitised), feature flags, announcement and maintenance. Writes go through `admin_set_setting()` (validated, permission-checked, audited); the storefront reads it all in one `site_config()` call. |
+| UI mirrors the database | `src/admin/permissions.ts`, `AuthContext.tsx` | `admin_me()` returns the effective permission list; nav and routes are gated by `can(permission)`, and a role with no `commerce.read` never even issues the orders query. |
+
 ## Next (queued)
 
 1. **M4 audit pass**: walk the 70-feature checklist against the inventory above; close genuine gaps (mood picker, skin journal, streak milestones copy, digest *email* content, save-for-later reminders, "Explain simply"/"Go deeper" variants, synonym search, seasonal hubs, ingredient cards, patch-test warnings, subscribe-and-save/loyalty points, referrals UX, tip button, A/B copy tests, reader-of-the-week, consent testimonials, sustainability badges, accessibility statement, privacy centre (DSAR), content notes, reading comfort modes, offline reading list UX, install prompt, background sync, native share sheet, web push, multi-currency deep work, command palette, reading insights, prefetch and status page (skeleton-first route loading and offline banner/retry are covered in Phase 2 Batch 1)…). Each gap lands with tests + a FEATURES.md line.
-2. **M5 admin audit**: RBAC/roles tables vs brief, audit-log depth, data explorer, SEO/growth suites, self-healing panels, intelligence digests.
+2. ~~**M5 admin audit**~~ — shipped (see the section above); follow-ups: alert emails for critical checks and monthly owner digests (M9).
 3. **M6 editor audit**: block editor depth vs brief (slash commands, drag-drop, revisions diff, scheduled publishing UX…).
 4. **M7 performance**: see `PERFORMANCE.md`.
 5. **M8 mobile audit**: viewport matrix + Playwright.
 6. **M9 security**: see `SECURITY.md`.
 7. **M10 polish**: DNS/domain decision, Sentry auth token, robots/sitemap verification, email templates, monthly owner report.
+
+## M10 — Predictive Control Centre
+
+| Area | Where | Delivery |
+|---|---|---|
+| Event-driven AI | `20261004260000_admin_ai_predictive.sql`, `AdminAI.tsx` | Idempotent event stream and processor for traffic, checkout, cart, content, broken-link and security signals. Events create safe investigations and reviewable proposals. |
+| Digital twin | same | Aggregate website model covering published content, products, orders, subscribers, revenue, campaigns, queue and incidents, with no member PII exposed. |
+| Predictive growth loop | same | Deterministic forecasts, confidence, assumptions, anomaly detection and notifications from recent metrics. |
+| Agent debate and trust | same | Security, growth and content peer reviews, evidence, confidence and trust scores; critical proposals are paused. |
+| Knowledge graph and maintenance | same | Product/article source indexing, relationships, stale-content proposals, broken-link and post-publication maintenance tasks. |
+| Lifecycle autopilot | same | Privacy-safe aggregate reader/customer stages and snapshots for journey, retention and conversion proposals. |
+| AI security operations | same | Prompt-injection, secret-exposure, permission-anomaly and unsafe-proposal quarantine with audited findings. |
+| Self-improvement | same | Outcome-based recommendations for autonomy, evidence and debate coverage; the AI cannot rewrite its own permissions. |

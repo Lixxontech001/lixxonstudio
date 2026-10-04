@@ -3,6 +3,7 @@ import { ArrowLeft, Clock } from 'lucide-react';
 import { Link, useNavigation } from '../../context/NavigationContext';
 import { useCollection } from '../../hooks/useCommerce';
 import EmptyState from '../EmptyState';
+import { renderMarkdown } from '../../lib/markdown';
 import { Helmet } from 'react-helmet-async';
 
 export default function CollectionDetailPage({ slug }: { slug: string }) {
@@ -54,7 +55,7 @@ export default function CollectionDetailPage({ slug }: { slug: string }) {
           {collection.title}
         </h1>
         {collection.description && (
-          <p className="text-charcoal-muted text-lg mt-5 max-w-2xl leading-relaxed">{collection.description}</p>
+          <div className="text-charcoal-muted text-lg mt-5 max-w-2xl leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(collection.description) }} />
         )}
       </section>
 

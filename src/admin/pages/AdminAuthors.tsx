@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAdminAuthors } from '../../hooks/useSupabase';
 import { Plus, Pencil, X } from 'lucide-react';
 import type { Author } from '../../lib/types';
+import { MarkdownField } from '../components/AdminEditorKit';
 
 export default function AdminAuthors() {
   const { authors, loading } = useAdminAuthors();
@@ -117,10 +118,14 @@ export default function AdminAuthors() {
                 <label className="block text-xs text-gray-500 mb-1">Role</label>
                 <input type="text" value={role} onChange={e => setRole(e.target.value)} placeholder="Editor, Writer, etc." className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Bio</label>
-                <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
-              </div>
+              <MarkdownField
+                label="Bio"
+                value={bio}
+                onChange={setBio}
+                rows={4}
+                max={900}
+                hint="A concise editorial bio. It appears on the author page and article header."
+              />
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Avatar URL</label>
                 <input type="text" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://..." className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />

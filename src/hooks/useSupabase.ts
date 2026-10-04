@@ -310,16 +310,12 @@ export function useLike(postId: string | null) {
       setLiked(false);
       localStorage.removeItem(key);
       setCount(c => Math.max(0, c - 1));
-      await supabase.from('article_likes')
-        .delete()
-        .eq('post_id', postId)
-        .eq('fingerprint', fingerprint);
+      await supabase.rpc('toggle_article_like', { p_post_id: postId, p_fingerprint: fingerprint, p_active: false });
     } else {
       setLiked(true);
       localStorage.setItem(key, '1');
       setCount(c => c + 1);
-      await supabase.from('article_likes')
-        .insert({ post_id: postId, fingerprint });
+      await supabase.rpc('toggle_article_like', { p_post_id: postId, p_fingerprint: fingerprint, p_active: true });
     }
   }, [postId, setCount]);
 

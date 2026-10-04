@@ -23,6 +23,8 @@ export default function SiteSettingsPanel() {
       rows<SiteSetting>(data).forEach(s => {
         if (s.key === 'announcement') setAnn(a => ({ ...a, ...(s.value as Partial<Ann>) }));
         if (s.key === 'maintenance') setMaint(m => ({ ...m, ...(s.value as Partial<Maint>) }));
+        // `flags` is the canonical key now; `features` is kept in step by admin_set_setting().
+        if (s.key === 'flags') setFeat(f => ({ ...f, ...(s.value as Partial<Feat>) }));
         if (s.key === 'features') setFeat(f => ({ ...f, ...(s.value as Partial<Feat>) }));
         if (s.key === 'social') setSocial(f => ({ ...f, ...(s.value as Partial<Social>) }));
         if (s.key === 'site_url' && typeof s.value.url === 'string') setSiteUrl(s.value.url);
@@ -30,10 +32,12 @@ export default function SiteSettingsPanel() {
     });
   }, []);
 
+  // Goes through the RPC (not a raw upsert) so the key is validated, the capability is
+  // checked server-side and the change lands in the audit trail with a diff.
   const save = async (key: string, value: Record<string, unknown>) => {
     setSaving(key);
-    await supabase.from('site_settings').upsert({ key, value, is_public: true, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    setSaving(''); setSaved(key); setTimeout(() => setSaved(''), 2000);
+    const { error } = await supabase.rpc('admin_set_setting', { p_key: key, p_value: value, p_is_public: true });
+    setSaving(''); setSaved(error ? '' : key); setTimeout(() => setSaved(''), 2000);
   };
   const Btn = ({ k, v }: { k: string; v: Record<string, unknown> }) => (
     <button onClick={() => save(k, v)} disabled={saving === k} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-xs rounded-sm hover:bg-bronze disabled:opacity-60">{saving === k ? <Loader2 size={12} className="animate-spin" /> : saved === k ? <Check size={12} /> : null} Save</button>
@@ -64,7 +68,7 @@ export default function SiteSettingsPanel() {
       <div className="bg-white border border-taupe/30 rounded-sm p-6 mb-6">
         <h3 className="text-sm font-medium text-charcoal mb-4 flex items-center gap-2"><ToggleLeft size={16} className="text-bronze" /> Feature flags</h3>
         <div className="grid sm:grid-cols-3 gap-3 mb-4">{(Object.keys(feat) as (keyof Feat)[]).map(k => <label key={k} className="flex items-center gap-2 text-sm capitalize"><input type="checkbox" checked={feat[k]} onChange={e => setFeat({ ...feat, [k]: e.target.checked })} /> {k === 'qa' ? 'Reader Q&A' : k}</label>)}</div>
-        <Btn k="features" v={feat} />
+        <Btn k="flags" v={feat} />
       </div>
       <div className="bg-white border border-taupe/30 rounded-sm p-6 mb-6">
         <h3 className="text-sm font-medium text-charcoal mb-4 flex items-center gap-2"><Share2 size={16} className="text-bronze" /> Site URL & social profiles</h3>

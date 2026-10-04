@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { MarkdownField } from '../components/AdminEditorKit';
 import {ArrowLeft, Save, Plus, X} from 'lucide-react';
 import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
@@ -92,7 +93,17 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
         <div className="space-y-4">
           <div><label className={labelClass}>Title</label><input className={inputClass} value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} /></div>
           <div><label className={labelClass}>Slug</label><input className={inputClass} value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value }))} /></div>
-          <div><label className={labelClass}>Description</label><textarea className={inputClass} rows={3} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} /></div>
+          <div>
+            <MarkdownField
+              label="Description (shown on the collection page and in search)"
+              value={form.description}
+              onChange={v => setForm(p => ({ ...p, description: v }))}
+              rows={4}
+              min={120}
+              max={1200}
+              hint="A couple of sentences: what this edit is, who it is for, what is inside."
+            />
+          </div>
           <div><label className={labelClass}>Cover Image URL</label><input className={inputClass} value={form.cover_image} onChange={e => setForm(p => ({ ...p, cover_image: e.target.value }))} /></div>
           <div><label className={labelClass}>Sort Order</label><input type="number" className={inputClass} value={form.sort_order} onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} /></div>
           <div className="space-y-2 pt-2">

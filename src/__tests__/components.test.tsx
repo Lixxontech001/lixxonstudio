@@ -87,13 +87,63 @@ describe('useFocusTrap', () => {
 });
 
 describe('Admin permissions', () => {
-  it('restricts routes by role', async () => {
+  const access = (over: Partial<import('../context/AuthContext').AdminAccess> = {}) => ({
+    user_id: 'u1', email: 'a@b.c', role: 'editor', role_label: 'Editor', display_name: null,
+    status: 'active' as const, is_founder: false, is_owner: false, mfa_enrolled: false,
+    permissions: ['content.read', 'content.write', 'content.moderate'],
+    ...over,
+  });
+
+  it('gates routes from the database permission list, not the role name', async () => {
     const { canAccess } = await import('../admin/permissions');
-    expect(canAccess('owner', 'admin-team')).toBe(true);
-    expect(canAccess('editor', 'admin-team')).toBe(false);
-    expect(canAccess('moderator', 'admin-comments')).toBe(true);
-    expect(canAccess('moderator', 'admin-orders')).toBe(false);
-    expect(canAccess('editor', 'admin-articles')).toBe(true);
+    expect(canAccess(access({ role: 'owner', is_owner: true, permissions: [] }), 'admin-team')).toBe(true);
+    expect(canAccess(access({ role: 'owner', is_owner: true, permissions: [] }), 'admin-data')).toBe(true);
+    expect(canAccess(access(), 'admin-team')).toBe(false);
+    expect(canAccess(access(), 'admin-orders')).toBe(false);
+    expect(canAccess(access({ permissions: ['content.read'] }), 'admin-dashboard')).toBe(true);
+    expect(canAccess(access({ permissions: ['content.read'] }), 'admin-comments')).toBe(false);
+    expect(canAccess(access({ permissions: ['content.moderate'] }), 'admin-comments')).toBe(true);
+    expect(canAccess(access({ permissions: ['commerce.read'] }), 'admin-orders')).toBe(true);
+    expect(canAccess(access({ is_founder: true, role: 'owner', permissions: [] }), 'admin-backups')).toBe(true);
+  });
+
+  it('refuses suspended admins and signed-out visitors', async () => {
+    const { canAccess } = await import('../admin/permissions');
+    expect(canAccess(access({ status: 'suspended' }), 'admin-comments')).toBe(false);
+    expect(canAccess(null, 'admin-comments')).toBe(false);
+    expect(canAccess(null, 'admin-login')).toBe(true);
+    expect(canAccess(null, 'home')).toBe(true);
+  });
+
+  it('mirrors the live 2FA screen for any active admin', async () => {
+    const { canAccess } = await import('../admin/permissions');
+    expect(canAccess(access({ permissions: [] }), 'admin-security')).toBe(true);
+  });
+});
+
+describe('Front-end configuration', () => {
+  it('sanitises the custom head block', async () => {
+    const { sanitizeHeadHtml } = await import('../hooks/useSiteConfig');
+    const dirty = '<meta name="x" content="1"><script>alert(1)</script><link rel="stylesheet" href="//evil"><div onclick="steal()">hi</div>';
+    const clean = sanitizeHeadHtml(dirty);
+    expect(clean).not.toMatch(/script/i);
+    expect(clean).not.toMatch(/onclick/i);
+    expect(clean).not.toMatch(/<link/i);
+    expect(clean).toContain('hi');
+  });
+
+  it('matches exact and prefix redirects', async () => {
+    const { matchRedirect } = await import('../hooks/useSiteConfig');
+    const config = { redirects: { rules: [{ from: '/old', to: '/new', permanent: true }, { from: '/shop/*', to: '/store', enabled: true }] } };
+    expect(matchRedirect(config, '/old')).toEqual({ to: '/new', permanent: true });
+    expect(matchRedirect(config, '/shop/bag')).toEqual({ to: '/store/bag', permanent: false });
+    expect(matchRedirect(config, '/nothing')).toBeNull();
+  });
+
+  it('falls back to the shipped homepage order', async () => {
+    const { enabledSections } = await import('../hooks/useSiteConfig');
+    expect(enabledSections({})[0]).toBe('hero');
+    expect(enabledSections({ homepage: { sections: [{ id: 'shop', enabled: true }, { id: 'hero', enabled: false }] } })).toEqual(['shop']);
   });
 });
 

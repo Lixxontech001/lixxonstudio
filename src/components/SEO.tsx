@@ -1,6 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import { useNavigation } from '../context/NavigationContext';
 import { usePostBySlug, useCategories, useProducts } from '../hooks/useSupabase';
+import { useSiteConfig } from '../hooks/useSiteConfig';
 
 const SITE_NAME = 'Lixxon Studio';
 const SITE_URL = typeof window !== 'undefined' ? window.location.origin : 'https://lixxonstudio.com';
@@ -12,9 +13,13 @@ export default function SEO() {
   const { post } = usePostBySlug(slug);
   const { categories } = useCategories();
   const { products } = useProducts();
+  const { config } = useSiteConfig();
+  // Admin → Front end → SEO holds the site-wide defaults; a page-level value always wins.
+  const seo = config.seo_defaults || {};
+  const suffix = seo.title_suffix || ` | ${SITE_NAME}`;
 
   let title = `${SITE_NAME} — Skincare, Style & Wellness`;
-  let description = DEFAULT_DESCRIPTION;
+  let description = seo.description || DEFAULT_DESCRIPTION;
   let image = '';
   let url = SITE_URL;
 
@@ -87,6 +92,12 @@ export default function SEO() {
     title = `Page Not Found | ${SITE_NAME}`;
   }
 
+  if (suffix !== ` | ${SITE_NAME}`) {
+    const fixed = ` | ${SITE_NAME}`;
+    if (title.endsWith(fixed)) title = title.slice(0, -fixed.length) + suffix;
+  }
+  if (!image && seo.og_image) image = seo.og_image;
+
   return (
     <Helmet>
       <title>{title}</title>
@@ -102,6 +113,8 @@ export default function SEO() {
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
       {image && <meta name="twitter:image" content={image} />}
+      {seo.twitter && <meta name="twitter:site" content={seo.twitter} />}
+      {route.name === 'home' && seo.robots && <meta name="robots" content={seo.robots} />}
       {route.name.startsWith('admin') && <meta name="robots" content="noindex, nofollow" />}
       {route.name === 'search' && <meta name="robots" content="noindex, follow" />}
       {(route.name === 'cart' || route.name === 'wishlist' || route.name === 'account' || route.name === 'account-orders' || route.name === 'account-downloads' || route.name === 'checkout') && <meta name="robots" content="noindex, nofollow" />}

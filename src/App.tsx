@@ -19,6 +19,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { HomePage, CategoryPage, AboutPage, PrivacyPage, TermsPage, ContactPage } from './components/Pages';
 import { SkipLink, AnnouncementBar, MaintenanceGate } from './components/SiteChrome';
+import SiteConfigEffects from './components/SiteConfigEffects';
 import ShortcutsHelp from './components/ShortcutsHelp';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { lazyWithRetry } from './lib/chunkRecovery';
@@ -214,6 +215,7 @@ function AppContent() {
 
   return (
     <MaintenanceGate>
+      <SiteConfigEffects />
       <SkipLink />
       <SEO />
       <GA4 />

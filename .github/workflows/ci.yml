@@ -11,6 +11,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci
+      - name: Production dependency audit
+        run: npm audit --audit-level=high
       - run: npx tsc --noEmit -p tsconfig.app.json
       - run: npx tsc --noEmit -p supabase/functions/tsconfig.json
       - run: npx tsc --noEmit -p api/tsconfig.json

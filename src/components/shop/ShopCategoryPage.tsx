@@ -4,6 +4,7 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { ProductCard } from './ShopPage';
 import { Helmet } from 'react-helmet-async';
+import { renderMarkdown } from '../../lib/markdown';
 
 export default function ShopCategoryPage({ slug }: { slug: string }) {
   const { products, loading } = useShopProducts(slug);
@@ -28,7 +29,7 @@ export default function ShopCategoryPage({ slug }: { slug: string }) {
           {category?.name || slug}
         </h1>
         {category?.description && (
-          <p className="text-charcoal-muted text-lg mt-4 max-w-xl leading-relaxed">{category.description}</p>
+          <div className="text-charcoal-muted text-lg mt-4 max-w-xl leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(category.description) }} />
         )}
       </section>
 

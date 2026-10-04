@@ -276,11 +276,14 @@ export function useAdminProducts() {
   return { products, loading, setProducts };
 }
 
-export function useAdminOrders() {
+export function useAdminOrders(enabled = true) {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
 
   const refetch = useCallback(async () => {
+    // RLS would return nothing without `commerce.read`; skipping the request keeps the
+    // network quiet and the dashboard honest about why the cards are empty.
+    if (!enabled) { setOrders([]); setLoading(false); return; }
     setLoading(true);
     const { data } = await supabase
       .from('orders')
@@ -288,7 +291,7 @@ export function useAdminOrders() {
       .order('created_at', { ascending: false });
     setOrders((data || []) as Order[]);
     setLoading(false);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => { refetch(); }, [refetch]);
 
