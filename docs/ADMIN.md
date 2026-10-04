@@ -157,31 +157,7 @@ The M8 RPCs are `admin_ai_control_tower`, `admin_ai_run_autopilot`, `admin_ai_ru
 `admin_ai_record_experiment_event` and `admin_ai_resolve_incident`. Every mutation re-checks
 RBAC server-side and is trigger-audited.
 
-## 9. Front end as data (Admin → Front end)
-
-`site_settings` public rows drive the storefront without a deploy: `nav_menu`, `footer`,
-`homepage` (section order + visibility), `theme` (accent pair), `seo_defaults`, `redirects`,
-`custom_head`, `flags`, `announcement`, `maintenance`. Writes go through
-`admin_set_setting(key, value, is_public)` which validates shape and requires
-`settings.frontend` (or `settings.write` for non-front-end keys); `admin_reset_setting(key)`
-restores the shipped default. The reader side reads everything in one `site_config()` call
-(`src/hooks/useSiteConfig.ts` → `SiteConfigEffects`, Header, Footer, HomePage, SEO).
-
-## 10. Local verification
-
-```bash
-/usr/bin/env python3 -m venv /home/user/.venv && /home/user/.venv/bin/pip install pgserver
-/home/user/.venv/bin/python scripts/db-test.py          # 37 migrations + 11 assertion suites
-npx tsc --noEmit -p tsconfig.app.json && npm test && npm run build
-node scripts/size-budget.mjs && npm run audit:contrast
-```
-
-`scripts/admin-assertions.sql` proves the model at the database level: editors cannot read
-orders, moderators cannot publish or reach backups, suspended admins lose everything, the
-founder cannot be demoted, the last owner cannot be removed, `deny` beats a role grant, the SQL
-console refuses writes, and the audit log records diffs with actor/IP and can be reverted.
-
-## 8. Admin AI Predictive Control Centre (Admin → Admin AI)
+## 8.1 Admin AI Predictive Control Centre (Admin → Admin AI)
 
 M10 adds event-driven, predictive and self-reviewing operation without changing the M8/M9 safety
 contract. The new Admin AI tabs are Predictive, Events, Digital twin, Debate & trust, Maintenance,
@@ -211,3 +187,27 @@ The M10 RPCs are `admin_ai_refresh_predictive`, `admin_ai_refresh_digital_twin`,
 `admin_ai_decide_maintenance`, and `admin_ai_resolve_security_finding`. The default provider remains
 `rules`; external providers must remain authenticated edge-function integrations that can only
 create proposals.
+
+## 9. Front end as data (Admin → Front end)
+
+`site_settings` public rows drive the storefront without a deploy: `nav_menu`, `footer`,
+`homepage` (section order + visibility), `theme` (accent pair), `seo_defaults`, `redirects`,
+`custom_head`, `flags`, `announcement`, `maintenance`. Writes go through
+`admin_set_setting(key, value, is_public)` which validates shape and requires
+`settings.frontend` (or `settings.write` for non-front-end keys); `admin_reset_setting(key)`
+restores the shipped default. The reader side reads everything in one `site_config()` call
+(`src/hooks/useSiteConfig.ts` → `SiteConfigEffects`, Header, Footer, HomePage, SEO).
+
+## 10. Local verification
+
+```bash
+/usr/bin/env python3 -m venv /home/user/.venv && /home/user/.venv/bin/pip install pgserver
+/home/user/.venv/bin/python scripts/db-test.py          # 37 migrations + 11 assertion suites
+npx tsc --noEmit -p tsconfig.app.json && npm test && npm run build
+node scripts/size-budget.mjs && npm run audit:contrast
+```
+
+`scripts/admin-assertions.sql` proves the model at the database level: editors cannot read
+orders, moderators cannot publish or reach backups, suspended admins lose everything, the
+founder cannot be demoted, the last owner cannot be removed, `deny` beats a role grant, the SQL
+console refuses writes, and the audit log records diffs with actor/IP and can be reverted.
