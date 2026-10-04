@@ -16,12 +16,19 @@ import { HeroSkeleton, FeedSkeleton } from './Skeletons';
 import { useNavigation, Link } from '../context/NavigationContext';
 import { Mail } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
+import QueryStatusNotice from './QueryStatusNotice';
 
 export function HomePage({ page }: { page: number }) {
-  const { posts, loading } = usePosts();
+  const { posts, loading, error, retry } = usePosts();
   const { categories } = useCategories();
   const { navigate } = useNavigation();
-  const { posts: paginatedPosts, totalPages, loading: pagLoading } = usePaginatedPosts(null, page);
+  const {
+    posts: paginatedPosts,
+    totalPages,
+    loading: pagLoading,
+    error: pagError,
+    retry: retryPaginated,
+  } = usePaginatedPosts(null, page);
 
   useEffect(() => { window.scrollTo(0, 0); }, [page]);
 
@@ -36,14 +43,15 @@ export function HomePage({ page }: { page: number }) {
     <main>
       {loading ? <HeroSkeleton /> : <Hero featuredPosts={heroPosts} />}
       <Newsletter />
+      <QueryStatusNotice loading={loading} hasData={posts.length > 0} error={error} onRetry={retry} />
       {!loading && trendingPosts.length > 0 && <TrendingSection posts={trendingPosts} />}
       {!loading && editorsPicks.length > 0 && <EditorsPicks posts={editorsPicks} />}
       <ProductGrid />
       {!loading && <MostReadThisWeek />}
       {!loading && <PersonalizedRecommendations />}
-      {pagLoading ? (
-        <FeedSkeleton />
-      ) : (
+      {pagLoading && paginatedPosts.length === 0 && <FeedSkeleton />}
+      <QueryStatusNotice loading={pagLoading} hasData={paginatedPosts.length > 0} error={pagError} onRetry={retryPaginated} />
+      {(!pagLoading || paginatedPosts.length > 0) && !pagError && (
         <>
           <MagazineFeed
             posts={paginatedPosts}

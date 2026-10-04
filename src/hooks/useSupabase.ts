@@ -9,55 +9,71 @@ interface PaginatedResult {
   total: number;
   totalPages: number;
   loading: boolean;
+  error: string | null;
+  retry: () => void;
 }
 
 export function usePaginatedPosts(categorySlug: string | null, page: number): PaginatedResult {
   const [posts, setPosts] = useState<PostWithRelations[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const fetchPage = async () => {
       setLoading(true);
+      setError(null);
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      let query = supabase
-        .from('posts')
-        .select('*, category:categories(*), author:authors(*)', { count: 'exact' })
-        .eq('status', 'published')
-        .order('published_at', { ascending: false })
-        .range(from, to);
+      try {
+        let query = supabase
+          .from('posts')
+          .select('*, category:categories(*), author:authors(*)', { count: 'exact' })
+          .eq('status', 'published')
+          .order('published_at', { ascending: false })
+          .range(from, to);
 
-      if (categorySlug) {
-        const { data: catData } = await supabase
-          .from('categories')
-          .select('id')
-          .eq('slug', categorySlug)
-          .maybeSingle();
-        if (catData) {
-          query = query.eq('category_id', catData.id);
+        if (categorySlug) {
+          const { data: catData, error: categoryError } = await supabase
+            .from('categories')
+            .select('id')
+            .eq('slug', categorySlug)
+            .maybeSingle();
+          if (categoryError) throw categoryError;
+          if (catData) {
+            query = query.eq('category_id', catData.id);
+          }
         }
-      }
 
-      const { data, count, error } = await query;
-      if (cancelled) return;
-      if (!error && data) {
-        setPosts(data as PostWithRelations[]);
+        const { data, count, error: queryError } = await query;
+        if (cancelled) return;
+        if (queryError) throw queryError;
+        setPosts((data || []) as PostWithRelations[]);
         setTotal(count || 0);
+      } catch (fetchError) {
+        if (!cancelled) {
+          setError(fetchError instanceof Error ? fetchError.message : 'Unable to load stories.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     };
     fetchPage();
     return () => { cancelled = true; };
-  }, [categorySlug, page]);
+  }, [categorySlug, page, retryKey]);
+
+  const retry = useCallback(() => setRetryKey((key) => key + 1), []);
 
   return {
     posts,
     total,
     totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
     loading,
+    error,
+    retry,
   };
 }
 
@@ -118,29 +134,37 @@ export function usePosts() {
   const [posts, setPosts] = useState<PostWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const fetchPosts = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*, category:categories(*), author:authors(*)')
-        .eq('status', 'published')
-        .order('published_at', { ascending: false });
-      if (cancelled) return;
-      if (error) {
-        setError(error.message);
-      } else {
+      setError(null);
+      try {
+        const { data, error: queryError } = await supabase
+          .from('posts')
+          .select('*, category:categories(*), author:authors(*)')
+          .eq('status', 'published')
+          .order('published_at', { ascending: false });
+        if (cancelled) return;
+        if (queryError) throw queryError;
         setPosts((data || []) as PostWithRelations[]);
+      } catch (fetchError) {
+        if (!cancelled) {
+          setError(fetchError instanceof Error ? fetchError.message : 'Unable to load stories.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     };
     fetchPosts();
     return () => { cancelled = true; };
-  }, []);
+  }, [retryKey]);
 
-  return { posts, loading, error };
+  const retry = useCallback(() => setRetryKey((key) => key + 1), []);
+
+  return { posts, loading, error, retry };
 }
 
 export function usePostBySlug(slug: string | null) {

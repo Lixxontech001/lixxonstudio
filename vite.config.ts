@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 /**
@@ -24,6 +24,17 @@ const KEY_NAMES = [
 export default defineConfig(({ mode }) => {
   // `.env*` files PLUS real process env (Vercel injects its variables into the build process).
   const env: Record<string, string> = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...(process.env as Record<string, string>) };
+  const buildId = env.VERCEL_GIT_COMMIT_SHA || env.VITE_COMMIT_SHA || new Date().toISOString();
+  const versionPlugin: Plugin = {
+    name: 'lixxon-version-json',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: `${JSON.stringify({ buildId }, null, 2)}\n`,
+      });
+    },
+  };
 
   const found = (names: string[]) => names.filter((n) => env[n]);
 
@@ -49,12 +60,10 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [react()],
+    plugins: [react(), versionPlugin],
     define: {
-      // Vercel only exposes the commit SHA server-side; surface it to the bundle for release tagging.
-      __COMMIT_SHA__: JSON.stringify(
-        env.VITE_COMMIT_SHA || env.VERCEL_GIT_COMMIT_SHA || '',
-      ),
+      // Vercel commit SHA when available, otherwise a unique build timestamp.
+      __COMMIT_SHA__: JSON.stringify(buildId),
       // Sentry DSN is a publishable value (it ships in every browser bundle by design).
       // Vercel stores it as SENTRY_DSN, which Vite will not inline on its own.
       __SENTRY_DSN__: JSON.stringify(env.VITE_SENTRY_DSN || env.SENTRY_DSN || ''),
