@@ -39,7 +39,7 @@ export default function AdminFeedback() {
                     <Icon size={14} className={color} />
                     <span className={`text-xs uppercase tracking-wide ${color}`}>{f.type}</span>
                   </div>
-                  <button onClick={() => remove(f.id)} className="text-charcoal-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => remove(f.id)} className="text-charcoal-muted hover:text-red-500 hover-reveal transition-opacity">
                     <Trash2 size={14} />
                   </button>
                 </div>

@@ -37,3 +37,66 @@ export function normalizeImageUrl(url: string | null | undefined): string | null
 
   return trimmed;
 }
+
+/** Responsive widths Pexels' CDN serves well (AVIF/WebP via auto=compress). */
+export const RESPONSIVE_WIDTHS = [400, 800, 1200, 1600] as const;
+
+const PEXELS_CDN = /^https?:\/\/images\.pexels\.com\//i;
+
+/**
+ * A `srcset` for Pexels CDN URLs using Pexels' own `w=` parameter. Returns
+ * `undefined` for other hosts (we never guess parameters for third parties).
+ */
+export function buildSrcSet(
+  url: string | null | undefined,
+  widths: readonly number[] = RESPONSIVE_WIDTHS
+): string | undefined {
+  const u = url?.trim();
+  if (!u || !PEXELS_CDN.test(u)) return undefined;
+  return widths
+    .map((w) => `${withWidth(u, w)} ${w}w`)
+    .join(', ');
+}
+
+/** Swap (or add) the `w=` query parameter on a Pexels CDN URL. */
+function withWidth(url: string, width: number): string {
+  const hashSplit = url.split('#');
+  const querySplit = hashSplit[0].split('?');
+  const params = new URLSearchParams(querySplit[1] ?? '');
+  params.set('w', String(width));
+  if (!params.has('auto')) params.set('auto', 'compress');
+  if (!params.has('cs')) params.set('cs', 'tinysrgb');
+  return `${querySplit[0]}?${params.toString()}${hashSplit[1] ? `#${hashSplit[1]}` : ''}`;
+}
+
+/** Branded placeholder (same-origin, CSP-safe) shown when an image fails to load. */
+export const IMAGE_FALLBACK_SRC = '/image-placeholder.svg';
+
+/**
+ * Swap a failed <img> to the branded placeholder exactly once and report the
+ * failing URL as a Sentry breadcrumb. Returns true if the fallback was applied.
+ */
+export function applyImageFallback(img: HTMLImageElement): boolean {
+  if (img.dataset.fallbackApplied === '1') return false;
+  img.dataset.fallbackApplied = '1';
+  void import('./monitoring').then((m) => m.addBreadcrumb('image', 'Image failed to load', { url: img.currentSrc || img.src }));
+  img.removeAttribute('srcset');
+  img.src = IMAGE_FALLBACK_SRC;
+  return true;
+}
+
+/**
+ * Capture-phase listener: image errors do not bubble, so this catches every
+ * failed <img> in the app (including markdown-rendered content) without any
+ * inline handlers (which CSP would block anyway).
+ */
+export function installImageFallback(): void {
+  window.addEventListener(
+    'error',
+    (e) => {
+      const t = e.target;
+      if (t instanceof HTMLImageElement) applyImageFallback(t);
+    },
+    true
+  );
+}

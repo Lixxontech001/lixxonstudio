@@ -25,6 +25,7 @@ import { Helmet } from 'react-helmet-async';
 import type { PostWithRelations } from '../lib/types';
 import { renderMarkdown } from '../lib/markdown';
 import { normalizeImageUrl } from '../lib/images';
+import SmartImage from './SmartImage';
 import { useGlossary } from '../hooks/useGlossary';
 import { useNavigation } from '../context/NavigationContext';
 import { useCloudBookmarks, pickHeadline, trackHeadline, useSiteSettings } from '../hooks/useV3';
@@ -41,7 +42,6 @@ export default function ArticleReader({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState('');
-  const [pinterestHovered, setPinterestHovered] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const { theme, toggleTheme } = useTheme();
@@ -335,17 +335,13 @@ export default function ArticleReader({ slug }: { slug: string }) {
       {/* Cover Image with Pinterest Save */}
       {post.cover_image && (
         <div className="container-wide mb-12">
-          <div
-            className="rounded-sm overflow-hidden luxury-shadow-lg aspect-[16/9] lg:aspect-[2/1] relative group"
-            onMouseEnter={() => setPinterestHovered(true)}
-            onMouseLeave={() => setPinterestHovered(false)}
-          >
-            <img src={normalizeImageUrl(post.cover_image) ?? ''} alt={post.title} className="w-full h-full object-cover" fetchPriority="high" />
+          <div className="rounded-sm overflow-hidden luxury-shadow-lg aspect-[16/9] lg:aspect-[2/1] relative group">
+            <SmartImage src={post.cover_image} alt={post.title} className="w-full h-full object-cover" sizes="100vw" aspectRatio="16/9" priority />
             <a
               href={pinterestUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={`absolute top-4 right-4 bg-white text-charcoal px-4 py-2 rounded-sm text-xs font-medium flex items-center gap-2 luxury-shadow transition-all duration-300 ${pinterestHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}
+              className="absolute top-4 right-4 bg-white text-charcoal px-4 py-2 rounded-sm text-xs font-medium flex items-center gap-2 luxury-shadow transition-all duration-300 hover-reveal"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12c0 5 3 9.4 7.4 11.3-.1-.9-.2-2.4 0-3.4.2-.9 1.3-5.7 1.3-5.7s-.3-.7-.3-1.6c0-1.5.9-2.7 2-2.7.9 0 1.4.7 1.4 1.5 0 .9-.6 2.3-.9 3.6-.3 1.1.5 2 1.6 2 1.9 0 3.4-2 3.4-5 0-2.6-1.9-4.4-4.5-4.4-3.1 0-4.9 2.3-4.9 4.7 0 .9.4 1.9.8 2.5.1.1.1.2 0 .3l-.3 1.1c0 .2-.2.2-.3.1-1.2-.5-1.9-2.2-1.9-3.6 0-2.9 2.1-5.6 6.2-5.6 3.2 0 5.8 2.3 5.8 5.4 0 3.2-2 5.8-4.8 5.8-1 0-1.9-.5-2.2-1.1l-.6 2.3c-.2.9-.8 2-1.2 2.6C9.5 23.8 10.7 24 12 24c6.6 0 12-5.4 12-12S18.6 0 12 0z"/></svg>
               Save
@@ -532,7 +528,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
                   className="group text-left bg-white rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500 flex flex-col"
                 >
                   <div className="img-zoom aspect-[4/5] overflow-hidden">
-                    {r.cover_image && <img src={normalizeImageUrl(r.cover_image) ?? ''} alt={r.title} className="w-full h-full object-cover" loading="lazy" />}
+                    {r.cover_image && <SmartImage src={r.cover_image} alt={r.title} className="w-full h-full object-cover" sizes="(max-width: 768px) 50vw, 20vw" aspectRatio="4/5" />}
                   </div>
                   <div className="p-5 flex flex-col flex-1">
                     <span className="text-[10px] tracking-editorial uppercase text-bronze">{r.category?.name}</span>

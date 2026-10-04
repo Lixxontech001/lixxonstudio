@@ -75,7 +75,7 @@ export default function AdminContentTemplates() {
             <div key={t.id} className="bg-white rounded-sm border border-taupe/30 p-5 group">
               <div className="flex items-start justify-between mb-3">
                 <FileText size={16} className="text-bronze" />
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-2 hover-reveal transition-opacity">
                   <button onClick={() => copyContent(t.id, t.content)} className="text-charcoal-muted hover:text-bronze" aria-label="Copy template">
                     {copied === t.id ? <span className="text-xs text-green-600">Copied!</span> : <Copy size={14} />}
                   </button>

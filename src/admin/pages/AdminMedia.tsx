@@ -160,7 +160,7 @@ export default function AdminMedia() {
                   <img src={item.url} alt={item.alt_text || ''} loading="lazy" className="w-full h-full object-cover" />
                   {!item.alt_text?.trim() && <span className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded">No alt</span>}
                   {uses !== null && <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded ${uses ? 'bg-black/60 text-white' : 'bg-gray-200 text-gray-600'}`}><Link2 size={9} className="inline mr-0.5" />{uses}</span>}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                  <div className="absolute inset-0 bg-black/25 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 hover-reveal">
                     <button onClick={() => setEditing(item)} className="bg-white p-2 rounded text-gray-700 hover:text-bronze" title="Edit"><Pencil size={14} /></button>
                     <button onClick={() => copyUrl(item)} className="bg-white p-2 rounded text-gray-700 hover:text-bronze" title="Copy URL">{copied === item.id ? <Check size={14} /> : <Copy size={14} />}</button>
                     <button onClick={() => handleDelete(item)} className="bg-white p-2 rounded text-gray-700 hover:text-red-600" title="Delete"><Trash2 size={14} /></button>

@@ -11,25 +11,23 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const STORAGE_KEY = 'lixxon_theme';
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light');
-
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (stored === 'dark' || stored === 'light') {
-      setTheme(stored);
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('dark');
+  const [theme, setTheme] = useState<Theme>(() => {
+    // The pre-paint script in index.html has already applied the class; read the same
+    // source of truth here. Default is LIGHT for everyone — the OS preference is
+    // deliberately ignored; dark is only ever an explicit, remembered choice.
+    try {
+      return localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
     }
-  }, []);
+  });
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem(STORAGE_KEY, theme);
+    root.classList.toggle('dark', theme === 'dark');
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch { /* storage disabled — class toggle still applies for this session */ }
   }, [theme]);
 
   const toggleTheme = useCallback(() => {

@@ -5,10 +5,12 @@ import './index.css';
 import { NavigationProvider } from './context/NavigationContext';
 import { initMonitoring, registerServiceWorker } from './lib/monitoring';
 import { installChunkRecovery } from './lib/chunkRecovery';
+import { installImageFallback } from './lib/images';
 
 initMonitoring();
 registerServiceWorker();
 installChunkRecovery();
+installImageFallback();
 
 const revealObserver = new IntersectionObserver(
   (entries) => {

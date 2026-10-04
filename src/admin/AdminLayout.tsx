@@ -8,9 +8,10 @@ import {
   BarChart3, ShieldCheck, ChevronDown, ChevronRight, Inbox,
   Tag, RotateCcw, ShoppingCart,
   Activity, FileCode, Gift, Share2, Calendar,
-  Layers, BookA, MessageCircleQuestion, DatabaseBackup
+  Layers, BookA, MessageCircleQuestion, DatabaseBackup, Moon, Sun
 } from 'lucide-react';
 import { canAccess } from './permissions';
+import { useTheme } from '../context/ThemeContext';
 import type { LucideIcon } from 'lucide-react';
 
 interface NavItem {
@@ -87,6 +88,7 @@ const NAV_SECTIONS: NavSection[] = [
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { route, navigate } = useNavigation();
+  const { theme, toggleTheme } = useTheme();
   const { signOut, adminRole, email } = useAuth();
   const sections = NAV_SECTIONS.map(sec => ({ ...sec, items: sec.items.filter(i => canAccess(adminRole, i.route.name)) })).filter(sec => sec.items.length > 0);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['Editorial', 'Commerce', 'Marketing', 'Analytics']));
@@ -150,6 +152,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               </div>
             );
           })}
+          {/* Theme toggle — same remembered preference as the public site */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-3 px-3 py-2.5 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors whitespace-nowrap"
+            aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+            aria-pressed={theme === 'dark'}
+          >
+            {theme === 'light' ? <Moon size={16} strokeWidth={1.5} /> : <Sun size={16} strokeWidth={1.5} />}
+            Theme
+          </button>
         </nav>
 
         <div className="p-3 mt-auto border-t border-gray-800 hidden lg:block">

@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // The .dark class on <html> is the single source of truth for dark mode (ThemeContext +
+  // the pre-paint script in index.html). Never follow the OS — dark is a deliberate choice.
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
