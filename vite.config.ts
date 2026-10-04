@@ -62,6 +62,14 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    server: {
+      host: true,
+      allowedHosts: true,
+    },
+    preview: {
+      host: true,
+      allowedHosts: true,
+    },
     plugins: [react(), versionPlugin],
     define: {
       // Vercel commit SHA when available, otherwise a unique build timestamp.

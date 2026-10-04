@@ -1,6 +1,61 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Tailwind v4 keeps the design tokens beside the stylesheet so the build has one
+   source of truth for generated utilities and custom editorial components. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: Inter, system-ui, sans-serif;
+  --tracking-editorial: 0.25em;
+  --tracking-ultra-wide: 0.4em;
+
+  --color-porcelain: #FDFBF7;
+  --color-ivory: #FFFFFF;
+  --color-charcoal: #1A1A1A;
+  --color-charcoal-light: #2D2D2D;
+  --color-charcoal-muted: #5A5A5A;
+  --color-taupe: #E8DFD8;
+  --color-taupe-light: #F2EDE7;
+  --color-taupe-dark: #D4C7BC;
+  --color-bronze: #C48B71;
+  --color-bronze-light: #D9A88E;
+  --color-bronze-dark: #A87056;
+  --color-bronze-50: #FBF3EF;
+  --color-bronze-100: #F5E6DD;
+  --color-bronze-200: #E8C9B6;
+
+  --animate-fade-in: fadeIn 0.6s ease forwards;
+  --animate-fade-up: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) forwards;
+  --animate-slide-in: slideIn 0.4s cubic-bezier(0.16,1,0.3,1) forwards;
+  --animate-shimmer: shimmer 2s infinite;
+  --animate-ticker: ticker 40s linear infinite;
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  @keyframes ticker {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(-50%); }
+  }
+}
 
 @layer base {
   html {
@@ -39,7 +94,7 @@
 
 @layer components {
   .container-editorial {
-    @apply max-w-7xl mx-auto px-6 md:px-10;
+    @apply max-w-7xl mx-auto px-6;
   }
 
   .container-narrow {
@@ -47,7 +102,14 @@
   }
 
   .container-wide {
-    @apply max-w-[1400px] mx-auto px-6 md:px-10;
+    @apply max-w-[1400px] mx-auto px-6;
+  }
+
+  @media (min-width: 768px) {
+    .container-editorial,
+    .container-wide {
+      @apply px-10;
+    }
   }
 
   .reveal {
@@ -119,11 +181,21 @@
   }
 
   .article-prose h2 {
-    @apply font-serif text-2xl md:text-3xl font-bold text-charcoal mt-12 mb-5 leading-tight;
+    @apply font-serif text-2xl font-bold text-charcoal mt-12 mb-5 leading-tight;
   }
 
   .article-prose h3 {
-    @apply font-serif text-xl md:text-2xl font-semibold text-charcoal mt-10 mb-4 leading-tight;
+    @apply font-serif text-xl font-semibold text-charcoal mt-10 mb-4 leading-tight;
+  }
+
+  @media (min-width: 768px) {
+    .article-prose h2 {
+      @apply text-3xl;
+    }
+
+    .article-prose h3 {
+      @apply text-2xl;
+    }
   }
 
   .article-prose p {
@@ -179,7 +251,8 @@
   }
 
   .article-prose img {
-    @apply w-full rounded-sm my-8 luxury-shadow-lg;
+    @apply w-full rounded-sm my-8;
+    box-shadow: 0 2px 8px rgba(26,26,26,0.04), 0 12px 40px rgba(26,26,26,0.10);
   }
 
   .article-prose h2 {

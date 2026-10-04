@@ -34,7 +34,7 @@ const PREFIX_GROUPS = [
   ['sanitize', 'sanitize'],
   ['markdown', 'markdown'],
   ['vercel-analytics', 'vercel'],
-  ['admin-bundle', 'AdminApp'],
+  ['admin-pages', 'admin-pages'],
   ['article-reader', 'ArticleReader'],
 ];
 
@@ -76,14 +76,20 @@ for (const [group, file] of Object.entries(chunks)) {
   measured[group] = { file, raw: readFileSync(join(ASSETS, file)).length, gzip: gzipSize(join(ASSETS, file)) };
 }
 
-// Totals: what a cold visitor could conceivably download for the whole app.
+// Totals: keep the public-reader budget separate from the lazy admin application.
+// Admin pages are intentionally excluded from the public cold-visitor total because the
+// Vite entry never loads them for readers. They still get their own explicit budget below.
 const jsFiles = files.filter((f) => f.endsWith('.js'));
+const adminJsFiles = jsFiles.filter((f) => f.startsWith('admin-pages-'));
+const publicJsFiles = jsFiles.filter((f) => !adminJsFiles.includes(f));
 const cssFiles = files.filter((f) => f.endsWith('.css'));
-measured['total-js'] = {
-  file: `${jsFiles.length} chunks`,
-  raw: jsFiles.reduce((n, f) => n + readFileSync(join(ASSETS, f)).length, 0),
-  gzip: jsFiles.reduce((n, f) => n + gzipSize(join(ASSETS, f)), 0),
-};
+const sumFiles = (list) => ({
+  file: `${list.length} chunks`,
+  raw: list.reduce((n, f) => n + readFileSync(join(ASSETS, f)).length, 0),
+  gzip: list.reduce((n, f) => n + gzipSize(join(ASSETS, f)), 0),
+});
+measured['total-js'] = sumFiles(publicJsFiles);
+measured['admin-total-js'] = sumFiles(adminJsFiles);
 measured['total-css'] = {
   file: `${cssFiles.length} file(s)`,
   raw: cssFiles.reduce((n, f) => n + readFileSync(join(ASSETS, f)).length, 0),
