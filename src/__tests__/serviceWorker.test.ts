@@ -1,9 +1,7 @@
 /**
- * Regression tests for public/sw.js (the "Failed to convert value to 'Response'" /
- * 206 partial / Pexels CSP production bugs).
- *
- * The worker is a standalone script (no build step), so the tests execute the real
- * file in a mocked service-worker scope and assert on its observable behaviour.
+ * Regression tests for public/sw.js. The worker is a standalone script (no build step),
+ * so the tests execute the real file in a mocked service-worker scope and assert on
+ * its observable behaviour.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -62,7 +60,7 @@ function loadWorker(opts: {
   cacheNames?: string[];
 }): Harness {
   const store = opts.store ?? new Map<string, Response>();
-  const cacheNames = opts.cacheNames ?? ['lixxon-v2'];
+  const cacheNames = opts.cacheNames ?? ['lixxon-v3'];
   const listeners = new Map<string, Array<(e: unknown) => void>>();
 
   const putMock = vi.fn(async (key: MockRequest | string, res: Response) => {
@@ -147,23 +145,68 @@ function loadWorker(opts: {
 }
 
 describe('public/sw.js', () => {
-  it('never hands respondWith() undefined — offline navigation with an empty cache still resolves to a real Response (synthetic 504)', async () => {
-    const h = loadWorker({ fetchImpl: () => Promise.reject(new TypeError('offline')) });
-    const responded = h.dispatchFetch(mockRequest('https://lixxonstudio.vercel.app/blog/x', { mode: 'navigate' }));
-    expect(responded).toBeDefined();
-    const res = await responded!;
-    expect(res).toBeInstanceOf(Response);
-    expect(res.status).toBe(504);
+  it('uses a new cache version and purges every previous cache on activate', async () => {
+    const cacheNames = ['lixxon-v1', 'lixxon-v2', 'lixxon-v0-old', 'lixxon-v3'];
+    const h = loadWorker({ cacheNames });
+    await h.runExtendable('activate');
+    expect(cacheNames).toEqual(['lixxon-v3']);
+    expect(h.claim).toHaveBeenCalled();
   });
 
-  it('a failing cache.put() never affects the response', async () => {
+  it('never intercepts navigations; documents are always handled by the browser', () => {
+    const h = loadWorker({});
+    const responded = h.dispatchFetch(
+      mockRequest('https://lixxonstudio.vercel.app/blog/article', { mode: 'navigate' })
+    );
+    expect(responded).toBeUndefined();
+    expect(h.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('never intercepts or caches Supabase REST requests', () => {
+    const h = loadWorker({});
+    const responded = h.dispatchFetch(
+      mockRequest('https://example.supabase.co/rest/v1/posts?select=*')
+    );
+    expect(responded).toBeUndefined();
+    expect(h.fetchMock).not.toHaveBeenCalled();
+    expect(h.putMock).not.toHaveBeenCalled();
+    expect(h.store.size).toBe(0);
+  });
+
+  it('never writes the document root or an HTML document during fetch handling', async () => {
+    const h = loadWorker({});
+    h.dispatchFetch(mockRequest('https://lixxonstudio.vercel.app/', { mode: 'navigate' }));
+    h.dispatchFetch(
+      mockRequest('https://lixxonstudio.vercel.app/offline.html', { mode: 'navigate' })
+    );
+    await h.dispatchFetch(mockRequest('https://lixxonstudio.vercel.app/assets/index-abc.js'));
+
+    const writtenKeys = [...h.store.keys()];
+    expect(writtenKeys).not.toContain('/');
+    expect(writtenKeys.some((key) => /\.html(?:$|[?#])/.test(key))).toBe(false);
+    expect(h.putMock.mock.calls.map(([key]) => keyOf(key))).toEqual([
+      'https://lixxonstudio.vercel.app/assets/index-abc.js',
+    ]);
+  });
+
+  it('serves a cache-first asset when one is already available', async () => {
+    const url = 'https://lixxonstudio.vercel.app/assets/index-abc.js';
+    const h = loadWorker({ store: new Map([[url, new Response('cached-asset')]]) });
+    const res = await h.dispatchFetch(mockRequest(url))!;
+    expect(await res.text()).toBe('cached-asset');
+    expect(h.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the network for an asset and treats a failing cache.put() as best-effort', async () => {
     const h = loadWorker({
       fetchImpl: () => Promise.resolve(new Response('asset-body', { status: 200 })),
       putImpl: () => {
         throw new Error('QuotaExceededError');
       },
     });
-    const res = await h.dispatchFetch(mockRequest('https://lixxonstudio.vercel.app/assets/index-abc.js'))!;
+    const res = await h.dispatchFetch(
+      mockRequest('https://lixxonstudio.vercel.app/assets/index-abc.js')
+    )!;
     expect(res).toBeInstanceOf(Response);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('asset-body');
@@ -175,49 +218,41 @@ describe('public/sw.js', () => {
       fetchImpl: () =>
         Promise.resolve(new Response('private', { status: 200, headers: { 'Cache-Control': 'no-store' } })),
     });
-    const res = await h.dispatchFetch(mockRequest('https://lixxonstudio.vercel.app/assets/index-abc.js'))!;
+    const res = await h.dispatchFetch(
+      mockRequest('https://lixxonstudio.vercel.app/assets/index-abc.js')
+    )!;
     expect(res.status).toBe(200);
     expect(h.putMock).not.toHaveBeenCalled();
   });
 
-  it('does not cache 206 partial responses (Cache.put would throw on them)', async () => {
+  it('does not cache 206 partial responses', async () => {
     const h = loadWorker({
       fetchImpl: () => Promise.resolve(new Response('partial', { status: 206 })),
     });
     const res = await h.dispatchFetch(
-      mockRequest('https://example.supabase.co/rest/v1/posts?select=*')
+      mockRequest('https://lixxonstudio.vercel.app/assets/index-abc.js')
     )!;
     expect(res.status).toBe(206);
     expect(h.putMock).not.toHaveBeenCalled();
   });
 
-  it('serves the cached shell/offline page for offline navigations', async () => {
-    const store = new Map<string, Response>([['/', new Response('shell')]]);
-    const h = loadWorker({ fetchImpl: () => Promise.reject(new TypeError('offline')), store });
-    const res = await h.dispatchFetch(mockRequest('https://lixxonstudio.vercel.app/shop', { mode: 'navigate' }))!;
-    expect(await res.text()).toBe('shell');
-
-    // nothing cached but the offline page → that one
-    const store2 = new Map<string, Response>([['/offline.html', new Response('offline-page')]]);
-    const h2 = loadWorker({ fetchImpl: () => Promise.reject(new TypeError('offline')), store: store2 });
-    const res2 = await h2.dispatchFetch(mockRequest('https://lixxonstudio.vercel.app/', { mode: 'navigate' }))!;
-    expect(await res2.text()).toBe('offline-page');
+  it('returns a real synthetic 504 when an uncached asset is offline', async () => {
+    const h = loadWorker({ fetchImpl: () => Promise.reject(new TypeError('offline')) });
+    const responded = h.dispatchFetch(
+      mockRequest('https://lixxonstudio.vercel.app/assets/index-abc.js')
+    );
+    expect(responded).toBeDefined();
+    const res = await responded!;
+    expect(res).toBeInstanceOf(Response);
+    expect(res.status).toBe(504);
   });
 
   it('never intercepts non-GET requests', () => {
     const h = loadWorker({});
     const responded = h.dispatchFetch(
-      mockRequest('https://lixxonstudio.vercel.app/rest/v1/anything', { method: 'POST' })
+      mockRequest('https://lixxonstudio.vercel.app/assets/index-abc.js', { method: 'POST' })
     );
     expect(responded).toBeUndefined();
-  });
-
-  it('purges stale caches on activate and keeps only lixxon-v2 (cache scope)', async () => {
-    const cacheNames = ['lixxon-v1', 'lixxon-v2', 'lixxon-v0-old'];
-    const h = loadWorker({ cacheNames });
-    await h.runExtendable('activate');
-    expect(cacheNames).toEqual(['lixxon-v2']);
-    expect(h.claim).toHaveBeenCalled();
   });
 
   it('never touches cross-origin requests (Pexels images, fonts, analytics)', () => {

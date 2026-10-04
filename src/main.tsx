@@ -7,11 +7,15 @@ import { initMonitoring, registerServiceWorker } from './lib/monitoring';
 import { installChunkRecovery } from './lib/chunkRecovery';
 import { installImageFallback } from './lib/images';
 import { initReveal } from './lib/reveal';
-import { initSwUpdate } from './lib/swUpdate';
+import { handleServiceWorkerKillSwitch, initSwUpdate } from './lib/swUpdate';
 
 initMonitoring();
-registerServiceWorker();
-initSwUpdate();
+const serviceWorkerResetRequested = handleServiceWorkerKillSwitch();
+// Build-time emergency switch: set VITE_DISABLE_SW=1 to skip registration; leave it unset in Vercel.
+if (!serviceWorkerResetRequested && import.meta.env.VITE_DISABLE_SW !== '1') {
+  registerServiceWorker();
+}
+if (!serviceWorkerResetRequested) initSwUpdate();
 installChunkRecovery();
 installImageFallback();
 initReveal();
