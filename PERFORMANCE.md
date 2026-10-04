@@ -229,7 +229,11 @@ Admin code is already **excluded from the public entry chunk** (lazy `/admin` ro
 | CI public-file guard | No per-file size assertion | Every file under `public/` is now limited to 250,000 bytes |
 
 Production Lighthouse baseline supplied for this work: performance 63–66, LCP 48–50 s,
-TTFB 20 ms, CLS 0.002. The production after-run is pending the Storage workflow and
-Vercel deployment; run `.github/workflows/perf.yml` against production before publishing
-a new Lighthouse number. The local source assets above save 4,698,289 bytes combined;
-that byte reduction is not a substitute for the production Lighthouse measurement.
+TTFB 20 ms, CLS 0.002. After PR #25, production `/version.json` reports merged main
+`edb4176150c5a8781914ce5e8ccf9890872b0323`. `/api/health` is `ok: true`; REST is 206
+with 71 published posts, search is 200 with 3 results, and the personalisation probe is
+200 (the feed returned 6 items). The Storage workflow and manual `perf.yml` dispatch
+both returned HTTP 403, `Resource not accessible by integration`; `SUPABASE_SECRET_KEY`
+presence is unconfirmed. No post-image Lighthouse result is available, so do not claim
+an LCP/performance improvement yet. The local source assets above save 4,698,289 bytes
+combined; that byte reduction is not a substitute for the production measurement.

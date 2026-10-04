@@ -1,7 +1,8 @@
 /**
  * send-emails — drains `email_queue` in small batches (respects Resend free tier: 100/day).
- * Trigger: pg_cron via pg_net is NOT free-tier-reliable, so instead call this from a
- * GitHub Actions cron (free) every hour:  curl -X POST $URL -H "x-internal-secret: ..."
+ * Trigger: Supabase pg_cron + pg_net every 20 minutes. The function URL and
+ * INTERNAL_FN_SECRET are read from Supabase Vault; the manual GitHub
+ * workflow_dispatch workflow remains as a recovery path.
  * Also processes `product_notifications` when a product flips back to in_stock.
  */
 import { json, preflight, serviceClient, sendEmail, emailShell } from "../_shared/http.ts";
