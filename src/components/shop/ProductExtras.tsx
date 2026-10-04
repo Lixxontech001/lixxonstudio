@@ -24,24 +24,37 @@ export function DisplayPrice({ usd, className = '' }: { usd: number; className?:
 /** Stock state + "notify me" (out of stock / coming soon). */
 export function StockNotice({ product }: { product: Product }) {
   const [email, setEmail] = useState(() => localStorage.getItem('lixxon_customer_email') || '');
+  const [consent, setConsent] = useState(false);
   const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
   const [msg, setMsg] = useState('');
   const st = product.stock_status || 'in_stock';
+  const emailId = `restock-email-${product.id}`;
+  const consentId = `restock-consent-${product.id}`;
   if (st === 'in_stock') return null;
   if (st === 'low') return <p className="mt-3 text-xs text-amber-700">Only a few left.</p>;
   const submit = async (e: FormEvent) => {
-    e.preventDefault(); setState('busy');
-    try { await submitForm('restock_notify', { product_id: product.id, email }); setState('done'); setMsg('We will email you the moment it is available.'); }
-    catch (err) { setState('error'); setMsg((err as ApiError).message); }
+    e.preventDefault();
+    if (!consent) { setState('error'); setMsg('Please agree to receive one email for this product.'); return; }
+    setState('busy'); setMsg('');
+    try {
+      await submitForm('restock_notify', { product_id: product.id, email, consent: true });
+      setState('done');
+      setMsg('We will send one email when this product is available. This does not subscribe you to the newsletter.');
+    } catch (err) { setState('error'); setMsg((err as ApiError).message); }
   };
   return (
     <form onSubmit={submit} className="mt-6 p-4 border border-taupe/50 rounded-sm bg-white/60">
       <p className="flex items-center gap-2 text-sm font-medium text-charcoal"><Bell size={14} className="text-bronze" /> {st === 'coming_soon' ? 'Coming soon' : 'Currently unavailable'} — get notified</p>
-      <div className="flex gap-2 mt-3">
-        <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" className="flex-1 px-3 py-2 border border-taupe rounded-sm text-sm bg-white focus:outline-none focus:border-bronze" />
-        <button disabled={state === 'busy' || state === 'done'} className="px-4 py-2 bg-charcoal text-white text-xs tracking-editorial uppercase rounded-sm hover:bg-bronze disabled:opacity-60">{state === 'busy' ? <Loader2 size={14} className="animate-spin" /> : state === 'done' ? <Check size={14} /> : 'Notify me'}</button>
+      <div className="mt-3">
+        <label htmlFor={emailId} className="sr-only">Email address</label>
+        <input id={emailId} required type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" className="w-full min-h-11 px-3 py-3 border border-taupe rounded-sm text-sm bg-white focus:outline-none focus:border-bronze" />
       </div>
-      {msg && <p className={`mt-2 text-xs ${state === 'error' ? 'text-red-600' : 'text-green-700'}`}>{msg}</p>}
+      <label htmlFor={consentId} className="mt-3 flex min-h-11 items-start gap-3 text-xs text-charcoal-muted">
+        <input id={consentId} type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-0.5 h-5 w-5 flex-shrink-0 accent-bronze" />
+        <span>Send me one email for this product when it is available. This alert will not sign me up for the newsletter.</span>
+      </label>
+      <button type="submit" aria-label={state === 'busy' ? 'Saving alert' : state === 'done' ? 'Alert saved' : 'Notify me'} disabled={state === 'busy' || state === 'done' || !consent} className="mt-3 min-h-11 px-4 py-3 bg-charcoal text-white text-xs tracking-editorial uppercase rounded-sm hover:bg-bronze focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze disabled:opacity-60">{state === 'busy' ? <Loader2 size={14} className="animate-spin" /> : state === 'done' ? <Check size={14} /> : 'Notify me'}</button>
+      {msg && <p role={state === 'error' ? 'alert' : 'status'} aria-live={state === 'error' ? 'assertive' : 'polite'} className={`mt-2 text-xs ${state === 'error' ? 'text-red-600' : 'text-green-700'}`}>{msg}</p>}
     </form>
   );
 }

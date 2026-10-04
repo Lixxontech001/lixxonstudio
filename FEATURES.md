@@ -78,12 +78,19 @@ hosted TTS provider (paid — deliberately not added):
 | Supabase-native email and FX schedules | `supabase/migrations/20261004183000_pg_net_cron_jobs.sql`, `.github/workflows/deploy-supabase.yml` | Email queue runs every 20 minutes and FX refresh daily through pg_cron + pg_net. The internal URL and authorization are stored in Supabase Vault via parameterized Management API calls, never in `VITE_` variables. |
 | Existing keep-alive + manual recovery | `20261003130000_platform_v3_features.sql`, `.github/workflows/cron.yml` | The existing six-hour `keep_alive` schedule was retained, not duplicated. GitHub scheduled/push triggers were removed; the workflow is manual-only. Main deploy run `37225767566` passed Vault setup, one-time email drain, two-job/one-keep-alive verification, and the `cron.job_run_details` query. |
 
-## Phase 2 — Batch 4: Community & social proof (implementation; deployment pending)
+## Phase 2 — Batch 4: Community & social proof (shipped in PR #28)
 
 | Feature | Where | Notes |
 |---|---|---|
-| Privacy-safe co-reading count | `heartbeat_article_reader()`, `LiveReaderCount.tsx`, `useLiveReaderCount()` | Public clients can heartbeat only for published posts and receive an aggregate count. Raw fingerprints are no longer directly readable/writable by anon; stale rows are pruned per active post. The UI only shows counts of two or more and uses an accessible status announcement. Covered by `community-assertions.sql` and `liveReaderCount.test.tsx`. |
+| Privacy-safe co-reading count | `heartbeat_article_reader()`, `LiveReaderCount.tsx`, `useLiveReaderCount()` | Public clients can heartbeat only for published posts and receive an aggregate count. Raw fingerprints are no longer directly readable/writable by anon; stale rows are pruned per active post. The UI only shows counts of two or more and uses an accessible status announcement. Covered by `community-assertions.sql` and `liveReaderCount.test.tsx`; main deploy run `37226971258` passed and production build `e975cdf` is healthy. |
 | Deferred community proof | `FEATURES.md` backlog | Reader-of-the-week and consent-based testimonials remain queued; no reader identity or testimonial is surfaced without an explicit consent/moderation path. |
+
+## Phase 2 — Batch 5: Commerce & loyalty (implementation; deployment pending)
+
+| Feature | Where | Notes |
+|---|---|---|
+| One-time back-in-stock email alert | `StockNotice`, `restock_notify`, `enqueue_product_restock_emails()`, `send-emails` | Adds explicit opt-in and server-side availability validation; a stock transition queues one private email, delivered by the existing scheduled worker and daily cap. Stale/unconsented alerts are skipped; failed email rows can be retried on a later restock. Covered by `stockNotice.test.tsx` and `commerce-assertions.sql`. |
+| Deferred loyalty/commercial rules | `FEATURES.md` backlog | Points/redemption value, subscriptions, and referral incentives remain deferred until the owner sets clear value, billing, and fraud rules. Existing product bundles remain shipped. |
 
 ## Phase 1 — Trust & speed basics (shipped in PR #19)
 
@@ -94,14 +101,14 @@ to be re-audited next session (M4 checklist below):
 
 - **Discovery/personalisation**: reading streaks + badges (`ReadingStreakBadge`), personalised recommendations, time-of-day homepage modules, "Because you read X"-style rails, bookmarks, reading history, reading lists (public share links via `SharedListPage`), resume-where-you-left-off data, reader profile + taste graph (`ReaderProfilePage`).
 - **Content/trust**: glossary with hover-cards (`GlossaryPage`, `useGlossary`), series with continue-where-you-left-off (`SeriesPage`, `SeriesNav`), article FAQ blocks + "Ask the editor" (`ArticleFaq`, `AskEditor`), key takeaways, product comparison, related articles, SEO (JSON-LD, OG images `/api/og`, sitemap/RSS `/api/feeds`, prerender for bots), reading time, rich reactions + ratings, polls with visualisation, comments with replies/likes/report.
-- **Commerce**: shop, product detail + reviews + "shop this article", collections, cart drawer, checkout (Flutterwave), promo codes, gift cards, wishlists, orders/downloads/refunds/account pages, abandoned-cart tooling (admin + cron), PWYW hooks, recently viewed.
+- **Commerce**: shop, product detail + reviews + "shop this article", product bundles, collections, cart drawer, checkout (Flutterwave), promo codes, gift cards, wishlists, orders/downloads/refunds/account pages, abandoned-cart tooling (admin + cron), PWYW hooks, one-time back-in-stock email alerts, recently viewed.
 - **Community**: reviews + helpfulness, comments/threads, questions, polls, privacy-safe aggregate live reader count, feedback widget, newsletter (double opt-in, preferences page, weekly digest page).
 - **Platform**: PWA manifest + offline page, keyboard shortcuts + help overlay, font-size control, cookie consent (GA consent-gated), currency selector, 404 page, health endpoint, feeds.
 - **Admin (`/admin`, MFA-gated)**: dashboard, articles editor, categories, authors, comments/messages/moderation, media library, featured slots, series, glossary, content templates, polls, reviews, questions, customers, orders, refunds, gift cards, promo codes, abandoned carts, newsletter, feedback, analytics, activity log, backups, security page, site settings — see `src/admin/pages/*`.
 
 ## Next (queued)
 
-1. **M4 audit pass**: walk the 70-feature checklist against the inventory above; close genuine gaps (mood picker, skin journal, streak milestones copy, digest *email* content, save-for-later reminders, "Explain simply"/"Go deeper" variants, synonym search, seasonal hubs, ingredient cards, patch-test warnings, bundles/subscribe-and-save/loyalty points, referrals UX, back-in-stock alerts, tip button, A/B copy tests, reader-of-the-week, consent testimonials, sustainability badges, accessibility statement, privacy centre (DSAR), content notes, reading comfort modes, offline reading list UX, install prompt, background sync, native share sheet, web push, multi-currency deep work, command palette, reading insights, prefetch and status page (skeleton-first route loading and offline banner/retry are covered in Phase 2 Batch 1)…). Each gap lands with tests + a FEATURES.md line.
+1. **M4 audit pass**: walk the 70-feature checklist against the inventory above; close genuine gaps (mood picker, skin journal, streak milestones copy, digest *email* content, save-for-later reminders, "Explain simply"/"Go deeper" variants, synonym search, seasonal hubs, ingredient cards, patch-test warnings, subscribe-and-save/loyalty points, referrals UX, tip button, A/B copy tests, reader-of-the-week, consent testimonials, sustainability badges, accessibility statement, privacy centre (DSAR), content notes, reading comfort modes, offline reading list UX, install prompt, background sync, native share sheet, web push, multi-currency deep work, command palette, reading insights, prefetch and status page (skeleton-first route loading and offline banner/retry are covered in Phase 2 Batch 1)…). Each gap lands with tests + a FEATURES.md line.
 2. **M5 admin audit**: RBAC/roles tables vs brief, audit-log depth, data explorer, SEO/growth suites, self-healing panels, intelligence digests.
 3. **M6 editor audit**: block editor depth vs brief (slash commands, drag-drop, revisions diff, scheduled publishing UX…).
 4. **M7 performance**: see `PERFORMANCE.md`.
