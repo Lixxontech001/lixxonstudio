@@ -26,17 +26,53 @@ export async function initMonitoring() {
   } catch { /* offline / blocked — ignore */ }
 }
 
+/**
+ * Escape hatch: visiting any page with ?reset-sw=1 unregisters every service worker,
+ * deletes every cache and reloads — for a visitor stuck on a broken old worker.
+ * The query param is stripped so the reload cannot loop.
+ */
+async function resetServiceWorkerAndReload(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch { /* nothing else we can do — still reload */ }
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reset-sw');
+    window.location.replace(url.toString());
+  } catch {
+    window.location.reload();
+  }
+}
+
 /** Register the hand-rolled service worker (offline shell + cached articles). */
 export function registerServiceWorker() {
-  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+  if (new URLSearchParams(window.location.search).has('reset-sw')) {
+    void resetServiceWorkerAndReload();
+    return;
+  }
+  if (!import.meta.env.PROD) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(reg => {
+    // updateViaCache: 'none' — never serve /sw.js from the HTTP cache, so fixes ship on
+    // the next page load and the old worker self-replaces (skipWaiting in the worker).
+    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).then(reg => {
       // tell the user when a new version is ready
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
         nw?.addEventListener('statechange', () => {
           if (nw.state === 'installed' && navigator.serviceWorker.controller) window.dispatchEvent(new CustomEvent('lixxon:update-ready'));
         });
+      });
+      // re-check for updates whenever the tab regains focus
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => undefined);
       });
     }).catch(() => undefined);
   });

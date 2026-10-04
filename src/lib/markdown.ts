@@ -1,4 +1,5 @@
 import { sanitizeHtml, escapeHtml } from './sanitize';
+import { normalizeImageUrl } from './images';
 
 // NUL is used as a stash delimiter because it can never appear in sanitised user content.
 const PLACEHOLDER = String.fromCharCode(0);
@@ -61,7 +62,7 @@ export function renderMarkdown(content: string | null | undefined, opts: { gloss
     const keep = (s: string) => { stash.push(s); return `${PLACEHOLDER}${stash.length - 1}${PLACEHOLDER}`; };
     let t = escapeHtml(raw);
     t = t.replace(/`([^`]+)`/g, (_m, c) => keep(`<code>${c}</code>`));
-    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, src) => keep(`<img src="${src}" alt="${alt}" loading="lazy" />`));
+    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m: string, alt: string, src: string) => keep(`<img src="${normalizeImageUrl(src) ?? ''}" alt="${alt}" loading="lazy" decoding="async" />`));
     t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text, href) => keep(`<a href="${href}">${text}</a>`));
     t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
          .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')

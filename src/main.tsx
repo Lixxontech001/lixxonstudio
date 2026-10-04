@@ -4,9 +4,11 @@ import App from './App.tsx';
 import './index.css';
 import { NavigationProvider } from './context/NavigationContext';
 import { initMonitoring, registerServiceWorker } from './lib/monitoring';
+import { installChunkRecovery } from './lib/chunkRecovery';
 
 initMonitoring();
 registerServiceWorker();
+installChunkRecovery();
 
 const revealObserver = new IntersectionObserver(
   (entries) => {

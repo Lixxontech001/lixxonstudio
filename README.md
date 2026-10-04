@@ -20,7 +20,7 @@ npm run dev
 | `npm test` | Vitest unit + component smoke tests |
 | `npx tsc --noEmit -p tsconfig.app.json` | Type-check the app |
 | `npx tsc --noEmit -p supabase/functions/tsconfig.json` | Type-check edge functions |
-| `python3 scripts/db-test.py` | Apply every migration to an embedded Postgres and run `scripts/db-assertions.sql` (RLS/privilege checks). Needs `pip install pgserver`. |
+| `python3 scripts/db-test.py` | Apply every migration to an embedded Postgres and run `scripts/db-assertions.sql` (RLS/privilege checks). Needs `pip install pgserver fasteners platformdirs psutil` (the old tracked `.whl` wheels were removed from the repo). |
 
 CI (`.github/workflows/ci.yml`) runs all of the above on every push, plus Lighthouse budgets on PRs.
 

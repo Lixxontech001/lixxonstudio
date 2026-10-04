@@ -22,7 +22,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ci-placeholder
       - name: Database migrations + RLS assertions (embedded Postgres)
         run: |
-          pip install --quiet pgserver
+          pip install --quiet pgserver fasteners platformdirs psutil
           python3 scripts/db-test.py
   lighthouse:
     if: github.event_name == 'pull_request'
