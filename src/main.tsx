@@ -7,9 +7,11 @@ import { initMonitoring, registerServiceWorker } from './lib/monitoring';
 import { installChunkRecovery } from './lib/chunkRecovery';
 import { installImageFallback } from './lib/images';
 import { initReveal } from './lib/reveal';
+import { initSwUpdate } from './lib/swUpdate';
 
 initMonitoring();
 registerServiceWorker();
+initSwUpdate();
 installChunkRecovery();
 installImageFallback();
 initReveal();

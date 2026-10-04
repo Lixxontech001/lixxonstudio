@@ -87,7 +87,7 @@ function AppContent() {
   useEffect(() => {
     const h = () =>
       showToast(
-        'New version available — reload.',
+        'New version available — reload',
         'info',
         { label: 'Reload', onClick: () => window.location.reload() },
         15000
