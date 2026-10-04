@@ -4,6 +4,7 @@
  */
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient';
 import { fetchWithRetry, TimeoutError } from './fetchWithTimeout';
+import { reportRequestError } from './requestStatus';
 
 const BASE = `${supabaseUrl}/functions/v1`;
 const ANON = supabaseAnonKey as string;
@@ -35,11 +36,18 @@ export async function callFn<T = Record<string, unknown>>(name: string, body: un
       body: JSON.stringify(body ?? {}),
     }, opts.timeoutMs ?? 12_000);
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) throw new ApiError(String(data.error || `Request failed (${res.status})`), res.status, data.field as string | undefined);
+    if (!res.ok) {
+      if (res.status === 408 || res.status === 429 || res.status >= 500) reportRequestError('edge');
+      throw new ApiError(String(data.error || `Request failed (${res.status})`), res.status, data.field as string | undefined);
+    }
     return data as T;
   } catch (e) {
     if (e instanceof ApiError) throw e;
-    if (e instanceof TimeoutError) throw new ApiError('The request timed out. Please try again.', 408);
+    if (e instanceof TimeoutError) {
+      reportRequestError('edge');
+      throw new ApiError('The request timed out. Please try again.', 408);
+    }
+    if (e instanceof TypeError) reportRequestError('edge');
     throw new ApiError('Network error. Check your connection and try again.', 0);
   }
 }

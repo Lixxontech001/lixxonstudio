@@ -5,13 +5,28 @@ import { useAuthorPosts } from '../hooks/useFeatures';
 import { HeroSkeleton } from './Skeletons';
 import EmptyState from './EmptyState';
 import { Helmet } from 'react-helmet-async';
+import QueryStatusNotice from './QueryStatusNotice';
 
 export default function AuthorPage({ slug }: { slug: string }) {
-  const { author, posts, loading } = useAuthorPosts(slug);
+  const { author, posts, loading, error, retry } = useAuthorPosts(slug);
 
   useEffect(() => { window.scrollTo(0, 0); }, [slug]);
 
   if (loading) return <HeroSkeleton />;
+  if (error) {
+    return (
+      <main>
+        <QueryStatusNotice
+          loading={false}
+          hasData={posts.length > 0}
+          error={error}
+          onRetry={retry}
+          unavailableTitle="Author page unavailable"
+          errorMessage="We couldn’t load this author right now."
+        />
+      </main>
+    );
+  }
   if (!author) return <EmptyState message="Author not found" />;
 
   const social = author.social_links || {};

@@ -31,6 +31,12 @@ hosted TTS provider (paid — deliberately not added):
 
 ---
 
+## Phase 2 — Trust & speed basics (implementation in this PR)
+
+| Feature | Where | Notes |
+|---|---|---|
+| Offline, request-retry and route-error recovery | `src/components/NetworkStatusBanner.tsx`, `src/components/RouteErrorBoundary.tsx`, `src/lib/requestStatus.ts`, `src/App.tsx` | Global offline and exhausted-request feedback; route-scoped error recovery; skeleton-first lazy routes; article/category/search/author/tag query errors expose Retry. Tests: `src/__tests__/networkRecovery.test.tsx`, `src/__tests__/searchRecovery.test.tsx`. |
+
 ## Existing features (prior sessions — inventory)
 
 Present in the codebase and routed today; depth vs the brief's acceptance criteria
@@ -45,7 +51,7 @@ to be re-audited next session (M4 checklist below):
 
 ## Next (queued)
 
-1. **M4 audit pass**: walk the 70-feature checklist against the inventory above; close genuine gaps (mood picker, skin journal, streak milestones copy, digest *email* content, save-for-later reminders, "Explain simply"/"Go deeper" variants, synonym search, seasonal hubs, ingredient cards, patch-test warnings, bundles/subscribe-and-save/loyalty points, referrals UX, back-in-stock alerts, tip button, A/B copy tests, reader-of-the-week, co-reading state, consent testimonials, sustainability badges, accessibility statement, privacy centre (DSAR), content notes, reading comfort modes, offline reading list UX, install prompt, background sync, native share sheet, web push, multi-currency deep work, command palette, reading insights, prefetch/skeletons, offline banner/retry, status page…). Each gap lands with tests + a FEATURES.md line.
+1. **M4 audit pass**: walk the 70-feature checklist against the inventory above; close genuine gaps (mood picker, skin journal, streak milestones copy, digest *email* content, save-for-later reminders, "Explain simply"/"Go deeper" variants, synonym search, seasonal hubs, ingredient cards, patch-test warnings, bundles/subscribe-and-save/loyalty points, referrals UX, back-in-stock alerts, tip button, A/B copy tests, reader-of-the-week, co-reading state, consent testimonials, sustainability badges, accessibility statement, privacy centre (DSAR), content notes, reading comfort modes, offline reading list UX, install prompt, background sync, native share sheet, web push, multi-currency deep work, command palette, reading insights, prefetch and status page (skeleton-first route loading and offline banner/retry are covered in Phase 2 Batch 1)…). Each gap lands with tests + a FEATURES.md line.
 2. **M5 admin audit**: RBAC/roles tables vs brief, audit-log depth, data explorer, SEO/growth suites, self-healing panels, intelligence digests.
 3. **M6 editor audit**: block editor depth vs brief (slash commands, drag-drop, revisions diff, scheduled publishing UX…).
 4. **M7 performance**: see `PERFORMANCE.md`.

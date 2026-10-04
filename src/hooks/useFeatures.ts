@@ -353,36 +353,50 @@ export function useAuthorPosts(authorSlug: string | null) {
   const [author, setAuthor] = useState<{ id: string; name: string; slug: string; bio: string | null; avatar_url: string | null; role: string | null; social_links: { twitter?: string; instagram?: string; linkedin?: string; website?: string } | null } | null>(null);
   const [posts, setPosts] = useState<{ id: string; title: string; slug: string; excerpt: string | null; cover_image: string | null; published_at: string; reading_time_minutes: number; category: { name: string; slug: string } | null }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
-    if (!authorSlug) { setLoading(false); return; }
+    if (!authorSlug) { setAuthor(null); setPosts([]); setLoading(false); return; }
     let cancelled = false;
-    const fetch = async () => {
+    const fetchAuthorPosts = async () => {
       setLoading(true);
-      const { data: authorData } = await supabase
-        .from('authors')
-        .select('*')
-        .eq('slug', authorSlug)
-        .maybeSingle();
-      if (cancelled) return;
-      if (authorData) {
+      setError(null);
+      try {
+        const { data: authorData, error: authorError } = await supabase
+          .from('authors')
+          .select('*')
+          .eq('slug', authorSlug)
+          .maybeSingle();
+        if (cancelled) return;
+        if (authorError) throw authorError;
+        if (!authorData) {
+          setAuthor(null);
+          setPosts([]);
+          return;
+        }
         setAuthor(authorData);
-        const { data: postData } = await supabase
+        const { data: postData, error: postsError } = await supabase
           .from('posts')
           .select('id, title, slug, excerpt, cover_image, published_at, reading_time_minutes, category:categories(name, slug)')
           .eq('author_id', authorData.id)
           .eq('status', 'published')
           .order('published_at', { ascending: false });
         if (cancelled) return;
+        if (postsError) throw postsError;
         setPosts(rows<typeof posts[number]>(postData));
+      } catch (fetchError) {
+        if (!cancelled) setError(fetchError instanceof Error ? fetchError.message : 'Unable to load this author.');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     };
-    fetch();
+    void fetchAuthorPosts();
     return () => { cancelled = true; };
-  }, [authorSlug]);
+  }, [authorSlug, retryKey]);
 
-  return { author, posts, loading };
+  const retry = useCallback(() => setRetryKey((key) => key + 1), []);
+  return { author, posts, loading, error, retry };
 }
 
 // ==================== TAG-BASED BROWSING ====================
@@ -393,35 +407,47 @@ export function useTagPosts(tag: string, page: number) {
   const [posts, setPosts] = useState<{ id: string; title: string; slug: string; excerpt: string | null; cover_image: string | null; published_at: string; reading_time_minutes: number; category: { name: string; slug: string } | null }[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
-    if (!tag) { setLoading(false); return; }
+    if (!tag) { setPosts([]); setTotal(0); setError(null); setLoading(false); return; }
     let cancelled = false;
-    const fetch = async () => {
+    const fetchTagPosts = async () => {
       setLoading(true);
+      setError(null);
       const from = (page - 1) * TAG_PAGE_SIZE;
       const to = from + TAG_PAGE_SIZE - 1;
-      const { data, count } = await supabase
-        .from('posts')
-        .select('*, category:categories(name, slug)', { count: 'exact' })
-        .eq('status', 'published')
-        .contains('tags', [tag])
-        .order('published_at', { ascending: false })
-        .range(from, to);
-      if (cancelled) return;
-      setPosts((data || []) as typeof posts);
-      setTotal(count || 0);
-      setLoading(false);
+      try {
+        const { data, count, error: queryError } = await supabase
+          .from('posts')
+          .select('*, category:categories(name, slug)', { count: 'exact' })
+          .eq('status', 'published')
+          .contains('tags', [tag])
+          .order('published_at', { ascending: false })
+          .range(from, to);
+        if (cancelled) return;
+        if (queryError) throw queryError;
+        setPosts((data || []) as typeof posts);
+        setTotal(count || 0);
+      } catch (fetchError) {
+        if (!cancelled) setError(fetchError instanceof Error ? fetchError.message : 'Unable to load these stories.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    fetch();
+    void fetchTagPosts();
     return () => { cancelled = true; };
-  }, [tag, page]);
+  }, [tag, page, retryKey]);
 
+  const retry = useCallback(() => setRetryKey((key) => key + 1), []);
   return {
     posts,
     total,
     totalPages: Math.max(1, Math.ceil(total / TAG_PAGE_SIZE)),
     loading,
+    error,
+    retry,
   };
 }
 

@@ -82,12 +82,16 @@ interface SearchResult {
   total: number;
   totalPages: number;
   loading: boolean;
+  error: string | null;
+  retry: () => void;
 }
 
 export function useSearchPosts(query: string, page: number): SearchResult {
   const [posts, setPosts] = useState<PostWithRelations[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,38 +99,48 @@ export function useSearchPosts(query: string, page: number): SearchResult {
       if (!query.trim()) {
         setPosts([]);
         setTotal(0);
+        setError(null);
         setLoading(false);
         return;
       }
       setLoading(true);
+      setError(null);
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
       const searchTerm = query.trim();
 
-      const { data, count, error } = await supabase
-        .from('posts')
-        .select('*, category:categories(*), author:authors(*)', { count: 'exact' })
-        .eq('status', 'published')
-        .or(`title.ilike.%${searchTerm}%,excerpt.ilike.%${searchTerm}%`)
-        .order('published_at', { ascending: false })
-        .range(from, to);
+      try {
+        const { data, count, error: queryError } = await supabase
+          .from('posts')
+          .select('*, category:categories(*), author:authors(*)', { count: 'exact' })
+          .eq('status', 'published')
+          .or(`title.ilike.%${searchTerm}%,excerpt.ilike.%${searchTerm}%`)
+          .order('published_at', { ascending: false })
+          .range(from, to);
 
-      if (cancelled) return;
-      if (!error && data) {
-        setPosts(data as PostWithRelations[]);
+        if (cancelled) return;
+        if (queryError) throw queryError;
+        setPosts((data || []) as PostWithRelations[]);
         setTotal(count || 0);
+      } catch (fetchError) {
+        if (!cancelled) setError(fetchError instanceof Error ? fetchError.message : 'Unable to search stories.');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     };
-    search();
-    return () => { cancelled = false; };
-  }, [query, page]);
+    void search();
+    return () => { cancelled = true; };
+  }, [query, page, retryKey]);
+
+  const retry = useCallback(() => setRetryKey((key) => key + 1), []);
 
   return {
     posts,
     total,
     totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
     loading,
+    error,
+    retry,
   };
 }
 
@@ -170,26 +184,42 @@ export function usePosts() {
 export function usePostBySlug(slug: string | null) {
   const [post, setPost] = useState<PostWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
-    if (!slug) { setLoading(false); return; }
+    if (!slug) {
+      setPost(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     const fetchPost = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*, category:categories(*), author:authors(*)')
-        .eq('slug', slug)
-        .maybeSingle();
-      if (cancelled) return;
-      if (!error) setPost(data as PostWithRelations | null);
-      setLoading(false);
+      setError(null);
+      try {
+        const { data, error: queryError } = await supabase
+          .from('posts')
+          .select('*, category:categories(*), author:authors(*)')
+          .eq('slug', slug)
+          .maybeSingle();
+        if (cancelled) return;
+        if (queryError) throw queryError;
+        setPost(data as PostWithRelations | null);
+      } catch (fetchError) {
+        if (!cancelled) setError(fetchError instanceof Error ? fetchError.message : 'Unable to load this article.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    fetchPost();
+    void fetchPost();
     return () => { cancelled = true; };
-  }, [slug]);
+  }, [slug, retryKey]);
 
-  return { post, loading };
+  const retry = useCallback(() => setRetryKey((key) => key + 1), []);
+
+  return { post, loading, error, retry };
 }
 
 export function useCategories() {

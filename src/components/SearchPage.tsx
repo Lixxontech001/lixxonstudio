@@ -6,6 +6,7 @@ import { useSearchHistory } from '../hooks/usePlatform';
 import { Helmet } from 'react-helmet-async';
 import Pagination from './Pagination';
 import EmptyState from './EmptyState';
+import QueryStatusNotice from './QueryStatusNotice';
 
 interface SearchPageProps {
   query: string;
@@ -14,7 +15,7 @@ interface SearchPageProps {
 
 export default function SearchPage({ query, page }: SearchPageProps) {
   const { navigate } = useNavigation();
-  const { posts, total, totalPages, loading } = useSearchPosts(query, page);
+  const { posts, total, totalPages, loading, error, retry } = useSearchPosts(query, page);
   const [inputValue, setInputValue] = useState(query);
   const { history, logSearch, clearHistory } = useSearchHistory();
 
@@ -64,7 +65,9 @@ export default function SearchPage({ query, page }: SearchPageProps) {
           />
         </form>
 
-        {query && !loading && (
+        <QueryStatusNotice loading={loading} hasData={posts.length > 0} error={error} onRetry={retry} />
+
+        {query && !loading && !error && (
           <p className="text-charcoal-muted text-sm mt-4">
             {total} {total === 1 ? 'article' : 'articles'} found
           </p>
@@ -99,7 +102,7 @@ export default function SearchPage({ query, page }: SearchPageProps) {
             </div>
           ))}
         </div>
-      ) : !query ? (
+      ) : error ? null : !query ? (
         <EmptyState message="Type a search query above to find articles" />
       ) : posts.length === 0 ? (
         <div className="max-w-md mx-auto text-center py-16">

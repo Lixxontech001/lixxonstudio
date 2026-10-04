@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { fetchWithRetry, TimeoutError } from './fetchWithTimeout';
+import { reportRequestError } from './requestStatus';
 import { selfHealServiceWorker } from './swUpdate';
 
 /**
@@ -125,9 +126,14 @@ export function createSupabaseFetch(
     try {
       const response = await fetcher(input, init, 12_000);
       consecutiveFailures = 0;
+      if (response.status === 408 || response.status === 429 || response.status >= 500) {
+        reportRequestError('supabase');
+      }
       return response;
     } catch (error) {
-      if (isSupabaseNetworkFailure(error) && hasServiceWorkerController()) {
+      const networkFailure = isSupabaseNetworkFailure(error);
+      if (networkFailure) reportRequestError('supabase');
+      if (networkFailure && hasServiceWorkerController()) {
         consecutiveFailures += 1;
         if (consecutiveFailures >= 3) {
           consecutiveFailures = 0;

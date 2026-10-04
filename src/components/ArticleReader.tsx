@@ -2,6 +2,7 @@ import {useEffect, useState, useMemo, useRef} from 'react';
 import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { usePostBySlug, usePosts } from '../hooks/useSupabase';
+import QueryStatusNotice from './QueryStatusNotice';
 import { HeroSkeleton } from './Skeletons';
 import EmptyState from './EmptyState';
 import Comments from './Comments';
@@ -36,7 +37,7 @@ import ShareQuote from './article/ShareQuote';
 import ArticleFaq from './article/ArticleFaq';
 
 export default function ArticleReader({ slug }: { slug: string }) {
-  const { post, loading } = usePostBySlug(slug);
+  const { post, loading, error, retry } = usePostBySlug(slug);
   const { posts } = usePosts();
   const { glossary } = useGlossary();
   const [copied, setCopied] = useState(false);
@@ -171,6 +172,20 @@ export default function ArticleReader({ slug }: { slug: string }) {
   }, [post, posts]);
 
   if (loading) return <HeroSkeleton />;
+  if (error) {
+    return (
+      <main>
+        <QueryStatusNotice
+          loading={false}
+          hasData={false}
+          error={error}
+          onRetry={retry}
+          unavailableTitle="Article unavailable"
+          errorMessage="We couldn’t load this article right now."
+        />
+      </main>
+    );
+  }
   if (!post) return <EmptyState message="Article not found" />;
 
   const articleUrl = `${window.location.origin}/blog/${post.slug}`;
