@@ -193,10 +193,25 @@ Deno.serve(async (req) => {
     case "restock_notify": {
       const email = normEmail(body.email);
       const product_id = String(body.product_id || "");
-      if (!email || !UUID.test(product_id)) return json({ error: "Invalid request." }, 400);
+      if (!email || !UUID.test(product_id) || body.consent !== true) return json({ error: "Please enter a valid email and confirm the one-time alert." }, 400);
       if (!(await rateLimit(sb, ip, "notify", 10, 3600))) return json({ error: "Too many requests." }, 429);
-      await sb.from("product_notifications").upsert({ product_id, email }, { onConflict: "product_id,email" });
-      return json({ ok: true });
+      const { data: product, error: productError } = await sb.from("products").select("id, is_active, stock_status").eq("id", product_id).maybeSingle();
+      if (productError) return json({ error: "Could not check product availability." }, 500);
+      if (!product || !product.is_active) return json({ error: "This product is unavailable." }, 404);
+      if (!["out_of_stock", "coming_soon"].includes(product.stock_status)) return json({ error: "This product is available now. Refresh the page to shop." }, 409);
+      const { error } = await sb.from("product_notifications").upsert({
+        product_id,
+        email,
+        alert_id: crypto.randomUUID(),
+        consented_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        notified_at: null,
+      }, { onConflict: "product_id,email" });
+      if (error) {
+        console.error("restock alert save failed", error.message);
+        return json({ error: "Could not save this alert. Please try again." }, 500);
+      }
+      return json({ ok: true, message: "One-time restock alert saved. You are not subscribed to the newsletter." });
     }
 
     // ------------------------------------------------------------------ REPORT COMMENT
