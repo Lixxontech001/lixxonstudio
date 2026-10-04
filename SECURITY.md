@@ -33,6 +33,21 @@ at scale.
 | A09 | Logging & Monitoring Failures | **Partial** | Sentry (free tier) + field-level admin audit (actor, role, IP, user-agent, before/after diff, revert, 180-day retention) on 43 tables; remaining: alert emails for `critical` checks and an incident timeline (M9). |
 | A10 | SSRF | **Partial** | Edge functions fetch only fixed hosts today; enforce allow-lists + timeouts + size caps on any future outbound fetch (e.g., the premium TTS proxy — specified in FEATURES.md). |
 
+## Admin AI Autopilot OS (M8)
+
+M8 adds an explicit autonomy contract. An agent may observe, suggest, draft, auto-apply or require
+approval, but the database policy is authoritative and the UI cannot raise its own privilege. The
+kill switch stops autopilot, each job has an idempotency key, action records expire, and every
+agent/action/workflow/mission/memory/experiment/incident/cost mutation is trigger-audited.
+
+The only automatic action allow-list is low-risk maintenance (`requeue_email`,
+`repair_image_urls`, `backfill_seo`, `analyze`) and it requires both the owner policy and `ops.fix`.
+Publishing, editing content, replying, commerce, experiments, permission changes and security
+actions enter the approval queue and re-check their underlying capability at execution time.
+Daily budgets and provider mode are persisted even though the current `rules` provider has no
+model cost. A future provider must be called by an authenticated edge function and can only write
+proposals; it must not receive database credentials.
+
 ## Admin AI and mutation hardening (M7)
 
 The Admin AI system is not a second superuser. `admin.ai.run` may scan live, permission-aware

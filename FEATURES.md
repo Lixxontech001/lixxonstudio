@@ -116,6 +116,17 @@ to be re-audited next session (M4 checklist below):
 | Admin AI control room | `20261004220000_admin_ai.sql`, `AdminAI.tsx` | Live health/growth scan, durable suggestions, safe low-risk automation, workflow proposals for approve/publish/reject/edit, reply drafts, approval/dismissal queue and separate AI capabilities. High-impact actions remain human-approved. |
 | Security hardening v2 | `20261004230000_security_hardening_v2.sql` | Removes anonymous update/delete holes, replaces fingerprint mutations with validated RPCs, adds abandoned-cart uniqueness, capability-gates storage writes and sanitises custom head settings. |
 
+## M8 — Admin AI Autopilot OS
+
+| Area | Where | Delivery |
+|---|---|---|
+| Agent fleet | `20261004240000_admin_ai_autopilot.sql`, `AdminAI.tsx` | Growth, SEO, content, commerce, community, reliability and security agents with independent cadence, action caps, autonomy levels and live run controls. |
+| Autonomous policy | same | Global enable switch, provider mode, daily budget, default autonomy and emergency kill switch. Rules engine works on free tiers; model-backed generation remains edge-function-only and proposal-only. |
+| Missions and workflows | same | Owner-defined growth objectives, metrics, priorities, deadlines, agent teams, workflow steps, manual runs, durable jobs and idempotency. |
+| Action queue | same | Risk-labelled proposals with required capability, diffs, approval/reject/pause/apply decisions, safe auto-apply allow-list and failure tracking. |
+| Memory and learning loop | same | Durable brand/editorial/SEO/commerce/community memory, experiments with variants and conversion events, AI metrics, cost ledger and notifications. |
+| Incident safety | same | Security/reliability incidents, acknowledgement/resolution, pause semantics and full audit coverage across AI objects. |
+
 ## M5 — Admin super panel (shipped in this PR)
 
 RBAC-first, with the database as the single source of truth (`docs/ADMIN.md`).

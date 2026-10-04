@@ -131,7 +131,33 @@ are permanently false in this release. An external language model, if added late
 behind an authenticated edge function and may only create a proposal — never receive database
 credentials or bypass the approval queue.
 
-## 8. Front end as data (Admin → Front end)
+## 8. Admin AI Autopilot OS (Admin → Admin AI)
+
+M8 expands the M7 queue into a policy-driven operating system. The control tower has tabs for
+Overview, Agents, Missions, Action queue, Workflows, Experiments, AI memory, Incidents and
+Settings. It is usable without a paid model: deterministic agents inspect live rows and create
+proposals; a future model may be selected as `edge_provider` only after an authenticated edge
+function is added.
+
+* Seven agents are seeded: growth, SEO, content, commerce, community, reliability and security.
+  Each has its own enable switch, cadence, action cap and autonomy level.
+* Missions define an objective, metric, priority, deadline and agent team. Workflows compose agent
+  steps and can be manually enabled and run. Jobs, idempotency keys and metrics persist in the DB.
+* The action queue records risk, required capability, proposal, before/after payload, approval,
+  execution and failure state. Only the allow-listed low-risk reliability repairs can auto-apply.
+* The owner can set the global autopilot, daily budget, provider mode and emergency kill switch.
+  Publish, edit, reply, commerce, experiments, permissions and security work remain approval-gated.
+* Durable memory stores brand/editorial/SEO/commerce/community rules. Experiments store variants,
+  impressions, conversions and value. Incidents and notifications provide an auditable safety loop.
+
+The M8 RPCs are `admin_ai_control_tower`, `admin_ai_run_autopilot`, `admin_ai_run_agent`,
+`admin_ai_execute_autonomous`, `admin_ai_set_autopilot`, `admin_ai_set_agent`,
+`admin_ai_create_mission`, `admin_ai_create_workflow`, `admin_ai_run_workflow`,
+`admin_ai_decide_action`, `admin_ai_upsert_memory`, `admin_ai_create_experiment`,
+`admin_ai_record_experiment_event` and `admin_ai_resolve_incident`. Every mutation re-checks
+RBAC server-side and is trigger-audited.
+
+## 9. Front end as data (Admin → Front end)
 
 `site_settings` public rows drive the storefront without a deploy: `nav_menu`, `footer`,
 `homepage` (section order + visibility), `theme` (accent pair), `seo_defaults`, `redirects`,
@@ -141,11 +167,11 @@ credentials or bypass the approval queue.
 restores the shipped default. The reader side reads everything in one `site_config()` call
 (`src/hooks/useSiteConfig.ts` → `SiteConfigEffects`, Header, Footer, HomePage, SEO).
 
-## 9. Local verification
+## 10. Local verification
 
 ```bash
 /usr/bin/env python3 -m venv /home/user/.venv && /home/user/.venv/bin/pip install pgserver
-/home/user/.venv/bin/python scripts/db-test.py          # 34 migrations + 8 assertion suites
+/home/user/.venv/bin/python scripts/db-test.py          # 35 migrations + 9 assertion suites
 npx tsc --noEmit -p tsconfig.app.json && npm test && npm run build
 node scripts/size-budget.mjs && npm run audit:contrast
 ```

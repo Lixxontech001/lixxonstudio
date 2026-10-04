@@ -29,9 +29,10 @@ type BtnProps = {
   icon?: ReactNode;
   title?: string;
   type?: 'button' | 'submit';
+  className?: string;
 };
 
-export function Btn({ children, onClick, variant = 'primary', disabled, busy, icon, title, type = 'button' }: BtnProps) {
+export function Btn({ children, onClick, variant = 'primary', disabled, busy, icon, title, type = 'button', className = '' }: BtnProps) {
   const styles = variant === 'primary'
     ? 'bg-charcoal text-white hover:bg-bronze'
     : variant === 'danger'
@@ -39,7 +40,7 @@ export function Btn({ children, onClick, variant = 'primary', disabled, busy, ic
       : 'border border-taupe/50 bg-white text-charcoal hover:border-bronze';
   return (
     <button type={type} onClick={onClick} disabled={disabled || busy} title={title}
-      className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs rounded-sm disabled:opacity-60 ${styles}`}>
+      className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs rounded-sm disabled:opacity-60 ${styles} ${className}`}>
       {busy ? <Loader2 size={13} className="animate-spin" /> : icon}{children}
     </button>
   );
