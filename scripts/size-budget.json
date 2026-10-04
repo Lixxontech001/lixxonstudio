@@ -1,0 +1,20 @@
+{
+  "note": "Gzip bundle budgets. Regression = growth past baseline + 5% tolerance. Update only with an owner-approved reason.",
+  "recordedAt": "2026-10-04",
+  "tolerance": 0.05,
+  "budgets": {
+    "react-vendor": 45380,
+    "supabase": 34039,
+    "icons": 9851,
+    "helmet": 6143,
+    "sanitize": 9131,
+    "markdown": 1198,
+    "vercel-analytics": 1247,
+    "admin-bundle": 44436,
+    "article-reader": 20455,
+    "entry": 43548,
+    "css": 11711,
+    "total-js": 277735,
+    "total-css": 11711
+  }
+}

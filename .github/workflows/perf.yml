@@ -1,0 +1,67 @@
+name: Perf (production Lighthouse)
+
+# Measures what readers actually get: real deployment, real CDN, mobile emulation.
+# Numbers land in the job summary and, on pull requests, as a comment so the
+# measured baseline is evidence rather than "the assertion was green".
+# Preview URLs are behind Vercel Authentication, so the target is always production.
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC — weekly trend line
+  workflow_dispatch:
+    inputs:
+      url:
+        description: URL to measure
+        required: false
+        default: https://lixxonstudio.vercel.app/
+      runs:
+        description: Lighthouse runs (median reported)
+        required: false
+        default: '3'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Lighthouse CI
+        run: npm i -g @lhci/cli@0.14.x
+
+      - name: Collect (mobile, median of runs)
+        env:
+          TARGET_URL: ${{ github.event.inputs.url || 'https://lixxonstudio.vercel.app/' }}
+          RUNS: ${{ github.event.inputs.runs || '3' }}
+        run: |
+          mkdir -p lhci-out
+          lhci collect --url="$TARGET_URL" --numberOfRuns="$RUNS" \
+            --settings.formFactor=mobile --output=json --outputPath=./lhci-out
+
+      - name: Summarise
+        run: node scripts/lhci-summary.mjs lhci-out --json perf-summary.json --markdown perf-summary.md
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          { echo '<!-- perf-baseline -->'; cat perf-summary.md; } > perf-comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file perf-comment.md
+
+      - name: Upload raw reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: lhci-out
+          retention-days: 14
