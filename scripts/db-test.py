@@ -92,10 +92,12 @@ def main():
             run_sql(uri, PROD_FIXTURES, label="prod fixtures")
         run_sql(uri, file=m, label=os.path.basename(m))
         print(f"✓ {os.path.basename(m)}")
-    assertions = os.path.join(ROOT, "scripts", "db-assertions.sql")
-    if os.path.exists(assertions):
-        out = run_sql(uri, file=assertions, label="db-assertions.sql")
-        print(out)
+    for name in ("db-assertions.sql", "search-assertions.sql"):
+        assertions = os.path.join(ROOT, "scripts", name)
+        if os.path.exists(assertions):
+            out = run_sql(uri, file=assertions, label=name)
+            if out.strip():
+                print(out.strip().splitlines()[-1] if name != "search-assertions.sql" else out)
     print(f"\n✅ {len(migs)} migrations applied; assertions passed.")
     if not keep:
         srv.cleanup()

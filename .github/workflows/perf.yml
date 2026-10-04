@@ -1,0 +1,93 @@
+name: Perf (production Lighthouse)
+
+# Measures what readers actually get: real deployment, real CDN, mobile emulation.
+# Numbers land in the job summary and, on pull requests, as a comment so the
+# measured baseline is evidence rather than "the assertion was green".
+# Preview URLs are behind Vercel Authentication, so the target is always production.
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC — weekly trend line
+  workflow_dispatch:
+    inputs:
+      url:
+        description: URL to measure
+        required: false
+        default: https://lixxonstudio.vercel.app/
+      runs:
+        description: Lighthouse runs (median reported)
+        required: false
+        default: '3'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Lighthouse CI
+        run: npm i -g @lhci/cli@0.14.x
+
+      - name: Collect (mobile, median of runs)
+        env:
+          TARGET_URL: ${{ github.event.inputs.url || 'https://lixxonstudio.vercel.app/' }}
+          RUNS: ${{ github.event.inputs.runs || '3' }}
+        run: |
+          lhci collect --url="$TARGET_URL" --numberOfRuns="$RUNS" --output=json --outputPath=./lhci-out
+          # lhci writes to .lighthouseci regardless of --outputPath; keep a copy
+          # in the path the summariser and the artifact step expect.
+          mkdir -p lhci-out
+          if [ -d .lighthouseci ]; then cp -r .lighthouseci/. lhci-out/; fi
+          ls -la lhci-out | head -10
+
+      - name: Summarise
+        run: |
+          if ! node scripts/lhci-summary.mjs lhci-out --json perf-summary.json --markdown perf-summary.md; then
+            {
+              echo '### Mobile Lighthouse — could not summarise the reports'
+              echo
+              echo 'The measurement ran but no Lighthouse JSON was found at the expected path.'
+              echo 'Files seen:'
+              echo
+              echo '```'
+              find . -maxdepth 3 -name '*.json' | head -50
+              echo '```'
+            } > perf-summary.md
+            echo "::warning::Lighthouse ran but the reports could not be summarised — see the PR comment for the file listing."
+          fi
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          { echo '<!-- perf-baseline -->'; cat perf-summary.md; } > perf-comment.md
+          PR="${{ github.event.pull_request.number }}"
+          COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq '[.[] | select(.body | startswith("<!-- perf-baseline -->")) | .id] | last // empty')
+          if [ -n "$COMMENT_ID" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+              -f body="$(cat perf-comment.md)" > /dev/null
+            echo "updated existing perf comment ($COMMENT_ID)"
+          else
+            gh pr comment "$PR" --body-file perf-comment.md
+          fi
+
+      - name: Upload raw reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: lhci-out
+          retention-days: 14
+          if-no-files-found: warn
