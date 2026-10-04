@@ -22,7 +22,7 @@ at scale.
 
 | # | Category | Status | Notes |
 |---|---|---|---|
-| A01 | Broken Access Control | **Partial** | RLS-first DB access + MFA admin; RBAC depth and owner-only invariants land in M5/M9. |
+| A01 | Broken Access Control | **Strong** | RLS-first DB access, MFA-gated admins and a 34-permission RBAC model (`admin_can()`), with triggers protecting the founder and the last owner. See `docs/ADMIN.md`. Remaining M9 work: session lockout/backoff. |
 | A02 | Cryptographic Failures | **Partial** | HTTPS-only everywhere (HSTS preload); secrets live only in Vercel/Supabase secret stores; never in the repo. |
 | A03 | Injection | **Strong** | No string-built SQL; PostgREST filters only; DOMPurify + escaping for output. |
 | A04 | Insecure Design | **Partial** | Server-side pricing/entitlements; webhook verification; free-tier abuse caps (rate limits in `submit-form`). |
@@ -30,12 +30,33 @@ at scale.
 | A06 | Vulnerable Components | **Open** | Add `npm audit` + SBOM + Dependabot (M9). |
 | A07 | Identification & Auth Failures | **Partial** | Supabase Auth magic links + TOTP for admins; add lockout/backoff and re-auth (M9). |
 | A08 | Software & Data Integrity | **Partial** | Flutterwave signature check; signed download URLs; CI-only deploys from `main`. |
-| A09 | Logging & Monitoring Failures | **Partial** | Sentry (free tier), admin activity log, audit triggers; add alert emails + incident timeline (M5/M9). |
+| A09 | Logging & Monitoring Failures | **Partial** | Sentry (free tier) + field-level admin audit (actor, role, IP, user-agent, before/after diff, revert, 180-day retention) on 43 tables; remaining: alert emails for `critical` checks and an incident timeline (M9). |
 | A10 | SSRF | **Partial** | Edge functions fetch only fixed hosts today; enforce allow-lists + timeouts + size caps on any future outbound fetch (e.g., the premium TTS proxy — specified in FEATURES.md). |
+
+## Admin RBAC (M5)
+
+- `admin_can(permission)` is the only authority; `is_admin()` also requires `status = 'active'`
+  and AAL2 once the account has enrolled a TOTP factor.
+- Capabilities are rows (`admin_permissions`, `admin_roles`, `role_permissions`,
+  `admin_permission_overrides`) — not constants in the client bundle. The UI reads the effective
+  list from `admin_me()`; RLS enforces the same list even for a hand-made API call.
+- The original owner account is the **founder**: it always holds every permission, cannot be
+  suspended/demoted/deleted by anyone (including itself — `admin_transfer_founder()` is the only
+  way to move the flag), and a trigger refuses any state that would leave the site without an
+  active owner.
+- Read-only SQL is sandboxed: single `SELECT`/`WITH`, denylist, 5 s statement timeout,
+  read-only transaction, 200-row cap, and it executes under the caller's own RLS.
+- The data explorer writes through PostgREST with the admin's JWT, so `data.write` + RLS decide
+  what is editable; money tables are read/update only and team/audit tables are read-only.
+- Every admin write is trigger-audited with a diff and can be reverted (which is itself audited).
 
 ## CI security checks (current)
 
 - `scripts/db-assertions.sql` (run by `scripts/db-test.py` on every PR): fixture-based proofs that cross-tenant reads/writes, anon writes to commerce tables, promo-code enumeration etc. are blocked; `ON_ERROR_STOP` fails the build on any regression.
+- `scripts/admin-assertions.sql` (run by the same harness): editors cannot read orders or open
+  backups, moderators cannot publish, suspended admins lose everything, `deny` overrides beat a
+  role grant, the founder cannot be demoted, the last owner cannot be removed, the SQL console
+  refuses writes, and audit diffs/reverts behave.
 - `scripts/contrast-audit.mjs` (a11y-adjacent, run locally / by hand): 31 WCAG-AA pairs.
 - `scripts/image-audit.mjs`: content-side URL hygiene (no `http://`, no HTML-page URLs in image fields).
 

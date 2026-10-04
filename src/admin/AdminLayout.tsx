@@ -8,7 +8,8 @@ import {
   BarChart3, ShieldCheck, ChevronDown, ChevronRight, Inbox,
   Tag, RotateCcw, ShoppingCart,
   Activity, FileCode, Gift, Share2, Calendar,
-  Layers, BookA, MessageCircleQuestion, DatabaseBackup, Moon, Sun
+  Layers, BookA, MessageCircleQuestion, DatabaseBackup, Moon, Sun,
+  Database, HeartPulse, TrendingUp, Lightbulb, Palette, KeyRound
 } from 'lucide-react';
 import { canAccess } from './permissions';
 import { useTheme } from '../context/ThemeContext';
@@ -26,6 +27,17 @@ interface NavSection {
 }
 
 const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'Operations',
+    items: [
+      { label: 'Team & access', route: { name: 'admin-access' }, icon: KeyRound },
+      { label: 'Health & issues', route: { name: 'admin-health' }, icon: HeartPulse },
+      { label: 'Advisor', route: { name: 'admin-advisor' }, icon: Lightbulb },
+      { label: 'Growth & SEO', route: { name: 'admin-growth' }, icon: TrendingUp },
+      { label: 'Data explorer', route: { name: 'admin-data' }, icon: Database },
+      { label: 'Front end', route: { name: 'admin-frontend' }, icon: Palette },
+    ],
+  },
   {
     title: 'Editorial',
     items: [
@@ -79,7 +91,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Content Templates', route: { name: 'admin-content-templates' }, icon: FileCode },
       { label: 'Feedback', route: { name: 'admin-feedback' }, icon: MessageSquare },
-      { label: 'Team & Roles', route: { name: 'admin-team' }, icon: Users },
       { label: 'Backups & Jobs', route: { name: 'admin-backups' }, icon: DatabaseBackup },
       { label: 'Security (2FA)', route: { name: 'admin-security' }, icon: ShieldCheck },
     ],
@@ -89,9 +100,9 @@ const NAV_SECTIONS: NavSection[] = [
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { route, navigate } = useNavigation();
   const { theme, toggleTheme } = useTheme();
-  const { signOut, adminRole, email } = useAuth();
-  const sections = NAV_SECTIONS.map(sec => ({ ...sec, items: sec.items.filter(i => canAccess(adminRole, i.route.name)) })).filter(sec => sec.items.length > 0);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['Editorial', 'Commerce', 'Marketing', 'Analytics']));
+  const { signOut, adminAccess, email } = useAuth();
+  const sections = NAV_SECTIONS.map(sec => ({ ...sec, items: sec.items.filter(i => canAccess(adminAccess, i.route.name)) })).filter(sec => sec.items.length > 0);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['Super panel', 'Editorial', 'Commerce', 'Marketing', 'Analytics']));
 
   const handleSignOut = async () => {
     await signOut();
@@ -116,7 +127,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <span className="font-serif text-lg">Lixxon Studio</span>
           </div>
           <p className="text-xs text-gray-500 mt-1 tracking-wider uppercase">Editorial CMS</p>
-          {adminRole && <p className="text-[10px] text-gray-500 mt-2 truncate" title={email || ''}><span className="text-bronze uppercase tracking-wider">{adminRole}</span> · {email}</p>}
+          {adminAccess && (
+            <p className="text-[10px] text-gray-500 mt-2 truncate" title={email || ''}>
+              <span className="text-bronze uppercase tracking-wider">{adminAccess.role_label || adminAccess.role}</span>
+              {adminAccess.is_founder && <span className="ml-1 text-amber-400" title="Protected super admin">★</span>}
+              {' · '}{email}
+            </p>
+          )}
         </div>
 
         <nav className="p-3 space-y-1 overflow-x-auto lg:overflow-x-hidden flex lg:flex-col gap-0.5">

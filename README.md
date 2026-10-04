@@ -77,6 +77,17 @@ The Supabase **URL and key may use any of the alias names** listed in `.env.exam
 ### 4. GitHub Actions secrets (repo → Settings → Secrets)
 `SUPABASE_FUNCTIONS_URL`, `INTERNAL_FN_SECRET`, `SITE_URL`. That's what keeps emails flowing on the free tier.
 
+## Admin super panel
+
+`/admin` is an RBAC panel whose source of truth is the database, not the client bundle:
+34 capabilities, roles as rows, per-admin grant/deny overrides, and an ultra-super-admin (the
+original owner account) that always holds everything and cannot be removed. Every admin write is
+trigger-audited with a before/after diff and can be reverted. Full model, RPC list and local
+verification commands: **`docs/ADMIN.md`**.
+
+Screens: Team & access · Health & issues · Advisor · Growth & SEO · Data (explorer + SQL) ·
+Front end · Activity log · Backups & jobs · Security (2FA) — each gated by `can(permission)`.
+
 ## Free-tier budget guardrails
 - Resend: 100 emails/day → `EMAIL_DAILY_CAP=90`, queue drains every 20 min, digest is weekly.
 - Supabase Free: 500 MB DB / 1 GB storage / project pauses after 7 idle days → images are compressed client-side, backups are rolled (`backup_snapshots`), keep-alive pings every 6 h.

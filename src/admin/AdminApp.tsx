@@ -36,7 +36,12 @@ import AdminSubscribersPrefs from './pages/AdminSubscribersPrefs';
 import AdminGlossary from './pages/AdminGlossary';
 import AdminSeries from './pages/AdminSeries';
 import AdminQuestions from './pages/AdminQuestions';
-import AdminTeam from './pages/AdminTeam';
+import AdminAccess from './pages/AdminAccess';
+import AdminDataExplorer from './pages/AdminDataExplorer';
+import AdminHealth from './pages/AdminHealth';
+import AdminGrowth from './pages/AdminGrowth';
+import AdminAdvisor from './pages/AdminAdvisor';
+import AdminFrontend from './pages/AdminFrontend';
 import AdminBackups from './pages/AdminBackups';
 import AdminSecurity from './pages/AdminSecurity';
 import MfaGate from './MfaGate';
@@ -45,7 +50,7 @@ import { ShieldAlert } from 'lucide-react';
 
 export default function AdminApp() {
   const { route, navigate } = useNavigation();
-  const { session, loading, isAdmin, adminRole, signOut, email, refreshAdmin } = useAuth();
+  const { session, loading, isAdmin, adminAccess, email, signOut, refreshAdmin } = useAuth();
 
   useEffect(() => {
     if (session && route.name === 'admin-login') {
@@ -69,16 +74,21 @@ export default function AdminApp() {
     return <AdminLogin />;
   }
 
-  // Signed in but not in app_admins (e.g. a customer who typed /admin). RLS already blocks
-  // every admin query; this just gives them a clear screen instead of empty tables.
+  // Signed in but not on the team (e.g. a customer who typed /admin), or suspended.
+  // RLS already blocks every admin query; this just gives them a clear screen.
   if (!isAdmin) {
+    const suspended = adminAccess?.status === 'suspended';
     return (
       <MfaGate onVerified={refreshAdmin}>
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
           <div className="max-w-md text-center bg-white border border-gray-200 rounded-sm p-8">
             <ShieldAlert size={28} className="mx-auto text-amber-500 mb-4" />
-            <h1 className="font-serif text-2xl text-charcoal mb-2">No admin access</h1>
-            <p className="text-sm text-gray-500 mb-6">You are signed in as <strong>{email}</strong>, but this account is not on the team. Ask an owner to add you under Admin → Team.</p>
+            <h1 className="font-serif text-2xl text-charcoal mb-2">{suspended ? 'Access suspended' : 'No admin access'}</h1>
+            <p className="text-sm text-gray-500 mb-6">
+              {suspended
+                ? <>This account (<strong>{email}</strong>) is on the team but its access is suspended. An owner can restore it under Admin → Team &amp; access.</>
+                : <>You are signed in as <strong>{email}</strong>, but this account is not on the team. Ask an owner to add you under Admin → Team &amp; access.</>}
+            </p>
             <div className="flex justify-center gap-3 text-sm">
               <a href="/account" className="px-4 py-2 border border-gray-300 rounded-sm hover:border-bronze">Go to my account</a>
               <button onClick={() => signOut().then(() => navigate({ name: 'admin-login' }))} className="px-4 py-2 bg-charcoal text-white rounded-sm hover:bg-bronze">Sign out</button>
@@ -89,13 +99,15 @@ export default function AdminApp() {
     );
   }
 
-  if (!canAccess(adminRole, route.name)) {
+  if (!canAccess(adminAccess, route.name)) {
     return (
       <AdminLayout>
         <div className="max-w-md mx-auto text-center py-20">
           <ShieldAlert size={28} className="mx-auto text-amber-500 mb-4" />
           <h1 className="font-serif text-2xl text-charcoal mb-2">Not available to your role</h1>
-          <p className="text-sm text-gray-500">Your role is <strong>{adminRole}</strong>. This section needs a higher permission level.</p>
+          <p className="text-sm text-gray-500">
+            Your role is <strong>{adminAccess?.role_label || adminAccess?.role}</strong>. This section needs a permission it does not have — an owner can grant it under Team &amp; access.
+          </p>
         </div>
       </AdminLayout>
     );
@@ -139,7 +151,13 @@ export default function AdminApp() {
       case 'admin-glossary': return <AdminGlossary />;
       case 'admin-series': return <AdminSeries />;
       case 'admin-questions': return <AdminQuestions />;
-      case 'admin-team': return <AdminTeam />;
+      case 'admin-team': return <AdminAccess />; // legacy link — the page it used to open is now Team & access
+      case 'admin-access': return <AdminAccess />;
+      case 'admin-data': return <AdminDataExplorer />;
+      case 'admin-health': return <AdminHealth />;
+      case 'admin-growth': return <AdminGrowth />;
+      case 'admin-advisor': return <AdminAdvisor />;
+      case 'admin-frontend': return <AdminFrontend />;
       case 'admin-backups': return <AdminBackups />;
       case 'admin-security': return <AdminSecurity />;
       default: return <AdminDashboard />;

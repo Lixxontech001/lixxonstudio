@@ -76,6 +76,15 @@ decorative dividers/rules, and star-fill rating graphics (held to 3:1 as UI comp
 State is shared everywhere via `localStorage.lixxon_theme`, so the choice follows the
 reader across pages, reloads and the admin panel.
 
+## Runtime accent (database-driven)
+
+The accent pair is stored in `site_settings.theme` (`{ "accent": "#9C6647", "accent_text": "#85543A" }`)
+and applied at runtime to the CSS variables `--accent-cta`, `--accent-cta-hover`,
+`--accent-ink` and `--accent-ink-dark` (`src/index.css`, applied by
+`src/components/SiteConfigEffects.tsx`). Admin → Front end → Theme edits it; the shipped
+values above remain the defaults, and the on-charcoal accent is auto-lightened when a darker
+accent is chosen so text stays readable.
+
 ## Maintenance rules
 
 1. Never add `prefers-color-scheme` behavior — dark stays an explicit choice.

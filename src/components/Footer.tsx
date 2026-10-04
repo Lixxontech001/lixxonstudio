@@ -4,10 +4,15 @@ import { Link } from '../context/NavigationContext';
 import CurrencySelector from './CurrencySelector';
 import Logo from './Logo';
 import { submitForm } from '../lib/api';
+import { useSiteConfig } from '../hooks/useSiteConfig';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const { config } = useSiteConfig();
+  // Owners can replace these columns (and the closing note) in Admin → Front end → Footer.
+  const dbColumns = Array.isArray(config.footer?.columns) ? config.footer!.columns! : [];
+  const closingNote = config.footer?.note || 'Crafted with intention.';
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +94,19 @@ export default function Footer() {
           </p>
         </div>
 
+        {dbColumns.length > 0 ? dbColumns.map((col, i) => (
+          <div key={`${col.title}-${i}`}>
+            <p className="text-xs tracking-editorial uppercase text-white/40 mb-5">{col.title}</p>
+            <ul className="space-y-3">
+              {(col.links || []).map(link => (
+                <li key={`${link.label}-${link.href}`}>
+                  <a href={link.href} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )) : (
+          <>
         <div>
           <p className="text-xs tracking-editorial uppercase text-white/40 mb-5">Explore</p>
           <ul className="space-y-3">
@@ -143,6 +161,8 @@ export default function Footer() {
             <li><Link to={{ name: 'account' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">My Account</Link></li>
           </ul>
         </div>
+          </>
+        )}
       </div>
 
       {/* Copyright */}
@@ -152,7 +172,7 @@ export default function Footer() {
           <div className="flex items-center gap-4">
             <CurrencySelector />
             <button onClick={() => window.dispatchEvent(new CustomEvent('lixxon:shortcuts'))} className="hidden sm:inline text-white/30 text-xs tracking-wider hover:text-bronze" aria-label="Keyboard shortcuts">Press ? for shortcuts</button>
-            <p className="text-white/30 text-xs tracking-wider">Crafted with intention.</p>
+            <p className="text-white/30 text-xs tracking-wider">{closingNote}</p>
           </div>
         </div>
       </div>

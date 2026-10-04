@@ -1,20 +1,42 @@
 import { useDashboardStats, usePosts } from '../../hooks/useSupabase';
 import { useAdminOrders } from '../../hooks/useCommerce';
 import { useNavigation } from '../../context/NavigationContext';
+import { useAuth } from '../../context/AuthContext';
+import { useAdminRpc, Panel, Notice, Empty } from '../components/ui';
 import LivePanel from '../components/LivePanel';
-import { FileText, CheckCircle, Clock, Calendar, FolderTree, MessageSquare, Plus, Package, DollarSign } from 'lucide-react';
+import {
+  FileText, CheckCircle, Clock, Calendar, FolderTree, MessageSquare, Plus, Package, DollarSign,
+  HeartPulse, Lightbulb, Database, KeyRound, Palette, TrendingUp, Gauge,
+} from 'lucide-react';
+
+type HealthSummary = { last: { taken_at: string; critical: number; warning: number; info: number; ok: number } | null; checks: { key: string; label: string; severity: string; detail: string }[]; trend: unknown[] };
+type Suggestion = { title: string; impact: string; detail: string; action_route: string | null; action_label: string | null; permission: string | null };
+type Metrics = { database_pretty: string; free_tier_limit: number; database_size: number; connections: number };
 
 export default function AdminDashboard() {
   const { stats, loading } = useDashboardStats();
   const { posts } = usePosts();
-  const { orders } = useAdminOrders();
   const { navigate } = useNavigation();
+  const { can, adminAccess, isFounder } = useAuth();
+
+  // Only ask the database for what this admin may see — an editor never even issues the query.
+  const showCommerce = can('commerce.read');
+  const { orders } = useAdminOrders(showCommerce);
+  const canHealth = can('ops.health');
+  const canAnalytics = can('analytics.read');
+  const health = useAdminRpc<HealthSummary>('admin_health_overview', undefined, canHealth);
+  const advisor = useAdminRpc<Suggestion[]>('admin_suggestions', undefined, canAnalytics || canHealth);
+  const metrics = useAdminRpc<Metrics>('admin_system_metrics', undefined, canHealth || canAnalytics);
 
   const recentArticles = posts.slice(0, 5);
   const totalRevenue = orders.filter(o => o.payment_status === 'paid').reduce((sum, o) => sum + o.amount, 0);
   const paidOrders = orders.filter(o => o.payment_status === 'paid').length;
   const pendingOrders = orders.filter(o => o.payment_status === 'pending').length;
   const recentOrders = orders.slice(0, 5);
+
+  const issues = canHealth ? (health.data?.checks || []).filter(c => c.severity !== 'ok') : [];
+  const topIssues = issues.filter(c => c.severity === 'critical' || c.severity === 'warning').slice(0, 4);
+  const ideas = ((advisor.data as Suggestion[] | null) || []).filter(s => !s.permission || can(s.permission)).slice(0, 3);
 
   const cards = [
     { label: 'Total Articles', value: stats.total, icon: FileText, color: 'bg-gray-100 text-gray-700' },
@@ -31,20 +53,91 @@ export default function AdminDashboard() {
     { label: 'Pending Orders', value: pendingOrders, icon: Clock, color: 'bg-amber-50 text-amber-700' },
   ];
 
+  const shortcuts = [
+    can('team.read') && { label: 'Team & access', hint: `${adminAccess?.role_label || 'role'}${isFounder ? ' · super admin' : ''}`, route: 'admin-access', icon: KeyRound },
+    can('ops.health') && { label: 'Health & issues', hint: `${issues.length} open`, route: 'admin-health', icon: HeartPulse },
+    can('analytics.read') && { label: 'Advisor', hint: `${(advisor.data as Suggestion[] | null)?.length || 0} suggestions`, route: 'admin-advisor', icon: Lightbulb },
+    can('analytics.read') && { label: 'Growth & SEO', hint: 'traffic, search, revenue', route: 'admin-growth', icon: TrendingUp },
+    can('data.explore') && { label: 'Data explorer', hint: metrics.data ? `${metrics.data.database_pretty} used` : 'browse tables', route: 'admin-data', icon: Database },
+    can('settings.frontend') && { label: 'Front end', hint: 'nav, theme, SEO', route: 'admin-frontend', icon: Palette },
+  ].filter(Boolean) as { label: string; hint: string; route: string; icon: typeof FileText }[];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="font-serif text-2xl text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-1">Overview of your editorial content</p>
+          <p className="text-gray-500 text-sm mt-1">
+            Overview of your editorial content
+            {adminAccess && <> · signed in as <strong className="text-bronze">{adminAccess.role_label || adminAccess.role}</strong>{isFounder && ' (super admin)'}</>}
+          </p>
         </div>
-        <button
-          onClick={() => navigate({ name: 'admin-article-new' })}
-          className="inline-flex items-center gap-2 bg-bronze text-white px-4 py-2.5 rounded text-sm font-medium hover:bg-bronze-dark transition-colors"
-        >
-          <Plus size={16} /> New Article
-        </button>
+        {can('content.write') && (
+          <button
+            onClick={() => navigate({ name: 'admin-article-new' })}
+            className="inline-flex items-center gap-2 bg-bronze text-white px-4 py-2.5 rounded text-sm font-medium hover:bg-bronze-dark transition-colors"
+          >
+            <Plus size={16} /> New Article
+          </button>
+        )}
       </div>
+
+      {shortcuts.length > 0 && (
+        <Panel title="Super panel" icon={<Gauge size={15} className="text-bronze" />}>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {shortcuts.map(s => {
+              const Icon = s.icon;
+              return (
+                <button key={s.route} onClick={() => navigate({ name: s.route } as never)}
+                  className="flex items-center gap-3 text-left border border-taupe/30 rounded-sm px-4 py-3 hover:border-bronze transition-colors">
+                  <Icon size={18} className="text-bronze flex-shrink-0" strokeWidth={1.5} />
+                  <span className="min-w-0">
+                    <span className="block text-sm text-charcoal">{s.label}</span>
+                    <span className="block text-[11px] text-charcoal-muted">{s.hint}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+      )}
+
+      {canHealth && (topIssues.length > 0 || health.data?.last) && (
+        <Panel title="Needs attention" icon={<HeartPulse size={15} className="text-bronze" />}
+          actions={<button onClick={() => navigate({ name: 'admin-health' })} className="text-xs text-bronze hover:underline">Open health</button>}>
+          {health.data?.last && (
+            <p className="text-xs text-charcoal-muted mb-3">
+              Last scan {new Date(health.data.last.taken_at).toLocaleString()} · {health.data.last.critical} critical · {health.data.last.warning} warning
+            </p>
+          )}
+          {topIssues.length === 0 ? <Empty>No critical or warning checks.</Empty> : (
+            <ul className="space-y-2">
+              {topIssues.map(c => (
+                <li key={c.key} className="text-sm text-charcoal-light">
+                  <span className={`inline-block px-1.5 py-0.5 mr-2 text-[10px] uppercase rounded-sm border ${c.severity === 'critical' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>{c.severity}</span>
+                  <strong className="text-charcoal">{c.label}</strong> — {c.detail}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
+
+      {canAnalytics && ideas.length > 0 && (
+        <Panel title="Advisor" icon={<Lightbulb size={15} className="text-bronze" />}
+          actions={<button onClick={() => navigate({ name: 'admin-advisor' })} className="text-xs text-bronze hover:underline">All suggestions</button>}>
+          <ul className="space-y-2">
+            {ideas.map(s => (
+              <li key={s.title} className="text-sm text-charcoal-light">
+                <button className="text-left" onClick={() => s.action_route && navigate({ name: s.action_route } as never)}>
+                  <span className={`inline-block px-1.5 py-0.5 mr-2 text-[10px] uppercase rounded-sm border ${s.impact === 'critical' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{s.impact}</span>
+                  <strong className="text-charcoal">{s.title}</strong> — {s.detail}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       <div className="mb-8"><LivePanel /></div>
 
@@ -99,7 +192,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {commerceCards.some(c => c.value !== 0) && (
+      {showCommerce && commerceCards.some(c => c.value !== 0) && (
         <div className="mt-10">
           <h2 className="font-serif text-lg text-gray-900 mb-4">Commerce Overview</h2>
           <div className="grid grid-cols-3 gap-4 mb-6">
@@ -140,6 +233,15 @@ export default function AdminDashboard() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {!showCommerce && (
+        <div className="mt-8">
+          <Notice tone="info">
+            Commerce figures are hidden because your role does not hold <code>commerce.read</code>. The database refuses
+            those rows too — this is not just a hidden card.
+          </Notice>
         </div>
       )}
     </div>

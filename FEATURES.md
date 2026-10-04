@@ -106,10 +106,29 @@ to be re-audited next session (M4 checklist below):
 - **Platform**: PWA manifest + offline page, keyboard shortcuts + help overlay, font-size control, cookie consent (GA consent-gated), currency selector, 404 page, health endpoint, feeds.
 - **Admin (`/admin`, MFA-gated)**: dashboard, articles editor, categories, authors, comments/messages/moderation, media library, featured slots, series, glossary, content templates, polls, reviews, questions, customers, orders, refunds, gift cards, promo codes, abandoned carts, newsletter, feedback, analytics, activity log, backups, security page, site settings — see `src/admin/pages/*`.
 
+## M5 — Admin super panel (shipped in this PR)
+
+RBAC-first, with the database as the single source of truth (`docs/ADMIN.md`).
+
+| Feature | Where | Notes |
+|---|---|---|
+| Capability model (34 permissions, roles as rows, per-admin grants/denies) | `supabase/migrations/20261004200000_admin_rbac.sql` | `admin_can()` is the one authority: every RLS policy, RPC and screen goes through it. Seeded roles owner / editor / moderator / analyst / support, plus custom roles created from the panel. |
+| **Ultra-super-admin** | same | The original owner account (`is_founder`) holds everything, cannot be suspended, demoted or deleted, and only it can transfer the flag (`admin_transfer_founder`). Triggers keep at least one active owner (`trg_admin_guard_last_owner`) and protect the founder (`trg_admin_protect_founder`). |
+| Team & access screen | `src/admin/pages/AdminAccess.tsx` | Add/update admins by email, change roles, suspend/restore, remove, force a re-login, edit the role→permission matrix, create roles, and set per-admin grant/deny overrides. |
+| Audit trail v2 | migration `20261004201000`, `src/admin/pages/AdminActivityLog.tsx` | Field-level before/after diffs with actor, role, IP, user-agent, severity and source; 43 tables trigger-audited; searchable (free text + entity/action/severity/actor/date); one-click revert for 19 tables (refuses when the row moved on); 180-day retention job. |
+| Data explorer | migration `20261004202000`, `src/admin/pages/AdminDataExplorer.tsx` | Browse/insert/update/delete any explorable table through PostgREST **as the signed-in admin** (RLS does the enforcement), column-aware editors, CSV export, PII/money badges, read-only for money and team rows. |
+| Read-only SQL console | `admin_run_sql()` | `data.sql` permission; single `SELECT`/`WITH`, keyword + function denylist, 5 s timeout, read-only transaction, 200-row cap, runs under the caller's RLS. |
+| Health & issues, self-healing | `admin_run_checks()`, `admin_fix_issue()`, `src/admin/pages/AdminHealth.tsx` | ~28 checks (database, security, queue, commerce, content, moderation, search, backups, cron) with severity, suggestion and snapshot trend; safe one-click repairs (`requeue_email`, `repair_images`, `backfill_seo`, `backfill_entitlements`, `take_backup`, `prune_audit`, `analyze`). |
+| Advisor | `admin_suggestions()`, `src/admin/pages/AdminAdvisor.tsx` | Scored, permission-aware suggestions computed from live rows (impact, effort, route, optional fix). |
+| Growth & SEO suite | `admin_growth_report()`, `src/admin/pages/AdminGrowth.tsx` | Traffic with previous-period deltas, content pipeline + SEO gaps, search demand and zero-result briefs, audience and commerce — all in one 7/30/90/180/365-day report. |
+| Scaling view | `admin_system_metrics()` | Database size vs free-tier limit, cache hit ratio, connections, largest tables, dead tuples, never-used indexes. |
+| Front end edited from the database | migration `20261004203000`, `src/admin/pages/AdminFrontend.tsx`, `src/hooks/useSiteConfig.ts` | `site_settings` drives nav menu, footer columns + note, homepage section order/visibility, theme accent pair, SEO defaults, redirects, custom `<head>` (sanitised), feature flags, announcement and maintenance. Writes go through `admin_set_setting()` (validated, permission-checked, audited); the storefront reads it all in one `site_config()` call. |
+| UI mirrors the database | `src/admin/permissions.ts`, `AuthContext.tsx` | `admin_me()` returns the effective permission list; nav and routes are gated by `can(permission)`, and a role with no `commerce.read` never even issues the orders query. |
+
 ## Next (queued)
 
 1. **M4 audit pass**: walk the 70-feature checklist against the inventory above; close genuine gaps (mood picker, skin journal, streak milestones copy, digest *email* content, save-for-later reminders, "Explain simply"/"Go deeper" variants, synonym search, seasonal hubs, ingredient cards, patch-test warnings, subscribe-and-save/loyalty points, referrals UX, tip button, A/B copy tests, reader-of-the-week, consent testimonials, sustainability badges, accessibility statement, privacy centre (DSAR), content notes, reading comfort modes, offline reading list UX, install prompt, background sync, native share sheet, web push, multi-currency deep work, command palette, reading insights, prefetch and status page (skeleton-first route loading and offline banner/retry are covered in Phase 2 Batch 1)…). Each gap lands with tests + a FEATURES.md line.
-2. **M5 admin audit**: RBAC/roles tables vs brief, audit-log depth, data explorer, SEO/growth suites, self-healing panels, intelligence digests.
+2. ~~**M5 admin audit**~~ — shipped (see the section above); follow-ups: alert emails for critical checks and monthly owner digests (M9).
 3. **M6 editor audit**: block editor depth vs brief (slash commands, drag-drop, revisions diff, scheduled publishing UX…).
 4. **M7 performance**: see `PERFORMANCE.md`.
 5. **M8 mobile audit**: viewport matrix + Playwright.

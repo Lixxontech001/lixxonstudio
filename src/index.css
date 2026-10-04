@@ -290,6 +290,13 @@
 
 :root {
   color-scheme: light;
+  /* Brand accent, overridable at runtime from the database
+     (Admin → Front end → Theme writes site_settings.theme). The defaults are the
+     audited values from THEME.md; scripts/contrast-audit.mjs checks them. */
+  --accent-cta: #9C6647;
+  --accent-cta-hover: #8A5A3E;
+  --accent-ink: #85543A;
+  --accent-ink-dark: #D9A88E;
 }
 
 .dark {
@@ -301,29 +308,29 @@
    light surfaces; on fixed dark surfaces (toasts, scrims, admin sidebar) it
    uses the light bronze. */
 .text-bronze {
-  color: #85543A;
+  color: var(--accent-ink, #85543A);
 }
 
 [class*='bg-charcoal'] .text-bronze {
-  color: #D9A88E;
+  color: var(--accent-ink-dark, #D9A88E);
 }
 
 .dark .text-bronze {
-  color: #D9A88E;
+  color: var(--accent-ink-dark, #D9A88E);
 }
 
 .dark [class*='bg-charcoal'] .text-bronze {
-  color: #D9A88E;
+  color: var(--accent-ink-dark, #D9A88E);
 }
 
 /* CTA surfaces: white text needs the deeper bronze (4.7:1). Decorative
    bronze tints (bg-bronze/10 …) and borders keep the light brand bronze. */
 .bg-bronze {
-  background-color: #9C6647;
+  background-color: var(--accent-cta, #9C6647);
 }
 
 .bg-bronze-dark {
-  background-color: #8A5A3E;
+  background-color: var(--accent-cta-hover, #8A5A3E);
 }
 
 /* Muted metadata at low opacity classes is clamped to AA-safe strength. */

@@ -1,20 +1,20 @@
 {
-  "note": "Gzip bundle budgets. Regression = growth past baseline + 5% tolerance. Update only with an owner-approved reason.",
+  "note": "Gzip bundle budgets. Regression = growth past baseline + 5% tolerance. Update only with an owner-approved reason. 2026-10-04 (M5): the admin super panel (Team & access, Data explorer, Health, Advisor, Growth, Front end) adds ~18 kB gzip to the LAZY admin chunk and ~0.6 kB of shared icons; readers never download the admin chunk. The reader entry grew ~2 kB for the database-driven nav/footer/homepage/theme.",
   "recordedAt": "2026-10-04",
   "tolerance": 0.05,
   "budgets": {
     "react-vendor": 45380,
     "supabase": 34039,
-    "icons": 10113,
+    "icons": 10736,
     "helmet": 6143,
     "sanitize": 9131,
     "markdown": 1197,
     "vercel-analytics": 1247,
-    "admin-bundle": 45544,
+    "admin-bundle": 63979,
     "article-reader": 20608,
     "entry": 43579,
     "css": 11954,
-    "total-js": 287959,
+    "total-js": 314562,
     "total-css": 11954
   }
 }

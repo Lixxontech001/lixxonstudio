@@ -76,6 +76,12 @@ export type Route =
   | { name: 'admin-refunds' }
   | { name: 'admin-abandoned-carts' }
   | { name: 'admin-activity-log' }
+  | { name: 'admin-access' }
+  | { name: 'admin-data' }
+  | { name: 'admin-health' }
+  | { name: 'admin-growth' }
+  | { name: 'admin-advisor' }
+  | { name: 'admin-frontend' }
   | { name: 'admin-content-templates' }
   | { name: 'admin-gift-cards' }
   | { name: 'admin-feedback' }
@@ -175,6 +181,12 @@ function parsePath(): Route {
     if (parts[1] === 'series') return { name: 'admin-series' };
     if (parts[1] === 'questions') return { name: 'admin-questions' };
     if (parts[1] === 'team') return { name: 'admin-team' };
+    if (parts[1] === 'access') return { name: 'admin-access' };
+    if (parts[1] === 'data') return { name: 'admin-data' };
+    if (parts[1] === 'health') return { name: 'admin-health' };
+    if (parts[1] === 'growth') return { name: 'admin-growth' };
+    if (parts[1] === 'advisor') return { name: 'admin-advisor' };
+    if (parts[1] === 'frontend' || parts[1] === 'front-end') return { name: 'admin-frontend' };
     if (parts[1] === 'backups') return { name: 'admin-backups' };
     if (parts[1] === 'security') return { name: 'admin-security' };
     if (parts[1] === 'feedback') return { name: 'admin-feedback' };
@@ -278,6 +290,12 @@ export function routeToPath(route: Route): string {
     case 'admin-refunds': return '/admin/refunds';
     case 'admin-abandoned-carts': return '/admin/abandoned-carts';
     case 'admin-activity-log': return '/admin/activity-log';
+    case 'admin-access': return '/admin/access';
+    case 'admin-data': return '/admin/data';
+    case 'admin-health': return '/admin/health';
+    case 'admin-growth': return '/admin/growth';
+    case 'admin-advisor': return '/admin/advisor';
+    case 'admin-frontend': return '/admin/frontend';
     case 'admin-content-templates': return '/admin/content-templates';
     case 'admin-gift-cards': return '/admin/gift-cards';
     case 'admin-feedback': return '/admin/feedback';
