@@ -1,0 +1,45 @@
+name: Recompress Storage images (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bucket:
+        description: Supabase Storage bucket containing article/product images
+        type: string
+        required: true
+        default: media
+      max_files:
+        description: Largest oversized image objects to recompress in place
+        type: number
+        required: true
+        default: 4
+      dry_run:
+        description: List selected paths and sizes without writing objects
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  recompress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install one-off image encoder
+        run: npm install --no-save --no-package-lock sharp
+      - name: Recompress the largest image objects in place
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jaatgiqigsmjodqgaocl.supabase.co' }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          STORAGE_BUCKET: ${{ inputs.bucket }}
+          MAX_FILES: ${{ inputs.max_files }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: node scripts/recompress-storage-images.mjs

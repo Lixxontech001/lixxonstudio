@@ -9,7 +9,7 @@
    - respondWith() is used only for an intercepted asset and always receives a real Response.
    - Cache writes are best-effort and can never fail or alter the network response.
 */
-const CACHE = 'lixxon-v3';
+const CACHE = 'lixxon-v4';
 const SHELL = ['/offline.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {

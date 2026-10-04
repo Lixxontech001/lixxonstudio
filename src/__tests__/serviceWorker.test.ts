@@ -146,10 +146,10 @@ function loadWorker(opts: {
 
 describe('public/sw.js', () => {
   it('uses a new cache version and purges every previous cache on activate', async () => {
-    const cacheNames = ['lixxon-v1', 'lixxon-v2', 'lixxon-v0-old', 'lixxon-v3'];
+    const cacheNames = ['lixxon-v1', 'lixxon-v2', 'lixxon-v0-old', 'lixxon-v4'];
     const h = loadWorker({ cacheNames });
     await h.runExtendable('activate');
-    expect(cacheNames).toEqual(['lixxon-v3']);
+    expect(cacheNames).toEqual(['lixxon-v4']);
     expect(h.claim).toHaveBeenCalled();
   });
 

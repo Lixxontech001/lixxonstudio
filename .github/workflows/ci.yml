@@ -20,6 +20,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://example.supabase.co
           VITE_SUPABASE_ANON_KEY: ci-placeholder
+      - name: Public asset size budget (250 KB maximum)
+        run: node scripts/public-size-budget.mjs
       - name: Bundle size budget (gzip, fails on regression)
         run: node scripts/size-budget.mjs
       - name: Database migrations + RLS assertions (embedded Postgres)

@@ -162,7 +162,7 @@ export default function CheckoutPage() {
         currency: order.currency,
         payment_options: 'card,banktransfer,ussd,account',
         customer: { email, name },
-        customizations: { title: 'Lixxon Studio', description: `Order ${order.order_number}`, logo: `${window.location.origin}/assets/images/Lixxon_Studio..png` },
+        customizations: { title: 'Lixxon Studio', description: `Order ${order.order_number}`, logo: `${window.location.origin}/assets/images/lixxon-studio-logo.webp` },
         callback: async (response: { transaction_id: string | number; status: string }) => {
           settled = true;
           setStatus('processing');

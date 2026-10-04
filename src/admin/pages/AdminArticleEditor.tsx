@@ -10,6 +10,7 @@ import {
   FileText, Tag, Star, Sparkles, ArrowLeft, Check, X, Lightbulb, FileCode
 } from 'lucide-react';
 import type { PostStatus } from '../../lib/types';
+import { optimizeAdminImage } from '../../lib/imageUpload';
 
 interface AdminArticleEditorProps {
   postId?: string;
@@ -69,19 +70,6 @@ const DEFAULT_STATE: EditorState = {
 };
 
 const draftKey = (id: string) => `lx_draft_${id}`;
-
-/** Browser-side image compression (canvas) so uploads stay small on the free Storage tier. */
-async function compressImage(file: File, maxW: number, quality: number): Promise<Blob> {
-  if (!file.type.startsWith('image/') || file.type === 'image/gif' || file.type === 'image/svg+xml') return file;
-  const bmp = await createImageBitmap(file).catch(() => null);
-  if (!bmp) return file;
-  const scale = Math.min(1, maxW / bmp.width);
-  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
-  c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
-  const type = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-  const blob: Blob | null = await new Promise(res => c.toBlob(res, type, quality));
-  return blob && blob.size < file.size ? blob : file;
-}
 
 /** Minimal line diff for the version viewer. */
 function diffLines(a: string, b: string): { type: 'same' | 'add' | 'del'; text: string }[] {
@@ -381,14 +369,13 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
 
   // ---- paste / drop an image → compress in-browser → upload to Storage → insert markdown
   const uploadImage = useCallback(async (file: File) => {
-    const blob = await compressImage(file, 1600, 0.82);
-    const ext = blob.type === 'image/png' ? 'png' : 'jpg';
-    const path = `articles/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error: upErr } = await supabase.storage.from('media').upload(path, blob, { contentType: blob.type, cacheControl: '31536000' });
+    const { blob, width, height, contentType, extension } = await optimizeAdminImage(file, 1600, 0.78);
+    const path = `articles/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+    const { error: upErr } = await supabase.storage.from('media').upload(path, blob, { contentType, cacheControl: '31536000' });
     if (upErr) { setError(`Image upload failed: ${upErr.message}`); return; }
     const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
     const alt = window.prompt('Alt text for this image (required for accessibility):', file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ')) || 'Image';
-    await supabase.from('media').insert({ url: urlData.publicUrl, alt_text: alt, file_name: file.name, title: alt }).then(() => undefined, () => undefined);
+    await supabase.from('media').insert({ url: urlData.publicUrl, alt_text: alt, file_name: file.name, file_size: blob.size, mime_type: contentType, width: width || null, height: height || null, title: alt }).then(() => undefined, () => undefined);
     const el = document.getElementById('content-editor') as HTMLTextAreaElement | null;
     const md = `\n![${alt}](${urlData.publicUrl})\n`;
     if (el) { const start = el.selectionStart; setState(prev => ({ ...prev, content: prev.content.slice(0, start) + md + prev.content.slice(el.selectionEnd) })); }

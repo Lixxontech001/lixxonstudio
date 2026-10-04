@@ -2,7 +2,7 @@ export default function Logo({ className = '', showText = true }: { className?: 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       <img
-        src="/assets/images/Lixxon_Studio..png"
+        src="/assets/images/lixxon-studio-logo.webp"
         alt="Lixxon Studio"
         className="h-9 md:h-10 w-auto object-contain"
         onError={(e) => {
