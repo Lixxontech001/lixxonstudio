@@ -48,22 +48,23 @@ real number, not a memory.
 **Bundle sizes (gzip, production build, recorded as the frozen budget in `scripts/size-budget.json`):**
 
 | Chunk | Gzip |
-|---|---|
-| `total-js` | 307.2 kB |
-| `react-vendor` | 44.3 kB |
-| `admin-bundle` (lazy, not in entry) | 62.5 kB |
-| `entry` | 44.5 kB |
-| `supabase` | 33.2 kB |
-| `article-reader` (lazy) | 20.0 kB |
-| `css` | 12.2 kB |
-| `icons` | 10.5 kB |
-| `sanitize` | 8.9 kB |
-| `helmet` | 6.0 kB |
+|---|---:|
+| `total-js` (public reader; excludes lazy admin) | 243.2 kB |
+| `admin-pages` (lazy) | 113.8 kB |
+| `react-vendor` | 44.5 kB |
+| `entry` | 28.9 kB |
+| `supabase` | 56.9 kB |
+| `article-reader` (lazy) | 20.3 kB |
+| `css` | 15.2 kB |
+| `icons` | 10.2 kB |
+| `helmet` | 6.1 kB |
 | `vercel-analytics` | 1.2 kB |
-| `markdown` | 1.2 kB |
 
-Raw totals: 984.3 kB JS / 61.6 kB CSS across 43 chunks (every route is split; the entry
-never contains admin or reader code).
+Recorded after the Vite 7, Supabase client and Tailwind 4 upgrades on 2026-10-04. The
+entry never contains admin or reader code; `admin-pages` is guarded separately so its
+intentional lazy cost cannot hide a public-reader regression. The full raw output remains
+available from `node scripts/size-budget.mjs --json`.
+
 
 ### Measurement tooling added with this baseline
 
@@ -215,6 +216,7 @@ Admin code is already **excluded from the public entry chunk** (lazy `/admin` ro
 | 2026-10-04 | Batch 1 merged (#19) — **Phase 2 baseline recorded** | 42.5 kB (entry, gzip) | 93 tests; size budget + production Lighthouse workflow added; budget JSON frozen |
 | 2026-10-04 | Batch 2 search & discovery | 42.6 kB (entry, gzip) | 130 tests; +9.98 kB total-js in lazy search chunks; critical path +30 bytes; budget refreshed |
 | 2026-10-04 | First production Lighthouse baseline recorded | 42.6 kB (entry, gzip) | perf 63–66 / a11y 89 / BP 79 / SEO 92; LCP ~49 s from ~9 MB of images; TTFB 20 ms, CLS 0.002; Batch 9 fix list written |
+| 2026-10-04 | Final stabilization baseline | 28.9 kB (entry, gzip) | Vite 7, Tailwind 4, Supabase 2.117.2, Vitest 5, full npm audit clean; public total-js 243.2 kB with admin guarded separately |
 | 2026-10-04 | Batch 3 personalisation & retention | 42.23 kB (entry, gzip) | 148 tests; 24 migrations + SQL assertions pass; entry is 0.33 kB below the 42.56 kB Phase 2 baseline; total JS gzip 285.90 kB remains within the configured +5% gate. No Lighthouse run in this local environment. |
 
 ## P0 image-weight remediation (2026-10-04)

@@ -16,7 +16,7 @@ at scale.
 | Readers (PII: emails, IPs, fingerprints) | Leak via APIs/logs | v5 migration column-level REVOKE: PII columns not selectable by anon/authenticated; admin-only views | IP hashing with salt, retention policy, DSAR export/delete (M5/M9) |
 | Browser clients | XSS | DOMPurify on all rich text (`sanitize.ts`), `escapeHtml` before formatting, React escaping, CSP with `object-src 'none'`, `frame-ancestors 'none'` | Remove `'unsafe-inline'` from `script-src` via hashes (incl. the theme pre-paint script), `report-to` collector, CORP/OAC headers (M9) |
 | Service worker | Cache poisoning, broken offline path | v2 worker: intercepts only navigations + same-origin assets + Supabase reads; never cross-origin; never caches 206/no-store/vary:*; every respondWith resolves to a real Response (`serviceWorker.test.ts`) | Keep CACHE bump rule on every change (Appendix C) |
-| Supply chain | Malicious dependency/action | Lockfile committed, `npm ci`, Dependabot recommended | `npm audit` in CI, SBOM, pin actions to SHAs (M9) |
+| Supply chain | Malicious dependency/action | Lockfile committed, `npm ci`, full `npm audit` is green in CI, Dependabot recommended | SBOM, pin actions to SHAs (M9) |
 
 ## OWASP Top 10 (2021) mapping
 
@@ -27,7 +27,7 @@ at scale.
 | A03 | Injection | **Strong** | No string-built SQL; PostgREST filters only; DOMPurify + escaping for output. |
 | A04 | Insecure Design | **Partial** | Server-side pricing/entitlements; webhook verification; free-tier abuse caps (rate limits in `submit-form`). |
 | A05 | Security Misconfiguration | **Partial** | Tight CSP/security headers in `vercel.json`; remaining: inline-script hashing, report-uri, CORS tightening on functions. |
-| A06 | Vulnerable Components | **Open** | Add `npm audit` + SBOM + Dependabot (M9). |
+| A06 | Vulnerable Components | **Partial** | Full `npm audit --audit-level=high` now runs in CI and is clean; SBOM, Dependabot and action SHA pinning remain hardening backlog. |
 | A07 | Identification & Auth Failures | **Partial** | Supabase Auth magic links + TOTP for admins; add lockout/backoff and re-auth (M9). |
 | A08 | Software & Data Integrity | **Partial** | Flutterwave signature check; signed download URLs; CI-only deploys from `main`. |
 | A09 | Logging & Monitoring Failures | **Partial** | Sentry (free tier) + field-level admin audit (actor, role, IP, user-agent, before/after diff, revert, 180-day retention) on 56 tables; remaining: alert emails for `critical` checks and an incident timeline (M9). |
@@ -122,7 +122,7 @@ the embedded Postgres used by `scripts/db-test.py` and records timings in this f
 
 ---
 
-Hardening backlog (tracked as Milestone 9 in FEATURES.md): inline-script hashing,
+Hardening backlog (tracked as Milestone 9 in FEATURES.md): SBOM generation, Dependabot and action SHA pinning, inline-script hashing,
 report-to collector, CORP/OAC headers, connect-src exact-host tightening, auth
 lockout/backoff + re-auth, npm audit + SBOM + pinned action SHAs, IP hashing,
 retention + DSAR flows, incident-disclosure template.
