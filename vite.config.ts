@@ -1,26 +1,87 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
-  plugins: [react()],
-  optimizeDeps: {
-    exclude: ['lucide-react'],
-    include: ['react', 'react-dom', 'react-helmet-async', '@supabase/supabase-js'],
-  },
-  build: {
-    target: 'es2020',
-    cssCodeSplit: true,
-    chunkSizeWarningLimit: 600,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-dom/client'],
-          'helmet': ['react-helmet-async'],
-          'supabase': ['@supabase/supabase-js'],
-          'icons': ['lucide-react'],
-          'vercel': ['@vercel/analytics/react'],
+/**
+ * Names the Supabase URL / browser key may be configured under in Vercel.
+ * Keep in sync with src/lib/supabaseClient.ts and api/feeds.ts + api/og.tsx.
+ */
+const URL_NAMES = [
+  'VITE_SUPABASE_URL',
+  'VITE_PUBLIC_SUPABASE_URL',
+  'VITE_SUPABASE_PROJECT_URL',
+  'VITE_SUPABASE_PUBLIC_URL',
+  'VITE_SUPABASE_PROJECT_REF_URL',
+];
+const KEY_NAMES = [
+  'VITE_SUPABASE_ANON_KEY',
+  'VITE_PUBLIC_SUPABASE_ANON_KEY',
+  'VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+  'VITE_SUPABASE_PUBLISHABLE_KEY',
+  'VITE_SUPABASE_KEY',
+  'VITE_SUPABASE_PUBLIC_KEY',
+];
+
+export default defineConfig(({ mode }) => {
+  // `.env*` files PLUS real process env (Vercel injects its variables into the build process).
+  const env: Record<string, string> = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...(process.env as Record<string, string>) };
+
+  const found = (names: string[]) => names.filter((n) => env[n]);
+
+  const urlNames = found(URL_NAMES);
+  const keyNames = found(KEY_NAMES);
+  const supabaseReady = urlNames.length > 0 && keyNames.length > 0;
+
+  // Loud but non-fatal: a build with no Supabase credentials ships a site that can never load data.
+  // (Fatal builds are opt-in via REQUIRE_SUPABASE_ENV=1.)
+  if (!supabaseReady) {
+    console.warn(
+      '\n\x1b[33m[lixxon] ⚠  Supabase credentials were NOT visible to this build.\x1b[0m\n' +
+        `  URL vars found: ${urlNames.join(', ') || 'none'}\n` +
+        `  KEY vars found: ${keyNames.join(', ') || 'none'}\n` +
+        '  Vite only inlines VITE_-prefixed vars from the BUILD environment, so after adding them\n' +
+        '  in Vercel you must redeploy (uncheck "Use existing Build Cache").\n',
+    );
+    if (process.env.REQUIRE_SUPABASE_ENV === '1') {
+      throw new Error('[lixxon] REQUIRE_SUPABASE_ENV=1 but no Supabase credentials were found at build time.');
+    }
+  } else {
+    console.log(`[lixxon] Supabase env detected — url via ${urlNames[0]}, key via ${keyNames[0]}`);
+  }
+
+  return {
+    plugins: [react()],
+    define: {
+      // Vercel only exposes the commit SHA server-side; surface it to the bundle for release tagging.
+      __COMMIT_SHA__: JSON.stringify(
+        env.VITE_COMMIT_SHA || env.VERCEL_GIT_COMMIT_SHA || '',
+      ),
+      // Sentry DSN is a publishable value (it ships in every browser bundle by design).
+      // Vercel stores it as SENTRY_DSN, which Vite will not inline on its own.
+      __SENTRY_DSN__: JSON.stringify(env.VITE_SENTRY_DSN || env.SENTRY_DSN || ''),
+      // Build-time fingerprint used by /api/health to confirm what the deployed bundle saw.
+      __SUPABASE_BUILD_STAMP__: JSON.stringify(
+        supabaseReady ? `${urlNames[0]}+${keyNames[0]}` : 'UNCONFIGURED',
+      ),
+    },
+    optimizeDeps: {
+      exclude: ['lucide-react'],
+      include: ['react', 'react-dom', 'react-helmet-async', '@supabase/supabase-js'],
+    },
+    build: {
+      target: 'es2020',
+      cssCodeSplit: true,
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-dom/client'],
+            'helmet': ['react-helmet-async'],
+            'supabase': ['@supabase/supabase-js'],
+            'icons': ['lucide-react'],
+            'vercel': ['@vercel/analytics/react'],
+          },
         },
       },
     },
-  },
+  };
 });

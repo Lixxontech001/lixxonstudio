@@ -61,6 +61,14 @@ Dashboard → Settings → Webhooks: URL `https://YOUR-PROJECT-REF.supabase.co/f
 ### 3. Vercel
 Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_FLUTTERWAVE_PUBLIC_KEY`, `VITE_SITE_URL`, optional `VITE_GA_MEASUREMENT_ID`, `VITE_SENTRY_DSN`. The serverless `api/feeds.ts` + `api/og.tsx` reuse the same `VITE_SUPABASE_*` variables. `vercel.json` already rewrites `/sitemap.xml`, `/rss.xml`, `/api/og` and bot traffic on `/blog/:slug`.
 
+The Supabase **URL and key may use any of the alias names** listed in `.env.example` (e.g. Supabase's own integration naming `VITE_PUBLIC_SUPABASE_URL` / `VITE_PUBLIC_SUPABASE_ANON_KEY`), so you do not have to rename anything in Vercel. `SUPABASE_SECRET_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are server-side only and must never get a `VITE_` prefix.
+
+> **"The deployed site loads nothing from Supabase" — checklist**
+> 1. Vite inlines `VITE_`-prefixed variables **at build time**, into the JS bundle. Nothing is read at runtime, so editing a variable in Vercel does nothing until you **redeploy**, and a cached build reuses the old values — redeploy with *Use existing Build Cache* unchecked.
+> 2. Open **`/api/health`** on the deployment: it lists which env-var names the deployment can see (never their values), shows which name the Supabase URL/key resolved from, and performs one anonymous read so you can tell "credentials missing" apart from "credentials fine, but RLS/rows are the problem".
+> 3. Watch the Vercel **build log**: the build prints `[lixxon] Supabase env detected — url via …` or a loud warning when no credentials were visible to the build.
+> 4. Only `VITE_`-prefixed names reach the browser. `SUPABASE_PUBLISHABLE_KEY` (no prefix) is fine for `api/*` but is invisible to the frontend.
+
 ### 4. GitHub Actions secrets (repo → Settings → Secrets)
 `SUPABASE_FUNCTIONS_URL`, `INTERNAL_FN_SECRET`, `SITE_URL`. That's what keeps emails flowing on the free tier.
 

@@ -18,6 +18,9 @@ vi.mock('../lib/supabaseClient', () => {
   });
   return {
     supabaseConfigured: true,
+    supabaseConfigError: '',
+    supabaseUrl: 'https://test.supabase.co',
+    supabaseAnonKey: 'test-anon-key',
     rows: (d: unknown) => (d || []) as unknown[],
     supabase: {
       from: () => chain(),

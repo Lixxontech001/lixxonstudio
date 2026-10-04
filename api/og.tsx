@@ -16,8 +16,22 @@ function env(...names: string[]): string | undefined {
 }
 
 async function loadPost(slug: string) {
-  const base = env('VITE_SUPABASE_URL', 'SUPABASE_URL', 'VITE_SUPABASE_PROJECT_URL');
-  const anon = env('VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY', 'VITE_SUPABASE_KEY') || '';
+  const base = env(
+    'VITE_SUPABASE_URL',
+    'VITE_PUBLIC_SUPABASE_URL',
+    'SUPABASE_URL',
+    'VITE_SUPABASE_PROJECT_URL',
+  );
+  const anon =
+    env(
+      'VITE_SUPABASE_ANON_KEY',
+      'VITE_PUBLIC_SUPABASE_ANON_KEY',
+      'VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      'VITE_SUPABASE_PUBLISHABLE_KEY',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_PUBLISHABLE_KEY',
+      'VITE_SUPABASE_KEY',
+    ) || '';
   if (!base) return null;
   const r = await fetch(`${base}/rest/v1/posts?slug=eq.${encodeURIComponent(slug)}&status=eq.published&select=title,excerpt,reading_time_minutes,category:categories(name),author:authors(name)&limit=1`, {
     headers: { apikey: anon, Authorization: `Bearer ${anon}` },
