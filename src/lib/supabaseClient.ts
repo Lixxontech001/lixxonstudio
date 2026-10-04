@@ -1,16 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-/** Read a Vite env var, trying each name in order. */
-function viteEnv(...names: string[]): string | undefined {
-  for (const n of names) {
-    const v = (import.meta.env as Record<string, string | undefined>)[n];
-    if (v) return v;
-  }
-  return undefined;
-}
-
-export const supabaseUrl = viteEnv('VITE_SUPABASE_URL', 'VITE_SUPABASE_PROJECT_URL');
-export const supabaseAnonKey = viteEnv('VITE_SUPABASE_ANON_KEY', 'VITE_SUPABASE_KEY');
+const supabaseUrl: string | undefined = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey: string | undefined = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 /** True when the build has real Supabase credentials. */
 export const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);

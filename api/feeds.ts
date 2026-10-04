@@ -5,18 +5,9 @@ export const config = { runtime: 'edge' };
 
 const ALLOWED = new Set(['sitemap', 'rss', 'prerender']);
 
-/** Read a process env var, trying each name in order. */
-function env(...names: string[]): string | undefined {
-  for (const n of names) {
-    const v = process.env[n];
-    if (v) return v;
-  }
-  return undefined;
-}
-
 export default async function handler(req: Request): Promise<Response> {
-  const base = env('VITE_SUPABASE_URL', 'SUPABASE_URL', 'VITE_SUPABASE_PROJECT_URL');
-  const anon = env('VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY', 'VITE_SUPABASE_KEY') || '';
+  const base = process.env.VITE_SUPABASE_URL;
+  const anon = process.env.VITE_SUPABASE_ANON_KEY || '';
   const url = new URL(req.url);
   const type = url.searchParams.get('type') || 'sitemap';
   const path = url.searchParams.get('path') || '/';

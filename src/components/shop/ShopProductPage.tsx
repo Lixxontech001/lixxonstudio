@@ -19,7 +19,7 @@ const getPublicStorageUrl = (filePath: string, bucket = 'previews') => {
     return filePath;
   }
   
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_PROJECT_URL || '';
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const cleanPath = filePath.replace(/^\/+/, '');
   return `${supabaseUrl}/storage/v1/object/public/${bucket}/${cleanPath}`;
 };

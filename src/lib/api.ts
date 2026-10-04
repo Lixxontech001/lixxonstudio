@@ -2,10 +2,10 @@
  * Typed client for the hardened edge functions.
  * Every public write (orders, forms, downloads) goes through here — never direct table writes.
  */
-import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient';
+import { supabase } from './supabaseClient';
 
-const BASE = `${supabaseUrl}/functions/v1`;
-const ANON = supabaseAnonKey as string;
+const BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export class ApiError extends Error {
   status: number;
