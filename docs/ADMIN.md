@@ -171,7 +171,7 @@ restores the shipped default. The reader side reads everything in one `site_conf
 
 ```bash
 /usr/bin/env python3 -m venv /home/user/.venv && /home/user/.venv/bin/pip install pgserver
-/home/user/.venv/bin/python scripts/db-test.py          # 36 migrations + 10 assertion suites
+/home/user/.venv/bin/python scripts/db-test.py          # 37 migrations + 11 assertion suites
 npx tsc --noEmit -p tsconfig.app.json && npm test && npm run build
 node scripts/size-budget.mjs && npm run audit:contrast
 ```
@@ -180,3 +180,34 @@ node scripts/size-budget.mjs && npm run audit:contrast
 orders, moderators cannot publish or reach backups, suspended admins lose everything, the
 founder cannot be demoted, the last owner cannot be removed, `deny` beats a role grant, the SQL
 console refuses writes, and the audit log records diffs with actor/IP and can be reverted.
+
+## 8. Admin AI Predictive Control Centre (Admin → Admin AI)
+
+M10 adds event-driven, predictive and self-reviewing operation without changing the M8/M9 safety
+contract. The new Admin AI tabs are Predictive, Events, Digital twin, Debate & trust, Maintenance,
+Lifecycle, AI security and Learning.
+
+* `admin_ai_record_event()` and `admin_ai_process_events()` provide an idempotent event stream for
+  traffic drops, checkout failures, cart abandonment, article publication, broken links, prompt
+  injection, secret exposure and permission anomalies. Events create incidents, maintenance tasks
+  or approval queue proposals; they do not mutate public content or payment state.
+* `admin_ai_refresh_digital_twin()` records aggregate content, commerce, subscriber, lifecycle and
+  AI-operation facts. `admin_ai_generate_forecasts()` and `admin_ai_scan_anomalies()` create
+  deterministic, review-state forecasts and notifications from recent observations.
+* `admin_ai_debate_queue()` runs security, growth and content reviews over queued proposals and
+  records confidence, evidence and trust scores. Critical proposals are paused for review.
+* `admin_ai_reindex_knowledge()` now indexes published articles and products. The knowledge graph,
+  stale-source maintenance tasks and post-publication checks remain reviewable before any edit.
+* `admin_ai_refresh_lifecycle()` stores only aggregate lifecycle snapshots. `admin_ai_run_security_sweep()`
+  quarantines possible secrets, prompt injection and suspicious permission signals. `admin_ai_learn_from_outcomes()`
+  recommends policy changes but cannot change its own permissions or autonomy.
+* `admin_ai_replay_command()` makes a previous command reproducible while retaining the original
+  command link. All M10 rows are RLS-protected and trigger-audited.
+
+The M10 RPCs are `admin_ai_refresh_predictive`, `admin_ai_refresh_digital_twin`,
+`admin_ai_generate_forecasts`, `admin_ai_scan_anomalies`, `admin_ai_debate_queue`,
+`admin_ai_refresh_knowledge_graph`, `admin_ai_generate_maintenance_tasks`,
+`admin_ai_refresh_lifecycle`, `admin_ai_run_security_sweep`, `admin_ai_learn_from_outcomes`,
+`admin_ai_decide_maintenance`, and `admin_ai_resolve_security_finding`. The default provider remains
+`rules`; external providers must remain authenticated edge-function integrations that can only
+create proposals.

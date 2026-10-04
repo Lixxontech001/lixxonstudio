@@ -9,7 +9,7 @@ at scale.
 
 | Asset | Threat | Control today | Roadmap |
 |---|---|---|---|
-| Supabase data (posts, orders, customers) | SQLi, RLS bypass, leaked service keys | Parameterised queries via supabase-js/PostgREST only; `supabaseClient.ts` **refuses secret keys in the browser**; RLS on all 63 public tables (143 policies), asserted by `scripts/db-assertions.sql` in CI via `scripts/db-test.py` | Extend assertions (M9): fail on tables without RLS, anon-write policies, `USING (true)` on sensitive tables |
+| Supabase data (posts, orders, customers) | SQLi, RLS bypass, leaked service keys | Parameterised queries via supabase-js/PostgREST only; `supabaseClient.ts` **refuses secret keys in the browser**; RLS on all 76 public tables (156 policies), asserted by `scripts/db-assertions.sql` in CI via `scripts/db-test.py` | Extend assertions (M9): fail on tables without RLS, anon-write policies, `USING (true)` on sensitive tables |
 | Paid digital products | Link sharing, entitlement bypass | Private bucket, entitlement-checked `download-file` edge function, signed URLs, download counters/caps | Watermarking, per-order tokens with TTL |
 | Payments (Flutterwave) | Webhook forgery, replay, price tampering | `verify-payment` verifies the webhook hash; prices recomputed server-side in `create-order` | Idempotency keys, replay window, alert emails (M9) |
 | Admin surface | Account takeover, privilege escalation | MFA gate (`MfaGate`, TOTP required by `is_admin()`), trigger-based audit log | Full RBAC roles/permissions tables, re-auth for destructive actions, invite tokens (M5/M9) |
@@ -22,7 +22,7 @@ at scale.
 
 | # | Category | Status | Notes |
 |---|---|---|---|
-| A01 | Broken Access Control | **Strong** | RLS-first DB access, MFA-gated admins and a 43-permission RBAC model (`admin_can()`), with triggers protecting the founder and the last owner. See `docs/ADMIN.md`. Remaining M9 work: session lockout/backoff. |
+| A01 | Broken Access Control | **Strong** | RLS-first DB access, MFA-gated admins and a 47-permission RBAC model (`admin_can()`), with triggers protecting the founder and the last owner. See `docs/ADMIN.md`. Remaining M9 work: session lockout/backoff. |
 | A02 | Cryptographic Failures | **Partial** | HTTPS-only everywhere (HSTS preload); secrets live only in Vercel/Supabase secret stores; never in the repo. |
 | A03 | Injection | **Strong** | No string-built SQL; PostgREST filters only; DOMPurify + escaping for output. |
 | A04 | Insecure Design | **Partial** | Server-side pricing/entitlements; webhook verification; free-tier abuse caps (rate limits in `submit-form`). |
@@ -30,7 +30,7 @@ at scale.
 | A06 | Vulnerable Components | **Open** | Add `npm audit` + SBOM + Dependabot (M9). |
 | A07 | Identification & Auth Failures | **Partial** | Supabase Auth magic links + TOTP for admins; add lockout/backoff and re-auth (M9). |
 | A08 | Software & Data Integrity | **Partial** | Flutterwave signature check; signed download URLs; CI-only deploys from `main`. |
-| A09 | Logging & Monitoring Failures | **Partial** | Sentry (free tier) + field-level admin audit (actor, role, IP, user-agent, before/after diff, revert, 180-day retention) on 43 tables; remaining: alert emails for `critical` checks and an incident timeline (M9). |
+| A09 | Logging & Monitoring Failures | **Partial** | Sentry (free tier) + field-level admin audit (actor, role, IP, user-agent, before/after diff, revert, 180-day retention) on 56 tables; remaining: alert emails for `critical` checks and an incident timeline (M9). |
 | A10 | SSRF | **Partial** | Edge functions fetch only fixed hosts today; enforce allow-lists + timeouts + size caps on any future outbound fetch (e.g., the premium TTS proxy — specified in FEATURES.md). |
 
 ## Admin AI Autopilot OS (M8)
@@ -126,3 +126,14 @@ Hardening backlog (tracked as Milestone 9 in FEATURES.md): inline-script hashing
 report-to collector, CORP/OAC headers, connect-src exact-host tightening, auth
 lockout/backoff + re-auth, npm audit + SBOM + pinned action SHAs, IP hashing,
 retention + DSAR flows, incident-disclosure template.
+
+## Admin AI Predictive Control Centre (M10)
+
+M10 adds a deterministic event stream, aggregate digital twin, forecasts, anomaly detection, agent
+peer review, lifecycle snapshots, maintenance proposals and an AI security sweep. Event handlers
+can open incidents, pause proposals and create approval work; they cannot publish content, send
+messages, change pricing, alter entitlements, change permissions or expose member PII. Lifecycle
+and digital-twin records are aggregate-only. Prompt-injection, secret-exposure and permission
+signals are quarantined, and critical proposals are paused. Learning signals only recommend policy
+changes; they cannot rewrite RBAC, allow-lists or autonomy. The default provider remains `rules`;
+any future provider must run through an authenticated edge function and can only write proposals.

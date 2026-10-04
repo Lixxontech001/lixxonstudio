@@ -155,3 +155,16 @@ RBAC-first, with the database as the single source of truth (`docs/ADMIN.md`).
 5. **M8 mobile audit**: viewport matrix + Playwright.
 6. **M9 security**: see `SECURITY.md`.
 7. **M10 polish**: DNS/domain decision, Sentry auth token, robots/sitemap verification, email templates, monthly owner report.
+
+## M10 — Predictive Control Centre
+
+| Area | Where | Delivery |
+|---|---|---|
+| Event-driven AI | `20261004260000_admin_ai_predictive.sql`, `AdminAI.tsx` | Idempotent event stream and processor for traffic, checkout, cart, content, broken-link and security signals. Events create safe investigations and reviewable proposals. |
+| Digital twin | same | Aggregate website model covering published content, products, orders, subscribers, revenue, campaigns, queue and incidents, with no member PII exposed. |
+| Predictive growth loop | same | Deterministic forecasts, confidence, assumptions, anomaly detection and notifications from recent metrics. |
+| Agent debate and trust | same | Security, growth and content peer reviews, evidence, confidence and trust scores; critical proposals are paused. |
+| Knowledge graph and maintenance | same | Product/article source indexing, relationships, stale-content proposals, broken-link and post-publication maintenance tasks. |
+| Lifecycle autopilot | same | Privacy-safe aggregate reader/customer stages and snapshots for journey, retention and conversion proposals. |
+| AI security operations | same | Prompt-injection, secret-exposure, permission-anomaly and unsafe-proposal quarantine with audited findings. |
+| Self-improvement | same | Outcome-based recommendations for autonomy, evidence and debate coverage; the AI cannot rewrite its own permissions. |
