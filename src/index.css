@@ -508,3 +508,17 @@
 .hover\:bg-bronze-dark:hover {
   background-color: #8A5A3E;
 }
+
+/* TTS — active sentence highlight (Milestone 3) */
+.article-prose .tts-active,
+.tts-active {
+  background: rgb(196 139 113 / 0.28);
+  border-radius: 2px;
+  box-shadow: 0 0 0 3px rgb(196 139 113 / 0.28);
+}
+
+.dark .article-prose .tts-active,
+.dark .tts-active {
+  background: rgb(217 168 142 / 0.32);
+  box-shadow: 0 0 0 3px rgb(217 168 142 / 0.32);
+}

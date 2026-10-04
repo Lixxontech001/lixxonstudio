@@ -1,4 +1,4 @@
-import {useEffect, useState, useMemo} from 'react';
+import {useEffect, useState, useMemo, useRef} from 'react';
 import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { usePostBySlug, usePosts } from '../hooks/useSupabase';
@@ -43,6 +43,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState('');
   const [bookmarked, setBookmarked] = useState(false);
+  const proseRef = useRef<HTMLDivElement>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const { theme, toggleTheme } = useTheme();
   const { showToast } = useToast();
@@ -381,7 +382,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
           <div className="flex-1 min-w-0">
             {/* TTS + Font Size controls */}
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
-              <TextToSpeech postId={post.id} title={post.title} content={post.content} />
+              <TextToSpeech postId={post.id} title={post.title} content={post.content} coverImage={post.cover_image} lang="en" containerRef={proseRef} />
               <FontSizeControl fontSize={fontSize} setFontSize={setFontSize} />
             </div>
 
@@ -407,7 +408,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
 
             <SeriesNav seriesId={post.series_id} currentPostId={post.id} />
             <KeyTakeaways items={post.takeaways} />
-            <div className={`article-prose max-w-none font-${fontSize}`} dangerouslySetInnerHTML={{ __html: renderContent(post.content) }} />
+            <div ref={proseRef} className={`article-prose max-w-none font-${fontSize}`} dangerouslySetInnerHTML={{ __html: renderContent(post.content) }} />
             <ArticleFaq faq={post.faq} />
             <SeriesNav seriesId={post.series_id} currentPostId={post.id} variant="bottom" />
 
