@@ -229,7 +229,41 @@ Admin code is already **excluded from the public entry chunk** (lazy `/admin` ro
 | CI public-file guard | No per-file size assertion | Every file under `public/` is now limited to 250,000 bytes |
 
 Production Lighthouse baseline supplied for this work: performance 63–66, LCP 48–50 s,
-TTFB 20 ms, CLS 0.002. The production after-run is pending the Storage workflow and
-Vercel deployment; run `.github/workflows/perf.yml` against production before publishing
-a new Lighthouse number. The local source assets above save 4,698,289 bytes combined;
-that byte reduction is not a substitute for the production Lighthouse measurement.
+TTFB 20 ms, CLS 0.002. After PR #25, production `/version.json` reports merged main
+`edb4176150c5a8781914ce5e8ccf9890872b0323`. `/api/health` is `ok: true`; REST is 206
+with 71 published posts, search is 200 with 3 results, and the personalisation probe is
+200 (the feed returned 6 items). The Storage workflow and manual `perf.yml` dispatch
+returned HTTP 403, `Resource not accessible by integration`; `SUPABASE_SECRET_KEY`
+presence is unconfirmed. The automatic production `perf.yml` check on PR #26 did run
+three measurements after the image deployment; its median is recorded below. Storage
+recompression is still pending. The local source assets above save 4,698,289 bytes, but
+that reduction alone is not a production performance result.
+
+## Post-image production measurement — 2026-10-04
+
+Source: `Perf (production Lighthouse)` workflow run `37225192479`, target
+`https://lixxonstudio.vercel.app/`, 3 mobile runs, median reported. The site was serving
+main build `edb4176150c5a8781914ce5e8ccf9890872b0323` at the time. This is an interim
+measurement after PR #25's public logo/icon and upload-optimizer changes; Supabase
+Storage originals had not yet been recompressed.
+
+| Metric | Before (user-provided baseline) | After (3-run median) | Change |
+|---|---:|---:|---:|
+| Performance score | 63–66 | 61 | −2 to −5 points |
+| Accessibility | 89 | 89 | unchanged |
+| Best practices | 79 | 79 | unchanged |
+| SEO | 92 | 92 | unchanged |
+| LCP | 48–50 s | 37,683 ms | 10.3–12.3 s lower (about 21.5–24.6%) |
+| TTFB | 20 ms | 20 ms | unchanged |
+| CLS | 0.002 | 0.002 | unchanged |
+| FCP | — | 3,510 ms | baseline not supplied |
+| TBT | — | 118 ms | baseline not supplied |
+| Speed Index | — | 7,050 ms | baseline not supplied |
+
+Interpretation: the measured LCP is lower, but the overall Lighthouse performance score
+is also lower than the supplied range; do not describe this as an overall score win. The
+report still flags properly-sized images (10,461 KiB estimated opportunity) and lists
+3,370 / 2,140 / 1,743 / 883 / 875 kB among its heaviest resources. Those are Lighthouse
+resource observations, not a new diagnosis of the known Storage originals. Recompress
+the existing objects at their same paths, then run a fresh three-run production measure
+before drawing a final conclusion.

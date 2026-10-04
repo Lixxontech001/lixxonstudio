@@ -1,7 +1,8 @@
 /**
  * refresh-rates — pulls USD base rates from a free, key-less public API and caches them
  * in `currency_rates` (display only; Flutterwave charges in CHECKOUT_CURRENCY).
- * Call daily from the GitHub Actions cron with x-internal-secret.
+ * Called daily by Supabase pg_cron + pg_net. Its URL and x-internal-secret
+ * are read from Supabase Vault; GitHub workflow_dispatch remains a manual backup.
  */
 import { json, preflight, serviceClient } from "../_shared/http.ts";
 

@@ -1,8 +1,6 @@
-# One-click Supabase deploy: migrations + edge functions + function secrets.
-# Trigger manually (Actions → "Deploy Supabase" → Run) or via `gh workflow run deploy-supabase.yml`.
+# One-click Supabase deploy: Vault credentials, migrations, edge functions and verification.
 # Required repo secrets: SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD
-# Optional (function secrets; only set if present): FLW_SECRET_KEY, FLW_WEBHOOK_HASH, INTERNAL_FN_SECRET,
-#   RATE_LIMIT_SALT, RESEND_API_KEY, EMAIL_FROM, ADMIN_NOTIFY_EMAIL, SITE_URL, CHECKOUT_CURRENCY, EMAIL_DAILY_CAP
+# Function secrets include INTERNAL_FN_SECRET; scheduler credentials are stored in Supabase Vault.
 name: Deploy Supabase
 on:
   push:
@@ -29,11 +27,8 @@ jobs:
         with: { version: latest }
       - name: Link project
         run: supabase link --project-ref "$REF"
-      - name: Push migrations
-        if: github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'migrations'
-        run: supabase db push --include-all
       - name: Set function secrets
-        if: github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'secrets'
+        if: ${{ github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'secrets' }}
         env:
           FLW_SECRET_KEY: ${{ secrets.FLW_SECRET_KEY }}
           FLW_WEBHOOK_HASH: ${{ secrets.FLW_WEBHOOK_HASH }}
@@ -46,15 +41,90 @@ jobs:
           CHECKOUT_CURRENCY: ${{ secrets.CHECKOUT_CURRENCY }}
           EMAIL_DAILY_CAP: ${{ secrets.EMAIL_DAILY_CAP }}
         run: |
+          set -euo pipefail
           : > .secrets.env
+          trap 'rm -f .secrets.env' EXIT
           for k in FLW_SECRET_KEY FLW_WEBHOOK_HASH INTERNAL_FN_SECRET RATE_LIMIT_SALT RESEND_API_KEY EMAIL_FROM ADMIN_NOTIFY_EMAIL SITE_URL CHECKOUT_CURRENCY EMAIL_DAILY_CAP; do
             v="${!k}"; [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> .secrets.env
           done
-          if [ -s .secrets.env ]; then supabase secrets set --env-file .secrets.env; else echo "no secrets provided"; fi
-          rm -f .secrets.env
+          if [ -s .secrets.env ]; then supabase secrets set --env-file .secrets.env; else echo "no function secrets provided"; fi
+      - name: Seed private scheduler credentials in Supabase Vault
+        if: ${{ github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'migrations' || inputs.what == 'secrets' }}
+        env:
+          INTERNAL_FN_SECRET: ${{ secrets.INTERNAL_FN_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.request
+
+          ref = os.environ.get("REF", "")
+          token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+          secret = os.environ.get("INTERNAL_FN_SECRET", "")
+          if not re.fullmatch(r"[a-z0-9]+", ref):
+              print("::error::SUPABASE_PROJECT_REF is missing or malformed; Vault was not changed.")
+              sys.exit(1)
+          if not token or not secret:
+              print("::error::SUPABASE_ACCESS_TOKEN and INTERNAL_FN_SECRET are required to configure scheduled functions.")
+              sys.exit(1)
+
+          endpoint = f"https://api.supabase.com/v1/projects/{ref}/database/query"
+
+          def execute(sql, parameters=None):
+              body = {"query": sql}
+              if parameters is not None:
+                  body["parameters"] = parameters
+              request = urllib.request.Request(
+                  endpoint,
+                  data=json.dumps(body).encode(),
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Content-Type": "application/json",
+                  },
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=60) as response:
+                      if response.status not in (200, 201):
+                          raise RuntimeError(f"HTTP {response.status}")
+              except (urllib.error.HTTPError, urllib.error.URLError, RuntimeError) as error:
+                  status = getattr(error, "code", str(error))
+                  print(f"::error::Supabase Vault setup failed ({status}); secret values were not logged.")
+                  sys.exit(1)
+
+          functions_url = f"https://{ref}.supabase.co/functions/v1"
+          execute("CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault")
+          execute("DELETE FROM vault.secrets WHERE name IN ('lixxon_supabase_functions_url', 'lixxon_internal_fn_secret')")
+          # Send secret values as bound parameters, never inline in SQL/query text.
+          execute(
+              "SELECT vault.create_secret($1::text, $2::text, $3::text)",
+              [functions_url, "lixxon_supabase_functions_url", "Base URL for scheduled Lixxon edge functions"],
+          )
+          execute(
+              "SELECT vault.create_secret($1::text, $2::text, $3::text)",
+              [secret, "lixxon_internal_fn_secret", "Internal authorization for scheduled Lixxon edge functions"],
+          )
+          print("Stored the scheduled-function URL and internal authorization in Supabase Vault (values redacted).")
+          PY
+      - name: Push migrations
+        if: ${{ github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'migrations' }}
+        run: supabase db push --include-all
       - name: Deploy edge functions
-        if: github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'functions'
+        if: ${{ github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'functions' }}
         run: supabase functions deploy --project-ref "$REF"
+      - name: Drain email queue once after moving the scheduler
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, 'pg_cron') }}
+        env:
+          FN: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1
+          SECRET: ${{ secrets.INTERNAL_FN_SECRET }}
+        run: |
+          set -euo pipefail
+          result=$(curl --fail --silent --show-error --max-time 60 -X POST "$FN/send-emails" \
+            -H "x-internal-secret: $SECRET" -H 'content-type: application/json' -d '{}')
+          echo "Initial email queue drain: $result" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Verify deployment (migrations applied + functions answer)
         run: |
           {
@@ -67,7 +137,6 @@ jobs:
               code=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$FN/$f"); echo "GET  $f -> $code"
             done
             echo "POST refresh-rates -> $(curl -s -o /tmp/r.txt -w '%{http_code}' -X POST "$FN/refresh-rates" -H "x-internal-secret: $SECRET") $(head -c 200 /tmp/r.txt)"
-            echo "POST send-emails   -> $(curl -s -o /tmp/e.txt -w '%{http_code}' -X POST "$FN/send-emails" -H "x-internal-secret: $SECRET" -H 'content-type: application/json' -d '{}') $(head -c 200 /tmp/e.txt)"
             echo "POST send-emails (wrong secret, expect 401/403) -> $(curl -s -o /dev/null -w '%{http_code}' -X POST "$FN/send-emails" -H 'x-internal-secret: nope')"
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY" > /tmp/summary.md
@@ -77,3 +146,86 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FN: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1
           SECRET: ${{ secrets.INTERNAL_FN_SECRET }}
+      - name: Verify pg_cron jobs and inspect cron.job_run_details
+        if: ${{ github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'migrations' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          ref = os.environ["PROJECT_REF"]
+          token = os.environ["SUPABASE_ACCESS_TOKEN"]
+          endpoint = f"https://api.supabase.com/v1/projects/{ref}/database/query"
+
+          def query(sql):
+              request = urllib.request.Request(
+                  endpoint,
+                  data=json.dumps({"query": sql}).encode(),
+                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=60) as response:
+                      return json.loads(response.read().decode())
+              except (urllib.error.HTTPError, urllib.error.URLError) as error:
+                  status = getattr(error, "code", "network error")
+                  print(f"::error::Cron verification query failed ({status}).")
+                  sys.exit(1)
+
+          def rows(payload):
+              if isinstance(payload, str):
+                  try:
+                      payload = json.loads(payload)
+                  except json.JSONDecodeError:
+                      return []
+              if isinstance(payload, list):
+                  return payload
+              if isinstance(payload, dict):
+                  for key in ("data", "result", "rows", "results"):
+                      if key in payload:
+                          return rows(payload[key])
+                  return [payload]
+              return []
+
+          registration = query("""
+          SELECT
+            (SELECT count(*) FROM cron.job WHERE jobname IN ('lixxon_send_emails', 'lixxon_refresh_rates')) = 2 AS managed_jobs_present,
+            (SELECT count(*) FROM cron.job WHERE jobname = 'keep_alive') AS keep_alive_count
+          """)
+          registered_rows = rows(registration)
+          if not registered_rows:
+              print("::error::Cron registration query returned no rows.")
+              sys.exit(1)
+          record = registered_rows[0]
+          jobs_present = record.get("managed_jobs_present") in (True, 1, "true", "t", "1")
+          try:
+              keep_alive_count = int(record.get("keep_alive_count", -1))
+          except (TypeError, ValueError):
+              keep_alive_count = -1
+          if not jobs_present or keep_alive_count != 1:
+              print("::error::Expected two pg_net jobs and exactly one pre-existing keep_alive job; see the registration result.")
+              print(json.dumps(record, sort_keys=True))
+              sys.exit(1)
+
+          history = query("""
+          SELECT COALESCE(json_agg(row_to_json(r)), '[]'::json) AS cron_job_run_details
+          FROM (
+            SELECT j.jobname, d.status, d.return_message, d.start_time, d.end_time
+            FROM cron.job_run_details AS d
+            JOIN cron.job AS j ON j.jobid = d.jobid
+            WHERE j.jobname IN ('lixxon_send_emails', 'lixxon_refresh_rates', 'keep_alive')
+            ORDER BY d.start_time DESC
+            LIMIT 10
+          ) AS r
+          """)
+          report = {"registration": record, "recent_run_details": rows(history)}
+          print("Supabase scheduler evidence:")
+          print(json.dumps(report, sort_keys=True, default=str))
+          print("::notice::Cron job_run_details was queried; a newly scheduled job will add its first row on its next tick.")
+          PY
