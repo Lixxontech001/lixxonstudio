@@ -24,6 +24,7 @@ npm run dev
 
 | `npm run audit:images` | Content audit: flags broken image URLs (Pexels page-URLs, `http://`, dead links) in posts/products |
 | `npm run audit:contrast` | WCAG-AA contrast audit for both themes (31 pairs, min 4.5:1) |
+| `npm audit --audit-level=high` | Full dependency audit (also enforced in CI) |
 
 CI (`.github/workflows/ci.yml`) runs all of the above on every push, plus Lighthouse budgets on PRs.
 
