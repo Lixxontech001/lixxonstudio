@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { usePosts, useCategories, usePaginatedPosts } from '../hooks/useSupabase';
 import Hero from './Hero';
 import Newsletter from './Newsletter';
@@ -6,7 +6,9 @@ import ProductGrid from './ProductGrid';
 import MagazineFeed from './MagazineFeed';
 import EditorsPicks from './EditorsPicks';
 import TrendingSection from './TrendingSection';
-import PersonalizedRecommendations from './PersonalizedRecommendations';
+import { lazyWithRetry } from '../lib/chunkRecovery';
+
+const HomePersonalised = lazyWithRetry(() => import('./personal/HomePersonalised'));
 import MostReadThisWeek from './MostReadThisWeek';
 import EmptyState from './EmptyState';
 import ContactForm from './ContactForm';
@@ -48,7 +50,7 @@ export function HomePage({ page }: { page: number }) {
       {!loading && editorsPicks.length > 0 && <EditorsPicks posts={editorsPicks} />}
       <ProductGrid />
       {!loading && <MostReadThisWeek />}
-      {!loading && <PersonalizedRecommendations />}
+      {!loading && <Suspense fallback={null}><HomePersonalised /></Suspense>}
       {pagLoading && paginatedPosts.length === 0 && <FeedSkeleton />}
       <QueryStatusNotice loading={pagLoading} hasData={paginatedPosts.length > 0} error={pagError} onRetry={retryPaginated} />
       {(!pagLoading || paginatedPosts.length > 0) && !pagError && (

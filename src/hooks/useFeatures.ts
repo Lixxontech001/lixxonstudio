@@ -271,46 +271,30 @@ export function useReadingStreak() {
   const [totalDays, setTotalDays] = useState(0);
 
   useEffect(() => {
-    const fp = getFingerprint();
     let cancelled = false;
     const fetch = async () => {
-      const { data } = await supabase
-        .from('reading_sessions')
-        .select('read_date')
-        .eq('fingerprint', fp)
-        .order('read_date', { ascending: false });
+      const { data, error } = await supabase.rpc('reader_insights', {
+        p_fingerprint: getFingerprint(),
+        p_days: 400,
+      });
       if (cancelled) return;
-      const dates = (data || []).map((d: { read_date: string }) => d.read_date);
-      setTotalDays(dates.length);
-
-      if (dates.length === 0) { setStreak(0); return; }
-
-      let currentStreak = 0;
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      const yesterdayStr = new Date(today.getTime() - 86400000).toISOString().split('T')[0];
-
-      if (dates[0] === todayStr || dates[0] === yesterdayStr) {
-        currentStreak = 1;
-        const dateSet = new Set(dates);
-        let checkDate = dates[0] === todayStr ? new Date(today.getTime() - 86400000) : new Date(today.getTime() - 2 * 86400000);
-        while (dateSet.has(checkDate.toISOString().split('T')[0])) {
-          currentStreak++;
-          checkDate = new Date(checkDate.getTime() - 86400000);
-        }
-      }
-      setStreak(currentStreak);
+      if (error) return;
+      const insight = Array.isArray(data) ? data[0] : data;
+      const row = insight as { current_streak?: number; days_active?: number } | null;
+      setStreak(row?.current_streak || 0);
+      setTotalDays(row?.days_active || 0);
     };
-    fetch();
+    void fetch();
     return () => { cancelled = true; };
   }, []);
 
   const recordReadingDay = useCallback(async (postId?: string) => {
-    const fp = getFingerprint();
-    const today = new Date().toISOString().split('T')[0];
-    const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from('reading_sessions')
-      .upsert({ fingerprint: fp, read_date: today, post_id: postId || null, user_id: session?.user?.id || null }, { onConflict: 'fingerprint,read_date' });
+    try {
+      await supabase.rpc('save_reading_day', {
+        p_fingerprint: getFingerprint(),
+        p_post_id: postId || null,
+      });
+    } catch { /* streak updates are best-effort */ }
   }, []);
 
   return { streak, totalDays, recordReadingDay };

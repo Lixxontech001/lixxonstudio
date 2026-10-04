@@ -3,6 +3,8 @@ import { Clock, Trash2, BookOpen, ArrowRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { useReadingHistory } from '../hooks/useFeatures';
 import { Helmet } from 'react-helmet-async';
+import ContinueReadingRail from './personal/ContinueReadingRail';
+import ReaderInsightsCard from './personal/ReaderInsightsCard';
 
 
 export default function ReadingHistoryPage() {
@@ -34,6 +36,11 @@ export default function ReadingHistoryPage() {
           </button>
         )}
       </div>
+
+      <div className="mb-8 max-w-4xl">
+        <ReaderInsightsCard />
+      </div>
+      {history.length > 0 && <ContinueReadingRail inline />}
 
       {history.length === 0 ? (
         <div className="max-w-md mx-auto text-center py-20">
