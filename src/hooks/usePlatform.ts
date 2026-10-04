@@ -82,30 +82,56 @@ export function useReadingListItems(listId: string | null) {
 }
 
 // ==================== SEARCH HISTORY ====================
+/**
+ * Recent searches.
+ *
+ * Reads go through `recent_searches(fingerprint)` — the fingerprint is the
+ * capability — because the raw search_history table is no longer world-readable
+ * (Batch 2 removed the `USING (true)` select policy). Logging records whether
+ * the search found anything, which powers zero-result content-gap reports.
+ */
 export function useSearchHistory() {
   const [history, setHistory] = useState<string[]>([]);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     const fp = getFingerprint();
-    supabase.from('search_history').select('query').eq('fingerprint', fp).order('created_at', { ascending: false }).limit(10).then(({ data }) => {
-      if (data) setHistory([...new Set(data.map((d: { query: string }) => d.query))].slice(0, 8));
-    });
+    return supabase
+      .rpc('recent_searches', { p_fingerprint: fp, p_limit: 10 })
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setHistory(
+            [...new Set((data as { query: string }[]).map((d) => d.query).filter(Boolean))].slice(0, 8),
+          );
+        }
+      });
   }, []);
 
-  const logSearch = useCallback((query: string) => {
-    if (!query.trim()) return;
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const logSearch = useCallback((query: string, resultCount?: number) => {
+    const clean = query.trim().slice(0, 200);
+    if (!clean) return;
     const fp = getFingerprint();
-    supabase.from('search_history').insert({ fingerprint: fp, query: query.trim() }).then(() => {});
-    setHistory(prev => [query, ...prev.filter(q => q !== query)].slice(0, 8));
+    supabase
+      .from('search_history')
+      .insert({
+        fingerprint: fp,
+        query: clean,
+        result_count: typeof resultCount === 'number' && Number.isFinite(resultCount) ? resultCount : null,
+      })
+      .then(() => {});
+    setHistory(prev => [clean, ...prev.filter(q => q !== clean)].slice(0, 8));
   }, []);
 
   const clearHistory = useCallback(() => {
     const fp = getFingerprint();
-    supabase.from('search_history').delete().eq('fingerprint', fp).then(() => {});
+    supabase.rpc('forget_searches', { p_fingerprint: fp }).then(() => {});
     setHistory([]);
   }, []);
 
-  return { history, logSearch, clearHistory };
+  return { history, logSearch, clearHistory, reload };
 }
 
 // ==================== CONTENT TEMPLATES ====================

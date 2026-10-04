@@ -155,6 +155,51 @@ export default async function handler(): Promise<Response> {
     report.problem = 'Could not run the homepage join query against Supabase from Vercel.';
   }
 
+  // Batch 2 deep probe: the ranked search RPC the search page calls, with one
+  // deliberate typo and its synonym expansion — the exact payload shape the client sends.
+  // A failure here is reported as a warning rather than a 503: the site is still up,
+  // and the two probes above are what `ok` means.
+  const warnings: string[] = [];
+  try {
+    const res = await fetch(`${url.value}/rest/v1/rpc/search_everything`, {
+      method: 'POST',
+      headers: {
+        apikey: key.value,
+        Authorization: `Bearer ${key.value}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        p_query: 'niacinamid',
+        p_terms: ['niacinamid', 'niacinamide', 'nicotinamide', 'vitamin b3'],
+        p_limit: 3,
+        p_offset: 0,
+      }),
+    });
+    const body = await res.text();
+    let rows: Array<Record<string, unknown>> = [];
+    try {
+      const parsed = JSON.parse(body);
+      if (Array.isArray(parsed)) rows = parsed as Array<Record<string, unknown>>;
+    } catch { /* not JSON — reported below */ }
+
+    const ok = res.ok && rows.length > 0;
+    report.search = {
+      endpoint: 'rpc/search_everything',
+      probe: "typo 'niacinamid' + synonyms",
+      status: res.status,
+      results: rows.length,
+      kinds: [...new Set(rows.map(r => r.result_kind).filter(Boolean))],
+      topHit: rows[0] ? { slug: rows[0].slug, score: rows[0].score } : null,
+      ok,
+      ...(ok ? {} : { bodySample: body.slice(0, 300) }),
+    };
+    if (!ok) warnings.push(`Search RPC not returning results (HTTP ${res.status}). ${body.slice(0, 200)}`);
+  } catch (e) {
+    report.search = { endpoint: 'rpc/search_everything', ok: false, error: String(e) };
+    warnings.push('Could not reach the search RPC from Vercel.');
+  }
+  if (warnings.length) report.warnings = warnings;
+
   return json(report, report.ok ? 200 : 503);
 }
 

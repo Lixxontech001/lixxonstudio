@@ -2,6 +2,7 @@ import {useEffect, useState, useMemo, useRef} from 'react';
 import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { usePostBySlug, usePosts } from '../hooks/useSupabase';
+import { useRelatedPosts } from '../hooks/useSearch';
 import QueryStatusNotice from './QueryStatusNotice';
 import { HeroSkeleton } from './Skeletons';
 import EmptyState from './EmptyState';
@@ -166,10 +167,26 @@ export default function ArticleReader({ slug }: { slug: string }) {
     return () => window.removeEventListener('lixxon:key', onKey);
   }, [post, posts, navigate]);
 
+  // Related articles come from SQL (shared tags + category + people who read both).
+  // If the function is unavailable or returns too little, the in-memory scorer
+  // that shipped before Batch 2 keeps the rail alive.
+  const { posts: related } = useRelatedPosts(post?.id ?? null, 4);
   const recommended = useMemo(() => {
     if (!post) return [];
-    return getRecommended(post, posts, 4);
-  }, [post, posts]);
+    if (related.length >= 2) {
+      return related.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        excerpt: row.excerpt,
+        cover_image: row.cover_image,
+        category: row.category_name ? { name: row.category_name } : null,
+        reading_time_minutes: row.reading_time_minutes ?? 5,
+        reason: row.reason as string | undefined,
+      }));
+    }
+    return getRecommended(post, posts, 4).map((row) => ({ ...row, reason: undefined as string | undefined }));
+  }, [post, posts, related]);
 
   if (loading) return <HeroSkeleton />;
   if (error) {
@@ -554,6 +571,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
                     )}
                     <div className="flex items-center gap-2 mt-4 text-xs text-charcoal-muted">
                       <Clock size={10} strokeWidth={1.5} /> {r.reading_time_minutes} min read
+                      {r.reason === 'co-read' && <span className="text-bronze">· readers of this also read it</span>}
                     </div>
                   </div>
                 </Link>
