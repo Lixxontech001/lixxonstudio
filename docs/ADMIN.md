@@ -171,7 +171,7 @@ restores the shipped default. The reader side reads everything in one `site_conf
 
 ```bash
 /usr/bin/env python3 -m venv /home/user/.venv && /home/user/.venv/bin/pip install pgserver
-/home/user/.venv/bin/python scripts/db-test.py          # 35 migrations + 9 assertion suites
+/home/user/.venv/bin/python scripts/db-test.py          # 36 migrations + 10 assertion suites
 npx tsc --noEmit -p tsconfig.app.json && npm test && npm run build
 node scripts/size-budget.mjs && npm run audit:contrast
 ```

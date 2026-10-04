@@ -22,7 +22,7 @@ at scale.
 
 | # | Category | Status | Notes |
 |---|---|---|---|
-| A01 | Broken Access Control | **Strong** | RLS-first DB access, MFA-gated admins and a 36-permission RBAC model (`admin_can()`), with triggers protecting the founder and the last owner. See `docs/ADMIN.md`. Remaining M9 work: session lockout/backoff. |
+| A01 | Broken Access Control | **Strong** | RLS-first DB access, MFA-gated admins and a 43-permission RBAC model (`admin_can()`), with triggers protecting the founder and the last owner. See `docs/ADMIN.md`. Remaining M9 work: session lockout/backoff. |
 | A02 | Cryptographic Failures | **Partial** | HTTPS-only everywhere (HSTS preload); secrets live only in Vercel/Supabase secret stores; never in the repo. |
 | A03 | Injection | **Strong** | No string-built SQL; PostgREST filters only; DOMPurify + escaping for output. |
 | A04 | Insecure Design | **Partial** | Server-side pricing/entitlements; webhook verification; free-tier abuse caps (rate limits in `submit-form`). |
