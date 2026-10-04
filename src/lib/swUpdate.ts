@@ -1,6 +1,10 @@
+import { addBreadcrumb } from './monitoring';
+
 const AUTO_RELOAD_FLAG = 'lixxon_sw_auto_reload_done';
 const UPDATE_CHECK_FLAG = 'lixxon_sw_update_checked_at';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+const SELF_HEAL_RELOAD_FLAG = 'lixxon_sw_selfheal_at';
+const SELF_HEAL_COOLDOWN_MS = 5 * 60 * 1000;
 
 export const RUNNING_BUILD_ID = typeof __COMMIT_SHA__ === 'string' && __COMMIT_SHA__
   ? __COMMIT_SHA__
@@ -36,6 +40,84 @@ function reloadOnce(reload: Reload = () => window.location.reload()): boolean {
   } catch {
     return false;
   }
+}
+
+async function clearServiceWorkerState(): Promise<void> {
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister().catch(() => false)));
+    } catch {
+      // Still attempt cache cleanup if unregistering is unavailable.
+    }
+  }
+
+  if (typeof caches !== 'undefined') {
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName).catch(() => false)));
+    } catch {
+      // Still reload after best-effort cleanup.
+    }
+  }
+}
+
+/** Unregister a broken controlled worker and reload at most once per five-minute window. */
+export async function selfHealServiceWorker(reload?: Reload): Promise<boolean> {
+  if (
+    typeof window === 'undefined' ||
+    typeof navigator === 'undefined' ||
+    !('serviceWorker' in navigator) ||
+    !navigator.serviceWorker.controller
+  ) {
+    return false;
+  }
+
+  try {
+    const previous = Number(window.sessionStorage.getItem(SELF_HEAL_RELOAD_FLAG) || 0);
+    if (Number.isFinite(previous) && previous > 0 && Date.now() - previous < SELF_HEAL_COOLDOWN_MS) {
+      return false;
+    }
+    window.sessionStorage.setItem(SELF_HEAL_RELOAD_FLAG, String(Date.now()));
+  } catch {
+    // Without a persistent guard, do not risk a reload loop.
+    return false;
+  }
+
+  addBreadcrumb('sw-selfheal', 'Three consecutive Supabase network failures; clearing service workers and caches', {
+    failures: 3,
+  });
+  await clearServiceWorkerState();
+  try {
+    (reload ?? (() => window.location.reload()))();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** ?no-sw=1 is the current kill switch; ?reset-sw=1 remains a compatibility alias. */
+export function handleServiceWorkerKillSwitch(reload?: Reload): false | Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('no-sw') !== '1' && params.get('reset-sw') !== '1') return false;
+
+  return (async () => {
+    await clearServiceWorkerState();
+    if (reload) {
+      reload();
+      return true;
+    }
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('no-sw');
+      url.searchParams.delete('reset-sw');
+      window.location.replace(url.toString());
+    } catch {
+      window.location.reload();
+    }
+    return true;
+  })();
 }
 
 export function handleWaitingRegistration(registration: ServiceWorkerRegistration, reload?: Reload): boolean {

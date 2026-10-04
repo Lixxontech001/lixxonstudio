@@ -24,6 +24,8 @@ const KEY_NAMES = [
 export default defineConfig(({ mode }) => {
   // `.env*` files PLUS real process env (Vercel injects its variables into the build process).
   const env: Record<string, string> = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...(process.env as Record<string, string>) };
+  const swEnabled = env.VITE_DISABLE_SW !== '1';
+  console.log(`[lixxon] SW enabled: ${swEnabled ? 'yes' : 'no'}`);
   const buildId = env.VERCEL_GIT_COMMIT_SHA || env.VITE_COMMIT_SHA || new Date().toISOString();
   const versionPlugin: Plugin = {
     name: 'lixxon-version-json',

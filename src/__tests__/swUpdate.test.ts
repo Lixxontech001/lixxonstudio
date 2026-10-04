@@ -1,17 +1,26 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recoverStaleChunk } from '../lib/chunkRecovery';
+import { createSupabaseFetch } from '../lib/supabaseClient';
 import {
   claimUpdateCheckSlot,
   checkBuildId,
   checkServiceWorkerUpdates,
+  handleServiceWorkerKillSwitch,
   handleWaitingRegistration,
+  selfHealServiceWorker,
 } from '../lib/swUpdate';
 
 beforeEach(() => {
   sessionStorage.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe('service-worker update recovery', () => {
@@ -93,6 +102,107 @@ describe('service-worker update recovery', () => {
       expect(reload).not.toHaveBeenCalled();
     } finally {
       window.removeEventListener('lixxon:update-ready', updateReady);
+    }
+  });
+
+  it('self-heals after three consecutive Supabase network failures, with success resetting the count', async () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { controller: {} },
+    });
+    const fetcher = vi.fn(async (): Promise<Response> => new Response('ok', { status: 200 }));
+    const onSelfHeal = vi.fn();
+    const trackedFetch = createSupabaseFetch(fetcher, onSelfHeal);
+
+    try {
+      fetcher.mockRejectedValue(new TypeError('offline'));
+      await expect(trackedFetch('/rest/v1/posts')).rejects.toThrow('offline');
+      await expect(trackedFetch('/rest/v1/posts')).rejects.toThrow('offline');
+      expect(onSelfHeal).not.toHaveBeenCalled();
+
+      fetcher.mockResolvedValueOnce(new Response('ok', { status: 200 }));
+      await expect(trackedFetch('/rest/v1/posts')).resolves.toBeInstanceOf(Response);
+      await expect(trackedFetch('/rest/v1/posts')).rejects.toThrow('offline');
+      await expect(trackedFetch('/rest/v1/posts')).rejects.toThrow('offline');
+      expect(onSelfHeal).not.toHaveBeenCalled();
+      await expect(trackedFetch('/rest/v1/posts')).rejects.toThrow('offline');
+      expect(onSelfHeal).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(navigator, 'serviceWorker', originalDescriptor);
+      } else {
+        Reflect.deleteProperty(navigator, 'serviceWorker');
+      }
+    }
+  });
+
+  it('unregisters workers, clears caches, and respects the five-minute self-heal cooldown', async () => {
+    vi.useFakeTimers();
+    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    const unregister = vi.fn(async () => true);
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        controller: {},
+        getRegistrations: vi.fn(async () => [{ unregister }]),
+      },
+    });
+    const cacheDelete = vi.fn(async () => true);
+    vi.stubGlobal('caches', {
+      keys: vi.fn(async () => ['lixxon-v3', 'old-cache']),
+      delete: cacheDelete,
+    });
+    const reload = vi.fn();
+
+    try {
+      expect(await selfHealServiceWorker(reload)).toBe(true);
+      expect(unregister).toHaveBeenCalledTimes(1);
+      expect(cacheDelete).toHaveBeenCalledTimes(2);
+      expect(reload).toHaveBeenCalledTimes(1);
+
+      expect(await selfHealServiceWorker(reload)).toBe(false);
+      vi.advanceTimersByTime(5 * 60 * 1000);
+      expect(await selfHealServiceWorker(reload)).toBe(true);
+      expect(reload).toHaveBeenCalledTimes(2);
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(navigator, 'serviceWorker', originalDescriptor);
+      } else {
+        Reflect.deleteProperty(navigator, 'serviceWorker');
+      }
+    }
+  });
+
+  it.each(['no-sw', 'reset-sw'] as const)('clears workers and caches for the ?%s=1 kill switch', async (flag) => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    const unregister = vi.fn(async () => true);
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistrations: vi.fn(async () => [{ unregister }]) },
+    });
+    const cacheDelete = vi.fn(async () => true);
+    vi.stubGlobal('caches', {
+      keys: vi.fn(async () => ['lixxon-v3']),
+      delete: cacheDelete,
+    });
+    const reload = vi.fn();
+    window.history.replaceState({}, '', `/?${flag}=1`);
+
+    try {
+      const reset = handleServiceWorkerKillSwitch(reload);
+      expect(reset).not.toBe(false);
+      await reset;
+      expect(unregister).toHaveBeenCalledTimes(1);
+      expect(cacheDelete).toHaveBeenCalledTimes(1);
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      window.history.replaceState({}, '', '/');
+      if (originalDescriptor) {
+        Object.defineProperty(navigator, 'serviceWorker', originalDescriptor);
+      } else {
+        Reflect.deleteProperty(navigator, 'serviceWorker');
+      }
     }
   });
 

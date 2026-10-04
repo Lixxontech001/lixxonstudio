@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { fetchWithRetry } from './fetchWithTimeout';
+import { fetchWithRetry, TimeoutError } from './fetchWithTimeout';
+import { selfHealServiceWorker } from './swUpdate';
 
 /**
  * Read a Vite env var, trying each name in order.
@@ -103,12 +104,55 @@ if (!supabaseConfigured) {
   );
 }
 
+function isSupabaseNetworkFailure(error: unknown): boolean {
+  return error instanceof TimeoutError || (error instanceof TypeError && error.name !== 'AbortError');
+}
+
+function hasServiceWorkerController(): boolean {
+  return typeof navigator !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    Boolean(navigator.serviceWorker.controller);
+}
+
+/** Wrap the shared timed fetch so three consecutive network failures can heal a controlled page. */
+export function createSupabaseFetch(
+  fetcher: typeof fetchWithRetry = fetchWithRetry,
+  onSelfHeal: () => unknown = selfHealServiceWorker,
+) {
+  let consecutiveFailures = 0;
+
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    try {
+      const response = await fetcher(input, init, 12_000);
+      consecutiveFailures = 0;
+      return response;
+    } catch (error) {
+      if (isSupabaseNetworkFailure(error) && hasServiceWorkerController()) {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= 3) {
+          consecutiveFailures = 0;
+          try {
+            void Promise.resolve(onSelfHeal()).catch(() => undefined);
+          } catch {
+            // Self-healing must never replace the original Supabase request error.
+          }
+        }
+      } else {
+        consecutiveFailures = 0;
+      }
+      throw error;
+    }
+  };
+}
+
+export const supabaseFetch = createSupabaseFetch();
+
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'public-anon-key-missing',
   {
     global: {
-      fetch: (input, init) => fetchWithRetry(input, init, 12_000),
+      fetch: supabaseFetch,
     },
   },
 );
