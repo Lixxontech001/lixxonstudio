@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { useSiteConfig, matchRedirect, sanitizeHeadHtml, type SiteConfig } from '../hooks/useSiteConfig';
 
-const HEAD_ELEMENT_ID = 'lixxon-custom-head';
 
 /** #RRGGBB → r,g,b (null when the value is not a hex colour). */
 function parseHex(hex: string | undefined): [number, number, number] | null {
@@ -65,20 +64,24 @@ function useAccent(config: SiteConfig) {
 function useCustomHead(config: SiteConfig) {
   const html = config.custom_head?.html;
   useEffect(() => {
+    const MARK = 'lixxonCustomHead';
+    const cleanup = () => document.querySelectorAll(`head [data-source="${MARK}"]`).forEach(n => n.remove());
+    cleanup();
+
     const clean = sanitizeHeadHtml(String(html || '')).trim();
-    let holder = document.getElementById(HEAD_ELEMENT_ID);
-    if (!clean) { holder?.remove(); return; }
-    if (!holder) {
-      holder = document.createElement('div');
-      holder.id = HEAD_ELEMENT_ID;
-      holder.hidden = true;
-      holder.setAttribute('data-source', 'site_settings.custom_head');
-      document.head.appendChild(holder);
-    }
-    // Rendered inside a detached node: the browser strips <script> from innerHTML,
-    // on* handlers and javascript: URLs are removed by the sanitiser above.
-    holder.innerHTML = clean;
-    return () => { document.getElementById(HEAD_ELEMENT_ID)?.remove(); };
+    if (!clean) return cleanup;
+
+    // Parsed into a detached document, then the real elements (meta, link, style, comment)
+    // are appended to <head> — never innerHTML, so a stray <script> cannot execute and the
+    // markup stays valid inside <head>.
+    const doc = new DOMParser().parseFromString(`<body>${clean}</body>`, 'text/html');
+    Array.from(doc.body.childNodes).forEach(node => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const el = node as Element;
+      el.setAttribute('data-source', MARK);
+      document.head.appendChild(el);
+    });
+    return cleanup;
   }, [html]);
 }
 
