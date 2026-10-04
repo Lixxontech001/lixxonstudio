@@ -1,0 +1,6 @@
+# Lixxon Studio — security disclosure (RFC 9116)
+Contact: https://lixxonstudio.vercel.app/contact
+Contact: https://github.com/Lixxontech001/lixxonstudio/security/advisories/new
+Policy: https://github.com/Lixxontech001/lixxonstudio/blob/main/SECURITY.md
+Preferred-Languages: en
+Expires: 2027-10-04T00:00:00.000Z
