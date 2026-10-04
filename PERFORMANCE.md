@@ -70,14 +70,65 @@ never contains admin or reader code).
 | Tool | What it does | Where |
 |---|---|---|
 | `scripts/size-budget.mjs` | Gzip budget per chunk; **fails CI** when any chunk grows past baseline + 5 %. `--update` rewrites the baseline (owner-approved only). | `ci.yml` → `build` job, after `npm run build` |
-| `.github/workflows/perf.yml` | Real **mobile Lighthouse against production** (previews are behind Vercel Authentication), median of 3 runs, posted to the PR as a comment plus the job summary; weekly schedule for a trend line; `workflow_dispatch` for ad-hoc runs. | new workflow |
-| `scripts/lhci-summary.mjs` | Turns raw LHCI JSON into the median scorecard / metrics table used in that comment. | used by `perf.yml` |
+| `.github/workflows/perf.yml` | Real **mobile Lighthouse against production** (previews are behind Vercel Authentication), median of 3 runs, posted to the PR as a comment (updated in place, never duplicated) plus the job summary; weekly schedule for a trend line; `workflow_dispatch` for ad-hoc runs. | new workflow |
+| `scripts/lhci-summary.mjs` | Turns raw LHCI JSON into the median scorecard / metrics table **plus the "what is costing points" diagnosis** (LCP element, opportunities, failing audits, heaviest resources) used in that comment. | used by `perf.yml` |
 
 Exact Lighthouse category scores could not be captured from the coding sandbox (no
 Chrome; `dl.google.com`, `storage.googleapis.com` and `cdn.playwright.dev` are blocked),
-so `perf.yml` runs them on GitHub runners and publishes the numbers. The first
-production measurement is attached to the Batch 2 PR and is the reference point for
-Batch 9's before/after table.
+so `perf.yml` runs them on GitHub runners and publishes the numbers.
+
+### First production Lighthouse measurement (mobile, median of 3)
+
+Measured 2026-10-04 by `perf.yml` against `https://lixxonstudio.vercel.app/` (run
+`37217733143`, artifact `lighthouse-reports`). This is the reference point for Batch 9's
+before/after table.
+
+| Category | Score | Target |
+|---|---|---|
+| performance | **63** | ≥ 95 |
+| accessibility | **89** | ≥ 95 |
+| best-practices | **79** | ≥ 95 |
+| SEO | **92** | ≥ 95 |
+
+| Metric | Value | Target |
+|---|---|---|
+| FCP | 3 508 ms | — |
+| **LCP** | **49 727 ms** | < 1 500 ms |
+| TBT | 101 ms | — |
+| CLS | 0.002 | < 0.05 ✅ |
+| SI | 6 023 ms | — |
+| TTFB | 20 ms | < 400 ms ✅ |
+
+Read this as: infrastructure is fast (TTFB 20 ms) and layout is stable (CLS 0.002), while
+**image weight on the critical path is the whole problem**. A 49.7 s LCP under 4G
+throttling is a multi-megabyte hero image, not a scripting cost (TBT 101 ms). The
+CI assertions in `ci.yml` pass because they run `lhci autorun` against static `dist/` on a
+runner without throttling — `perf.yml` measuring production is now the source of truth.
+Batch 9's first three jobs, in order: serve responsive hero images (`SmartImage`
+`srcset`/`sizes` are in place, so this is a data-URL/size mismatch), fix whatever the
+browser errors in the console (best-practices 79), then close the accessibility gap
+(89 → 95: alt text and contrast).
+
+`scripts/lhci-summary.mjs` now also prints a **"What is costing points"** block from the
+worst run — LCP element, biggest opportunities, failing audits per category and heaviest
+resources — so every future scorecard arrives with its own diagnosis.
+
+## Batch 2 bundle delta (search & discovery) — 2026-10-04
+
+| Chunk | Before Batch 2 | After | Δ |
+|---|---|---|---|
+| `entry` (critical path) | 42.53 kB | 42.56 kB | **+0.03 kB** |
+| `total-js` (all 45 chunks) | 271.23 kB | 281.21 kB | +9.98 kB (+3.7 %) |
+| `admin-bundle` (lazy) | 43.39 kB | 44.48 kB | +1.09 kB (synonym editor) |
+| `article-reader` (lazy) | 19.98 kB | 20.12 kB | +0.14 kB (related-posts RPC) |
+| `css` | 11.44 kB | 11.67 kB | +0.23 kB |
+
+New lazy chunks carry the feature: `SearchPage-*.js` (26.8 kB raw / ~7 kB gzip) and a
+shared `useSearch-*.js` (9.6 kB raw) that only loads when the search page or an article
+opens. **The critical path grew by 30 bytes**, which is the number that matters here;
+the frozen budget in `scripts/size-budget.json` was refreshed to the post-Batch-2
+figures so Batch 9 (LCP < 1.5 s, ≥95 everywhere) starts from a documented state and has
+to win the reduction back from the total.
 
 ## Bundle sizes — before/after this session (production build, vite 5)
 
@@ -135,3 +186,5 @@ Admin code is already **excluded from the public entry chunk** (lazy `/admin` ro
 | 2026-10-04 | M2 theme/hover/SmartImage | 40.0 kB | SmartImage + theme CSS layer |
 | 2026-10-04 | M3 TTS player | 39.9 kB | engine split into lazy article chunk |
 | 2026-10-04 | Batch 1 merged (#19) — **Phase 2 baseline recorded** | 42.5 kB (entry, gzip) | 93 tests; size budget + production Lighthouse workflow added; budget JSON frozen |
+| 2026-10-04 | Batch 2 search & discovery | 42.6 kB (entry, gzip) | 130 tests; +9.98 kB total-js in lazy search chunks; critical path +30 bytes; budget refreshed |
+| 2026-10-04 | First production Lighthouse baseline recorded | 42.6 kB (entry, gzip) | perf 63 / a11y 89 / BP 79 / SEO 92; LCP 49.7 s (image weight), TTFB 20 ms, CLS 0.002; Batch 9 targets set |

@@ -114,6 +114,92 @@ for (const [id, label] of metricIds) {
   summary.metrics[label] = id === 'cumulative-layout-shift' ? Number(value.toFixed(3)) : Math.round(value);
 }
 
+
+/* ------------------------------------------------------------------ *
+ * Diagnostics — medians answer "how bad"; these answer "why".
+ * Taken from the worst-performing run so fixes target the real cause.
+ * ------------------------------------------------------------------ */
+
+const short = (value, max = 90) => {
+  const text = String(value ?? '');
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+};
+
+function opportunities(report, limit = 7) {
+  return Object.values(report.audits ?? {})
+    .filter(
+      (audit) =>
+        audit?.details?.type === 'opportunity' &&
+        audit.score !== null &&
+        audit.score < 1 &&
+        (audit.details.overallSavingsMs ?? 0) > 40
+    )
+    .sort((a, b) => (b.details.overallSavingsMs ?? 0) - (a.details.overallSavingsMs ?? 0))
+    .slice(0, limit)
+    .map((audit) => `- ${audit.title} — save **${Math.round(audit.details.overallSavingsMs)} ms**`);
+}
+
+function failingAudits(report, categoryId, limit = 6) {
+  const refs = report.categories?.[categoryId]?.auditRefs ?? [];
+  return refs
+    .map((ref) => report.audits?.[ref.id])
+    .filter(
+      (audit) =>
+        audit &&
+        audit.score !== null &&
+        audit.score < 1 &&
+        !['notApplicable', 'informative', 'manual'].includes(audit.scoreDisplayMode)
+    )
+    .sort((a, b) => (a.score ?? 1) - (b.score ?? 1))
+    .slice(0, limit)
+    .map((audit) => `- ${audit.title}${audit.displayValue ? ` — ${audit.displayValue}` : ''}`);
+}
+
+function heaviestResources(report, limit = 5) {
+  const items = report.audits?.['total-byte-weight']?.details?.items ?? [];
+  return items
+    .slice(0, limit)
+    .map((item) => `- ${Math.round((item.totalBytes ?? 0) / 1024)} kB — \`${short(item.url, 80)}\``);
+}
+
+function diagnosticsFor(report) {
+  const lcpNode = report.audits?.['largest-contentful-paint-element']?.details?.items?.[0]?.items?.[0]?.node;
+  const out = {
+    lcpElement: lcpNode ? { selector: lcpNode.selector, snippet: short(lcpNode.snippet, 140) } : null,
+    lcpLazyLoaded: report.audits?.['lcp-lazy-loaded']?.score === 0,
+    opportunities: opportunities(report),
+    failing: Object.fromEntries(
+      ['accessibility', 'best-practices', 'seo'].map((id) => [id, failingAudits(report, id)])
+    ),
+    heaviestResources: heaviestResources(report),
+  };
+  return out;
+}
+
+const worst = reports.reduce((a, b) => (score(a, 'performance') <= score(b, 'performance') ? a : b));
+const diagnostics = diagnosticsFor(worst);
+summary.diagnostics = diagnostics;
+
+const diagnosticLines = [];
+diagnosticLines.push('', '### What is costing points', '', '_From the worst run; medians above._', '');
+if (diagnostics.lcpElement) {
+  diagnosticLines.push(
+    `- **LCP element** \`${short(diagnostics.lcpElement.selector, 60)}\`${
+      diagnostics.lcpElement.snippet ? ` — \`${short(diagnostics.lcpElement.snippet, 120)}\`` : ''
+    }`
+  );
+}
+if (diagnostics.lcpLazyLoaded) diagnosticLines.push('- **The LCP image is lazy-loaded** — make it eager with high priority.');
+if (diagnostics.opportunities.length) {
+  diagnosticLines.push('', '**Biggest opportunities**', '', ...diagnostics.opportunities);
+}
+for (const [id, rows] of Object.entries(diagnostics.failing)) {
+  if (rows.length) diagnosticLines.push('', `**Failing ${id} audits**`, '', ...rows);
+}
+if (diagnostics.heaviestResources.length) {
+  diagnosticLines.push('', '**Heaviest resources**', '', ...diagnostics.heaviestResources);
+}
+
 const lines = [
   `### Mobile Lighthouse — ${summary.url || dir}`,
   '',
@@ -135,6 +221,7 @@ const lines = [
   }),
   '',
   '_Targets: LCP < 1500 ms · INP < 150 ms · CLS < 0.05 · TTFB < 400 ms · all categories ≥ 95 (Batch 9)._',
+  ...diagnosticLines,
 ];
 
 const markdown = `${lines.join('\n')}\n`;
