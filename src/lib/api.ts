@@ -3,6 +3,7 @@
  * Every public write (orders, forms, downloads) goes through here — never direct table writes.
  */
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient';
+import { fetchWithRetry, TimeoutError } from './fetchWithTimeout';
 
 const BASE = `${supabaseUrl}/functions/v1`;
 const ANON = supabaseAnonKey as string;
@@ -27,24 +28,19 @@ async function authHeader(): Promise<string> {
 }
 
 export async function callFn<T = Record<string, unknown>>(name: string, body: unknown, opts: { timeoutMs?: number } = {}): Promise<T> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 20000);
   try {
-    const res = await fetch(`${BASE}/${name}`, {
+    const res = await fetchWithRetry(`${BASE}/${name}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: await authHeader(), apikey: ANON },
       body: JSON.stringify(body ?? {}),
-      signal: ctrl.signal,
-    });
+    }, opts.timeoutMs ?? 12_000);
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) throw new ApiError(String(data.error || `Request failed (${res.status})`), res.status, data.field as string | undefined);
     return data as T;
   } catch (e) {
     if (e instanceof ApiError) throw e;
-    if ((e as Error).name === 'AbortError') throw new ApiError('The request timed out. Please try again.', 408);
+    if (e instanceof TimeoutError) throw new ApiError('The request timed out. Please try again.', 408);
     throw new ApiError('Network error. Check your connection and try again.', 0);
-  } finally {
-    clearTimeout(t);
   }
 }
 

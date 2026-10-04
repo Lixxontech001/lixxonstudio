@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { fetchWithRetry } from './fetchWithTimeout';
 
 /**
  * Read a Vite env var, trying each name in order.
@@ -105,6 +106,11 @@ if (!supabaseConfigured) {
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'public-anon-key-missing',
+  {
+    global: {
+      fetch: (input, init) => fetchWithRetry(input, init, 12_000),
+    },
+  },
 );
 
 /**
