@@ -234,11 +234,7 @@ export function useArticleReactions(postId: string | null) {
     const hasReacted = userReactions.has(reactionType);
 
     if (hasReacted) {
-      await supabase.from('article_reactions')
-        .delete()
-        .eq('post_id', postId)
-        .eq('reaction_type', reactionType)
-        .eq('fingerprint', fp);
+      await supabase.rpc('toggle_article_reaction', { p_post_id: postId, p_reaction_type: reactionType, p_fingerprint: fp, p_active: false });
       setUserReactions(prev => {
         const next = new Set(prev);
         next.delete(reactionType);
@@ -248,8 +244,7 @@ export function useArticleReactions(postId: string | null) {
         r.reaction_type === reactionType ? { ...r, count: Math.max(0, r.count - 1) } : r
       ));
     } else {
-      await supabase.from('article_reactions')
-        .insert({ post_id: postId, reaction_type: reactionType, fingerprint: fp });
+      await supabase.rpc('toggle_article_reaction', { p_post_id: postId, p_reaction_type: reactionType, p_fingerprint: fp, p_active: true });
       setUserReactions(prev => {
         const next = new Set(prev);
         next.add(reactionType);

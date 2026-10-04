@@ -3,7 +3,7 @@ import { supabase, rows } from '../lib/supabaseClient';
 import { submitForm } from '../lib/api';
 
 // ==================== FINGERPRINT (shared) ====================
-function getFingerprint(): string {
+export function getFingerprint(): string {
   const stored = localStorage.getItem('fp');
   if (stored && stored.length >= 10) return stored;
   const parts = [navigator.userAgent, navigator.language, screen.width + 'x' + screen.height, new Date().getTimezoneOffset().toString(), Math.random().toString(36).slice(2)];
@@ -41,7 +41,7 @@ export function useReadingLists() {
   }, [refetch]);
 
   const deleteList = useCallback(async (id: string) => {
-    await supabase.from('reading_lists').delete().eq('id', id);
+    await supabase.rpc('delete_reading_list', { p_list_id: id, p_fingerprint: getFingerprint() });
     await refetch();
   }, [refetch]);
 
@@ -74,7 +74,7 @@ export function useReadingListItems(listId: string | null) {
   }, []);
 
   const removePost = useCallback(async (itemId: string) => {
-    await supabase.from('reading_list_items').delete().eq('id', itemId);
+    await supabase.rpc('delete_reading_list_item', { p_item_id: itemId, p_fingerprint: getFingerprint() });
     setItems(prev => prev.filter(i => i.id !== itemId));
   }, []);
 
@@ -250,10 +250,10 @@ export function useCommentLikes(commentId: string | null) {
     if (!commentId) return;
     const fp = getFingerprint();
     if (liked) {
-      await supabase.from('comment_likes').delete().eq('comment_id', commentId).eq('fingerprint', fp);
+      await supabase.rpc('toggle_comment_like', { p_comment_id: commentId, p_fingerprint: fp, p_active: false });
       setLiked(false); setCount(c => Math.max(0, c - 1));
     } else {
-      await supabase.from('comment_likes').insert({ comment_id: commentId, fingerprint: fp });
+      await supabase.rpc('toggle_comment_like', { p_comment_id: commentId, p_fingerprint: fp, p_active: true });
       setLiked(true); setCount(c => c + 1);
     }
   }, [commentId, liked]);
@@ -291,17 +291,13 @@ export function useArticleRating(postId: string | null) {
   const rate = useCallback(async (rating: number) => {
     if (!postId) return;
     const fp = getFingerprint();
-    if (userRating > 0) {
-      await supabase.from('article_ratings').update({ rating }).eq('post_id', postId).eq('fingerprint', fp);
-    } else {
-      await supabase.from('article_ratings').insert({ post_id: postId, fingerprint: fp, rating });
-    }
+    await supabase.rpc('rate_article', { p_post_id: postId, p_fingerprint: fp, p_rating: rating });
     setUserRating(rating);
     const { data } = await supabase.from('article_ratings').select('rating').eq('post_id', postId);
     const ratings = (data || []).map((r: { rating: number }) => r.rating);
     setTotalRatings(ratings.length);
     setAvgRating(ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0);
-  }, [postId, userRating]);
+  }, [postId]);
 
   return { avgRating, totalRatings, userRating, rate, loading };
 }
@@ -353,16 +349,16 @@ export function useReviewHelpfulness(reviewId: string | null) {
     if (!reviewId) return;
     const fp = getFingerprint();
     if (userVote === isHelpful) {
-      await supabase.from('review_helpfulness').delete().eq('review_id', reviewId).eq('fingerprint', fp);
+      await supabase.rpc('vote_review_helpfulness', { p_review_id: reviewId, p_fingerprint: fp, p_is_helpful: isHelpful, p_active: false });
       setUserVote(null);
       if (isHelpful) setHelpfulCount(c => c - 1); else setUnhelpfulCount(c => c - 1);
     } else if (userVote !== null) {
-      await supabase.from('review_helpfulness').update({ is_helpful: isHelpful }).eq('review_id', reviewId).eq('fingerprint', fp);
+      await supabase.rpc('vote_review_helpfulness', { p_review_id: reviewId, p_fingerprint: fp, p_is_helpful: isHelpful, p_active: true });
       setUserVote(isHelpful);
       if (isHelpful) { setHelpfulCount(c => c + 1); setUnhelpfulCount(c => c - 1); }
       else { setUnhelpfulCount(c => c + 1); setHelpfulCount(c => c - 1); }
     } else {
-      await supabase.from('review_helpfulness').insert({ review_id: reviewId, fingerprint: fp, is_helpful: isHelpful });
+      await supabase.rpc('vote_review_helpfulness', { p_review_id: reviewId, p_fingerprint: fp, p_is_helpful: isHelpful, p_active: true });
       setUserVote(isHelpful);
       if (isHelpful) setHelpfulCount(c => c + 1); else setUnhelpfulCount(c => c + 1);
     }
@@ -414,16 +410,15 @@ export function useProductBundles() {
 // ==================== ABANDONED CARTS ====================
 export function trackAbandonedCart(items: { id: string; name: string; price: number; quantity: number; image_url: string | null }[]) {
   const fp = getFingerprint();
-  supabase.from('abandoned_carts').upsert({
-    fingerprint: fp,
-    cart_data: JSON.stringify(items),
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'fingerprint' }).then(() => {});
+  supabase.rpc('upsert_abandoned_cart', {
+    p_fingerprint: fp,
+    p_cart_data: items,
+  }).then(() => {});
 }
 
 export function clearAbandonedCart() {
   const fp = getFingerprint();
-  supabase.from('abandoned_carts').delete().eq('fingerprint', fp).then(() => {});
+  supabase.rpc('clear_abandoned_cart', { p_fingerprint: fp }).then(() => {});
 }
 
 // ==================== ADMIN ACTIVITY LOG ====================

@@ -14,7 +14,7 @@ const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
 
 function migrationSql(): string {
   return readdirSync(MIGRATIONS)
-    .filter(f => /^2026100420\d+.*\.sql$/.test(f))
+    .filter(f => /^202610042\d+.*\.sql$/.test(f))
     .map(f => readFileSync(join(MIGRATIONS, f), 'utf8'))
     .join('\n');
 }
@@ -22,8 +22,7 @@ function migrationSql(): string {
 function catalogueKeys(sql: string): Set<string> {
   const keys = new Set<string>();
   // ('content.read', 'View editorial content', …) rows inside the admin_permissions INSERT
-  const block = sql.slice(sql.indexOf('INSERT INTO admin_permissions'));
-  for (const m of block.slice(0, block.indexOf('ON CONFLICT')).matchAll(/\('([a-z]+\.[a-z_]+)'/g)) keys.add(m[1]);
+  for (const m of sql.matchAll(/\('([a-z_]+(?:\.[a-z_]+)+)'/g)) keys.add(m[1]);
   return keys;
 }
 

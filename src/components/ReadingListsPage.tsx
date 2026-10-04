@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { List, Trash2, Clock, ArrowRight, Plus, X, Globe, Lock } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
-import { useReadingLists, useReadingListItems } from '../hooks/usePlatform';
+import { getFingerprint, useReadingLists, useReadingListItems } from '../hooks/usePlatform';
 import { useToast } from '../context/ToastContext';
 import { Helmet } from 'react-helmet-async';
 import EmptyState from './EmptyState';
@@ -88,7 +88,7 @@ export default function ReadingListsPage() {
                 <button
                   onClick={async () => {
                     const { supabase } = await import('../lib/supabaseClient');
-                    await supabase.from('reading_lists').update({ is_public: !list.is_public }).eq('id', list.id);
+                    await supabase.rpc('set_reading_list_visibility', { p_list_id: list.id, p_fingerprint: getFingerprint(), p_is_public: !list.is_public });
                     refetch();
                     showToast(list.is_public ? 'List is now private' : 'List is public — share link copied', 'success');
                     if (!list.is_public && list.share_token) navigator.clipboard?.writeText(`${window.location.origin}/list/${list.share_token}`);

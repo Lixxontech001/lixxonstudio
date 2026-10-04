@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { MarkdownField } from '../components/AdminEditorKit';
 import { BookA, Plus, Trash2, Pencil, Loader2, Search } from 'lucide-react';
 import { supabase, rows } from '../../lib/supabaseClient';
 import type { GlossaryTerm } from '../../lib/types';
@@ -45,7 +46,16 @@ export default function AdminGlossary() {
             <label className="text-xs text-charcoal-muted uppercase tracking-wide">Term<input required value={editing.term || ''} onChange={e => setEditing(x => ({ ...x, term: e.target.value }))} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
             <label className="text-xs text-charcoal-muted uppercase tracking-wide">Category<input value={editing.category || ''} onChange={e => setEditing(x => ({ ...x, category: e.target.value }))} placeholder="e.g. Ingredients" className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
           </div>
-          <label className="text-xs text-charcoal-muted uppercase tracking-wide">Definition <span className="normal-case">({(editing.definition || '').length}/600)</span><textarea required maxLength={600} rows={3} value={editing.definition || ''} onChange={e => setEditing(x => ({ ...x, definition: e.target.value }))} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
+          <div className="normal-case">
+            <MarkdownField
+              label={`Definition (${(editing.definition || '').length}/600)`}
+              value={editing.definition || ''}
+              onChange={v => setEditing(x => ({ ...x, definition: v.slice(0, 600) }))}
+              rows={3}
+              max={600}
+              hint="Keep it under 600 characters — glossary entries are also used for search and SEO."
+            />
+          </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2"><button disabled={saving} className="px-4 py-2 bg-bronze text-white text-sm rounded-sm disabled:opacity-60">{saving ? <Loader2 size={14} className="animate-spin" /> : 'Save'}</button><button type="button" onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-charcoal-muted">Cancel</button></div>
         </form>

@@ -1,11 +1,10 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 import AdminLayout from './AdminLayout';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminArticles from './pages/AdminArticles';
-import AdminArticleEditor from './pages/AdminArticleEditor';
 import AdminCategories from './pages/AdminCategories';
 import AdminAuthors from './pages/AdminAuthors';
 import AdminComments from './pages/AdminComments';
@@ -14,11 +13,9 @@ import AdminFeatured from './pages/AdminFeatured';
 import AdminMessages from './pages/AdminMessages';
 import AdminSettings from './pages/AdminSettings';
 import AdminProducts from './pages/AdminProducts';
-import AdminProductEditor from './pages/AdminProductEditor';
 import AdminOrders from './pages/AdminOrders';
 import AdminCustomers from './pages/AdminCustomers';
 import AdminCollections from './pages/AdminCollections';
-import AdminCollectionEditor from './pages/AdminCollectionEditor';
 import AdminNewsletter from './pages/AdminNewsletter';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminSponsored from './pages/AdminSponsored';
@@ -47,6 +44,15 @@ import AdminSecurity from './pages/AdminSecurity';
 import MfaGate from './MfaGate';
 import { canAccess } from './permissions';
 import { ShieldAlert } from 'lucide-react';
+
+const AdminAI = lazy(() => import('./pages/AdminAI'));
+const AdminArticleEditor = lazy(() => import('./pages/AdminArticleEditor'));
+const AdminProductEditor = lazy(() => import('./pages/AdminProductEditor'));
+const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor'));
+
+const LazyPage = ({ children }: { children: ReactNode }) => (
+  <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading editor...</div>}>{children}</Suspense>
+);
 
 export default function AdminApp() {
   const { route, navigate } = useNavigation();
@@ -117,8 +123,8 @@ export default function AdminApp() {
     switch (route.name) {
       case 'admin-dashboard': return <AdminDashboard />;
       case 'admin-articles': return <AdminArticles />;
-      case 'admin-article-new': return <AdminArticleEditor isNew />;
-      case 'admin-article-edit': return <AdminArticleEditor postId={route.id} />;
+      case 'admin-article-new': return <LazyPage><AdminArticleEditor isNew /></LazyPage>;
+      case 'admin-article-edit': return <LazyPage><AdminArticleEditor postId={route.id} /></LazyPage>;
       case 'admin-categories': return <AdminCategories />;
       case 'admin-authors': return <AdminAuthors />;
       case 'admin-comments': return <AdminComments />;
@@ -127,13 +133,13 @@ export default function AdminApp() {
       case 'admin-featured': return <AdminFeatured />;
       case 'admin-settings': return <AdminSettings />;
       case 'admin-products': return <AdminProducts />;
-      case 'admin-product-new': return <AdminProductEditor isNew />;
-      case 'admin-product-edit': return <AdminProductEditor productId={route.id} />;
+      case 'admin-product-new': return <LazyPage><AdminProductEditor isNew /></LazyPage>;
+      case 'admin-product-edit': return <LazyPage><AdminProductEditor productId={route.id} /></LazyPage>;
       case 'admin-orders': return <AdminOrders />;
       case 'admin-customers': return <AdminCustomers />;
       case 'admin-collections': return <AdminCollections />;
-      case 'admin-collection-new': return <AdminCollectionEditor isNew />;
-      case 'admin-collection-edit': return <AdminCollectionEditor collectionId={route.id} />;
+      case 'admin-collection-new': return <LazyPage><AdminCollectionEditor isNew /></LazyPage>;
+      case 'admin-collection-edit': return <LazyPage><AdminCollectionEditor collectionId={route.id} /></LazyPage>;
       case 'admin-newsletter': return <AdminNewsletter />;
       case 'admin-analytics': return <AdminAnalytics />;
       case 'admin-sponsored': return <AdminSponsored />;
@@ -157,6 +163,7 @@ export default function AdminApp() {
       case 'admin-health': return <AdminHealth />;
       case 'admin-growth': return <AdminGrowth />;
       case 'admin-advisor': return <AdminAdvisor />;
+      case 'admin-ai': return <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading Admin AI...</div>}><AdminAI /></Suspense>;
       case 'admin-frontend': return <AdminFrontend />;
       case 'admin-backups': return <AdminBackups />;
       case 'admin-security': return <AdminSecurity />;

@@ -92,7 +92,7 @@ def main():
             run_sql(uri, PROD_FIXTURES, label="prod fixtures")
         run_sql(uri, file=m, label=os.path.basename(m))
         print(f"✓ {os.path.basename(m)}")
-    for name in ("db-assertions.sql", "search-assertions.sql", "personalisation-assertions.sql", "community-assertions.sql", "commerce-assertions.sql", "admin-assertions.sql"):
+    for name in ("db-assertions.sql", "search-assertions.sql", "personalisation-assertions.sql", "community-assertions.sql", "commerce-assertions.sql", "editor-assertions.sql", "admin-assertions.sql", "security-ai-assertions.sql"):
         assertions = os.path.join(ROOT, "scripts", name)
         if os.path.exists(assertions):
             out = run_sql(uri, file=assertions, label=name)

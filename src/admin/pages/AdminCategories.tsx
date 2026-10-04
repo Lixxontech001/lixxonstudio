@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useCategories } from '../../hooks/useSupabase';
 import { Plus, Pencil, Trash2, X, FolderTree } from 'lucide-react';
 import type { Category } from '../../lib/types';
+import { MarkdownField } from '../components/AdminEditorKit';
 
 export default function AdminCategories() {
   const { categories, loading } = useCategories();
@@ -115,10 +116,14 @@ export default function AdminCategories() {
                 <label className="block text-xs text-gray-500 mb-1">Slug</label>
                 <input type="text" value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm font-mono focus:outline-none focus:border-bronze" />
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Description</label>
-                <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
-              </div>
+              <MarkdownField
+                label="Description"
+                value={description}
+                onChange={setDescription}
+                rows={3}
+                max={600}
+                hint="The short introduction shown above this category."
+              />
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Sort Order</label>
                 <input type="number" value={sortOrder} onChange={e => setSortOrder(parseInt(e.target.value) || 0)} className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
@@ -131,10 +136,15 @@ export default function AdminCategories() {
                 <label className="block text-xs text-gray-500 mb-1">SEO Title (optional)</label>
                 <input type="text" value={seoTitle} onChange={e => setSeoTitle(e.target.value)} className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">SEO Description</label>
-                <textarea value={seoDescription} onChange={e => setSeoDescription(e.target.value)} rows={2} className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
-              </div>
+              <MarkdownField
+                label="SEO Description"
+                value={seoDescription}
+                onChange={setSeoDescription}
+                rows={2}
+                min={110}
+                max={160}
+                hint="Keep this between 110 and 160 characters."
+              />
               <button onClick={save} disabled={saving} className="w-full bg-bronze text-white py-2.5 rounded text-sm font-medium hover:bg-bronze-dark disabled:opacity-50">
                 {saving ? 'Saving...' : 'Save Category'}
               </button>

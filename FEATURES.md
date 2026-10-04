@@ -106,6 +106,16 @@ to be re-audited next session (M4 checklist below):
 - **Platform**: PWA manifest + offline page, keyboard shortcuts + help overlay, font-size control, cookie consent (GA consent-gated), currency selector, 404 page, health endpoint, feeds.
 - **Admin (`/admin`, MFA-gated)**: dashboard, articles editor, categories, authors, comments/messages/moderation, media library, featured slots, series, glossary, content templates, polls, reviews, questions, customers, orders, refunds, gift cards, promo codes, abandoned carts, newsletter, feedback, analytics, activity log, backups, security page, site settings — see `src/admin/pages/*`.
 
+## M7 — Editors, autonomous settings, Admin AI and security
+
+| Area | Where | Delivery |
+|---|---|---|
+| Shared editorial kit | `src/admin/components/AdminEditorKit.tsx` | Markdown toolbar, slash commands, preview, find/replace, character counts, quality score ring and reusable long-form fields now power the article, product, collection, template, glossary, category, series and author editors. Product and collection copy renders through the sanitised Markdown renderer without changing the existing field/section semantics. |
+| Product quality workflow | `20261004210000_editor_workflow.sql`, `AdminProductEditor.tsx` | Product scoring, compare-at pricing, SEO/social fields, robots/schema controls, cover media picker, database-persisted quality score and the same quality panel used by articles. |
+| Autonomous front end | `AdminFrontend.tsx`, `20261004203000_admin_frontend_settings.sql` | Homepage ordering, navigation, footer, theme, SEO defaults, redirects, custom head, flags, announcements and maintenance are validated database settings, audited and live without a deploy. |
+| Admin AI control room | `20261004220000_admin_ai.sql`, `AdminAI.tsx` | Live health/growth scan, durable suggestions, safe low-risk automation, workflow proposals for approve/publish/reject/edit, reply drafts, approval/dismissal queue and separate AI capabilities. High-impact actions remain human-approved. |
+| Security hardening v2 | `20261004230000_security_hardening_v2.sql` | Removes anonymous update/delete holes, replaces fingerprint mutations with validated RPCs, adds abandoned-cart uniqueness, capability-gates storage writes and sanitises custom head settings. |
+
 ## M5 — Admin super panel (shipped in this PR)
 
 RBAC-first, with the database as the single source of truth (`docs/ADMIN.md`).

@@ -81,6 +81,7 @@ export type Route =
   | { name: 'admin-health' }
   | { name: 'admin-growth' }
   | { name: 'admin-advisor' }
+  | { name: 'admin-ai' }
   | { name: 'admin-frontend' }
   | { name: 'admin-content-templates' }
   | { name: 'admin-gift-cards' }
@@ -186,6 +187,7 @@ function parsePath(): Route {
     if (parts[1] === 'health') return { name: 'admin-health' };
     if (parts[1] === 'growth') return { name: 'admin-growth' };
     if (parts[1] === 'advisor') return { name: 'admin-advisor' };
+    if (parts[1] === 'ai') return { name: 'admin-ai' };
     if (parts[1] === 'frontend' || parts[1] === 'front-end') return { name: 'admin-frontend' };
     if (parts[1] === 'backups') return { name: 'admin-backups' };
     if (parts[1] === 'security') return { name: 'admin-security' };
@@ -295,6 +297,7 @@ export function routeToPath(route: Route): string {
     case 'admin-health': return '/admin/health';
     case 'admin-growth': return '/admin/growth';
     case 'admin-advisor': return '/admin/advisor';
+    case 'admin-ai': return '/admin/ai';
     case 'admin-frontend': return '/admin/frontend';
     case 'admin-content-templates': return '/admin/content-templates';
     case 'admin-gift-cards': return '/admin/gift-cards';

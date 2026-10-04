@@ -81,15 +81,23 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'es2020',
       cssCodeSplit: true,
+      // Admin is reached through a route-level dynamic import; do not make readers
+      // download its shared chunk as a modulepreload dependency.
+      modulePreload: {
+        resolveDependencies(_filename, deps) {
+          return deps.filter(dep => !dep.includes('admin-pages'));
+        },
+      },
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'react-vendor': ['react', 'react-dom', 'react-dom/client'],
-            'helmet': ['react-helmet-async'],
-            'supabase': ['@supabase/supabase-js'],
-            'icons': ['lucide-react'],
-            'vercel': ['@vercel/analytics/react'],
+          manualChunks(id) {
+            if (id.includes('/src/admin/')) return 'admin-pages';
+            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'react-vendor';
+            if (id.includes('node_modules/react-helmet-async')) return 'helmet';
+            if (id.includes('node_modules/@supabase/supabase-js')) return 'supabase';
+            if (id.includes('node_modules/lucide-react')) return 'icons';
+            if (id.includes('node_modules/@vercel/analytics')) return 'vercel';
           },
         },
       },

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {BookmarkPlus, List, X, Plus} from 'lucide-react';
 
-import { useReadingLists } from '../hooks/usePlatform';
+import { getFingerprint, useReadingLists } from '../hooks/usePlatform';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabaseClient';
 
@@ -21,7 +21,7 @@ export default function ReadingListButton({ postId }: { postId: string }) {
       .maybeSingle();
 
     if (existing) {
-      await supabase.from('reading_list_items').delete().eq('id', existing.id);
+      await supabase.rpc('delete_reading_list_item', { p_item_id: existing.id, p_fingerprint: getFingerprint() });
       showToast(`Removed from "${listName}"`, 'info');
     } else {
       const { count } = await supabase.from('reading_list_items').select('*', { count: 'exact', head: true }).eq('list_id', listId);

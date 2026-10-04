@@ -1,4 +1,4 @@
-# Admin super panel (M5) — RBAC, audit, data tools, health, growth
+# Admin super panel (M7) — RBAC, editors, settings, AI, security
 
 The original owner account is the **ultra-super-admin**: it holds every capability, cannot be
 suspended, demoted or removed, and only it can hand the founder flag to another account.
@@ -111,7 +111,27 @@ skip one; money and team changes are `warning`/`critical` and the founder's own 
   commerce with previous-period comparisons.
 * `admin_system_metrics()` gives size/cache/connections/table detail for scaling decisions.
 
-## 7. Front end as data (Admin → Front end)
+## 7. Admin AI control room (Admin → Admin AI)
+
+M7 adds a database-grounded automation queue rather than an un-audited model with direct
+credentials:
+
+* `admin_ai_scan()` turns the live health/growth facts into durable, prioritised suggestions.
+* `admin_ai_auto_run()` can batch only the owner-enabled low-risk repairs (email requeue,
+  image URL repair, SEO backfill and ANALYZE).
+* `admin_ai_queue_workflow()` proposes approve, publish, reject or an allow-listed SEO edit;
+  `admin_ai_draft_reply()` proposes a context-aware community reply. Neither publishes, edits
+  or replies until `admin_ai_apply()` is explicitly approved.
+* `admin_ai_dismiss()` records a decision, and AI runs/suggestions are trigger-audited.
+  `admin.ai.run` and `admin.ai.approve` are separate capabilities; underlying publish,
+  moderation, repair and content permissions are checked again at execution time.
+
+The default policy is conservative: low-risk automation is off, and auto-publish/auto-reply
+are permanently false in this release. An external language model, if added later, must sit
+behind an authenticated edge function and may only create a proposal — never receive database
+credentials or bypass the approval queue.
+
+## 8. Front end as data (Admin → Front end)
 
 `site_settings` public rows drive the storefront without a deploy: `nav_menu`, `footer`,
 `homepage` (section order + visibility), `theme` (accent pair), `seo_defaults`, `redirects`,
@@ -121,11 +141,11 @@ skip one; money and team changes are `warning`/`critical` and the founder's own 
 restores the shipped default. The reader side reads everything in one `site_config()` call
 (`src/hooks/useSiteConfig.ts` → `SiteConfigEffects`, Header, Footer, HomePage, SEO).
 
-## 8. Local verification
+## 9. Local verification
 
 ```bash
 /usr/bin/env python3 -m venv /home/user/.venv && /home/user/.venv/bin/pip install pgserver
-/home/user/.venv/bin/python scripts/db-test.py          # 31 migrations + 6 assertion suites
+/home/user/.venv/bin/python scripts/db-test.py          # 34 migrations + 8 assertion suites
 npx tsc --noEmit -p tsconfig.app.json && npm test && npm run build
 node scripts/size-budget.mjs && npm run audit:contrast
 ```

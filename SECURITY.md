@@ -22,7 +22,7 @@ at scale.
 
 | # | Category | Status | Notes |
 |---|---|---|---|
-| A01 | Broken Access Control | **Strong** | RLS-first DB access, MFA-gated admins and a 34-permission RBAC model (`admin_can()`), with triggers protecting the founder and the last owner. See `docs/ADMIN.md`. Remaining M9 work: session lockout/backoff. |
+| A01 | Broken Access Control | **Strong** | RLS-first DB access, MFA-gated admins and a 36-permission RBAC model (`admin_can()`), with triggers protecting the founder and the last owner. See `docs/ADMIN.md`. Remaining M9 work: session lockout/backoff. |
 | A02 | Cryptographic Failures | **Partial** | HTTPS-only everywhere (HSTS preload); secrets live only in Vercel/Supabase secret stores; never in the repo. |
 | A03 | Injection | **Strong** | No string-built SQL; PostgREST filters only; DOMPurify + escaping for output. |
 | A04 | Insecure Design | **Partial** | Server-side pricing/entitlements; webhook verification; free-tier abuse caps (rate limits in `submit-form`). |
@@ -32,6 +32,22 @@ at scale.
 | A08 | Software & Data Integrity | **Partial** | Flutterwave signature check; signed download URLs; CI-only deploys from `main`. |
 | A09 | Logging & Monitoring Failures | **Partial** | Sentry (free tier) + field-level admin audit (actor, role, IP, user-agent, before/after diff, revert, 180-day retention) on 43 tables; remaining: alert emails for `critical` checks and an incident timeline (M9). |
 | A10 | SSRF | **Partial** | Edge functions fetch only fixed hosts today; enforce allow-lists + timeouts + size caps on any future outbound fetch (e.g., the premium TTS proxy — specified in FEATURES.md). |
+
+## Admin AI and mutation hardening (M7)
+
+The Admin AI system is not a second superuser. `admin.ai.run` may scan live, permission-aware
+health and growth facts and create a durable proposal. `admin.ai.approve` is separately required
+to apply one. Applying a proposal checks the underlying capability again (`content.publish`,
+`content.write`, `content.moderate` or `ops.fix`), writes an audit row, and supports only
+allow-listed fields/actions. Low-risk automation is opt-in and never publishes, edits or replies
+automatically. An external model, if configured later, must be isolated behind an edge function
+and can only write proposals.
+
+The M7 security migration removes the remaining anonymous update/delete policies for carts,
+likes, reactions, ratings, helpfulness and reading lists. Reader mutations now use small
+validated RPCs with fingerprint and value checks. It also adds a unique abandoned-cart
+fingerprint invariant, gates Storage writes by the effective RBAC capability, and strips script,
+iframe, event-handler and `javascript:` content from the database-controlled custom head.
 
 ## Admin RBAC (M5)
 
