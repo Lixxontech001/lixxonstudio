@@ -52,6 +52,16 @@ hosted TTS provider (paid — deliberately not added):
 | Health probe for search | `api/health.ts` | `/api/health` now also runs the typo+RPC probe and reports `search.ok`, `results`, `topHit` — the deployed search function is verifiable from any browser. |
 | Tests | `src/__tests__/searchQuery.test.ts` (36), `src/__tests__/searchRecovery.test.tsx` (4), `scripts/search-assertions.sql` (54 SQL assertions, run by `scripts/db-test.py`) | Query builder, synonym expansion both directions, phrase keys, caps, URL round-trips, hostile input, filter chips; page-level loading/error/retry/empty; SQL behaviour + RLS boundaries (drafts invisible, history not world-readable, admin-only gaps, per-user saved searches). |
 
+## Phase 2 — Batch 3: Personalisation & retention (implementation)
+
+| Feature | Where | Notes |
+|---|---|---|
+| Private reading progress | `reading_progress`, `record_reading_progress()` | Fingerprint-scoped, monotonic milestones, server-clamped progress, draft/future-post rejection; only admins can read the backing table directly. |
+| Continue reading + reader insights | `continue_reading()`, `reader_insights()`, `save_reading_day()` | One RPC per rail/card; unfinished-first ordering, recent-view fallback that cannot resurrect finished items, UTC daily activity, streaks, minutes and top categories. Raw reading sessions are no longer public. |
+| Personalised + trending feed | `for_you_feed()` | Category/tag affinity, recency and editorial boosts; excludes already-read posts and falls back to 14-day popularity on cold start. |
+| Responsive reader modules | `src/components/personal/*`, `src/hooks/usePersonalisation.ts` | Lazy homepage rails, accessible progress bars, loading/empty/error/retry states, private insights and best-effort throttled milestone sync. |
+| Health + regression coverage | `api/health.ts`, `src/__tests__/personalisation.test.tsx`, `scripts/personalisation-assertions.sql` | Warning-only RPC health probe; 18 client tests; SQL assertions exercise validation, RLS, streak arithmetic, finished-post exclusion, feed reasons and limits via `scripts/db-test.py` (24 migrations). |
+
 ## Phase 1 — Trust & speed basics (shipped in PR #19)
 
 ## Existing features (prior sessions — inventory)

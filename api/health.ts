@@ -198,6 +198,56 @@ export default async function handler(): Promise<Response> {
     report.search = { endpoint: 'rpc/search_everything', ok: false, error: String(e) };
     warnings.push('Could not reach the search RPC from Vercel.');
   }
+  // Batch 3 warning-only probe. This fingerprint is intentionally unique so the
+  // health check never reads or changes a real reader's private history.
+  try {
+    const fingerprint = `health_probe_${crypto.randomUUID().replace(/-/g, '')}`.slice(0, 64);
+    const headers = {
+      apikey: key.value,
+      Authorization: `Bearer ${key.value}`,
+      'Content-Type': 'application/json',
+    };
+    const [continueResponse, feedResponse] = await Promise.all([
+      fetch(`${url.value}/rest/v1/rpc/continue_reading`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ p_fingerprint: fingerprint, p_limit: 3 }),
+      }),
+      fetch(`${url.value}/rest/v1/rpc/for_you_feed`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ p_fingerprint: fingerprint, p_limit: 6 }),
+      }),
+    ]);
+    const [continueBody, feedBody] = await Promise.all([continueResponse.text(), feedResponse.text()]);
+    let continueRows: unknown[] = [];
+    let feedRows: Array<Record<string, unknown>> = [];
+    let continueParsed = false;
+    let feedParsed = false;
+    try {
+      const parsed = JSON.parse(continueBody);
+      if (Array.isArray(parsed)) { continueRows = parsed; continueParsed = true; }
+    } catch { /* included in the warning below */ }
+    try {
+      const parsed = JSON.parse(feedBody);
+      if (Array.isArray(parsed)) { feedRows = parsed as Array<Record<string, unknown>>; feedParsed = true; }
+    } catch { /* included in the warning below */ }
+    const probeOk = continueResponse.ok && feedResponse.ok && continueParsed && feedParsed;
+    report.personalisation = {
+      ok: probeOk,
+      continueReading: { status: continueResponse.status, results: continueRows.length },
+      status: feedResponse.status,
+      ...(probeOk ? {} : { bodySample: `${continueBody.slice(0, 150)} ${feedBody.slice(0, 150)}` }),
+    };
+    report.forYou = {
+      results: feedRows.length,
+      firstReason: typeof feedRows[0]?.reason === 'string' ? feedRows[0].reason : null,
+    };
+    if (!probeOk) warnings.push(`Personalisation RPC probe failed (continue ${continueResponse.status}, feed ${feedResponse.status}).`);
+  } catch (e) {
+    report.personalisation = { ok: false, error: String(e) };
+    report.forYou = { results: 0, firstReason: null };
+    warnings.push('Could not reach the personalisation RPCs from Vercel.');
+  }
+
   if (warnings.length) report.warnings = warnings;
 
   return json(report, report.ok ? 200 : 503);

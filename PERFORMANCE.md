@@ -215,3 +215,4 @@ Admin code is already **excluded from the public entry chunk** (lazy `/admin` ro
 | 2026-10-04 | Batch 1 merged (#19) — **Phase 2 baseline recorded** | 42.5 kB (entry, gzip) | 93 tests; size budget + production Lighthouse workflow added; budget JSON frozen |
 | 2026-10-04 | Batch 2 search & discovery | 42.6 kB (entry, gzip) | 130 tests; +9.98 kB total-js in lazy search chunks; critical path +30 bytes; budget refreshed |
 | 2026-10-04 | First production Lighthouse baseline recorded | 42.6 kB (entry, gzip) | perf 63–66 / a11y 89 / BP 79 / SEO 92; LCP ~49 s from ~9 MB of images; TTFB 20 ms, CLS 0.002; Batch 9 fix list written |
+| 2026-10-04 | Batch 3 personalisation & retention | 42.23 kB (entry, gzip) | 148 tests; 24 migrations + SQL assertions pass; entry is 0.33 kB below the 42.56 kB Phase 2 baseline; total JS gzip 285.90 kB remains within the configured +5% gate. No Lighthouse run in this local environment. |

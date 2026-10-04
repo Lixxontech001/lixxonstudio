@@ -20,7 +20,8 @@ import EmailArticleButton from './EmailArticleButton';
 import RandomArticleButton from './RandomArticleButton';
 import { trackSocialShare } from '../hooks/usePlatform';
 import { trackArticleView } from '../hooks/useCommerce';
-import {recordReadingHistory, useReadingStreak} from '../hooks/useFeatures';
+import { getFingerprint, recordReadingHistory, useReadingStreak } from '../hooks/useFeatures';
+import { useReadingProgressTracker } from '../hooks/usePersonalisation';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { Helmet } from 'react-helmet-async';
@@ -54,6 +55,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
   const { navigate } = useNavigation();
   const { toggle: toggleCloudBookmark } = useCloudBookmarks();
   const flags = (useSiteSettings().features || {}) as Record<string, boolean>;
+  useReadingProgressTracker(post?.id ?? null, progress);
 
   // "Continue reading": restore the last scroll position for this article (kept for 7 days)
   useEffect(() => {
@@ -89,7 +91,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
 
   useEffect(() => {
     if (post) {
-      trackArticleView(post.id);
+      trackArticleView(post.id, getFingerprint());
       setBookmarked(localStorage.getItem(`bookmark_${post.id}`) === '1');
       recordReadingHistory({
         id: post.id,

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase, rows } from '../lib/supabaseClient';
 import type { Product, ShopCategory, Collection, Order, DownloadEntitlement, NewsletterSubscriber } from '../lib/types';
+import { getFingerprint } from './useFeatures';
 
 // ==================== PUBLIC COMMERCE HOOKS ====================
 
@@ -239,9 +240,9 @@ export function useDownloadEntitlements(email: string | null) {
   return { entitlements, loading, refetch: fetchEnts };
 }
 
-export function trackArticleView(postId: string) {
+export function trackArticleView(postId: string, fingerprint = getFingerprint()) {
   try {
-    supabase.from('article_views').insert({ post_id: postId }).then(() => {});
+    void supabase.from('article_views').insert({ post_id: postId, fingerprint }).then(() => {}, () => {});
   } catch { /* non-critical */ }
 }
 

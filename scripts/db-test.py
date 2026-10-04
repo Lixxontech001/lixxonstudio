@@ -5,7 +5,7 @@ Local migration + RLS test harness.
 Spins up an embedded PostgreSQL (via `pgserver`), installs a minimal Supabase-compatible
 stub (auth / storage schemas, anon / authenticated / service_role roles, auth.uid(),
 auth.jwt()), applies every migration in supabase/migrations in order, then runs the
-security assertions in scripts/db-assertions.sql.
+security and feature assertions in scripts/*-assertions.sql.
 
 Usage:  python3 scripts/db-test.py            # full run
         python3 scripts/db-test.py --keep     # keep the DB directory afterwards
@@ -92,7 +92,7 @@ def main():
             run_sql(uri, PROD_FIXTURES, label="prod fixtures")
         run_sql(uri, file=m, label=os.path.basename(m))
         print(f"✓ {os.path.basename(m)}")
-    for name in ("db-assertions.sql", "search-assertions.sql"):
+    for name in ("db-assertions.sql", "search-assertions.sql", "personalisation-assertions.sql"):
         assertions = os.path.join(ROOT, "scripts", name)
         if os.path.exists(assertions):
             out = run_sql(uri, file=assertions, label=name)
