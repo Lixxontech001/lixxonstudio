@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {Settings as SettingsIcon, Info, CreditCard, BookOpen, Check, Copy} from 'lucide-react';
 import SiteSettingsPanel from '../components/SiteSettingsPanel';
+import SearchSynonymsPanel from '../components/SearchSynonymsPanel';
 
 export default function AdminSettings() {
   const [copied, setCopied] = useState('');
@@ -22,6 +23,9 @@ export default function AdminSettings() {
       </div>
 
       <SiteSettingsPanel />
+
+      {/* ==================== SEARCH SYNONYMS ==================== */}
+      <SearchSynonymsPanel />
 
       {/* ==================== PAYMENT CONFIGURATION ==================== */}
       <div className="bg-white border border-taupe/30 rounded-sm p-6 mb-6">

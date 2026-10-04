@@ -31,11 +31,28 @@ hosted TTS provider (paid — deliberately not added):
 
 ---
 
-## Phase 2 — Trust & speed basics (implementation in this PR)
+## Phase 1 — Trust & speed basics (shipped in PR #19)
 
 | Feature | Where | Notes |
 |---|---|---|
 | Offline, request-retry and route-error recovery | `src/components/NetworkStatusBanner.tsx`, `src/components/RouteErrorBoundary.tsx`, `src/lib/requestStatus.ts`, `src/App.tsx` | Global offline and exhausted-request feedback; route-scoped error recovery; skeleton-first lazy routes; article/category/search/author/tag query errors expose Retry. Tests: `src/__tests__/networkRecovery.test.tsx`, `src/__tests__/searchRecovery.test.tsx`. |
+
+## Phase 2 — Batch 2: Search & discovery (implementation in this PR)
+
+| Feature | Where | Notes |
+|---|---|---|
+| Typo-tolerant instant search | `supabase/migrations/20261004160000_search_discovery.sql` (`search_everything`), `src/hooks/useSearch.ts`, `src/components/SearchPage.tsx` | Trigram ranking (`pg_trgm`, GIN-indexed; a pure-SQL trigram fallback keeps CI honest where the extension is absent) + English FTS over title/body + tag matches. Debounced 220 ms in the hook, 350 ms instant-commit in the page, stale responses discarded, previous results kept while refreshing. Typo-proof: "niacinamid" and "retionl" both land. |
+| Synonym expansion | `search_synonyms` table + `src/lib/searchQuery.ts` (`expandTerms`) | Admin-editable, seeded with 20 beauty equivalences (niacinamide≈nicotinamide≈vitamin B3, retinol≈retinal≈tretinoin, vitamin C≈ascorbic acid, SPF≈sunscreen…). Expansion runs both directions and matches multi-word phrases ("minimal wardrobe" → capsule wardrobe). The results header shows what else was searched. |
+| Filters + sort + paging | `src/components/search/SearchFilters.tsx` | Type (article/product), category, author, tag, reading-time range, date range, plus relevance/newest/most-read sorting and 12-per-page paging. Desktop sticky rail, mobile bottom sheet, active-filter chips with one-tap removal; every control ≥44 px with radio/pressed semantics. |
+| URL-synced search state | `src/lib/searchQuery.ts` (`parseSearchParams` / `buildSearchQuery`), `SearchPage` | `?q=&type=&cat=&author=&tag=&min=&max=&from=&to=&sort=&page=` — validated and clamped (never trusted), inverted ranges repaired, and the address bar always describes what is on screen, so searches are shareable and reload-safe. |
+| Recent, saved, trending searches | `recent_searches` / `forget_searches` / `trending_searches` / `people_also_searched` RPCs, `SearchRails.tsx`, `useSavedSearches` | Recent searches come back through a fingerprint capability function (the raw history table is no longer world-readable); saved searches live locally and sync to the account when signed in; trending is a 14-day aggregate with a ≥2-search floor. |
+| Knowledge cards | `matchGlossaryTerm` + `KnowledgeCard.tsx` | Searching an ingredient (including by synonym — "nicotinamide") shows the glossary definition above the results, with routes into the glossary and everything written about it. |
+| Related articles in SQL | `related_posts()` + `ArticleReader.tsx` | Shared tags ×5, same category +3, **co-visit similarity** (readers who opened both, ×0.5/reader) and a small featured/editors-pick nudge; the rail labels the co-read reason ("readers of this also read it") and falls back to the in-memory scorer if the RPC is unavailable. |
+| Zero-result recovery | `NoResults` in `SearchRails.tsx`, `search_history.result_count` | No dead ends: trending terms, a plain-English explanation, and every search records whether it found anything so `search_gaps()` can turn misses into a content plan (admin-only). |
+| Health probe for search | `api/health.ts` | `/api/health` now also runs the typo+RPC probe and reports `search.ok`, `results`, `topHit` — the deployed search function is verifiable from any browser. |
+| Tests | `src/__tests__/searchQuery.test.ts` (36), `src/__tests__/searchRecovery.test.tsx` (4), `scripts/search-assertions.sql` (54 SQL assertions, run by `scripts/db-test.py`) | Query builder, synonym expansion both directions, phrase keys, caps, URL round-trips, hostile input, filter chips; page-level loading/error/retry/empty; SQL behaviour + RLS boundaries (drafts invisible, history not world-readable, admin-only gaps, per-user saved searches). |
+
+## Phase 1 — Trust & speed basics (shipped in PR #19)
 
 ## Existing features (prior sessions — inventory)
 
