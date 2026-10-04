@@ -9,7 +9,7 @@
 import { lazy } from 'react';
 
 const RELOAD_FLAG = 'lixxon_chunk_reload_at';
-const RELOAD_COOLDOWN_MS = 60_000;
+const RELOAD_COOLDOWN_MS = 5 * 60 * 1000;
 
 export function isStaleChunkError(err: unknown): boolean {
   const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
@@ -17,6 +17,14 @@ export function isStaleChunkError(err: unknown): boolean {
 }
 
 function trySingleReload(): boolean {
+  if (
+    typeof navigator !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    navigator.serviceWorker.controller
+  ) {
+    return false;
+  }
+
   try {
     const last = Number(window.sessionStorage.getItem(RELOAD_FLAG) || 0);
     if (Number.isFinite(last) && Date.now() - last < RELOAD_COOLDOWN_MS) return false; // loop guard
