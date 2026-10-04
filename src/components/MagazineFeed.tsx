@@ -1,7 +1,7 @@
 import { Clock, ArrowUpRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { pickHeadline, trackHeadline } from '../hooks/useV3';
-import { normalizeImageUrl } from '../lib/images';
+import SmartImage from './SmartImage';
 import type { PostWithRelations, Category } from '../lib/types';
 
 interface MagazineFeedProps {
@@ -73,15 +73,15 @@ export default function MagazineFeed({ posts, categories, activeCategory, onCate
             >
               <div className="img-zoom rounded-sm overflow-hidden luxury-shadow relative aspect-[4/5]">
                 {post.cover_image && (
-                  <img src={normalizeImageUrl(post.cover_image) ?? ''} alt={post.title} className="w-full h-full object-cover" loading="lazy" />
+                  <SmartImage src={post.cover_image} alt={post.title} className="w-full h-full object-cover" sizes="(max-width: 768px) 50vw, 25vw" aspectRatio="4/5" />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/20 to-transparent hover-reveal transition-opacity duration-500" />
                 {post.category && (
                   <span className="absolute top-4 left-4 text-[9px] tracking-editorial uppercase text-white bg-charcoal/60 backdrop-blur-md px-3 py-1.5 rounded-full">
                     {post.category.name}
                   </span>
                 )}
-                <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-400">
+                <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center hover-reveal transition-opacity duration-400">
                   <ArrowUpRight size={14} strokeWidth={1.5} className="text-charcoal" />
                 </div>
               </div>

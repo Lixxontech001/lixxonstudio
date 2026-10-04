@@ -898,7 +898,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
                     >
                       <img src={item.url} alt={item.alt_text || ''} className="w-full h-full object-cover" loading="lazy" />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                        <Check size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <Check size={20} className="text-white hover-reveal transition-opacity" />
                       </div>
                     </button>
                   ))}

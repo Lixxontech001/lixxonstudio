@@ -2,6 +2,18 @@
  * Optional error tracking (Sentry free tier: 5k errors/month). Completely inert unless
  * VITE_SENTRY_DSN is set, and the SDK is only downloaded in that case (dynamic import).
  */
+let sentryModule: typeof import('@sentry/react') | null = null;
+
+/**
+ * Best-effort Sentry breadcrumb (no-op when Sentry is not initialised — e.g. no DSN
+ * or dev builds). Never throws.
+ */
+export function addBreadcrumb(category: string, message: string, data?: Record<string, unknown>): void {
+  try {
+    sentryModule?.addBreadcrumb({ category, message, level: 'warning', data });
+  } catch { /* tracking must never break the app */ }
+}
+
 export async function initMonitoring() {
   // VERCEL exposes the DSN as SENTRY_DSN; vite.config.ts re-exposes it (and the commit SHA)
   // at build time, because Vite alone would only inline VITE_-prefixed variables.
@@ -23,6 +35,7 @@ export async function initMonitoring() {
       },
       ignoreErrors: ['ResizeObserver loop', 'Load failed', 'NetworkError', /Loading chunk \d+ failed/],
     });
+    sentryModule = Sentry;
   } catch { /* offline / blocked — ignore */ }
 }
 

@@ -49,14 +49,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               'bg-charcoal text-white'
             }`}
           >
-            {toast.type === 'success' && <Check size={16} className="text-bronze flex-shrink-0" />}
+            {toast.type === 'success' && <Check size={16} className="text-bronze-light flex-shrink-0" />}
             {toast.type === 'error' && <AlertCircle size={16} className="text-red-300 flex-shrink-0" />}
-            {toast.type === 'info' && <Info size={16} className="text-bronze flex-shrink-0" />}
+            {toast.type === 'info' && <Info size={16} className="text-bronze-light flex-shrink-0" />}
             <span className="text-sm flex-1">{toast.message}</span>
             {toast.action && (
               <button
                 onClick={() => { toast.action?.onClick(); dismiss(toast.id); }}
-                className="text-sm font-medium text-bronze hover:text-white underline underline-offset-2 transition-colors flex-shrink-0"
+                className="text-sm font-medium text-bronze-light hover:text-white underline underline-offset-2 transition-colors flex-shrink-0"
               >
                 {toast.action.label}
               </button>

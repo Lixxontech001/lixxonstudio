@@ -1,6 +1,6 @@
 import { TrendingUp, ArrowRight, Clock } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
-import { normalizeImageUrl } from '../lib/images';
+import SmartImage from './SmartImage';
 import type { PostWithRelations } from '../lib/types';
 
 export default function EditorsPicks({ posts }: { posts: PostWithRelations[] }) {
@@ -26,7 +26,7 @@ export default function EditorsPicks({ posts }: { posts: PostWithRelations[] }) 
               </div>
               <div className="img-zoom rounded-sm overflow-hidden mb-5 aspect-[3/2]">
                 {post.cover_image && (
-                  <img src={normalizeImageUrl(post.cover_image) ?? ''} alt={post.title} className="w-full h-full object-cover" loading="lazy" />
+                  <SmartImage src={post.cover_image} alt={post.title} className="w-full h-full object-cover" sizes="(max-width: 1024px) 100vw, 33vw" aspectRatio="3/2" />
                 )}
               </div>
               <span className="text-[10px] tracking-editorial uppercase text-bronze">{post.category?.name}</span>

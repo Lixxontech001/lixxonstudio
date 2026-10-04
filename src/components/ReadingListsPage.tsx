@@ -101,7 +101,7 @@ export default function ReadingListsPage() {
                 </button>
                 <button
                   onClick={() => handleDelete(list.id, list.name)}
-                  className="text-charcoal-muted/40 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                  className="text-charcoal-muted/40 hover:text-red-500 transition-colors hover-reveal"
                   aria-label="Delete list"
                 >
                   <Trash2 size={14} />
@@ -149,7 +149,7 @@ function ReadingListDetail({ listId, listName, onBack }: { listId: string; listN
               </Link>
               <button
                 onClick={() => removePost(item.id)}
-                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/80 backdrop-blur flex items-center justify-center text-charcoal-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/80 backdrop-blur flex items-center justify-center text-charcoal-muted hover:text-red-500 hover-reveal transition-all"
                 aria-label="Remove from list"
               >
                 <Trash2 size={12} />

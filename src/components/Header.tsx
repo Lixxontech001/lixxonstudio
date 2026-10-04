@@ -117,7 +117,8 @@ export default function Header() {
             <button
               onClick={toggleTheme}
               className="text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/80 dark:hover:text-bronze-light"
-              aria-label="Toggle dark mode"
+              aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+              aria-pressed={theme === 'dark'}
             >
               {theme === 'light' ? <Moon size={18} strokeWidth={1.5} /> : <Sun size={18} strokeWidth={1.5} />}
             </button>
@@ -246,9 +247,19 @@ export default function Header() {
         >
           <div className="flex items-center justify-between p-6 border-b border-taupe/40 dark:border-white/10">
             <Logo showText={false} />
-            <button onClick={() => setMobileOpen(false)} className="text-charcoal-muted hover:text-charcoal dark:text-white/60 dark:hover:text-white" aria-label="Close menu">
-              <X size={22} strokeWidth={1.5} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleTheme}
+                className="p-2.5 text-charcoal-muted hover:text-bronze transition-colors dark:text-white/60 dark:hover:text-bronze-light"
+                aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+                aria-pressed={theme === 'dark'}
+              >
+                {theme === 'light' ? <Moon size={20} strokeWidth={1.5} /> : <Sun size={20} strokeWidth={1.5} />}
+              </button>
+              <button onClick={() => setMobileOpen(false)} className="p-2.5 text-charcoal-muted hover:text-charcoal dark:text-white/60 dark:hover:text-white" aria-label="Close menu">
+                <X size={22} strokeWidth={1.5} />
+              </button>
+            </div>
           </div>
           <nav className="flex flex-col p-6 gap-1 overflow-y-auto">
             <Link to={{ name: 'home', page: 1 }} className="text-left py-3 font-serif text-2xl text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/90 dark:hover:text-bronze-light" onClick={() => setMobileOpen(false)}>

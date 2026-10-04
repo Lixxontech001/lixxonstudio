@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Flame, Clock, ArrowRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { supabase } from '../lib/supabaseClient';
-import { normalizeImageUrl } from '../lib/images';
+import SmartImage from './SmartImage';
 import type { PostWithRelations } from '../lib/types';
 
 export default function TrendingSection({ posts }: { posts: PostWithRelations[] }) {
@@ -51,7 +51,7 @@ export default function TrendingSection({ posts }: { posts: PostWithRelations[] 
         <Link to={{ name: 'article', slug: trending[0].slug }} className="group text-left">
           <div className="img-zoom rounded-sm overflow-hidden luxury-shadow aspect-[16/10] mb-5 relative">
             {trending[0].cover_image && (
-              <img src={normalizeImageUrl(trending[0].cover_image) ?? ''} alt={trending[0].title} className="w-full h-full object-cover" loading="lazy" />
+              <SmartImage src={trending[0].cover_image} alt={trending[0].title} className="w-full h-full object-cover" sizes="(max-width: 768px) 100vw, 66vw" aspectRatio="16/10" />
             )}
             <div className="absolute top-4 left-4 w-10 h-10 rounded-full bg-bronze text-white flex items-center justify-center text-xs font-bold">
               01

@@ -84,8 +84,10 @@
     transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .img-zoom:hover img {
-    transform: scale(1.06);
+  @media (hover: hover) and (pointer: fine) {
+    .img-zoom:hover img {
+      transform: scale(1.06);
+    }
   }
 
   .skeleton {
@@ -273,3 +275,236 @@
 }
 /* visible focus ring for keyboard users only */
 :focus-visible { outline: 2px solid #B08D57; outline-offset: 2px; }
+
+/* ==========================================================================
+   THEME — single source of truth (see THEME.md)
+   The .dark class on <html> is the ONLY thing that switches themes (set by the
+   pre-paint script in index.html and ThemeContext). The OS preference is
+   deliberately never consulted: light is the default for everyone.
+   Values below are audited in scripts/contrast-audit.mjs (WCAG AA 4.5:1).
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+/* --- WCAG AA fixes for the LIGHT palette ------------------------------- */
+/* Bronze accent text is only AA-safe at the deeper "bronze-ink" value on
+   light surfaces; on fixed dark surfaces (toasts, scrims, admin sidebar) it
+   uses the light bronze. */
+.text-bronze {
+  color: #85543A;
+}
+
+[class*='bg-charcoal'] .text-bronze {
+  color: #D9A88E;
+}
+
+.dark .text-bronze {
+  color: #D9A88E;
+}
+
+.dark [class*='bg-charcoal'] .text-bronze {
+  color: #D9A88E;
+}
+
+/* CTA surfaces: white text needs the deeper bronze (4.7:1). Decorative
+   bronze tints (bg-bronze/10 …) and borders keep the light brand bronze. */
+.bg-bronze {
+  background-color: #9C6647;
+}
+
+.bg-bronze-dark {
+  background-color: #8A5A3E;
+}
+
+/* Muted metadata at low opacity classes is clamped to AA-safe strength. */
+.text-charcoal-muted\/30,
+.text-charcoal-muted\/40,
+.text-charcoal-muted\/50 {
+  color: #6B6560;
+}
+
+.text-charcoal-muted\/70 {
+  color: #5A5A5A;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #85543A;
+  outline-offset: 2px;
+}
+
+.dark :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline-color: #D9A88E;
+}
+
+/* --- Deliberate DARK palette ------------------------------------------ */
+.dark body {
+  background-color: #14110E;
+  color: #F2EDE7;
+}
+
+.dark ::selection {
+  background: #C48B71;
+  color: #14110E;
+}
+
+/* Inks flip (every text-charcoal* variant, including /opacity ones). */
+.dark .text-charcoal {
+  color: #F2EDE7;
+}
+
+.dark .text-charcoal-light {
+  color: #D8CFC2;
+}
+
+.dark .text-charcoal-muted,
+.dark [class*='text-charcoal-muted/'] {
+  color: #B4A99A;
+}
+
+.dark .text-taupe,
+.dark .text-taupe-dark {
+  color: #B4A99A;
+}
+
+/* Surfaces flip. Low-opacity white glass over photos becomes dark glass;
+   solid/strong white surfaces become dark cards. */
+.dark .bg-white {
+  background-color: #1D1915;
+}
+
+.dark [class*='bg-white/5'],
+.dark [class*='bg-white/10'],
+.dark [class*='bg-white/40'] {
+  background-color: rgb(20 17 14 / 0.55);
+}
+
+.dark [class*='bg-white/50'],
+.dark [class*='bg-white/60'],
+.dark [class*='bg-white/70'],
+.dark [class*='bg-white/80'],
+.dark [class*='bg-white/90'],
+.dark [class*='bg-white/95'] {
+  background-color: #1D1915;
+}
+
+.dark .bg-ivory,
+.dark .bg-porcelain {
+  background-color: #14110E;
+}
+
+.dark [class*='bg-porcelain/'] {
+  background-color: rgb(20 17 14 / 0.9);
+}
+
+.dark .bg-taupe-light {
+  background-color: #26211B;
+}
+
+.dark [class*='bg-taupe-light/'] {
+  background-color: rgb(38 33 27 / 0.7);
+}
+
+.dark .bg-taupe,
+.dark [class*='bg-taupe/'] {
+  background-color: #2A2420;
+}
+
+.dark .bg-taupe-dark {
+  background-color: #352E26;
+}
+
+/* Lines and outlines. */
+.dark .border-taupe,
+.dark [class*='border-taupe/'] {
+  border-color: #3A322A;
+}
+
+.dark .border-charcoal {
+  border-color: #B4A99A;
+}
+
+.dark .border-white\/10,
+.dark [class*='border-white/10'] {
+  border-color: rgb(255 255 255 / 0.12);
+}
+
+/* Depth + skeletons + scrollbar adapt to the dark canvas. */
+.dark .luxury-shadow {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 20px rgb(0 0 0 / 0.35);
+}
+
+.dark .luxury-shadow-lg {
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.45), 0 12px 40px rgb(0 0 0 / 0.4);
+}
+
+.dark .skeleton {
+  background: linear-gradient(90deg, #241F1A 25%, #2E2822 50%, #241F1A 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #14110E;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #A87056;
+}
+
+.dark .btn-outline-luxury {
+  border-color: #B4A99A;
+  color: #F2EDE7;
+}
+
+.dark .btn-outline-luxury:hover {
+  background: #F2EDE7;
+  color: #14110E;
+}
+
+/* ==========================================================================
+   TOUCH — hover must only ever enhance (see WCAG 1.4.13 / mobile audit).
+   Default state of .hover-reveal is VISIBLE; on devices with a real hover
+   (mouse/trackpad) it hides until the group is hovered OR keyboard-focused.
+   On touch screens the content/controls are always visible and tappable.
+   ========================================================================== */
+
+.hover-reveal {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .group:not(:focus-within) .hover-reveal {
+    opacity: 0;
+  }
+
+  .group:hover .hover-reveal,
+  .group:focus-within .hover-reveal,
+  .hover-reveal:focus-visible {
+    opacity: 1;
+  }
+}
+
+/* Scroll reveal (IntersectionObserver in main.tsx) must never trap content:
+   if the observer never fires (JS glitch, print, no IO), show the content. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+.hover\:bg-bronze:hover {
+  background-color: #9C6647;
+}
+
+.hover\:bg-bronze-dark:hover {
+  background-color: #8A5A3E;
+}
