@@ -5,6 +5,8 @@ import { useNavigation, routeToPath } from './context/NavigationContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import BackToTop from './components/BackToTop';
+import NetworkStatusBanner from './components/NetworkStatusBanner';
+import RouteErrorBoundary from './components/RouteErrorBoundary';
 import SEO from './components/SEO';
 import {FeedSkeleton} from './components/Skeletons';
 import CartDrawer from './components/shop/CartDrawer';
@@ -76,7 +78,12 @@ function GA4() {
 }
 
 function LazyFallback() {
-  return <div className="min-h-[60vh]"><FeedSkeleton /></div>;
+  return (
+    <div role="status" aria-live="polite" aria-label="Loading page" className="min-h-[60vh]">
+      <span className="sr-only">Loading page</span>
+      <FeedSkeleton />
+    </div>
+  );
 }
 
 function AppContent() {
@@ -107,9 +114,14 @@ function AppContent() {
 
   if (route.name.startsWith('admin') || route.name === 'admin') {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-gray-50 animate-pulse" />}>
-        <AdminApp />
-      </Suspense>
+      <>
+        <NetworkStatusBanner key={`network-${routeKey}`} />
+        <RouteErrorBoundary key={`route-${routeKey}`}>
+          <Suspense fallback={<div role="status" aria-label="Loading admin page" className="min-h-screen bg-gray-50 animate-pulse" />}>
+            <AdminApp />
+          </Suspense>
+        </RouteErrorBoundary>
+      </>
     );
   }
 
@@ -206,10 +218,13 @@ function AppContent() {
       <SEO />
       <GA4 />
       <AnnouncementBar />
+      <NetworkStatusBanner key={`network-${routeKey}`} />
       <Header />
-      <Suspense fallback={<LazyFallback />}>
-        {renderPage()}
-      </Suspense>
+      <RouteErrorBoundary key={`route-${routeKey}`}>
+        <Suspense fallback={<LazyFallback />}>
+          {renderPage()}
+        </Suspense>
+      </RouteErrorBoundary>
       <Footer />
       <BackToTop />
       <CartDrawer />

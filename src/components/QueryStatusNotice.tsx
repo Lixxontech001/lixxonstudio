@@ -5,9 +5,18 @@ interface QueryStatusNoticeProps {
   hasData: boolean;
   error: string | null;
   onRetry: () => void;
+  unavailableTitle?: string;
+  errorMessage?: string;
 }
 
-export default function QueryStatusNotice({ loading, hasData, error, onRetry }: QueryStatusNoticeProps) {
+export default function QueryStatusNotice({
+  loading,
+  hasData,
+  error,
+  onRetry,
+  unavailableTitle = 'Stories unavailable',
+  errorMessage = 'We couldn’t load the latest stories right now.',
+}: QueryStatusNoticeProps) {
   const [slow, setSlow] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
 
@@ -32,10 +41,8 @@ export default function QueryStatusNotice({ loading, hasData, error, onRetry }: 
     return (
       <section className="container-wide py-8" role="alert" aria-live="assertive">
         <div className="border border-bronze/40 bg-taupe-light/30 p-6 md:p-8">
-          <p className="text-[10px] tracking-ultra-wide uppercase text-bronze mb-2">Stories unavailable</p>
-          <p className="font-serif text-2xl text-charcoal">
-            We couldn’t load the latest stories right now.
-          </p>
+          <p className="text-[10px] tracking-ultra-wide uppercase text-bronze mb-2">{unavailableTitle}</p>
+          <p className="font-serif text-2xl text-charcoal">{errorMessage}</p>
           <p className="text-charcoal-muted mt-2 max-w-xl">
             {timedOut && !error
               ? 'The connection is taking too long. Please try again or reload the page.'

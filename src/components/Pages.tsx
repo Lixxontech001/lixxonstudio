@@ -69,13 +69,13 @@ export function HomePage({ page }: { page: number }) {
 export function CategoryPage({ slug, page }: { slug: string; page: number }) {
   const { categories } = useCategories();
   const { navigate } = useNavigation();
-  const { posts, total, totalPages, loading } = usePaginatedPosts(slug, page);
+  const { posts, total, totalPages, loading, error, retry } = usePaginatedPosts(slug, page);
 
   useEffect(() => { window.scrollTo(0, 0); }, [slug, page]);
 
   const category = categories.find(c => c.slug === slug);
 
-  if (!category && !loading) {
+  if (!category && !loading && !error) {
     return <EmptyState message="Category not found" />;
   }
 
@@ -84,7 +84,8 @@ export function CategoryPage({ slug, page }: { slug: string; page: number }) {
   return (
     <main>
       {category && <CategoryBanner category={category} postCount={total} />}
-      {loading ? <FeedSkeleton /> : posts.length === 0 ? (
+      <QueryStatusNotice loading={loading} hasData={posts.length > 0} error={error} onRetry={retry} />
+      {loading && posts.length === 0 ? <FeedSkeleton /> : error && posts.length === 0 ? null : posts.length === 0 ? (
         <EmptyState message="No stories in this category yet" />
       ) : (
         <>

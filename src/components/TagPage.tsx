@@ -6,9 +6,10 @@ import { FeedSkeleton } from './Skeletons';
 import EmptyState from './EmptyState';
 import Pagination from './Pagination';
 import { Helmet } from 'react-helmet-async';
+import QueryStatusNotice from './QueryStatusNotice';
 
 export default function TagPage({ tag, page }: { tag: string; page: number }) {
-  const { posts, totalPages, loading } = useTagPosts(tag, page);
+  const { posts, totalPages, loading, error, retry } = useTagPosts(tag, page);
   useEffect(() => { window.scrollTo(0, 0); }, [tag, page]);
 
   const buildRoute = (p: number) => ({ name: 'tag' as const, tag, page: p });
@@ -31,9 +32,10 @@ export default function TagPage({ tag, page }: { tag: string; page: number }) {
       </section>
 
       <section className="container-wide py-12 md:py-16">
-        {loading ? (
+        <QueryStatusNotice loading={loading} hasData={posts.length > 0} error={error} onRetry={retry} />
+        {loading && posts.length === 0 ? (
           <FeedSkeleton />
-        ) : posts.length === 0 ? (
+        ) : error && posts.length === 0 ? null : posts.length === 0 ? (
           <EmptyState message={`No articles tagged "${tag}" yet`} />
         ) : (
           <>
