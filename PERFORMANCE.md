@@ -216,3 +216,20 @@ Admin code is already **excluded from the public entry chunk** (lazy `/admin` ro
 | 2026-10-04 | Batch 2 search & discovery | 42.6 kB (entry, gzip) | 130 tests; +9.98 kB total-js in lazy search chunks; critical path +30 bytes; budget refreshed |
 | 2026-10-04 | First production Lighthouse baseline recorded | 42.6 kB (entry, gzip) | perf 63–66 / a11y 89 / BP 79 / SEO 92; LCP ~49 s from ~9 MB of images; TTFB 20 ms, CLS 0.002; Batch 9 fix list written |
 | 2026-10-04 | Batch 3 personalisation & retention | 42.23 kB (entry, gzip) | 148 tests; 24 migrations + SQL assertions pass; entry is 0.33 kB below the 42.56 kB Phase 2 baseline; total JS gzip 285.90 kB remains within the configured +5% gate. No Lighthouse run in this local environment. |
+
+## P0 image-weight remediation (2026-10-04)
+
+| Asset / signal | Before | After / status |
+|---|---:|---:|
+| Header logo (`Lixxon_Studio..png`) | 2,264,839 bytes | Replaced by `lixxon-studio-logo.webp`, 2,716 bytes (300 × 164; WebP q78) |
+| Duplicate logo | 2,264,839 bytes | Deleted; identical bytes are no longer shipped twice |
+| PWA `icon-512.png` | 285,896 bytes | 114,569 bytes (palette-optimised PNG; same path and dimensions) |
+| Four Supabase Storage originals (owner-provided) | 3,370 / 1,743 / 883 / 841 kB | Manual `Recompress Storage images` workflow added; execution pending its `SUPABASE_SECRET_KEY` repo secret and workflow dispatch |
+| Admin raster uploads | Article editor 1600 px / q82; Media 1800 px / q82; product cover uncompressed | Shared browser downscale: max edge 1600 px, WebP quality 0.78, applied to article/media/product image uploads |
+| CI public-file guard | No per-file size assertion | Every file under `public/` is now limited to 250,000 bytes |
+
+Production Lighthouse baseline supplied for this work: performance 63–66, LCP 48–50 s,
+TTFB 20 ms, CLS 0.002. The production after-run is pending the Storage workflow and
+Vercel deployment; run `.github/workflows/perf.yml` against production before publishing
+a new Lighthouse number. The local source assets above save 4,698,289 bytes combined;
+that byte reduction is not a substitute for the production Lighthouse measurement.

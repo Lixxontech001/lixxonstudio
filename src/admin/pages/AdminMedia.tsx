@@ -3,22 +3,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAdminMedia } from '../../hooks/useSupabase';
 import { Upload, Search, Trash2, X, Copy, Check, AlertTriangle, Link2, Pencil } from 'lucide-react';
 import type { MediaItem } from '../../lib/types';
-
-/** Shrink large images in the browser before upload (keeps the free Storage tier small). */
-async function compressImage(file: File, maxW = 1800, quality = 0.82): Promise<{ blob: Blob; width: number; height: number }> {
-  const fallback = { blob: file as Blob, width: 0, height: 0 };
-  if (!file.type.startsWith('image/') || file.type === 'image/gif' || file.type === 'image/svg+xml') return fallback;
-  const bmp = await createImageBitmap(file).catch(() => null);
-  if (!bmp) return fallback;
-  const scale = Math.min(1, maxW / bmp.width);
-  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  c.getContext('2d')!.drawImage(bmp, 0, 0, w, h);
-  const type = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-  const blob: Blob | null = await new Promise(res => c.toBlob(res, type, quality));
-  if (!blob || blob.size >= file.size) return { blob: file, width: bmp.width, height: bmp.height };
-  return { blob, width: w, height: h };
-}
+import { optimizeAdminImage } from '../../lib/imageUpload';
 
 const fmtSize = (n: number | null) => !n ? '' : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
 
@@ -66,15 +51,14 @@ export default function AdminMedia() {
       if (alt === null) continue;
       if (!alt.trim()) { alert('Alt text is required for accessibility. Skipped.'); continue; }
 
-      const { blob, width, height } = await compressImage(file);
-      const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/jpeg' ? 'jpg' : (file.name.split('.').pop() || 'bin');
-      const path = `media/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('media').upload(path, blob, { contentType: blob.type || file.type, cacheControl: '31536000' });
+      const { blob, width, height, contentType, extension } = await optimizeAdminImage(file, 1600, 0.78);
+      const path = `media/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from('media').upload(path, blob, { contentType, cacheControl: '31536000' });
       if (uploadError) { alert(`Upload failed: ${uploadError.message}`); continue; }
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
       const { data: row } = await supabase.from('media').insert({
         url: urlData.publicUrl, alt_text: alt.trim(), title: suggested, file_name: file.name,
-        file_size: blob.size, mime_type: blob.type || file.type, width: width || null, height: height || null,
+        file_size: blob.size, mime_type: contentType, width: width || null, height: height || null,
       }).select('*').single();
       if (row) setMedia(prev => [row as MediaItem, ...prev]);
     }

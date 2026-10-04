@@ -62,6 +62,15 @@ hosted TTS provider (paid — deliberately not added):
 | Responsive reader modules | `src/components/personal/*`, `src/hooks/usePersonalisation.ts` | Lazy homepage rails, accessible progress bars, loading/empty/error/retry states, private insights and best-effort throttled milestone sync. |
 | Health + regression coverage | `api/health.ts`, `src/__tests__/personalisation.test.tsx`, `scripts/personalisation-assertions.sql` | Warning-only RPC health probe; 18 client tests; SQL assertions exercise validation, RLS, streak arithmetic, finished-post exclusion, feed reasons and limits via `scripts/db-test.py` (24 migrations). |
 
+## Phase 2 — P0: Image weight & LCP remediation (implementation)
+
+| Feature | Where | Notes |
+|---|---|---|
+| Optimised brand assets | `public/assets/images/lixxon-studio-logo.webp`, `public/icon-512.png`, `Logo.tsx`, `CheckoutPage.tsx` | 2.16 MB logo + byte-identical duplicate replaced by a 2.7 KB 2× WebP; the PWA icon remains at the same path and is under the new public-file limit. Service-worker cache version bumped for automatic asset refresh. |
+| Smaller admin uploads | `src/lib/imageUpload.ts`, Admin Article Editor, Admin Media, Admin Product Editor | Raster images are downscaled to a 1600 px maximum edge and encoded as WebP quality 0.78 before Storage upload; vector and animated formats remain intact. |
+| Storage originals + CI size guard | `.github/workflows/recompress-storage.yml`, `scripts/recompress-storage-images.mjs`, `scripts/public-size-budget.mjs`, `.github/workflows/ci.yml` | Manual action targets the four largest oversized Storage images and replaces them at the same object paths; the public-tree guard rejects files above 250,000 bytes. The Storage action and post-deploy Lighthouse run remain pending. |
+| Upload helper regression tests | `src/__tests__/imageUpload.test.ts` | Verifies max-edge resizing, q78 WebP output, safe handling of animated/vector formats, and retaining a small original when re-encoding would increase weight. |
+
 ## Phase 1 — Trust & speed basics (shipped in PR #19)
 
 ## Existing features (prior sessions — inventory)

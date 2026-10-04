@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Upload, FileText, ExternalLink } from 'lucide-react';
 import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
 import { useShopCategories } from '../../hooks/useCommerce';
+import { optimizeAdminImage } from '../../lib/imageUpload';
 
 interface FormData {
   name: string; brand: string; description: string; image_url: string;
@@ -48,32 +49,31 @@ const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) =>
   const file = e.target.files?.[0];
   if (!file) return;
   setUploadingImage(true);
+  try {
+    const { blob, width, height, contentType, extension } = await optimizeAdminImage(file, 1600, 0.78);
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+    const path = `media/${fileName}`;
+    const { error: uploadError } = await supabase.storage.from('media').upload(path, blob, { contentType, cacheControl: '31536000' });
+    if (uploadError) throw new Error(uploadError.message);
 
-  const ext = file.name.split('.').pop();
-  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const path = `media/${fileName}`;
-
-  const { error: uploadError } = await supabase.storage.from('media').upload(path, file);
-  if (uploadError) {
-    alert(`Upload failed: ${uploadError.message}`);
+    const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
+    const publicUrl = urlData.publicUrl;
+    await supabase.from('media').insert({
+      url: publicUrl,
+      title: file.name,
+      file_name: file.name,
+      file_size: blob.size,
+      mime_type: contentType,
+      width: width || null,
+      height: height || null,
+    });
+    update('image_url', publicUrl);
+  } catch (uploadError) {
+    alert(`Upload failed: ${uploadError instanceof Error ? uploadError.message : 'Could not optimize this image.'}`);
+  } finally {
     setUploadingImage(false);
-    return;
+    e.target.value = '';
   }
-
-  const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
-  const publicUrl = urlData.publicUrl;
-
-  // Also save record to media table so it shows up in media library later
-  await supabase.from('media').insert({
-    url: publicUrl,
-    title: file.name,
-    file_name: file.name,
-    file_size: file.size,
-    mime_type: file.type,
-  });
-
-  update('image_url', publicUrl);
-  setUploadingImage(false);
 };
   
   useEffect(() => {
