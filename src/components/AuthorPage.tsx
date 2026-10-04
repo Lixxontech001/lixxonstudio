@@ -6,6 +6,7 @@ import { HeroSkeleton } from './Skeletons';
 import EmptyState from './EmptyState';
 import { Helmet } from 'react-helmet-async';
 import QueryStatusNotice from './QueryStatusNotice';
+import { renderMarkdown } from '../lib/markdown';
 
 export default function AuthorPage({ slug }: { slug: string }) {
   const { author, posts, loading, error, retry } = useAuthorPosts(slug);
@@ -56,7 +57,7 @@ export default function AuthorPage({ slug }: { slug: string }) {
           <h1 className="font-serif text-3xl md:text-5xl text-charcoal font-light leading-tight">{author.name}</h1>
           {author.role && <p className="text-charcoal-muted text-base mt-3">{author.role}</p>}
           {author.bio && (
-            <p className="text-charcoal-muted text-lg leading-relaxed mt-6 max-w-2xl mx-auto">{author.bio}</p>
+            <div className="text-charcoal-muted text-lg leading-relaxed mt-6 max-w-2xl mx-auto" dangerouslySetInnerHTML={{ __html: renderMarkdown(author.bio) }} />
           )}
           {Object.keys(social).length > 0 && (
             <div className="flex items-center justify-center gap-3 mt-8">

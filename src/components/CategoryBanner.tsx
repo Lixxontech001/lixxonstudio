@@ -1,5 +1,6 @@
 import { Link } from '../context/NavigationContext';
 import type { Category } from '../lib/types';
+import { renderMarkdown } from '../lib/markdown';
 
 interface CategoryBannerProps {
   category: Category;
@@ -40,7 +41,7 @@ export default function CategoryBanner({ category, postCount }: CategoryBannerPr
         </nav>
         <p className="text-[10px] tracking-ultra-wide uppercase text-bronze-light mb-4">Category</p>
         <h1 className="font-serif text-4xl md:text-6xl text-white font-light capitalize">{category.name}</h1>
-        <p className="text-white/70 text-lg mt-5 leading-relaxed max-w-xl">{config.tagline}</p>
+        <div className="text-white/70 text-lg mt-5 leading-relaxed max-w-xl" dangerouslySetInnerHTML={{ __html: renderMarkdown(config.tagline) }} />
         <p className="text-white/40 text-sm mt-6">{postCount} {postCount === 1 ? 'article' : 'articles'}</p>
       </div>
     </section>

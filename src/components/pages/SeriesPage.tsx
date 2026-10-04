@@ -5,6 +5,7 @@ import { Link } from '../../context/NavigationContext';
 import { useSeriesBySlug, useAllSeries } from '../../hooks/useV3';
 import { FeedSkeleton } from '../Skeletons';
 import EmptyState from '../EmptyState';
+import { renderMarkdown } from '../../lib/markdown';
 
 export function SeriesIndexPage() {
   const { series, loading } = useAllSeries();
@@ -24,7 +25,7 @@ export function SeriesIndexPage() {
               <div className="p-6">
                 <p className="flex items-center gap-2 text-[10px] tracking-editorial uppercase text-bronze mb-2"><Layers size={12} /> {s.count} part{s.count === 1 ? '' : 's'}</p>
                 <h2 className="font-serif text-2xl text-charcoal group-hover:text-bronze transition-colors">{s.title}</h2>
-                {s.description && <p className="text-sm text-charcoal-light mt-2 line-clamp-3">{s.description}</p>}
+                {s.description && <div className="text-sm text-charcoal-light mt-2 line-clamp-3" dangerouslySetInnerHTML={{ __html: renderMarkdown(s.description) }} />}
               </div>
             </Link>
           ))}
@@ -50,7 +51,7 @@ export default function SeriesPage({ slug }: { slug: string }) {
       <header className="mb-12">
         <Link to={{ name: 'series-index' }} className="text-[11px] tracking-editorial uppercase text-bronze hover:underline">← All series</Link>
         <h1 className="font-serif text-4xl md:text-5xl text-charcoal mt-4 mb-4">{series.title}</h1>
-        {series.description && <p className="text-lg text-charcoal-light leading-relaxed">{series.description}</p>}
+        {series.description && <div className="text-lg text-charcoal-light leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(series.description) }} />}
         <p className="flex items-center gap-4 text-xs text-charcoal-muted mt-4"><span className="flex items-center gap-1"><Layers size={12} /> {posts.length} parts</span><span className="flex items-center gap-1"><Clock size={12} /> {total} min total</span></p>
       </header>
       <ol className="space-y-6">

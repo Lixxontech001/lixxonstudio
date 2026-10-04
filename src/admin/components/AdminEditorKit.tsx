@@ -75,10 +75,8 @@ export const SLASH_ITEMS: SlashItem[] = [
   { id: 'image', label: 'Image', hint: '![]', block: '![Describe the image](/media/example.jpg)\n', keywords: 'picture photo img' },
   { id: 'divider', label: 'Divider', hint: '---', block: '\n---\n', keywords: 'hr rule separator' },
   { id: 'table', label: 'Table', hint: '| |', block: '| Column | Detail |\n| --- | --- |\n| Row | Value |\n', keywords: 'table grid' },
-  { id: 'cta', label: 'Shop call-to-action', hint: 'CTA', block: '\n> **Shop the edit** — [see the full selection](/shop)\n', keywords: 'cta product promo' },
   { id: 'faq', label: 'FAQ block', hint: 'FAQ', block: '## Frequently asked questions\n\n**Question?**\n\nAnswer.\n', keywords: 'faq questions seo' },
   { id: 'key', label: 'Key takeaways', hint: 'list', block: '## Key takeaways\n\n- Point one\n- Point two\n', keywords: 'takeaways summary' },
-  { id: 'details', label: 'Collapsible section', hint: '<details>', block: '<details>\n<summary>More detail</summary>\n\nHidden until opened.\n\n</details>\n', keywords: 'details collapse spoiler' },
 ];
 
 const HISTORY_LIMIT = 120;
@@ -880,7 +878,6 @@ export const EDITOR_SHORTCUTS: [string, string][] = [
   ['⌘/Ctrl + I', 'Italic'],
   ['⌘/Ctrl + K', 'Insert link'],
   ['⌘/Ctrl + F', 'Find & replace'],
-  ['⌘/Ctrl + S', 'Save draft'],
   ['⌘/Ctrl + Z', 'Undo'],
   ['/', 'Slash commands at the start of a line'],
 ];

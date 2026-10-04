@@ -4,6 +4,7 @@ import { useProducts } from '../hooks/useSupabase';
 import { HeroSkeleton } from './Skeletons';
 import EmptyState from './EmptyState';
 import { Helmet } from 'react-helmet-async';
+import { renderMarkdown } from '../lib/markdown';
 
 export default function ProductDetail({ slug }: { slug: string }) {
   const { products, loading } = useProducts();
@@ -55,7 +56,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
                 <p className="font-serif text-3xl text-charcoal mb-6">{product.price}</p>
               )}
               {product.description && (
-                <p className="text-charcoal-muted text-lg leading-relaxed mb-8">{product.description}</p>
+                <div className="text-charcoal-muted text-lg leading-relaxed mb-8" dangerouslySetInnerHTML={{ __html: renderMarkdown(product.description) }} />
               )}
 
               {product.key_ingredients && (
@@ -95,7 +96,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
                 </div>
                 <h2 className="font-serif text-2xl text-charcoal font-light">What It Is</h2>
               </div>
-              <p className="text-charcoal-muted text-lg leading-[1.8]">{product.what_it_is}</p>
+              <div className="text-charcoal-muted text-lg leading-[1.8]" dangerouslySetInnerHTML={{ __html: renderMarkdown(product.what_it_is) }} />
             </div>
           )}
 
@@ -107,7 +108,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
                 </div>
                 <h2 className="font-serif text-2xl text-charcoal font-light">What It's Used For</h2>
               </div>
-              <p className="text-charcoal-muted text-lg leading-[1.8]">{product.what_its_used_for}</p>
+              <div className="text-charcoal-muted text-lg leading-[1.8]" dangerouslySetInnerHTML={{ __html: renderMarkdown(product.what_its_used_for) }} />
             </div>
           )}
 
