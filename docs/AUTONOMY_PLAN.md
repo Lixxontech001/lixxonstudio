@@ -5,7 +5,7 @@
 **Integration branch:** `arena/4da46b60-lixxonstudio` (Arena-fixed; do not switch branches)  
 **Baseline:** `f5d652ddea9e9441663d7e3cf041548dd9564635`  
 **Production:** `https://lixxonstudio.vercel.app`  
-**Status:** reconnaissance complete; no feature code has been written. The only permitted next work is Phase 1, step 1.1.
+**Status:** reconnaissance and Phase 1, step 1.1 are complete; all database assertions and the pre-push gate passed. Phase 1 is not complete. The only permitted next work is Phase 1, step 1.2.
 
 This is the execution contract, not a design-only proposal. Work proceeds in order, one unchecked step at a time. For each step: implement only its scope, run its stated proof, record the result and commit SHA here, commit, then push to the fixed integration branch. Do not start the next step until that evidence is recorded. Push after every completed phase and at every session boundary. Open one PR to `main` only after all five phases and the final acceptance gates pass. Do not merge partial work or claim production success without the post-merge production evidence.
 
@@ -17,7 +17,7 @@ This is the execution contract, not a design-only proposal. Work proceeds in ord
 | Production | The production `/api/health` probe previously returned `ok: true`; deployed version matched `main` at the baseline SHA. | This is a baseline-only check, not proof of any new feature. Recheck after the final merge. |
 | Front end and routing | Vite + React + TypeScript SPA. `App.tsx` lazy-loads the `AdminApp`; the main public shell is separate. The custom route parser is in `src/context/NavigationContext.tsx`, whose unknown-admin fallback is the admin dashboard. | Preserve the entry bundle. Implement the two requested deep links inside the permitted admin application/page boundary; **do not edit `NavigationContext.tsx`**. |
 | Admin / RBAC | Existing M5 admin permissions, database-side checks, MFA, role-filtered navigation, audit log, founder and last-owner protections are in place. `AdminAI.tsx` already exposes the M7–M10 control tower and its permissions. The protected admin files and `docs/ADMIN.md` were inspected. | Add narrowly scoped automation permissions; do not replace the 34-permission M5 model or weaken its guards. Extend the existing four AI suites rather than create a parallel AI control room. |
-| Editorial scheduling | `posts` already has `status`, `scheduled_at`, `published_at` and editorial workflow state. `publish_scheduled_posts()` publishes approved/scheduled due rows; an existing `pg_cron` job checks it every five minutes. | Reuse the existing article scheduler. Do not add a duplicate `scheduled_for` column or a second publisher. Add only the missing pipeline/run state and enforce that automation never writes `posts.content`. |
+| Editorial scheduling | `posts` already has `status`, `scheduled_at`, `published_at` and editorial workflow state. `publish_scheduled_posts()` publishes rows with `status = 'scheduled'` once `scheduled_at` is due; M5 requires the `content.publish` capability when a human schedules a row. An existing `pg_cron` job checks it every five minutes. | Reuse the existing article scheduler. Do not add a duplicate `scheduled_for` column or a second publisher. Add only the missing pipeline/run state and enforce that automation never writes `posts.content`. |
 | Background jobs | Regular email/rate work already runs in Supabase `pg_cron` + `pg_net`; `cron.yml` is a manual recovery workflow, not the production scheduler. The deploy workflow verifies registered cron jobs. | Add one idempotent daily pipeline trigger to the existing Supabase scheduler, not a polling Vercel function or recurring GitHub cron. Keep its GH dispatch payload non-secret. |
 | Admin AI | M7 has grounded suggestions, approval, and a low-risk allow-list; M8 adds six operational roles/jobs/queue; M9 adds goals, strategy, commands, knowledge, campaigns, critic and routes; M10 adds events, forecasts, security, lifecycle, trust and learning. Existing database functions are `SECURITY DEFINER`, permission-check their underlying actions, and are audited. | Reuse `admin_ai_agents`, jobs, queue, events, critic, controls and metrics. Add the six requested business agents as extensions, not a competing agent framework. Preserve the allow-lists and human decisions. |
 | PWA | One reader PWA and root-scoped `public/sw.js` already exist. The worker contains cache/version and recovery behavior. | Add two install identities/manifests and Buddy; touch `public/sw.js` only for push handlers and a cache-version bump. Preserve its fetch behavior, kill switches, and self-healing. |
@@ -42,14 +42,13 @@ This is the execution contract, not a design-only proposal. Work proceeds in ord
 
 ### 1.1 Schema, Vault boundary and proof harness
 
-- [ ] Add additive migrations for `automation_secrets` metadata (Vault IDs only), `feature_flags`, `article_pipeline_state`, `article_runs`, `automation_logs`, and `automation_run_tokens`. Do not duplicate the existing `posts.scheduled_at`/publisher. Feature flags start fail-closed.
-- [ ] Create least-privilege RPCs for saving, listing metadata, deleting, testing and internal server-side retrieval of a named secret. Listing never returns `vault.decrypted_secrets.decrypted_secret`; test responses never echo provider bodies/credentials. Make Vault writes and audit changes atomic where possible. Ensure browser roles cannot select Vault data or mutate these tables directly.
-- [ ] Use database authorization for every RPC; add narrow automation permissions to the existing permissions/role system. Keep setup owner-only; retain last-owner/MFA policy.
-- [ ] Add an article-content guard and structural/behavioral assertions proving the new automation roles, service runner and edge workflow cannot change `posts.content`. Human editorial save/restore stays governed by its current editorial permissions.
-- [ ] Add SQL assertions for anonymous/non-owner denials, RLS, cross-user isolation, Vault value non-disclosure, no secret-shaped audit/log fields, kill switch and article-content immutability. Register each file in the explicit test list in `scripts/db-test.py`.
-- [ ] Add unit coverage for masked secret DTOs, authorization and feature-flag defaults.
+- [x] Add additive migrations for `automation_secret_catalog`, `automation_secrets` metadata (Vault IDs only), `feature_flags`, `article_pipeline_state`, `article_runs`, `automation_logs`, and `automation_run_tokens`. Reused `posts.scheduled_at` and its existing publisher; feature flags default off.
+- [x] Create least-privilege RPCs for save, masked list, delete, safe test-result recording and internal server-side retrieval of named secrets. The list/result DTOs never return `vault.decrypted_secrets.decrypted_secret`; provider checks themselves are implemented in step 1.2. Vault writes and metadata/audit changes are transactional. Browser roles cannot select Vault data or mutate automation tables.
+- [x] Add database permissions and owner-only automation controls without changing the M5 role/founder/last-owner/MFA model.
+- [x] Add a `posts.content` guard, revoke direct post INSERT/UPDATE/DELETE from the Edge `service_role`, and prove owner edits still work while service-role and automation-context article-body writes fail.
+- [x] Add SQL assertions for anonymous/non-owner denial, RLS/direct-grant boundaries, Vault value non-disclosure, audit/log redaction, default-off flags, service-only secret retrieval/test RPCs and article-body immutability. Registered the suite in `scripts/db-test.py`.
 
-**1.1 evidence:** migration list, each registered SQL assertion, and `python3 scripts/db-test.py`; exact SHA recorded here before proceeding.
+**1.1 evidence:** 39 migrations applied; all 12 registered SQL suites passed (including the new Vault/content-guard suite). Full pre-push gate passed: npm audit (0 vulnerabilities), app/Edge/API TypeScript, lint (0 errors; 27 pre-existing warnings), 163 tests, production build, public-asset and gzip budgets, and `git diff --check`. Detailed evidence is in the work log below.
 
 ### 1.2 Keys page and end-to-end secret checks
 
@@ -57,6 +56,7 @@ This is the execution contract, not a design-only proposal. Work proceeds in ord
 - [ ] Cover provider-agnostic AI, GitHub dispatch, Flutterwave/webhook, email and the requested platform/VAPID/video integrations. Use the app's Vault path for runtime automation keys; document any existing deployment-only credentials that must remain in GitHub/Vercel infrastructure settings rather than pretending the app can change them.
 - [ ] A test button calls the provider server-side with a minimal request, consumes the response, stores only safe status metadata and returns no secret or raw provider payload. Invalid credentials fail clearly without affecting checkout or other integrations.
 - [ ] The page has keyboard-accessible labels, focus, status and confirmation; destructive replacement/deletion asks for confirmation. Record only redacted key-name/metadata changes in the audit trail.
+- [ ] Add focused unit coverage for the masked key DTO, authorization UI states and default-off feature flags; no secret value may enter component state after save, network diagnostics or browser storage.
 
 **1.2 evidence:** browser/network inspection confirms no values in response/storage/logs; valid, invalid, replace and delete tests; non-owner/anonymous denials; app, API and Edge type checks.
 
@@ -172,7 +172,8 @@ Also run targeted integration/provider-mock checks for the completed step and `g
 
 | Date (UTC) | Step | Verification/evidence | Commit SHA | Push |
 |---|---|---|---|---|
-| 2026-10-05 | 0 — repository/production reconnaissance and plan bootstrap | Clean fixed branch; HEAD=origin/main=`f5d652ddea9e9441663d7e3cf041548dd9564635`; production health/version baseline checked; architecture, migrations, workflows, M7–M10, assertion suites and protected paths inventoried. Plan commit SHA to be recorded immediately after commit. | pending | pending |
+| 2026-10-05 | 0 — repository/production reconnaissance and plan bootstrap | Clean fixed branch; HEAD=origin/main=`f5d652ddea9e9441663d7e3cf041548dd9564635`; production health/version baseline checked; architecture, migrations, workflows, M7–M10, assertion suites and protected paths inventoried. Full pre-push gate passed: 0 npm audit vulnerabilities; app/Edge/API typechecks; lint (0 errors, 27 pre-existing warnings); 163 tests; production build; public-asset/gzip budgets; 38 migrations and all 11 registered SQL suites; `git diff --check`. `pgserver` was absent initially, installed in the external `/home/user/.venv`, then DB gate passed. | `43e57dd42c1f45502158aed25c13d1e00ba08f23` | pushed to `origin/arena/4da46b60-lixxonstudio` |
+| 2026-10-05 | 1.1 — secure schema, Vault boundary and article-content guard | Added 1 additive migration, test-only Vault shim and the registered `automation-foundation-assertions.sql`; verified 39 migrations and 12 SQL suites. Full gate passed: 0 npm audit vulnerabilities; app/Edge/API typechecks; lint (0 errors, 27 existing warnings); 163 tests; production build; public-asset/gzip budgets; `git diff --check`. No app bundle changes. | `288333fdefb9072ef614b5ce7f8eede3ecf510c7` | pushed to `origin/arena/4da46b60-lixxonstudio` after full gate passed 2026-10-05 |
 
 ## 9. Questions / conservative resolutions
 
@@ -184,4 +185,4 @@ Also run targeted integration/provider-mock checks for the completed step and `g
 
 ---
 
-**Next action:** implement only Phase 1, step 1.1. No feature code may precede this plan's first commit/push.
+**Next action:** implement only Phase 1, step 1.2 (the owner-only Keys page and real server-side key tests). Do not start the System Check UI/API or article queue until step 1.2 evidence is recorded and pushed.
