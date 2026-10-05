@@ -1,0 +1,187 @@
+# Lixxon Studio Article-to-Business Automation — Living Plan
+
+**Owner:** Lixxon Studio founder  
+**Prepared:** 2026-10-05 (UTC)  
+**Integration branch:** `arena/4da46b60-lixxonstudio` (Arena-fixed; do not switch branches)  
+**Baseline:** `f5d652ddea9e9441663d7e3cf041548dd9564635`  
+**Production:** `https://lixxonstudio.vercel.app`  
+**Status:** reconnaissance complete; no feature code has been written. The only permitted next work is Phase 1, step 1.1.
+
+This is the execution contract, not a design-only proposal. Work proceeds in order, one unchecked step at a time. For each step: implement only its scope, run its stated proof, record the result and commit SHA here, commit, then push to the fixed integration branch. Do not start the next step until that evidence is recorded. Push after every completed phase and at every session boundary. Open one PR to `main` only after all five phases and the final acceptance gates pass. Do not merge partial work or claim production success without the post-merge production evidence.
+
+## 0. Verified repository and production inventory
+
+| Area | Verified state at baseline | Consequence for this build |
+|---|---|---|
+| Branch and source of truth | Working tree was clean on `arena/4da46b60-lixxonstudio`; `HEAD` and `origin/main` both resolved to the baseline SHA above. No open PR was returned by GitHub. | Keep every edit, commit, and push on this branch. |
+| Production | The production `/api/health` probe previously returned `ok: true`; deployed version matched `main` at the baseline SHA. | This is a baseline-only check, not proof of any new feature. Recheck after the final merge. |
+| Front end and routing | Vite + React + TypeScript SPA. `App.tsx` lazy-loads the `AdminApp`; the main public shell is separate. The custom route parser is in `src/context/NavigationContext.tsx`, whose unknown-admin fallback is the admin dashboard. | Preserve the entry bundle. Implement the two requested deep links inside the permitted admin application/page boundary; **do not edit `NavigationContext.tsx`**. |
+| Admin / RBAC | Existing M5 admin permissions, database-side checks, MFA, role-filtered navigation, audit log, founder and last-owner protections are in place. `AdminAI.tsx` already exposes the M7–M10 control tower and its permissions. The protected admin files and `docs/ADMIN.md` were inspected. | Add narrowly scoped automation permissions; do not replace the 34-permission M5 model or weaken its guards. Extend the existing four AI suites rather than create a parallel AI control room. |
+| Editorial scheduling | `posts` already has `status`, `scheduled_at`, `published_at` and editorial workflow state. `publish_scheduled_posts()` publishes approved/scheduled due rows; an existing `pg_cron` job checks it every five minutes. | Reuse the existing article scheduler. Do not add a duplicate `scheduled_for` column or a second publisher. Add only the missing pipeline/run state and enforce that automation never writes `posts.content`. |
+| Background jobs | Regular email/rate work already runs in Supabase `pg_cron` + `pg_net`; `cron.yml` is a manual recovery workflow, not the production scheduler. The deploy workflow verifies registered cron jobs. | Add one idempotent daily pipeline trigger to the existing Supabase scheduler, not a polling Vercel function or recurring GitHub cron. Keep its GH dispatch payload non-secret. |
+| Admin AI | M7 has grounded suggestions, approval, and a low-risk allow-list; M8 adds six operational roles/jobs/queue; M9 adds goals, strategy, commands, knowledge, campaigns, critic and routes; M10 adds events, forecasts, security, lifecycle, trust and learning. Existing database functions are `SECURITY DEFINER`, permission-check their underlying actions, and are audited. | Reuse `admin_ai_agents`, jobs, queue, events, critic, controls and metrics. Add the six requested business agents as extensions, not a competing agent framework. Preserve the allow-lists and human decisions. |
+| PWA | One reader PWA and root-scoped `public/sw.js` already exist. The worker contains cache/version and recovery behavior. | Add two install identities/manifests and Buddy; touch `public/sw.js` only for push handlers and a cache-version bump. Preserve its fetch behavior, kill switches, and self-healing. |
+| Commerce | Flutterwave checkout, server-authoritative order pricing, webhook and browser verification, idempotent fulfilment, download entitlements, refunds, gift cards and tests already exist. Flutterwave's public checkout key is currently a browser build setting; secret verification uses Edge Function secrets. | Extend and test the real payment path; do not rebuild checkout. Keep private payment credentials server-side and route the automation-managed secret through Vault. Never run a destructive production payment test. |
+| Deployment and CI | CI runs on pushes to `main` and `arena/**`, and PRs. `Deploy Supabase` deploys on `main` (or manual dispatch), not an integration-branch push. Vercel production deploys from `main`. Recent CI/deploy runs on the latest `main` were green; historical runs of the manual-backup workflow include failures and must not be mistaken for production cron failures. | Run all gates locally and on this branch/PR. Production schema and UI verification is a final post-merge gate; the existing deployment topology cannot prove a new production migration before the one permitted merge without changing live infrastructure. |
+| Tests and budgets | The CI workflow runs npm install/audit, app + Edge + API TypeScript, lint, Vitest, production build, 250 KB per-public-file limit, frozen gzip bundle budget, and `python3 scripts/db-test.py`. That runner explicitly enumerates eleven SQL assertion files; new suites must be registered. PR CI also runs Lighthouse CI; `perf.yml` measures production weekly and on PRs. | Run these same gates before every push. Register every new SQL suite in `scripts/db-test.py`; no budget baseline reset without evidence and a separate owner-approved reason. |
+| Actions runtime | The repository is public. GitHub documents standard hosted runners as free/unlimited for public repositories, with a 6-hour hosted-job maximum. Use pinned `ubuntu-24.04`. The current official runner image manifest does **not** list FFmpeg, so the video job must install it and assert `ffmpeg -version`. | Keep expensive work on hosted Actions, within a hard per-run deadline and zero paid compute. On quota/provider failure, pause, log and alert; never fall back to a paid plan or spin indefinitely. |
+| Protected files | `Header.tsx`, `Footer.tsx`, `NavigationContext.tsx`, custom `Link`, `ThemeContext.tsx`, and `tailwind.config.js` are explicitly off-limits. | Do not edit them. Keep the public shell and navigation API intact. |
+
+### Working invariants (apply to every phase)
+
+1. The founder writes every article. No agent, workflow, prompt, API, trigger or action may write, rewrite, improve or restore article prose. In particular, no automation path has an update privilege/path to `posts.content`; no copying `posts.content` into an article draft, generated replacement, or field patch. The article itself is source material only for approved distribution excerpts, links and metadata that the owner has explicitly requested.
+2. Publish is an explicit action. New channels default to **approval required**. No article, social post, email or video goes public before an owner approval tap. Per-channel auto-publishing may be enabled only by a separate owner action after 30 days of clean measurements; it is off by default, independently revocable, and audited. A scheduled article's existing explicit owner approval/scheduling is the publishing approval, but it does not authorize auto-publishing to distribution channels.
+3. Secrets live server-side in Supabase Vault. Secret values are never returned to a browser, logged, included in audit diffs, embedded in workflow events or named `VITE_*`. Browser responses show only secret names, masked presence, test time and redacted result. Public Actions logs receive only a non-secret run identifier; authenticate runners with short-lived, run-bound proof (GitHub OIDC plus single-use capability), not a bearer token in a public dispatch payload.
+4. The AI layer is provider-agnostic and fail-closed. No paid model/media/service fallback. Show remaining daily allowance; on exhaustion or API review/permission failure, keep the work in the Daily Kit, explain the block and alert the owner.
+5. Every new table has RLS, least-privilege policies and cross-user-read assertions. Every new callable function is `SECURITY DEFINER SET search_path = public, pg_temp`, checks database permissions and underlying capabilities, has `PUBLIC` execute revoked, and receives only the minimum role grant. Audit mutations. Preserve MFA, the full M5 RBAC model, founder/last-owner checks, and reversible owner decisions.
+6. Mobile-first, light by default with optional dark mode; keyboard operable, labeled, visible focus, at least 44×44 px targets. Keep public entry JS flat; lazy-load automation, Admin AI and Buddy. No dead controls or “coming soon” placeholders—unavailable integrations must be explicitly disabled with a reason and a working manual-kit alternative where appropriate.
+7. All time math is stored as UTC. The daily owner-facing schedule is 08:00 Africa/Lagos (UTC+1 year-round); the scheduler therefore uses 07:00 UTC and displays both zones. Idempotency keys prevent retries from posting or publishing twice.
+8. No production-destructive tests. Use embedded Postgres, isolated test fixtures, mocks/provider sandboxes, and read-only production checks. For the final live commerce proof, use a non-destructive owner-approved test procedure or a verified zero-value/sandbox order.
+
+## 1. Phase 1 — secure foundation and system check
+
+### 1.1 Schema, Vault boundary and proof harness
+
+- [ ] Add additive migrations for `automation_secrets` metadata (Vault IDs only), `feature_flags`, `article_pipeline_state`, `article_runs`, `automation_logs`, and `automation_run_tokens`. Do not duplicate the existing `posts.scheduled_at`/publisher. Feature flags start fail-closed.
+- [ ] Create least-privilege RPCs for saving, listing metadata, deleting, testing and internal server-side retrieval of a named secret. Listing never returns `vault.decrypted_secrets.decrypted_secret`; test responses never echo provider bodies/credentials. Make Vault writes and audit changes atomic where possible. Ensure browser roles cannot select Vault data or mutate these tables directly.
+- [ ] Use database authorization for every RPC; add narrow automation permissions to the existing permissions/role system. Keep setup owner-only; retain last-owner/MFA policy.
+- [ ] Add an article-content guard and structural/behavioral assertions proving the new automation roles, service runner and edge workflow cannot change `posts.content`. Human editorial save/restore stays governed by its current editorial permissions.
+- [ ] Add SQL assertions for anonymous/non-owner denials, RLS, cross-user isolation, Vault value non-disclosure, no secret-shaped audit/log fields, kill switch and article-content immutability. Register each file in the explicit test list in `scripts/db-test.py`.
+- [ ] Add unit coverage for masked secret DTOs, authorization and feature-flag defaults.
+
+**1.1 evidence:** migration list, each registered SQL assertion, and `python3 scripts/db-test.py`; exact SHA recorded here before proceeding.
+
+### 1.2 Keys page and end-to-end secret checks
+
+- [ ] Add the owner-only `/admin/automation/keys` screen and secure server/Edge endpoints. It supports paste/save, replace, delete and a real minimal provider test. Show the secret name, masked configured state, last test time and redacted success/failure only. Do not provide reveal/copy/list-secret-value APIs.
+- [ ] Cover provider-agnostic AI, GitHub dispatch, Flutterwave/webhook, email and the requested platform/VAPID/video integrations. Use the app's Vault path for runtime automation keys; document any existing deployment-only credentials that must remain in GitHub/Vercel infrastructure settings rather than pretending the app can change them.
+- [ ] A test button calls the provider server-side with a minimal request, consumes the response, stores only safe status metadata and returns no secret or raw provider payload. Invalid credentials fail clearly without affecting checkout or other integrations.
+- [ ] The page has keyboard-accessible labels, focus, status and confirmation; destructive replacement/deletion asks for confirmation. Record only redacted key-name/metadata changes in the audit trail.
+
+**1.2 evidence:** browser/network inspection confirms no values in response/storage/logs; valid, invalid, replace and delete tests; non-owner/anonymous denials; app, API and Edge type checks.
+
+### 1.3 Health API and System Check
+
+- [ ] Add `/api/automation/health` with read-only, secret-free diagnostics. Check database/migrations, Vault availability (presence only), Actions dispatch configuration/last job, schedule registration/last run, AI-provider test age/quota, enabled channel connectivity, video toolchain/run age, push readiness, commerce/webhook configuration and outstanding incidents.
+- [ ] Add `/admin/automation/check`, owner/admin-gated according to the automation check permission. Each row is `healthy`, `warning`, `blocked` or `not configured`, explains its evidence and links to the relevant page. “Green” means measured evidence, not just a saved key. A failure includes a safe remediation and never triggers a paid fallback.
+- [ ] Add probes/tests for 401/403 behavior, missing credentials, stale checks, timeouts and redaction. Keep the existing `/api/health` contract unchanged.
+
+**1.3 evidence:** API and authenticated UI checks, secret redaction, negative authorization and mocked timeout/quota tests.
+
+### 1.4 Integration and acceptance
+
+- [ ] Integrate the two exact paths inside permitted admin files (not `NavigationContext.tsx`); keep both admin-lazy. Ensure browser refresh/back works on each deep link and permission denial is enforced by the database, not only hidden navigation.
+- [ ] Confirm all Phase 1 switches default off and all M5 capabilities/production routes are unchanged.
+- [ ] Run the full pre-push gate in §7, record the evidence and SHA, push the phase, and do not begin Phase 2 until the phase gate is green.
+
+**Phase 1 gate:** all 1.1–1.4 checks pass; key save/test/delete does not reveal values; all new DB assertions pass; no `posts.content` mutation is possible through an automation path; no new public bundle regression.
+
+## 2. Phase 2 — article queue and the 08:00 Lagos pipeline
+
+### 2.1 Owner-authored article intake and calendar
+
+- [ ] Add an owner-facing article queue for up to ten DOCX files plus their selected images/category/tags and proposed publish dates. Extract text only for import and validation; preserve it byte-for-byte after import. Never call a generative model to create or rewrite `posts.content`.
+- [ ] Validate real word count (target 3,500–4,000 words), required image/category/tags/metadata, duplicate slug, bad/missing image, invalid/past date and two-per-day limit. Validation may report, warn or block; it may not edit prose. Support owner correction/re-upload and explicit per-row rejection.
+- [ ] Reuse the existing `posts` draft/scheduled editor and `scheduled_at`; store only pipeline state and run linkage separately. Calendar supports drag/drop reschedule with confirmation, list/week/month views, search/filter, and direct edit without changing the existing editor.
+- [ ] Show queue health and publish readiness. Only an owner/editor with the existing publish capability can move a draft to scheduled/publish-approved state.
+
+### 2.2 Daily orchestration
+
+- [ ] At 07:00 UTC (08:00 Lagos), a single Supabase `pg_cron` task claims due, owner-approved rows and issues an idempotent pipeline run. A late or duplicate tick must be safe. It dispatches a public-repo Actions workflow with a non-secret run identifier only; the runner proves its workflow/repository/ref identity via OIDC and redeems a scoped, short-lived, single-use run capability.
+- [ ] Use the existing five-minute `publish_scheduled_posts()` job for scheduled publication; do not create a second publisher or publish unapproved drafts. Keep scheduled publication and channel-distribution approvals separate.
+- [ ] Heavy work runs in `.github/workflows/automation.yml` on `ubuntu-24.04`, with explicit timeouts, concurrency/idempotency controls, quota caps, artifacts retention and safe retries. Install/verify FFmpeg explicitly before rendering. No heavy task or polling loop in Vercel serverless.
+- [ ] Add per-article stages: preflight, approved source snapshot/checksum, safe metadata/link checks, channel-kit preparation, optional approved asset rendering, owner review and final publish/dispatch. Every stage is resumable and individually logged; a failed stage does not silently skip or mutate the article.
+- [ ] Validate links, image attribution/alt text, disclaimers and claims. Risk/medical/guaranteed-result language produces a human-review hold, not an automatic rewrite.
+
+### 2.3 Run monitor and controls
+
+- [ ] Add `/admin/automation/runs`: current and queued jobs, article title/ID, Lagos+UTC time, step, duration, retry count, usage/quota, redacted logs and final URLs. Each pause/resume/retry/cancel action works and is audited. Preview mode performs no external write, email, payment or publish.
+- [ ] Add owner-controlled schedule and kill switch. Failure alerts use configured email and Telegram/Web Push fallback without exposing tokens. When a key/quota is missing, the run stops and preserves a usable draft/kit.
+
+**Phase 2 gate:** test a due approved fixture publishes exactly once on the next scheduled tick; an unapproved draft remains unpublished; an invalid fixture stops before external side effects; dry run has no side effects; duplicate/retried Actions runs do not double-publish; existing scheduler and article editor tests remain green.
+
+## 3. Phase 3 — channel adapters, Daily Kit and zero-cost video
+
+### 3.1 Distribution model and personalized channels
+
+- [ ] Add RLS-protected channel account/configuration metadata, per-channel approval/auto-publish settings, `distribution_log` and `ab_test_variants`; secrets remain in Vault. Store idempotency key, approved payload checksum, remote post ID/URL, last attempt, usage, rejection/error class and final status—never tokens or raw secret-bearing provider responses.
+- [ ] Build separate server-side adapters and provider tests for **Instagram, Facebook Pages, YouTube Shorts, TikTok, Pinterest, Telegram, Threads, LinkedIn, X, Tumblr, WhatsApp share/Business where officially supported, the existing email newsletter path, and the site's own content widget**. Each adapter returns only verified outcome metadata. Do not label a post successful until the provider returns a remote ID and a follow-up/readback or provider receipt confirms it.
+- [ ] Show each channel's truthful state: `connected`, `approval required`, `manual kit`, `paused`, `blocked by provider review`, `quota exhausted` or `not configured`, with a specific reason and next action. Platform API review, payment/plan requirements, missing scopes and unsupported post types stay paused/manual; never invent a successful integration.
+- [ ] Generate channel-specific approved excerpts/captions, link/UTM, approved CTA, image crops and short-video copy only from the owner's article and explicitly selected product links. Preserve article text. Require owner approval for every channel payload until that individual channel is deliberately opted into auto-publishing after the 30-day clean-metrics period; every toggle is audited and reversible.
+- [ ] Add a functional Daily Kit with per-channel preview/edit (distribution copy only), copy, image download, caption/hashtags, link, UTM, posting instructions and working provider share/deep links where available. The manual fallback remains usable when a provider is paused. Email preview/test-send requires confirmation; actual send is approved and quota-limited.
+
+### 3.2 Video and measurement
+
+- [ ] Render a branded, portrait 9:16 article explainer from approved source excerpts and/or licensed Coverr stock. Use local FFmpeg on free GitHub-hosted runners; install and assert its version. Verify stock/license attribution, captions, sound/alt text, codec, dimensions, duration and playback before offering download. Keep the original article immutable.
+- [ ] Add per-channel publishing caps, daily free-tier usage, backoff, retry classification and circuit breakers. Stop on quota/auth/policy error; alert and retain the kit. An A/B variant requires owner approval, a clear hypothesis and an explicit primary/guardrail metric; never test unapproved claims or silently replace article prose.
+- [ ] Add measured reach/click/conversion/engagement where APIs and consent permit; distinguish measured provider metrics from estimates. Suppress customer PII and use aggregate-only lifecycle analytics.
+
+**Phase 3 gate:** provider-mocked end-to-end tests for all adapters, real authenticated readback for every configured platform, owner approval required by default, at least nine truly connected automatic targets only if the owner has enabled each one and free quotas allow it, remaining channels shown honestly as paused/manual, Android video playback verified, quota/failure isolation proven, and a complete manual Daily Kit demonstrated.
+
+## 4. Phase 4 — six operations agents extending M7–M10
+
+- [ ] Add the requested six roles—**Analyst, Strategist, CEO, Auditor, Executioner and Chief of Staff**—to the existing `admin_ai_agents`/jobs/queue/events/control-tower model. Preserve existing SEO/content/community/commerce/reliability/security agents, permission checks, kill switch, two-person/sensitive approvals, critic and audit semantics. No duplicate unreviewed task runner.
+- [ ] Add `agent_runs`, `agent_findings` and `agent_commands` only for traceable operations attribution/command execution not already modeled by M7–M10; link them to existing `admin_ai_jobs`, commands, events and action queue. Add RLS/cross-user assertions. Record latency, safe usage counters, outcome, run ID and provider route, never prompt secrets or private keys.
+- [ ] Analyst reports measured article views/search, conversions, Flutterwave paid-order aggregates, email/channel metrics, top content/products and safe recommendations. All data is real server-side data; label unavailable metrics instead of fabricating them. No browser-supplied sales/revenue input is trusted.
+- [ ] Strategist uses grounded site/catalog/trend evidence to create a goal, hypothesis and reviewable plan. CEO proposes only bounded, reversible, auditable experiments/actions. Auditor independently blocks secret leakage, disallowed health/guarantee claims, missing evidence, article-body mutation and unauthorized publishing. Executioner may dispatch only the owner-approved job/channel payload. Chief of Staff turns the morning state into a prioritized, linked digest with one safe next action.
+- [ ] Buddy exposes only an allow-listed set of typed, least-privilege RPC operations (check, summarize, queue, pause, run, preview, approved publish). Parse commands into a preview/confirmation contract; ask before ambiguous, irreversible or external actions. A chat message itself never implies approval.
+- [ ] Add per-agent pause, last-run/next-run, job transcript and incident controls to the existing Admin AI control tower. All six remain paused or suggestion-only by default; preserve provider/budget/kill-switch controls.
+
+**Phase 4 gate:** seeded deterministic fixtures prove exact metric values, safe suggestions, unauthorized-call denial, Auditor blocks, content immutability, no auto-publish, explicit CEO/Executioner approval, agent pause, replay/idempotency and audit completeness. Update `docs/ADMIN.md` without removing existing M7–M10 instructions.
+
+## 5. Phase 5 — three Android-installable PWAs, Buddy push, commerce and cleanup
+
+- [ ] Keep the existing reader PWA and add distinct, installable **Owner/Admin** and **Buddy** manifests with stable unique app IDs, icons, names, start URLs and route-specific manifest selection. Add responsive, labeled install instructions and verify installation/update/launch on Android Chrome. Do not fork the content or weaken admin authorization.
+- [ ] Add opt-in Web Push with VAPID keys in Vault, authenticated subscription ownership, unsubscribe/revoke and minimal notification payloads. Extend `public/sw.js` only with push/notification-click handlers and a cache-version bump; keep its existing offline/cache kill switches and self-healing behavior. Telegram remains the user-requested fallback. No notification contains article/customer data or secrets.
+- [ ] Integrate Buddy in its own installable surface and permitted admin surface; support offline-safe draft commands/queue, clear pending/failed state, and explicit reconfirmation before any external side effect. No cached token or privileged offline action.
+- [ ] Wire a visible, real Flutterwave product/payment path to current checkout, server-side verification/webhook and existing idempotent fulfilment. Automation can recommend/link a product but cannot change price, entitlement or payment state. Test callback/webhook/signature failure and duplicate settlement in a sandbox/mock; production uses a non-destructive procedure.
+- [ ] Finish cleanup, redaction, rate limits, CSRF/CORS/origin checks, request-id correlation, log retention, quota/usage UX, keyboard/mobile accessibility, contrast, light/dark, test coverage, admin/setup docs and a complete channel/permission/data map. Remove only proven-unused automation-specific artifacts; never delete content, products, customers, orders, audit logs or existing media.
+
+**Phase 5 gate:** all three PWAs install/launch on Android; push opt-in/delivery/unsubscribe works; Buddy previews and confirms a safe real action; commerce verifies through the existing server-side path; kill switch and quota caps stop work; final pre-push gates and production Lighthouse pass; every feature in System Check has real evidence; no forbidden file was touched.
+
+## 6. Final acceptance and merge protocol
+
+1. Re-run the full gate in §7 on the integration branch. Resolve every failure; do not suppress/skip an existing gate or silently reset a budget.
+2. Verify all new SQL assertion suites are included in `scripts/db-test.py` and all are green. Verify `git diff --check`, clean status, public-asset budget and gzip budget.
+3. Verify no secret or owner-written article prose changed, no forbidden files changed, no dead buttons/placeholder channel statuses exist, and public entry bundle remains within its frozen budget.
+4. Confirm approvals/kill switches/zero-spend caps with tests. Capture screenshots/API results/log IDs with all personal data and secrets redacted. Test URLs and first-run instructions must be in `docs/AUTOMATION_SETUP.md`.
+5. Only after all five phases and every gate pass, open **one** PR from `arena/4da46b60-lixxonstudio` to `main`. Do not open phase PRs and do not merge until CI, Lighthouse, database assertions and review are green. After the single merge, verify Supabase deployment/migrations and production System Check/read-only health, inspect the daily cron and first run, and test enabled providers only with owner-authorized credentials. If a production gate fails, report it honestly and fix forward; do not call the system complete until corrected.
+6. Write the detailed final evidence/report to `/home/user/AUTOMATION_REPORT.md`. The handover lists exact key names, exact production/test URLs, first-run steps, per-channel verified status, quotas/limitations, PR/merge SHA and production evidence. Never claim unavailable/untested channels work.
+
+## 7. Mandatory pre-push gate (before **every** push)
+
+Run from repository root, in this order, with the same safe CI build values:
+
+```sh
+npm ci
+npm audit --audit-level=high
+npx tsc --noEmit -p tsconfig.app.json
+npx tsc --noEmit -p supabase/functions/tsconfig.json
+npx tsc --noEmit -p api/tsconfig.json
+npm run lint
+npm test
+VITE_SUPABASE_URL=https://example.supabase.co VITE_SUPABASE_ANON_KEY=ci-placeholder npm run build
+node scripts/public-size-budget.mjs
+node scripts/size-budget.mjs
+python3 scripts/db-test.py
+```
+
+Also run targeted integration/provider-mock checks for the completed step and `git diff --check`. The PR workflow runs Lighthouse CI; production Lighthouse remains a separate live check. Before the video workflow is enabled, install `ffmpeg` on `ubuntu-24.04` and assert it with `ffmpeg -version` rather than depending on an image default. If any required command cannot run in the sandbox, mark the gate blocked, capture the exact error and do not state that the gate passed.
+
+## 8. Work log (append one evidence row per completed step)
+
+| Date (UTC) | Step | Verification/evidence | Commit SHA | Push |
+|---|---|---|---|---|
+| 2026-10-05 | 0 — repository/production reconnaissance and plan bootstrap | Clean fixed branch; HEAD=origin/main=`f5d652ddea9e9441663d7e3cf041548dd9564635`; production health/version baseline checked; architecture, migrations, workflows, M7–M10, assertion suites and protected paths inventoried. Plan commit SHA to be recorded immediately after commit. | pending | pending |
+
+## 9. Questions / conservative resolutions
+
+- **Auto-publish eligibility:** “30 days of clean metrics” was specified, but the exact clean-metrics threshold was not. Until the owner defines that threshold, the UI must not enable channel auto-publishing; default remains per-item approval. This does not block a safe approval-first release.
+- **API availability/free tiers:** platform app review, permissions, API pricing and quotas depend on owner credentials and platform accounts that are not in this repository. No tokens were inspected or assumed. An integration is `connected` only after a live provider test; otherwise it is honestly `manual kit`, `paused`, `blocked` or `not configured`. Do not purchase access or bypass platform review.
+- **Production-before-merge constraint:** existing Vercel/Supabase deployment workflows deploy from `main`, while the owner requires a single final merge. Do not manually deploy partial branch migrations to production. Prove pre-merge behavior with embedded Postgres, unit/integration tests and safe preview checks; the production gate is the required read-only/owner-authorized smoke test immediately after the one final merge. If policy requires production proof before merge, that conflicts with the existing deployment topology and must be resolved before changing it.
+- **08:00 acceptance wording:** a “draft that publishes on the next run” is interpreted under the stricter explicit-approval rule: the owner first approves/schedules it; the existing scheduled publisher then publishes exactly once at the due time. A merely imported/unapproved draft never publishes automatically.
+- **Daily 3,500–4,000 requirement:** interpreted as a **word-count validation band** for the owner-authored DOCX, not a command to expand, rewrite or reject prose without owner review. The importer reports the count and never changes the text.
+
+---
+
+**Next action:** implement only Phase 1, step 1.1. No feature code may precede this plan's first commit/push.
