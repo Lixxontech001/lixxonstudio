@@ -19,6 +19,9 @@ export default function AdminLogin() {
     if (error) {
       setError(error);
       setLoading(false);
+    } else if (window.location.pathname.replace(/\/+$/, '') === '/admin/automation/keys') {
+      // Preserve this exact deep link after authentication without accepting an open redirect.
+      window.location.replace('/admin/automation/keys');
     } else {
       navigate({ name: 'admin-dashboard' });
     }

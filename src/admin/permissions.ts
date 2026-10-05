@@ -57,6 +57,7 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   'admin-data': 'data.explore',
   'admin-settings': 'settings.read',
   'admin-frontend': 'settings.frontend',
+  'admin-automation-keys': 'automation.keys',
   // 'admin-security' (own 2FA), 'admin', 'admin-login' need no capability
 };
 
@@ -75,9 +76,11 @@ export function can(access: AdminAccess | null, permission: string): boolean {
 export function canAccess(access: AdminAccess | null, routeName: string): boolean {
   if (!routeName.startsWith('admin')) return true;
   if (routeName === 'admin' || routeName === 'admin-login') return true;
-  if (!access) return false;
+  if (!access || access.status !== 'active') return false;
   if (access.is_founder || access.is_owner) return true;
-  if (access.status !== 'active') return false;
+  // This screen manages application-wide provider secrets: an explicit RBAC
+  // override must not turn it into a non-owner capability.
+  if (routeName === 'admin-automation-keys') return false;
   const needed = ROUTE_PERMISSIONS[routeName];
   if (!needed) return true; // e.g. admin-security: any active admin
   return access.permissions.includes(needed);

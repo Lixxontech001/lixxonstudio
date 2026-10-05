@@ -14,7 +14,7 @@ const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
 
 function migrationSql(): string {
   return readdirSync(MIGRATIONS)
-    .filter(f => /^202610042\d+.*\.sql$/.test(f))
+    .filter(f => /^2026\d{10}_.*\.sql$/.test(f))
     .map(f => readFileSync(join(MIGRATIONS, f), 'utf8'))
     .join('\n');
 }
@@ -50,6 +50,7 @@ describe('admin RBAC map vs the database catalogue', () => {
     expect(ROUTE_PERMISSIONS['admin-frontend']).toBe('settings.frontend');
     expect(ROUTE_PERMISSIONS['admin-health']).toBe('ops.health');
     expect(ROUTE_PERMISSIONS['admin-activity-log']).toBe('audit.read');
+    expect(ROUTE_PERMISSIONS['admin-automation-keys']).toBe('automation.keys');
   });
 
   it('refuses a route when the permission is absent, and allows it when present', () => {
@@ -60,6 +61,8 @@ describe('admin RBAC map vs the database catalogue', () => {
     expect(canAccess(access(['ops.health']), 'admin-health')).toBe(true);
     expect(canAccess(access(['ops.health']), 'admin-data')).toBe(false);
     expect(canAccess(access(['content.read']), 'admin-advisor')).toBe(false);
+    expect(canAccess(access(['automation.keys']), 'admin-automation-keys')).toBe(false);
     expect(canAccess(access([], { is_owner: true }), 'admin-data')).toBe(true);
+    expect(canAccess(access([], { is_founder: true }), 'admin-automation-keys')).toBe(true);
   });
 });

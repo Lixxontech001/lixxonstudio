@@ -17,3 +17,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.refresh-rates]
 verify_jwt = false
+# Owner-only Vault key checks; verify the caller JWT at the gateway and again in the handler.
+[functions.automation-keys]
+verify_jwt = true

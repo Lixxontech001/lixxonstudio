@@ -18,6 +18,7 @@ import type { LucideIcon } from 'lucide-react';
 interface NavItem {
   label: string;
   route: { name: string };
+  href?: string;
   icon: LucideIcon;
 }
 
@@ -37,6 +38,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Growth & SEO', route: { name: 'admin-growth' }, icon: TrendingUp },
       { label: 'Data explorer', route: { name: 'admin-data' }, icon: Database },
       { label: 'Front end', route: { name: 'admin-frontend' }, icon: Palette },
+      { label: 'Automation keys', route: { name: 'admin-automation-keys' }, href: '/admin/automation/keys', icon: KeyRound },
     ],
   },
   {
@@ -103,7 +105,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const { signOut, adminAccess, email } = useAuth();
   const sections = NAV_SECTIONS.map(sec => ({ ...sec, items: sec.items.filter(i => canAccess(adminAccess, i.route.name)) })).filter(sec => sec.items.length > 0);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['Super panel', 'Editorial', 'Commerce', 'Marketing', 'Analytics']));
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['Super panel', 'Operations', 'Editorial', 'Commerce', 'Marketing', 'Analytics']));
 
   const handleSignOut = async () => {
     await signOut();
@@ -151,13 +153,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 </button>
                 <div className={`lg:${isExpanded ? 'block' : 'hidden'} flex lg:block gap-0.5`}>
                   {section.items.map(item => {
-                    const isActive = route.name === item.route.name;
+                    const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+                    const isActive = route.name === item.route.name || (item.href !== undefined && currentPath === item.href);
                     const Icon = item.icon;
                     return (
                       <button
                         key={item.route.name}
-                        onClick={() => navigate(item.route as never)}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors whitespace-nowrap ${
+                        type="button"
+                        onClick={() => item.href ? window.location.assign(item.href) : navigate(item.route as never)}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={`flex min-h-11 items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors whitespace-nowrap ${
                           isActive ? 'bg-bronze text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                         }`}
                       >

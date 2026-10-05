@@ -52,7 +52,9 @@ export async function callerUser(req: Request) {
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false },
     });
-    const { data } = await client.auth.getUser();
+    // Pass the bearer explicitly: Edge Functions have no browser session storage,
+    // so getUser() without a JWT would always report a missing session.
+    const { data } = await client.auth.getUser(token);
     return data.user ?? null;
   } catch {
     return null;

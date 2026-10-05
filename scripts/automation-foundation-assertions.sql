@@ -43,6 +43,7 @@ DECLARE
   anon_claims jsonb := '{"role":"anon"}'::jsonb;
   service_claims jsonb := '{"role":"service_role"}'::jsonb;
   fake_secret text := 'AUTOMATION-FAKE-SECRET-never-persist-in-app-table-314159';
+  replacement_secret text := 'AUTOMATION-REPLACEMENT-SECRET-never-persist-in-app-table-271828';
   result jsonb;
   secret_list text;
   audit_rows text;
@@ -97,7 +98,8 @@ BEGIN
      WHERE n.nspname = 'public' AND p.proname IN (
        'automation_list_secrets', 'automation_secret_save', 'automation_secret_delete',
        'automation_secret_get_internal', 'test_automation_secret', 'automation_feature_flags',
-       'automation_set_feature_flag', 'automation_write_log', 'automation_guard_post_content'
+       'automation_set_feature_flag', 'automation_write_log', 'automation_guard_post_content',
+       'automation_owner_authorized'
      )
   LOOP
     IF fn.prosecdef IS NOT TRUE THEN RAISE EXCEPTION '% is not SECURITY DEFINER', fn.proname; END IF;
@@ -108,7 +110,10 @@ BEGIN
   IF has_function_privilege('anon', 'public.automation_list_secrets()', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.automation_secret_get_internal(text)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.test_automation_secret(text,text)', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'public.automation_write_log(text,text,text,uuid,jsonb)', 'EXECUTE') THEN
+     OR has_function_privilege('authenticated', 'public.automation_write_log(text,text,text,uuid,jsonb)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.automation_owner_authorized()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.automation_owner_authorized()', 'EXECUTE')
+     OR has_function_privilege('service_role', 'public.automation_owner_authorized()', 'EXECUTE') THEN
     RAISE EXCEPTION 'Anonymous/client role can call an internal automation function';
   END IF;
   IF NOT has_function_privilege('service_role', 'public.automation_secret_get_internal(text)', 'EXECUTE')
@@ -153,6 +158,43 @@ BEGIN
   IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_secret_save(''openai_api_key'', ''not-authorized'')') THEN
     RAISE EXCEPTION 'Non-owner editor saved an automation secret';
   END IF;
+
+  -- Even an explicit M5 capability override cannot turn the Vault Keys page or
+  -- global automation kill switches into a non-owner capability.
+  PERFORM set_config('request.jwt.claims', owner_claims::text, true);
+  PERFORM set_config('request.jwt.claim.sub', owner_claims->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM admin_set_override('00000000-0000-0000-0000-0000000000c3', 'automation.keys', 'grant');
+  PERFORM set_config('request.jwt.claims', editor_claims::text, true);
+  PERFORM set_config('request.jwt.claim.sub', editor_claims->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  IF NOT admin_can('automation.keys') THEN RAISE EXCEPTION 'Owner-only fixture did not receive the explicit M5 override'; END IF;
+  IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_list_secrets()') THEN
+    RAISE EXCEPTION 'An explicit permission override opened the owner-only Keys page';
+  END IF;
+  IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_secret_save(''openai_api_key'', ''not-authorized'')') THEN
+    RAISE EXCEPTION 'An explicit permission override allowed saving a Vault secret';
+  END IF;
+  PERFORM set_config('request.jwt.claims', owner_claims::text, true);
+  PERFORM set_config('request.jwt.claim.sub', owner_claims->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM admin_set_override('00000000-0000-0000-0000-0000000000c3', 'automation.keys', '');
+
+  -- Replacing a key rotates the Vault row transactionally, clears its old test,
+  -- and never returns either value in the owner response.
+  SELECT automation_secret_save('openai_api_key', replacement_secret) INTO result;
+  IF result::text LIKE '%' || replacement_secret || '%' OR result ? 'secret_value' THEN
+    RAISE EXCEPTION 'Key replacement response disclosed its value';
+  END IF;
+  IF EXISTS (SELECT 1 FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_openai_api_key' AND decrypted_secret = fake_secret)
+     OR (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_openai_api_key') IS DISTINCT FROM replacement_secret THEN
+    RAISE EXCEPTION 'Key replacement did not remove the old Vault value and store the new one';
+  END IF;
+  SELECT automation_list_secrets()::text INTO secret_list;
+  IF secret_list LIKE '%' || fake_secret || '%' OR secret_list LIKE '%' || replacement_secret || '%' THEN
+    RAISE EXCEPTION 'Key list disclosed a value after replacement';
+  END IF;
+
   IF NOT _automation_raises('authenticated', owner_claims, 'SELECT * FROM automation_secrets') THEN
     RAISE EXCEPTION 'Owner bypassed the masked secret-list API via direct table read';
   END IF;
@@ -163,7 +205,7 @@ BEGIN
   -- Only a service-role Edge caller may retrieve the value, and only into its
   -- server-side process. A test result is a fixed safe code, not provider output.
   internal_value := _automation_text('service_role', service_claims, 'automation_secret_get_internal(''openai_api_key'')');
-  IF internal_value IS DISTINCT FROM fake_secret THEN RAISE EXCEPTION 'Service role could not retrieve its Vault secret'; END IF;
+  IF internal_value IS DISTINCT FROM replacement_secret THEN RAISE EXCEPTION 'Service role could not retrieve its replacement Vault secret'; END IF;
   SELECT _automation_text('service_role', service_claims, 'test_automation_secret(''openai_api_key'', ''ok'')')::jsonb INTO result;
   IF result->>'status' <> 'ok' OR result::text LIKE '%' || fake_secret || '%' THEN
     RAISE EXCEPTION 'Internal key test result is missing or leaked the secret';
@@ -172,7 +214,38 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', owner_claims->>'sub', true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   SELECT automation_list_secrets()::text INTO secret_list;
-  IF secret_list NOT LIKE '%Provider connection verified.%' THEN RAISE EXCEPTION 'Safe provider-test metadata was not recorded'; END IF;
+  IF secret_list NOT LIKE '%Read-only provider check verified; write scopes were not exercised.%'
+     OR secret_list NOT LIKE '%"credential_type": "secret"%' THEN
+    RAISE EXCEPTION 'Safe provider-test/catalogue metadata was not recorded';
+  END IF;
+  SELECT _automation_text('service_role', service_claims,
+    'test_automation_secret(''openai_api_key'', ''invalid'')')::jsonb INTO result;
+  IF result->>'status' <> 'invalid'
+     OR result->>'message' <> 'Provider rejected this credential or required scope.'
+     OR result::text LIKE '%' || replacement_secret || '%' THEN
+    RAISE EXCEPTION 'Invalid-provider result was not safely labelled';
+  END IF;
+  PERFORM set_config('request.jwt.claims', owner_claims::text, true);
+  PERFORM set_config('request.jwt.claim.sub', owner_claims->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  SELECT automation_list_secrets()::text INTO secret_list;
+  IF secret_list NOT LIKE '%Provider rejected this credential or required scope.%' THEN
+    RAISE EXCEPTION 'Invalid provider result was not persisted safely';
+  END IF;
+  SELECT _automation_text('service_role', service_claims,
+    'test_automation_secret(''openai_api_key'', ''local_ok'')')::jsonb INTO result;
+  IF result->>'status' <> 'local_ok' OR result->>'ok' <> 'false'
+     OR result->>'message' <> 'Local format check passed; provider connectivity is not verified.'
+     OR result::text LIKE '%' || replacement_secret || '%' THEN
+    RAISE EXCEPTION 'Local-only key result was not safely labelled';
+  END IF;
+  PERFORM set_config('request.jwt.claims', owner_claims::text, true);
+  PERFORM set_config('request.jwt.claim.sub', owner_claims->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  SELECT automation_list_secrets()::text INTO secret_list;
+  IF secret_list NOT LIKE '%Local format check passed; provider connectivity is not verified.%' THEN
+    RAISE EXCEPTION 'Local-only test status was not persisted safely';
+  END IF;
 
   -- Owner-only feature policy starts fail-closed, is auditable, and can be restored.
   IF (automation_feature_flags()->>'automation.enabled')::boolean IS DISTINCT FROM false
@@ -190,6 +263,17 @@ BEGIN
   IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_set_feature_flag(''automation.enabled'', true)') THEN
     RAISE EXCEPTION 'Non-owner editor changed an automation feature flag';
   END IF;
+  PERFORM set_config('request.jwt.claims', owner_claims::text, true);
+  PERFORM set_config('request.jwt.claim.sub', owner_claims->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM admin_set_override('00000000-0000-0000-0000-0000000000c3', 'automation.manage', 'grant');
+  IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_set_feature_flag(''automation.enabled'', true)') THEN
+    RAISE EXCEPTION 'An explicit permission override changed an owner-only automation feature flag';
+  END IF;
+  PERFORM set_config('request.jwt.claims', owner_claims::text, true);
+  PERFORM set_config('request.jwt.claim.sub', owner_claims->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM admin_set_override('00000000-0000-0000-0000-0000000000c3', 'automation.manage', '');
   IF NOT _automation_raises('authenticated', owner_claims, 'SELECT automation_set_feature_flag(''unreviewed.feature'', true)') THEN
     RAISE EXCEPTION 'Owner enabled an undefined feature flag';
   END IF;
@@ -245,7 +329,9 @@ BEGIN
   END IF;
 
   SELECT COALESCE(string_agg(to_jsonb(l)::text, E'\n'), '') INTO audit_rows FROM admin_activity_log l;
-  IF audit_rows LIKE '%' || fake_secret || '%' THEN RAISE EXCEPTION 'Audit log contains a raw Vault secret'; END IF;
+  IF audit_rows LIKE '%' || fake_secret || '%' OR audit_rows LIKE '%' || replacement_secret || '%' THEN
+    RAISE EXCEPTION 'Audit log contains a raw Vault secret';
+  END IF;
 
   IF NOT automation_secret_delete('openai_api_key') THEN RAISE EXCEPTION 'Owner could not delete a Vault secret'; END IF;
   IF EXISTS (SELECT 1 FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_openai_api_key')

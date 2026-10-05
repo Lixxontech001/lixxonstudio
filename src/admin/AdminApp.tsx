@@ -49,6 +49,7 @@ const AdminAI = lazy(() => import('./pages/AdminAI'));
 const AdminArticleEditor = lazy(() => import('./pages/AdminArticleEditor'));
 const AdminProductEditor = lazy(() => import('./pages/AdminProductEditor'));
 const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor'));
+const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
 
 const LazyPage = ({ children }: { children: ReactNode }) => (
   <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading editor...</div>}>{children}</Suspense>
@@ -57,6 +58,11 @@ const LazyPage = ({ children }: { children: ReactNode }) => (
 export default function AdminApp() {
   const { route, navigate } = useNavigation();
   const { session, loading, isAdmin, adminAccess, email, signOut, refreshAdmin } = useAuth();
+  // NavigationContext intentionally remains untouched; resolve this protected deep
+  // link at the admin boundary and keep the Keys page lazy-loaded.
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  const routeName = path === '/admin/automation/keys' ? 'admin-automation-keys' : route.name;
+  const routeId = 'id' in route ? route.id : undefined;
 
   useEffect(() => {
     if (session && route.name === 'admin-login') {
@@ -72,11 +78,11 @@ export default function AdminApp() {
     );
   }
 
-  if (!session && route.name !== 'admin-login') {
+  if (!session && routeName !== 'admin-login') {
     return <AdminLogin />;
   }
 
-  if (route.name === 'admin-login') {
+  if (routeName === 'admin-login') {
     return <AdminLogin />;
   }
 
@@ -105,14 +111,16 @@ export default function AdminApp() {
     );
   }
 
-  if (!canAccess(adminAccess, route.name)) {
+  if (!canAccess(adminAccess, routeName)) {
     return (
       <AdminLayout>
         <div className="max-w-md mx-auto text-center py-20">
           <ShieldAlert size={28} className="mx-auto text-amber-500 mb-4" />
           <h1 className="font-serif text-2xl text-charcoal mb-2">Not available to your role</h1>
           <p className="text-sm text-gray-500">
-            Your role is <strong>{adminAccess?.role_label || adminAccess?.role}</strong>. This section needs a permission it does not have — an owner can grant it under Team &amp; access.
+            {routeName === 'admin-automation-keys'
+              ? <>Only an active owner or founder can manage automation credentials.</>
+              : <>Your role is <strong>{adminAccess?.role_label || adminAccess?.role}</strong>. This section needs a permission it does not have — an owner can grant it under Team &amp; access.</>}
           </p>
         </div>
       </AdminLayout>
@@ -120,11 +128,13 @@ export default function AdminApp() {
   }
 
   const renderPage = () => {
-    switch (route.name) {
+    switch (routeName) {
+      case 'admin-automation-keys':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation keys…</div>}><AutomationKeys /></Suspense>;
       case 'admin-dashboard': return <AdminDashboard />;
       case 'admin-articles': return <AdminArticles />;
       case 'admin-article-new': return <LazyPage><AdminArticleEditor isNew /></LazyPage>;
-      case 'admin-article-edit': return <LazyPage><AdminArticleEditor postId={route.id} /></LazyPage>;
+      case 'admin-article-edit': return <LazyPage><AdminArticleEditor postId={routeId} /></LazyPage>;
       case 'admin-categories': return <AdminCategories />;
       case 'admin-authors': return <AdminAuthors />;
       case 'admin-comments': return <AdminComments />;
@@ -134,12 +144,12 @@ export default function AdminApp() {
       case 'admin-settings': return <AdminSettings />;
       case 'admin-products': return <AdminProducts />;
       case 'admin-product-new': return <LazyPage><AdminProductEditor isNew /></LazyPage>;
-      case 'admin-product-edit': return <LazyPage><AdminProductEditor productId={route.id} /></LazyPage>;
+      case 'admin-product-edit': return <LazyPage><AdminProductEditor productId={routeId} /></LazyPage>;
       case 'admin-orders': return <AdminOrders />;
       case 'admin-customers': return <AdminCustomers />;
       case 'admin-collections': return <AdminCollections />;
       case 'admin-collection-new': return <LazyPage><AdminCollectionEditor isNew /></LazyPage>;
-      case 'admin-collection-edit': return <LazyPage><AdminCollectionEditor collectionId={route.id} /></LazyPage>;
+      case 'admin-collection-edit': return <LazyPage><AdminCollectionEditor collectionId={routeId} /></LazyPage>;
       case 'admin-newsletter': return <AdminNewsletter />;
       case 'admin-analytics': return <AdminAnalytics />;
       case 'admin-sponsored': return <AdminSponsored />;
