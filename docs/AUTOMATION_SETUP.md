@@ -11,6 +11,13 @@ This is the owner-facing setup and key-handling guide. Do not paste credentials 
 - Paste one credential into its labelled field and choose **Save**. For an existing value, confirm **Replace**. The field clears after the save attempt. The app stores the value in Supabase Vault; the Keys page only receives the catalogue name, type, configured state and redacted test metadata. A saved value cannot be viewed or copied back. Replace it with the provider's newly issued value if it is lost or rotated.
 - **Delete** asks for confirmation and permanently removes the Vault value. Saving/replacing/deleting is audited as metadata only; provider values and provider response bodies are not included.
 
+## System Check
+
+- Owner/admin page: `/admin/automation/check`
+- API: the same site's `/api/automation/health`; it requires the signed-in session and the database-enforced `automation.check` permission.
+- The check reads only safe database metadata. It does not read or return Vault values, call provider endpoints, dispatch jobs, publish content or enable any feature flag. “Healthy” requires measured evidence; quota, channel readback, webhook-signature and push-delivery checks remain warnings until their real end-to-end flows are implemented and verified.
+- Production URL after the final merge and deployment: `https://lixxonstudio.vercel.app/admin/automation/check`.
+
 The key catalogue includes these exact Vault names:
 
 | Group | Names |

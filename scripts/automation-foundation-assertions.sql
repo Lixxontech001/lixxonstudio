@@ -51,6 +51,8 @@ DECLARE
   log_id bigint;
   flag_updated boolean;
   current_flags jsonb;
+  health_snapshot jsonb;
+  health_item jsonb;
   rel record;
   fn record;
   v_source text;
@@ -99,7 +101,7 @@ BEGIN
        'automation_list_secrets', 'automation_secret_save', 'automation_secret_delete',
        'automation_secret_get_internal', 'test_automation_secret', 'automation_feature_flags',
        'automation_set_feature_flag', 'automation_write_log', 'automation_guard_post_content',
-       'automation_owner_authorized'
+       'automation_owner_authorized', 'automation_health_snapshot'
      )
   LOOP
     IF fn.prosecdef IS NOT TRUE THEN RAISE EXCEPTION '% is not SECURITY DEFINER', fn.proname; END IF;
@@ -113,12 +115,44 @@ BEGIN
      OR has_function_privilege('authenticated', 'public.automation_write_log(text,text,text,uuid,jsonb)', 'EXECUTE')
      OR has_function_privilege('anon', 'public.automation_owner_authorized()', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.automation_owner_authorized()', 'EXECUTE')
-     OR has_function_privilege('service_role', 'public.automation_owner_authorized()', 'EXECUTE') THEN
+     OR has_function_privilege('service_role', 'public.automation_owner_authorized()', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.automation_health_snapshot()', 'EXECUTE')
+     OR has_function_privilege('service_role', 'public.automation_health_snapshot()', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'public.automation_health_snapshot()', 'EXECUTE') THEN
     RAISE EXCEPTION 'Anonymous/client role can call an internal automation function';
   END IF;
   IF NOT has_function_privilege('service_role', 'public.automation_secret_get_internal(text)', 'EXECUTE')
      OR NOT has_function_privilege('service_role', 'public.test_automation_secret(text,text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'Trusted Edge service role cannot call required internal secret RPCs';
+  END IF;
+
+  -- The owner-only health RPC returns measured safe metadata, including the
+  -- expected not-configured state before any fixture credential is stored.
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  IF jsonb_typeof(health_snapshot->'checks') <> 'array'
+     OR jsonb_array_length(health_snapshot->'checks') <> 12
+     OR health_snapshot::text LIKE '%' || fake_secret || '%'
+     OR health_snapshot::text LIKE '%decrypted_secret%'
+     OR health_snapshot::text LIKE '%vault_secret_id%' THEN
+    RAISE EXCEPTION 'Automation health snapshot is incomplete or disclosed a secret field';
+  END IF;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'ai_providers';
+  IF health_item->>'status' <> 'not_configured'
+     OR (health_item->'evidence'->>'configured_providers')::integer <> 0 THEN
+    RAISE EXCEPTION 'Missing AI credentials were not reported as not configured';
+  END IF;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'daily_schedule';
+  IF health_item->>'status' <> 'not_configured' THEN
+    RAISE EXCEPTION 'An unregistered daily schedule was reported as healthy';
+  END IF;
+  IF NOT _automation_raises('anon', anon_claims, 'SELECT automation_health_snapshot()')
+     OR NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_health_snapshot()') THEN
+    RAISE EXCEPTION 'Anonymous or non-owner caller accessed automation health';
   END IF;
 
   -- New automation/legacy worker definitions contain no UPDATE/INSERT path to article prose.
@@ -246,6 +280,134 @@ BEGIN
   IF secret_list NOT LIKE '%Local format check passed; provider connectivity is not verified.%' THEN
     RAISE EXCEPTION 'Local-only test status was not persisted safely';
   END IF;
+
+  -- Stale read-only tests and unmeasured quotas never get a green status.
+  UPDATE automation_secrets
+     SET last_test_status = 'ok', last_tested_at = now() - interval '48 hours'
+   WHERE secret_name = 'openai_api_key';
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'ai_providers';
+  IF health_item->>'status' <> 'warning'
+     OR (health_item->'evidence'->>'recent_successful_tests')::integer <> 0 THEN
+    RAISE EXCEPTION 'A stale AI provider test was reported as fresh or healthy';
+  END IF;
+  UPDATE automation_secrets SET last_tested_at = now() WHERE secret_name = 'openai_api_key';
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'ai_providers';
+  IF health_item->>'status' <> 'warning'
+     OR (health_item->'evidence'->>'recent_successful_tests')::integer <> 1 THEN
+    RAISE EXCEPTION 'An AI key was reported green without quota measurements';
+  END IF;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'ai_quota';
+  IF health_item->>'status' <> 'warning'
+     OR (health_item->'evidence'->>'quota_measured')::boolean THEN
+    RAISE EXCEPTION 'Missing AI quota evidence was not reported as a warning';
+  END IF;
+
+  -- Only recent, valid, positive measurements can be green; a zero remaining
+  -- measurement blocks AI even when the stored credential itself tested OK.
+  INSERT INTO automation_logs (event_code, status, details)
+  VALUES ('AI.QUOTA', 'succeeded', '{"quota_remaining":10}'::jsonb);
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'ai_providers';
+  IF health_item->>'status' <> 'healthy' THEN
+    RAISE EXCEPTION 'A fully tested AI provider with positive measured quota was not healthy';
+  END IF;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'ai_quota';
+  IF health_item->>'status' <> 'healthy'
+     OR NOT (health_item->'evidence'->>'all_recent_samples_positive')::boolean THEN
+    RAISE EXCEPTION 'Positive measured AI quota was not reported healthy';
+  END IF;
+  INSERT INTO automation_logs (event_code, status, details)
+  VALUES ('AI.QUOTA', 'succeeded', '{"quota_remaining":0}'::jsonb);
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'ai_providers';
+  IF health_item->>'status' <> 'blocked' THEN
+    RAISE EXCEPTION 'Exhausted AI quota did not block provider readiness';
+  END IF;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'ai_quota';
+  IF health_item->>'status' <> 'blocked'
+     OR (health_item->'evidence'->>'all_recent_samples_positive')::boolean THEN
+    RAISE EXCEPTION 'Zero remaining AI quota was not reported as blocked';
+  END IF;
+  IF health_snapshot::text LIKE '%' || fake_secret || '%' OR health_snapshot::text LIKE '%' || replacement_secret || '%' THEN
+    RAISE EXCEPTION 'Automation health snapshot disclosed a stored Vault value';
+  END IF;
+
+  -- pg_cron evidence rejects duplicate/inactive/stale schedules and only marks
+  -- one active schedule with a recent successful run healthy.
+  CREATE SCHEMA IF NOT EXISTS cron;
+  CREATE TABLE IF NOT EXISTS cron.job (jobid bigint PRIMARY KEY, jobname text NOT NULL, active boolean NOT NULL);
+  CREATE TABLE IF NOT EXISTS cron.job_run_details (jobid bigint NOT NULL, status text NOT NULL, start_time timestamptz NOT NULL);
+  INSERT INTO cron.job (jobid, jobname, active) VALUES
+    (930001, 'lixxon_automation_daily_pipeline', true),
+    (930002, 'lixxon_automation_daily_pipeline', true);
+  INSERT INTO cron.job_run_details (jobid, status, start_time)
+  VALUES (930001, 'succeeded', now());
+  UPDATE feature_flags SET enabled = true WHERE flag_key = 'automation.daily_pipeline';
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'daily_schedule';
+  IF health_item->>'status' <> 'blocked'
+     OR (health_item->'evidence'->>'registered_job_count')::integer <> 2 THEN
+    RAISE EXCEPTION 'Duplicate daily schedules were not blocked';
+  END IF;
+  DELETE FROM cron.job WHERE jobid = 930002;
+  UPDATE cron.job_run_details SET start_time = now() - interval '48 hours' WHERE jobid = 930001;
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'daily_schedule';
+  IF health_item->>'status' <> 'warning'
+     OR (health_item->'evidence'->>'last_run_fresh')::boolean THEN
+    RAISE EXCEPTION 'A stale daily run was reported healthy';
+  END IF;
+  UPDATE cron.job_run_details SET start_time = now() WHERE jobid = 930001;
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'daily_schedule';
+  IF health_item->>'status' <> 'healthy'
+     OR NOT (health_item->'evidence'->>'last_run_fresh')::boolean THEN
+    RAISE EXCEPTION 'A fresh, successful daily run was not healthy';
+  END IF;
+  UPDATE cron.job SET active = false WHERE jobid = 930001;
+  SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
+    INTO health_snapshot;
+  SELECT check_row INTO health_item
+    FROM jsonb_array_elements(health_snapshot->'checks') AS checks(check_row)
+   WHERE check_row->>'key' = 'daily_schedule';
+  IF health_item->>'status' <> 'blocked' THEN
+    RAISE EXCEPTION 'An inactive daily schedule was not blocked';
+  END IF;
+  DELETE FROM cron.job_run_details WHERE jobid = 930001;
+  DELETE FROM cron.job WHERE jobid = 930001;
+  DROP TABLE cron.job_run_details;
+  DROP TABLE cron.job;
+  DROP SCHEMA cron;
+  UPDATE feature_flags SET enabled = false WHERE flag_key = 'automation.daily_pipeline';
 
   -- Owner-only feature policy starts fail-closed, is auditable, and can be restored.
   IF (automation_feature_flags()->>'automation.enabled')::boolean IS DISTINCT FROM false
