@@ -5,7 +5,7 @@
 **Integration branch:** `arena/4da46b60-lixxonstudio` (Arena-fixed; do not switch branches)  
 **Baseline:** `f5d652ddea9e9441663d7e3cf041548dd9564635`  
 **Production:** `https://lixxonstudio.vercel.app`  
-**Status:** reconnaissance and Phase 1, step 1.1 are complete; all database assertions and the pre-push gate passed. Phase 1 is not complete. The only permitted next work is Phase 1, step 1.2.
+**Status:** reconnaissance and Phase 1 steps 1.1 and 1.2 are implemented and verified locally. Phase 1 is not complete. Step 1.2 is committed as `88da9eb1356cc6b915f2e0160b3edf1d88c55cd1`; its evidence is recorded below. The mandatory pre-push gate passed on 2026-10-05. No production deployment, production browser/network inspection, or live provider-key test has occurred. The next work in order is Phase 1, step 1.3, after the step 1.2 changes are pushed.
 
 This is the execution contract, not a design-only proposal. Work proceeds in order, one unchecked step at a time. For each step: implement only its scope, run its stated proof, record the result and commit SHA here, commit, then push to the fixed integration branch. Do not start the next step until that evidence is recorded. Push after every completed phase and at every session boundary. Open one PR to `main` only after all five phases and the final acceptance gates pass. Do not merge partial work or claim production success without the post-merge production evidence.
 
@@ -52,13 +52,15 @@ This is the execution contract, not a design-only proposal. Work proceeds in ord
 
 ### 1.2 Keys page and end-to-end secret checks
 
-- [ ] Add the owner-only `/admin/automation/keys` screen and secure server/Edge endpoints. It supports paste/save, replace, delete and a real minimal provider test. Show the secret name, masked configured state, last test time and redacted success/failure only. Do not provide reveal/copy/list-secret-value APIs.
-- [ ] Cover provider-agnostic AI, GitHub dispatch, Flutterwave/webhook, email and the requested platform/VAPID/video integrations. Use the app's Vault path for runtime automation keys; document any existing deployment-only credentials that must remain in GitHub/Vercel infrastructure settings rather than pretending the app can change them.
-- [ ] A test button calls the provider server-side with a minimal request, consumes the response, stores only safe status metadata and returns no secret or raw provider payload. Invalid credentials fail clearly without affecting checkout or other integrations.
-- [ ] The page has keyboard-accessible labels, focus, status and confirmation; destructive replacement/deletion asks for confirmation. Record only redacted key-name/metadata changes in the audit trail.
-- [ ] Add focused unit coverage for the masked key DTO, authorization UI states and default-off feature flags; no secret value may enter component state after save, network diagnostics or browser storage.
+- [x] Add the owner-only `/admin/automation/keys` screen and secure server/Edge endpoints. It supports paste/save, replace, delete and a real minimal provider test. Show the secret name, masked configured state, last test time and redacted success/failure only. Do not provide reveal/copy/list-secret-value APIs.
+- [x] Cover provider-agnostic AI, GitHub dispatch, Flutterwave/webhook, email and the requested platform/VAPID/video integrations. Use the app's Vault path for runtime automation keys; document any existing deployment-only credentials that must remain in GitHub/Vercel infrastructure settings rather than pretending the app can change them.
+- [x] A test button calls the provider server-side with a minimal request, consumes the response, stores only safe status metadata and returns no secret or raw provider payload. Invalid credentials fail clearly without affecting checkout or other integrations.
+- [x] The page has keyboard-accessible labels, focus, status and confirmation; destructive replacement/deletion asks for confirmation. Record only redacted key-name/metadata changes in the audit trail.
+- [x] Add focused unit coverage for the masked key DTO, authorization UI states and default-off feature flags; no secret value may enter component state after save, network diagnostics or browser storage.
 
-**1.2 evidence:** browser/network inspection confirms no values in response/storage/logs; valid, invalid, replace and delete tests; non-owner/anonymous denials; app, API and Edge type checks.
+**1.2 evidence (2026-10-05):** Owner/founder-only deep-link and RPC authorization are enforced. The embedded-Postgres run applied all 40 migrations and passed the registered SQL assertions, including anonymous/non-owner denials, safe Vault replacement/deletion, no fake secret values in list/save/audit outputs, and invalid-result persistence. The focused page/provider/RBAC tests passed (16 tests): mocks cover successful/rejected/timeout/network provider results, response-body disposal, save/replace/delete confirmations, field clearing, redacted rendering, empty local/session storage, and that the test call sends only the catalogue name. The full suite passed (175 tests in 23 files). Full gate also passed: npm audit (0 vulnerabilities), app/Edge/API TypeScript, lint (0 errors; 27 existing warnings), production build, public-file and gzip budgets, and `git diff --check`. The lazy admin gzip chunk is 118.49 kB, within the configured baseline +5% budget; the entry chunk remains within budget. The default Python lacks `pgserver`, so the DB gate used `/home/user/.venv/bin/python3 scripts/db-test.py`.
+
+**Verification limits:** These are mocked provider/UI tests plus embedded database checks, not a live browser-network capture. The branch is not deployed; no real provider credential was entered or tested. Production browser/network inspection and live provider acceptance remain deferred until deployment and owner-authorized credentials. No secret values or article prose were added to the repo.
 
 ### 1.3 Health API and System Check
 
@@ -174,6 +176,7 @@ Also run targeted integration/provider-mock checks for the completed step and `g
 |---|---|---|---|---|
 | 2026-10-05 | 0 — repository/production reconnaissance and plan bootstrap | Clean fixed branch; HEAD=origin/main=`f5d652ddea9e9441663d7e3cf041548dd9564635`; production health/version baseline checked; architecture, migrations, workflows, M7–M10, assertion suites and protected paths inventoried. Full pre-push gate passed: 0 npm audit vulnerabilities; app/Edge/API typechecks; lint (0 errors, 27 pre-existing warnings); 163 tests; production build; public-asset/gzip budgets; 38 migrations and all 11 registered SQL suites; `git diff --check`. `pgserver` was absent initially, installed in the external `/home/user/.venv`, then DB gate passed. | `43e57dd42c1f45502158aed25c13d1e00ba08f23` | pushed to `origin/arena/4da46b60-lixxonstudio` |
 | 2026-10-05 | 1.1 — secure schema, Vault boundary and article-content guard | Added 1 additive migration, test-only Vault shim and the registered `automation-foundation-assertions.sql`; verified 39 migrations and 12 SQL suites. Full gate passed: 0 npm audit vulnerabilities; app/Edge/API typechecks; lint (0 errors, 27 existing warnings); 163 tests; production build; public-asset/gzip budgets; `git diff --check`. No app bundle changes. | `288333fdefb9072ef614b5ce7f8eede3ecf510c7` | pushed to `origin/arena/4da46b60-lixxonstudio` after full gate passed 2026-10-05 |
+| 2026-10-05 | 1.2 — owner Keys UI, Vault credential tests and redaction | Added owner-only Keys route/RPC guard, migration/catalogue, Vault save/replace/delete, read-only/local provider checks, bounded/rate-limited Edge handler, sanitized UI and setup guide. SQL assertions cover authorization, replacement, invalid-result persistence and secret non-disclosure. Full gate passed: 0 npm audit vulnerabilities; app/Edge/API typechecks; lint (0 errors, 27 existing warnings); 175 tests; production build; public-file/gzip budgets; 40 migrations and registered DB assertions; `git diff --check`. No live provider/browser production test. | `88da9eb1356cc6b915f2e0160b3edf1d88c55cd1` | target: `origin/arena/4da46b60-lixxonstudio` after the mandatory gate |
 
 ## 9. Questions / conservative resolutions
 
@@ -185,4 +188,4 @@ Also run targeted integration/provider-mock checks for the completed step and `g
 
 ---
 
-**Next action:** implement only Phase 1, step 1.2 (the owner-only Keys page and real server-side key tests). Do not start the System Check UI/API or article queue until step 1.2 evidence is recorded and pushed.
+**Next action:** finish the gated push of Phase 1, step 1.2 on `arena/4da46b60-lixxonstudio`. Stop here for this session. Step 1.3 (System Check) is next in sequence, but do not begin it until step 1.2 is pushed; do not start article-queue or later-phase work.
