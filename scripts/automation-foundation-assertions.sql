@@ -409,10 +409,26 @@ BEGIN
   DROP SCHEMA cron;
   UPDATE feature_flags SET enabled = false WHERE flag_key = 'automation.daily_pipeline';
 
+  -- Preserve every one of the original 34 M5 permissions as the model evolves.
+  IF EXISTS (
+    SELECT required.permission
+      FROM unnest(ARRAY[
+        'content.read', 'content.write', 'content.publish', 'content.delete', 'content.moderate',
+        'media.read', 'media.write', 'media.delete', 'taxonomy.manage', 'collections.manage',
+        'marketing.newsletter', 'marketing.campaigns', 'analytics.read', 'analytics.export',
+        'commerce.read', 'commerce.write', 'commerce.pricing', 'commerce.refunds',
+        'settings.read', 'settings.write', 'settings.frontend', 'team.read', 'team.manage',
+        'team.roles', 'security.sessions', 'ops.health', 'ops.fix', 'ops.backups', 'ops.jobs',
+        'data.explore', 'data.write', 'data.sql', 'audit.read', 'audit.revert'
+      ]::text[]) AS required(permission)
+     WHERE NOT EXISTS (SELECT 1 FROM admin_permissions p WHERE p.key = required.permission)
+  ) THEN RAISE EXCEPTION 'One or more original M5 permissions are missing'; END IF;
+
   -- Owner-only feature policy starts fail-closed, is auditable, and can be restored.
   IF (automation_feature_flags()->>'automation.enabled')::boolean IS DISTINCT FROM false
-     OR (automation_feature_flags()->>'automation.daily_pipeline')::boolean IS DISTINCT FROM false THEN
-    RAISE EXCEPTION 'Automation feature flags are not default-off';
+     OR (automation_feature_flags()->>'automation.daily_pipeline')::boolean IS DISTINCT FROM false
+     OR EXISTS (SELECT 1 FROM feature_flags WHERE flag_key LIKE 'automation.%' AND enabled) THEN
+    RAISE EXCEPTION 'One or more automation feature flags are not default-off';
   END IF;
   flag_updated := automation_set_feature_flag('automation.daily_pipeline', true);
   current_flags := automation_feature_flags();

@@ -1,4 +1,4 @@
-import { AUTOMATION_HEALTH_KEYS } from '../../lib/automationHealth';
+import { AUTOMATION_HEALTH_KEYS, parseAutomationHealthSnapshot } from '../../lib/automationHealth';
 
 export const HEALTH_TEST_SECRET = 'FAKE-VAULT-SECRET-MUST-NEVER-RETURN';
 
@@ -17,7 +17,7 @@ export function automationHealthFixture() {
     incidents: { failed_or_blocked_last_24h: 0, last_incident_at: null, telemetry_seen: false, last_telemetry_at: null },
     automation_safety: { master_enabled: false, daily_pipeline_enabled: false, distribution_enabled: false, video_enabled: false, push_enabled: false },
   };
-  return {
+  const rawSnapshot = {
     checked_at: '2026-10-05T08:00:00.000Z',
     decrypted_secret: HEALTH_TEST_SECRET,
     checks: AUTOMATION_HEALTH_KEYS.map(key => ({
@@ -26,6 +26,17 @@ export function automationHealthFixture() {
       observed_at: '2026-10-05T08:00:00.000Z',
       evidence: { ...evidenceByKey[key], ignored_extra_secret: HEALTH_TEST_SECRET },
       detail: HEALTH_TEST_SECRET,
+    })),
+  };
+  const safe = parseAutomationHealthSnapshot(rawSnapshot);
+  if (!safe) throw new Error('Invalid automation health fixture');
+  return {
+    ...safe,
+    decrypted_secret: HEALTH_TEST_SECRET,
+    checks: safe.checks.map(check => ({
+      ...check,
+      ignored_extra_secret: HEALTH_TEST_SECRET,
+      evidence: { ...check.evidence, ignored_extra_secret: HEALTH_TEST_SECRET },
     })),
   };
 }

@@ -100,6 +100,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // The owner-only health screen is a nested dynamic import: keep its
+            // diagnostic UI out of the already-budgeted core admin route chunk.
+            if (id.includes('/src/admin/pages/AutomationCheck.tsx')) return 'automation-check';
             if (id.includes('/src/admin/')) return 'admin-pages';
             if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'react-vendor';
             if (id.includes('node_modules/react-helmet-async')) return 'helmet';

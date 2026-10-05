@@ -1,12 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Info, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
-import {
-  AUTOMATION_HEALTH_STATUSES,
-  parseAutomationHealthSnapshot,
-  type AutomationHealthSnapshot,
-  type AutomationHealthStatus,
-} from '../../lib/automationHealth';
+import { AUTOMATION_HEALTH_KEYS } from '../../lib/automationHealth';
+import type { AutomationHealthSnapshot, AutomationHealthStatus } from '../../lib/automationHealth';
+
+const DISPLAY_STATUSES: readonly AutomationHealthStatus[] = ['healthy', 'warning', 'blocked', 'not_configured'];
+const HEALTH_ACTION_HREFS = new Set(['/admin/automation/keys']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isSafeTime(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value));
+}
+
+/** The API already applies the detailed DTO whitelist; this is a small render-shape guard. */
+function isSafeHealthSnapshot(value: unknown): value is AutomationHealthSnapshot {
+  if (!isRecord(value) || !isSafeTime(value.checkedAt) || !Array.isArray(value.checks) || value.checks.length !== AUTOMATION_HEALTH_KEYS.length) return false;
+  const seen = new Set<string>();
+  for (const row of value.checks) {
+    if (!isRecord(row) || typeof row.key !== 'string' || !AUTOMATION_HEALTH_KEYS.includes(row.key as (typeof AUTOMATION_HEALTH_KEYS)[number])) return false;
+    if (seen.has(row.key) || typeof row.status !== 'string' || !DISPLAY_STATUSES.includes(row.status as AutomationHealthStatus)) return false;
+    if (!isSafeTime(row.observedAt) || typeof row.label !== 'string' || row.label.length > 80) return false;
+    if (typeof row.category !== 'string' || row.category.length > 40 || typeof row.detail !== 'string' || row.detail.length > 500) return false;
+    if (row.remediation !== null && (typeof row.remediation !== 'string' || row.remediation.length > 500)) return false;
+    if (row.actionHref !== null && (typeof row.actionHref !== 'string' || !HEALTH_ACTION_HREFS.has(row.actionHref))) return false;
+    if (row.actionLabel !== null && (typeof row.actionLabel !== 'string' || row.actionLabel.length > 80)) return false;
+    seen.add(row.key);
+  }
+  return seen.size === AUTOMATION_HEALTH_KEYS.length;
+}
 
 const STATUS_LABELS: Record<AutomationHealthStatus, string> = {
   healthy: 'Healthy',
@@ -60,13 +84,13 @@ export default function AutomationCheck() {
         setError(apiError(response.status));
         return;
       }
-      const parsed = parseAutomationHealthSnapshot(await response.json());
-      if (!parsed) {
+      const payload: unknown = await response.json();
+      if (!isSafeHealthSnapshot(payload)) {
         setSnapshot(null);
         setError('The health endpoint returned an incomplete or unrecognized safe schema.');
         return;
       }
-      setSnapshot(parsed);
+      setSnapshot(payload);
     } catch {
       setSnapshot(null);
       setError('The read-only automation health check could not be reached. Try again shortly.');
@@ -143,7 +167,7 @@ export default function AutomationCheck() {
       ) : snapshot && (
         <>
           <section aria-label="System check summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {AUTOMATION_HEALTH_STATUSES.map(status => (
+            {DISPLAY_STATUSES.map(status => (
               <div key={status} className={`rounded-sm border p-3 ${STATUS_CLASSES[status]}`}>
                 <p className="text-xs uppercase tracking-wide">{STATUS_LABELS[status]}</p>
                 <p className="mt-1 text-2xl font-semibold" aria-label={`${counts[status]} ${STATUS_LABELS[status]} checks`}>

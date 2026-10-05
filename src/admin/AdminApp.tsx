@@ -43,6 +43,7 @@ import AdminBackups from './pages/AdminBackups';
 import AdminSecurity from './pages/AdminSecurity';
 import MfaGate from './MfaGate';
 import { canAccess } from './permissions';
+import { resolveAutomationAdminRoute } from './automationRoutes';
 import { ShieldAlert } from 'lucide-react';
 
 const AdminAI = lazy(() => import('./pages/AdminAI'));
@@ -50,6 +51,7 @@ const AdminArticleEditor = lazy(() => import('./pages/AdminArticleEditor'));
 const AdminProductEditor = lazy(() => import('./pages/AdminProductEditor'));
 const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor'));
 const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
+const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
 
 const LazyPage = ({ children }: { children: ReactNode }) => (
   <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading editor...</div>}>{children}</Suspense>
@@ -58,10 +60,10 @@ const LazyPage = ({ children }: { children: ReactNode }) => (
 export default function AdminApp() {
   const { route, navigate } = useNavigation();
   const { session, loading, isAdmin, adminAccess, email, signOut, refreshAdmin } = useAuth();
-  // NavigationContext intentionally remains untouched; resolve this protected deep
-  // link at the admin boundary and keep the Keys page lazy-loaded.
+  // NavigationContext intentionally remains untouched; resolve only the two
+  // protected automation deep links at the admin boundary and keep both lazy.
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
-  const routeName = path === '/admin/automation/keys' ? 'admin-automation-keys' : route.name;
+  const routeName = resolveAutomationAdminRoute(path) ?? route.name;
   const routeId = 'id' in route ? route.id : undefined;
 
   useEffect(() => {
@@ -131,6 +133,8 @@ export default function AdminApp() {
     switch (routeName) {
       case 'admin-automation-keys':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation keys…</div>}><AutomationKeys /></Suspense>;
+      case 'admin-automation-check':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading System Check…</div>}><AutomationCheck /></Suspense>;
       case 'admin-dashboard': return <AdminDashboard />;
       case 'admin-articles': return <AdminArticles />;
       case 'admin-article-new': return <LazyPage><AdminArticleEditor isNew /></LazyPage>;
