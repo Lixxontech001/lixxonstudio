@@ -29,6 +29,31 @@ END $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS storage;
 CREATE SCHEMA IF NOT EXISTS extensions;
+-- Test-only Supabase Vault shim. It is intentionally inaccessible to client roles;
+-- production uses the managed supabase_vault extension and encrypted storage.
+CREATE SCHEMA IF NOT EXISTS vault;
+CREATE TABLE IF NOT EXISTS vault.secrets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text UNIQUE NOT NULL,
+  description text,
+  secret text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE VIEW vault.decrypted_secrets AS
+  SELECT id, name, description, secret AS decrypted_secret, created_at, updated_at FROM vault.secrets;
+CREATE OR REPLACE FUNCTION vault.create_secret(p_secret text, p_name text, p_description text DEFAULT NULL)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = vault, pg_temp AS $$
+DECLARE secret_id uuid;
+BEGIN
+  INSERT INTO vault.secrets (secret, name, description)
+  VALUES (p_secret, p_name, p_description)
+  RETURNING id INTO secret_id;
+  RETURN secret_id;
+END $$;
+REVOKE ALL ON TABLE vault.secrets FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON TABLE vault.decrypted_secrets FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION vault.create_secret(text, text, text) FROM PUBLIC, anon, authenticated, service_role;
 CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text, created_at timestamptz DEFAULT now(), last_sign_in_at timestamptz);
 CREATE TABLE IF NOT EXISTS auth.mfa_factors (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid, status text, factor_type text, created_at timestamptz DEFAULT now());
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
@@ -92,7 +117,12 @@ def main():
             run_sql(uri, PROD_FIXTURES, label="prod fixtures")
         run_sql(uri, file=m, label=os.path.basename(m))
         print(f"✓ {os.path.basename(m)}")
-    for name in ("db-assertions.sql", "search-assertions.sql", "personalisation-assertions.sql", "community-assertions.sql", "commerce-assertions.sql", "editor-assertions.sql", "admin-assertions.sql", "security-ai-assertions.sql", "admin-ai-autopilot-assertions.sql", "admin-ai-ceo-assertions.sql", "admin-ai-predictive-assertions.sql"):
+    for name in (
+        "db-assertions.sql", "search-assertions.sql", "personalisation-assertions.sql",
+        "community-assertions.sql", "commerce-assertions.sql", "editor-assertions.sql",
+        "admin-assertions.sql", "automation-foundation-assertions.sql", "security-ai-assertions.sql",
+        "admin-ai-autopilot-assertions.sql", "admin-ai-ceo-assertions.sql", "admin-ai-predictive-assertions.sql",
+    ):
         assertions = os.path.join(ROOT, "scripts", name)
         if os.path.exists(assertions):
             out = run_sql(uri, file=assertions, label=name)
