@@ -89,7 +89,9 @@ export function buildVideoFilterGraph({
       + `:y='(ih-ih/zoom)/2+(ih-ih/zoom)*${templateNumber(movement.pan_y, 3)}*cos(on/${movement.pan_y_period})'`
       + `:d=1:s=1080x1920:fps=${t.fps}`,
     'drawbox=x=24:y=28:w=585:h=68:color=0x1A1A1A@0.88:t=fill',
-    drawText(sans, watermark, `fontcolor=${watermarkStyle.color}:fontsize=${watermarkStyle.font_size}:x=44:y=45`),
+    // The watermark has no colour of its own in the template: it takes the title colour,
+    // exactly as the original fixed look did.
+    drawText(sans, watermark, `fontcolor=${titleStyle.color}:fontsize=${watermarkStyle.font_size}:x=44:y=45`),
     `drawbox=x=0:y=0:w=iw:h=${titleStyle.box_height}:color=0x1A1A1A@0.84:t=fill:enable='lt(t,${hold})'`,
     drawText(serif, title, `fontcolor=${titleStyle.color}:fontsize=${titleStyle.font_size}:line_spacing=${titleStyle.line_spacing}:x=(w-text_w)/2:y=104:enable='lt(t,${hold})'`),
     `drawbox=x=${captionBoxX}:y=${caption.box_top}:w=${captionBoxWidth}:h=${caption.box_height}:color=0x1A1A1A@0.88:t=fill:enable='${captionEnable}'`,
