@@ -1,18 +1,35 @@
+/**
+ * Buddy's offline-safe draft queue.
+ *
+ * A queued entry is a *draft*: a fixed operation id plus typed arguments. It is
+ * never executed by this module — not on load, not on reconnect, not on any
+ * timer. Executing a draft requires a fresh online preview and an explicit
+ * confirmation in the UI (see buddyOperations.ts).
+ *
+ * Storage contains no typed text, no token, no article or customer data.
+ */
+import {
+  BUDDY_OPERATIONS,
+  getBuddyOperation,
+  validateBuddyArguments,
+  type BuddyArguments,
+  type BuddyOperationId,
+} from './buddyOperations';
+
 export const BUDDY_QUEUE_STORAGE_KEY = 'lixxon.buddy.safe-queue.v1';
 export const BUDDY_QUEUE_LIMIT = 20;
 
-export type SafeBuddyCommand = 'status' | 'daily-kit' | 'help';
+export type SafeBuddyCommand = BuddyOperationId;
+
+export type BuddyQueueState = 'draft';
 
 export interface BuddyQueueItem {
   id: string;
   command: SafeBuddyCommand;
+  args: BuddyArguments;
+  state: BuddyQueueState;
   createdAt: string;
 }
-
-export type BuddyCommandParseResult =
-  | { kind: 'safe'; command: SafeBuddyCommand }
-  | { kind: 'blocked'; category: 'external' | 'commerce' }
-  | { kind: 'unsupported' };
 
 export interface BuddyStorage {
   getItem(key: string): string | null;
@@ -28,34 +45,24 @@ const storageOrNull = (): BuddyStorage | null => {
   }
 };
 
-/** Only fixed, non-privileged commands are queueable; free-form text is never persisted. */
-export function parseBuddyCommand(input: string): BuddyCommandParseResult {
-  const command = input.trim().toLowerCase().replace(/\s+/g, ' ');
-  if (/\b(price|pricing|product|refund|charge|payment|order)\b/.test(command)) {
-    return { kind: 'blocked', category: 'commerce' };
-  }
-  if (/\b(publish|post|send|email|campaign|approve|schedule|delete|rewrite|edit article)\b/.test(command)) {
-    return { kind: 'blocked', category: 'external' };
-  }
-  if (command === 'status' || command === 'check status') return { kind: 'safe', command: 'status' };
-  if (command === 'daily kit' || command === 'open daily kit') return { kind: 'safe', command: 'daily-kit' };
-  if (command === 'help' || command === '?') return { kind: 'safe', command: 'help' };
-  return { kind: 'unsupported' };
-}
-
-function validCommand(value: unknown): value is SafeBuddyCommand {
-  return value === 'status' || value === 'daily-kit' || value === 'help';
+/** Only operations in the typed registry can be queued. Publishing is not one of them. */
+export function isAllowListedCommand(value: unknown): value is SafeBuddyCommand {
+  return typeof value === 'string' && BUDDY_OPERATIONS.some((operation) => operation.id === value);
 }
 
 function validItem(value: unknown): value is BuddyQueueItem {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
-  return typeof item.id === 'string' && item.id.length > 0 && item.id.length <= 80
-    && validCommand(item.command)
-    && typeof item.createdAt === 'string'
-    && Number.isFinite(Date.parse(item.createdAt));
+  if (typeof item.id !== 'string' || item.id.length === 0 || item.id.length > 80) return false;
+  if (!isAllowListedCommand(item.command)) return false;
+  if (item.state !== 'draft') return false;
+  if (typeof item.createdAt !== 'string' || !Number.isFinite(Date.parse(item.createdAt))) return false;
+  const operation = getBuddyOperation(item.command);
+  if (!operation) return false;
+  return validateBuddyArguments(operation.id, item.args).ok;
 }
 
+/** Loads drafts only. It performs no I/O other than reading storage and runs nothing. */
 export function loadBuddyQueue(storage: BuddyStorage | null = storageOrNull()): BuddyQueueItem[] {
   if (!storage) return [];
   try {
@@ -70,25 +77,31 @@ export function loadBuddyQueue(storage: BuddyStorage | null = storageOrNull()): 
 function createId(): string {
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  } catch { /* use a local non-secret identifier fallback */ }
+  } catch { /* fall back to a local, non-secret identifier */ }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function enqueueBuddyCommand(
   command: SafeBuddyCommand,
-  options: { storage?: BuddyStorage | null; now?: () => Date; id?: () => string } = {},
-): { items: BuddyQueueItem[]; item: BuddyQueueItem; persisted: boolean } {
+  options: { storage?: BuddyStorage | null; now?: () => Date; id?: () => string; args?: BuddyArguments } = {},
+): { items: BuddyQueueItem[]; item: BuddyQueueItem | null; persisted: boolean } {
   const storage = options.storage === undefined ? storageOrNull() : options.storage;
+  const validation = validateBuddyArguments(command, options.args ?? {});
+  if (!validation.ok) {
+    // An unknown or mistyped operation is never stored, not even as a draft.
+    return { items: loadBuddyQueue(storage), item: null, persisted: false };
+  }
   const item: BuddyQueueItem = {
     id: (options.id || createId)(),
     command,
+    args: validation.args,
+    state: 'draft',
     createdAt: (options.now || (() => new Date()))().toISOString(),
   };
   const items = [...loadBuddyQueue(storage), item].slice(-BUDDY_QUEUE_LIMIT);
   let persisted = false;
   if (storage) {
     try {
-      // This allow-listed DTO contains no command text, credentials, session, or action payload.
       storage.setItem(BUDDY_QUEUE_STORAGE_KEY, JSON.stringify(items));
       persisted = true;
     } catch { /* the visible queue still works in memory for this tab */ }
@@ -104,7 +117,7 @@ export function removeBuddyQueueItem(id: string, storage: BuddyStorage | null = 
   return items;
 }
 
-/** Clear only Buddy's allow-listed queue; never clears reader/site data or service-worker caches. */
+/** Clear only Buddy's allow-listed draft queue; never touches reader/site data or caches. */
 export function clearBuddyQueue(storage: BuddyStorage | null = storageOrNull()): void {
   try { storage?.removeItem(BUDDY_QUEUE_STORAGE_KEY); } catch { /* storage can be unavailable */ }
 }
