@@ -76,6 +76,7 @@ DECLARE
   result jsonb;
   unapproved_analyze uuid;
   approved_analyze uuid;
+  other_agent_analyze uuid;
   approved_unsafe uuid;
   body_before text;
   body_after text;
@@ -126,18 +127,23 @@ BEGIN
 
   PERFORM admin_ai_set_agent('executioner',true,'suggest',1440,10);
   SELECT admin_ai_queue_action(
-    'analyst','analyze','M8 unapproved maintenance fixture','Must remain queued until an owner approves it.',
-    'low','approval_required','ops.fix','system',NULL,'{"fixture":"unapproved"}'::jsonb,NULL,NULL
+    'executioner','analyze','M8 unapproved Executioner fixture','Must remain queued until an owner approves it.',
+    'low','approval_required','ops.fix','system',NULL,'{"fixture":"executioner-unapproved"}'::jsonb,NULL,NULL
   ) INTO unapproved_analyze;
   SELECT admin_ai_queue_action(
-    'analyst','analyze','M8 approved maintenance fixture','Owner-approved safe statistics maintenance.',
-    'low','approval_required','ops.fix','system',NULL,'{"fixture":"approved"}'::jsonb,NULL,NULL
+    'executioner','analyze','M8 approved Executioner fixture','Owner-approved safe statistics maintenance.',
+    'low','approval_required','ops.fix','system',NULL,'{"fixture":"executioner-approved"}'::jsonb,NULL,NULL
   ) INTO approved_analyze;
   SELECT admin_ai_queue_action(
-    'analyst','requeue_email','M8 non-allow-listed fixture','Must not be dispatched by Executioner.',
-    'low','approval_required','ops.fix','system',NULL,'{"fixture":"not-allow-listed"}'::jsonb,NULL,NULL
+    'analyst','analyze','M8 other-agent approved fixture','Must remain approved; Executioner only dispatches its own row.',
+    'low','approval_required','ops.fix','system',NULL,'{"fixture":"other-agent-approved"}'::jsonb,NULL,NULL
+  ) INTO other_agent_analyze;
+  SELECT admin_ai_queue_action(
+    'executioner','requeue_email','M8 non-allow-listed fixture','Must not be dispatched by Executioner.',
+    'low','approval_required','ops.fix','system',NULL,'{"fixture":"executioner-not-allow-listed"}'::jsonb,NULL,NULL
   ) INTO approved_unsafe;
-  PERFORM admin_ai_decide_action(approved_analyze,'approve','Owner-approved Phase 4 assertion');
+  PERFORM admin_ai_decide_action(approved_analyze,'approve','Owner-approved Executioner fixture');
+  PERFORM admin_ai_decide_action(other_agent_analyze,'approve','Approved for Analyst; not executable by Executioner');
   PERFORM admin_ai_decide_action(approved_unsafe,'approve','Owner approval does not expand Executioner allow-list');
 
   IF NOT EXISTS (SELECT 1 FROM role_permissions WHERE role='editor' AND permission='admin.ai.run') THEN
@@ -156,13 +162,16 @@ BEGIN
   SELECT admin_ai_run_agent('executioner') INTO result;
   queued_count := COALESCE((result->>'queued')::integer,0);
   IF queued_count <> 1 THEN RAISE EXCEPTION 'Executioner did not dispatch exactly one owner-approved allow-listed action'; END IF;
-  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=approved_analyze AND status='applied') THEN
-    RAISE EXCEPTION 'Owner-approved ANALYZE action did not pass through the existing executor';
+  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=approved_analyze AND agent_key='executioner' AND action_type='analyze' AND status='applied') THEN
+    RAISE EXCEPTION 'Executioner-owned approved ANALYZE action did not pass through the existing executor';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=unapproved_analyze AND status='queued') THEN
+  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=unapproved_analyze AND agent_key='executioner' AND status='queued') THEN
     RAISE EXCEPTION 'Executioner dispatched an unapproved action';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=approved_unsafe AND status='approved') THEN
+  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=other_agent_analyze AND agent_key='analyst' AND status='approved') THEN
+    RAISE EXCEPTION 'Executioner dispatched an approved ANALYZE action owned by another agent';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=approved_unsafe AND agent_key='executioner' AND status='approved') THEN
     RAISE EXCEPTION 'Executioner dispatched an action outside its allow-list';
   END IF;
 
