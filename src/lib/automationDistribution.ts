@@ -11,6 +11,13 @@ export const DISTRIBUTION_STATES = [
 export type DistributionState = (typeof DISTRIBUTION_STATES)[number];
 export type DistributionReviewStatus = 'pending' | 'approved' | 'rejected' | 'sent' | 'paused';
 
+const DISTRIBUTION_METRIC_KEYS = new Set([
+  'reach', 'impressions', 'clicks', 'conversions', 'engagements', 'saves', 'replies',
+  'unsubscribes', 'negative_feedback', 'click_through_rate', 'engagement_rate',
+  'conversion_rate', 'save_rate', 'reply_rate', 'unsubscribe_rate', 'negative_feedback_rate',
+]);
+const DISTRIBUTION_FAILURE_CLASSES = ['quota', 'authentication', 'policy', 'transient'] as const;
+
 export interface DistributionPayload {
   title: string;
   subject: string;
@@ -56,6 +63,27 @@ export interface DistributionArticleOption {
   scheduledAtUtc: string | null;
 }
 
+export interface DistributionUsageToday {
+  usageDay: string;
+  readbackAttempts: number;
+  deliveryAttempts: number;
+  deliverySuccesses: number;
+  deliveryFailures: number;
+  ownerTestEmailAttempts: number;
+}
+
+export interface DistributionMetricSample {
+  channelKey: DistributionChannelKey;
+  metricKey: string;
+  value: number;
+  measurementKind: 'measured' | 'estimated';
+  collectionBasis: 'provider_aggregate' | 'consented_site_aggregate' | 'estimate';
+  periodStart: string;
+  periodEnd: string;
+  sampleCount: number;
+  variantId: string | null;
+}
+
 export interface DistributionChannel {
   key: DistributionChannelKey;
   label: string;
@@ -67,6 +95,11 @@ export interface DistributionChannel {
   quotaRemaining: number | null;
   lastReadbackStatus: string;
   lastReadbackAt: string | null;
+  circuitState: 'closed' | 'open' | 'half_open';
+  failureStreak: number;
+  lastFailureClass: 'quota' | 'authentication' | 'policy' | 'transient' | null;
+  retryAfter: string | null;
+  usageToday: DistributionUsageToday;
   draft: DistributionDraft | null;
 }
 
@@ -81,6 +114,7 @@ export interface DistributionSnapshot {
   coverImageAlt: string;
   flags: { 'automation.enabled': boolean; 'automation.distribution': boolean };
   channels: DistributionChannel[];
+  metrics: DistributionMetricSample[];
 }
 
 export const DISTRIBUTION_CHANNELS: Record<DistributionChannelKey, {
@@ -265,6 +299,62 @@ export function parseDistributionArticles(value: unknown): DistributionArticleOp
   return articles;
 }
 
+function parseUsageToday(value: unknown): DistributionUsageToday | null {
+  if (!isRecord(value) || Object.keys(value).some(key => ![
+    'usage_day', 'readback_attempts', 'delivery_attempts', 'delivery_successes',
+    'delivery_failures', 'owner_test_email_attempts',
+  ].includes(key)) || typeof value.usage_day !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}$/.test(value.usage_day)
+      || !Number.isFinite(Date.parse(value.usage_day))) return null;
+  const fields = ['readback_attempts', 'delivery_attempts', 'delivery_successes', 'delivery_failures', 'owner_test_email_attempts'] as const;
+  if (fields.some(field => !Number.isInteger(value[field]) || (value[field] as number) < 0 || (value[field] as number) > 100000)) return null;
+  if ((value.delivery_successes as number) + (value.delivery_failures as number) > (value.delivery_attempts as number)) return null;
+  return {
+    usageDay: value.usage_day,
+    readbackAttempts: value.readback_attempts as number,
+    deliveryAttempts: value.delivery_attempts as number,
+    deliverySuccesses: value.delivery_successes as number,
+    deliveryFailures: value.delivery_failures as number,
+    ownerTestEmailAttempts: value.owner_test_email_attempts as number,
+  };
+}
+
+function parseDistributionMetrics(value: unknown): DistributionMetricSample[] | null {
+  if (!Array.isArray(value) || value.length > 300) return null;
+  const metrics: DistributionMetricSample[] = [];
+  for (const row of value) {
+    if (!isRecord(row) || Object.keys(row).some(key => ![
+      'channel_key', 'metric_key', 'value', 'measurement_kind', 'collection_basis',
+      'period_start', 'period_end', 'sample_count', 'variant_id',
+    ].includes(key)) || typeof row.channel_key !== 'string'
+        || !(DISTRIBUTION_CHANNEL_KEYS as readonly string[]).includes(row.channel_key)
+        || typeof row.metric_key !== 'string' || !DISTRIBUTION_METRIC_KEYS.has(row.metric_key)
+        || typeof row.value !== 'number' || !Number.isFinite(row.value) || row.value < 0 || row.value > 1_000_000_000_000
+        || (row.metric_key.endsWith('_rate') && row.value > 1)
+        || !['measured', 'estimated'].includes(String(row.measurement_kind))
+        || !['provider_aggregate', 'consented_site_aggregate', 'estimate'].includes(String(row.collection_basis))
+        || (row.collection_basis === 'estimate') !== (row.measurement_kind === 'estimated')
+        || typeof row.period_start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.period_start)
+        || typeof row.period_end !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.period_end)
+        || !Number.isFinite(Date.parse(row.period_start)) || !Number.isFinite(Date.parse(row.period_end))
+        || Date.parse(row.period_start) > Date.parse(row.period_end)
+        || !Number.isInteger(row.sample_count) || (row.sample_count as number) < 1 || (row.sample_count as number) > 100000
+        || !(row.variant_id === null || (typeof row.variant_id === 'string' && UUID_RE.test(row.variant_id)))) return null;
+    metrics.push({
+      channelKey: row.channel_key as DistributionChannelKey,
+      metricKey: row.metric_key,
+      value: row.value,
+      measurementKind: row.measurement_kind as DistributionMetricSample['measurementKind'],
+      collectionBasis: row.collection_basis as DistributionMetricSample['collectionBasis'],
+      periodStart: row.period_start,
+      periodEnd: row.period_end,
+      sampleCount: row.sample_count as number,
+      variantId: row.variant_id as string | null,
+    });
+  }
+  return metrics;
+}
+
 export function parseDistributionSnapshot(value: unknown): DistributionSnapshot | null {
   if (!isRecord(value) || !UUID_RE.test(String(value.post_id))
       || typeof value.title !== 'string' || value.title.length > 200
@@ -276,7 +366,10 @@ export function parseDistributionSnapshot(value: unknown): DistributionSnapshot 
       || typeof value.cover_image_alt !== 'string' || value.cover_image_alt.length > 500
       || !isRecord(value.flags) || typeof value.flags['automation.enabled'] !== 'boolean'
       || typeof value.flags['automation.distribution'] !== 'boolean'
-      || !Array.isArray(value.channels) || value.channels.length !== DISTRIBUTION_CHANNEL_KEYS.length) return null;
+      || !Array.isArray(value.channels) || value.channels.length !== DISTRIBUTION_CHANNEL_KEYS.length
+      || !Array.isArray(value.metrics)) return null;
+  const metrics = parseDistributionMetrics(value.metrics);
+  if (!metrics) return null;
   const channels: DistributionChannel[] = [];
   const seen = new Set<string>();
   for (const candidate of value.channels) {
@@ -290,7 +383,13 @@ export function parseDistributionSnapshot(value: unknown): DistributionSnapshot 
         || !(candidate.daily_free_quota === null || (Number.isInteger(candidate.daily_free_quota) && (candidate.daily_free_quota as number) >= 0))
         || !(candidate.quota_remaining === null || (Number.isInteger(candidate.quota_remaining) && (candidate.quota_remaining as number) >= 0))
         || typeof candidate.last_readback_status !== 'string'
-        || !(candidate.last_readback_at === null || (typeof candidate.last_readback_at === 'string' && Number.isFinite(Date.parse(candidate.last_readback_at))))) return null;
+        || !(candidate.last_readback_at === null || (typeof candidate.last_readback_at === 'string' && Number.isFinite(Date.parse(candidate.last_readback_at))))
+        || !['closed', 'open', 'half_open'].includes(String(candidate.circuit_state))
+        || !Number.isInteger(candidate.failure_streak) || (candidate.failure_streak as number) < 0 || (candidate.failure_streak as number) > 1000
+        || !(candidate.last_failure_class === null || (typeof candidate.last_failure_class === 'string' && (DISTRIBUTION_FAILURE_CLASSES as readonly string[]).includes(candidate.last_failure_class)))
+        || !(candidate.retry_after === null || (typeof candidate.retry_after === 'string' && Number.isFinite(Date.parse(candidate.retry_after))))) return null;
+    const usageToday = parseUsageToday(candidate.usage_today);
+    if (!usageToday) return null;
     const draft = parseDraft(candidate.draft);
     if (candidate.draft !== null && draft === null) return null;
     channels.push({
@@ -304,6 +403,11 @@ export function parseDistributionSnapshot(value: unknown): DistributionSnapshot 
       quotaRemaining: candidate.quota_remaining as number | null,
       lastReadbackStatus: candidate.last_readback_status,
       lastReadbackAt: candidate.last_readback_at as string | null,
+      circuitState: candidate.circuit_state as DistributionChannel['circuitState'],
+      failureStreak: candidate.failure_streak as number,
+      lastFailureClass: candidate.last_failure_class as DistributionChannel['lastFailureClass'],
+      retryAfter: candidate.retry_after as string | null,
+      usageToday,
       draft,
     });
     seen.add(candidate.channel_key);
@@ -322,6 +426,7 @@ export function parseDistributionSnapshot(value: unknown): DistributionSnapshot 
       'automation.distribution': value.flags['automation.distribution'],
     },
     channels,
+    metrics,
   };
 }
 

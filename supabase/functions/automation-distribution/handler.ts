@@ -23,6 +23,7 @@ import {
   distributionPreflight,
   distributionResponse,
 } from "../_shared/distributionCors.ts";
+import { deliverPendingDistributionFailureAlerts } from "../_shared/automationAlerts.ts";
 
 const MAX_BODY_BYTES = 2048;
 const PROVIDER_TIMEOUT_MS = 8_000;
@@ -280,6 +281,7 @@ async function checkChannel(
   }
 
   const recorded = await recordReadback(sb, channel, result.status, result.code);
+  if (recorded) await deliverPendingDistributionFailureAlerts(sb, fetcher);
   return respond(req, { ok: recorded, channel, state: result.status, message: statusMessage(result.status) }, recorded ? 200 : 503);
 }
 
@@ -356,6 +358,7 @@ async function sendTelegram(
     p_safe_error_code: receipt.ok ? null : receipt.safeCode,
   });
   if (completionError) return respond(req, { error: "Telegram returned no safely recorded receipt. Check the private channel before retrying." }, 503);
+  await deliverPendingDistributionFailureAlerts(sb, fetcher);
   if (!receipt.ok) return respond(req, { error: `Telegram delivery did not complete: ${receipt.safeCode}. The approved manual kit is retained.` }, 502);
   return respond(req, { ok: true, sent: true, alreadySent: false, remotePostId: receipt.remoteMessageId }, 200);
 }
@@ -452,6 +455,7 @@ async function sendNewsletterTest(
     p_safe_error_code: receipt.ok ? null : receipt.safeCode,
   });
   if (completionError) return respond(req, { error: 'Resend returned no safely recorded test receipt. Check the Resend dashboard before trying another copy.' }, 503);
+  await deliverPendingDistributionFailureAlerts(sb, fetcher);
   if (!receipt.ok) return respond(req, { error: `Owner-only test email was not confirmed: ${receipt.safeCode}. No subscriber campaign was sent.` }, 502);
   return respond(req, { ok: true, sent: true, alreadySent: false, testEmailId: receipt.remoteMessageId }, 200);
 }
