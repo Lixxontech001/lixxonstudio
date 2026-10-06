@@ -90,18 +90,23 @@ jobs:
           assert.equal(evidence.altTextPresent, true, 'silent video requires bounded alt text');
           assert.equal(evidence.articleBodySha256Before, evidence.articleBodySha256After);
           assert.equal(evidence.articleBodyImmutable, true);
-          console.log(JSON.stringify({
-            ffprobeAssertions: 'PASS', codec: video[0].codec_name,
+          const report = {
+            ffprobeAssertions: 'PASS', fixtureId: evidence.fixtureId, namespace: evidence.namespace,
+            testOnly: evidence.testOnly, codec: video[0].codec_name,
             width: video[0].width, height: video[0].height, pixelFormat: video[0].pix_fmt,
             durationSeconds: duration, subtitleCodec: subtitles[0].codec_name,
-            captionTrackPresent: true, audioStreams: 0, audioMode: 'intentionally silent',
+            captionTrackPresent: true, captionCount: evidence.captionCount,
+            audioStreams: 0, audioMode: 'intentionally silent',
             altTextPresent: evidence.altTextPresent, bytes, maxBytes: 100 * 1024 * 1024,
+            videoSha256: evidence.videoSha256,
             articleBodySha256Before: evidence.articleBodySha256Before,
             articleBodySha256After: evidence.articleBodySha256After,
             articleBodyImmutable: evidence.articleBodyImmutable,
             approvalEligible: evidence.approvalEligible,
             publishEligible: evidence.publishEligible,
-          }, null, 2));
+          };
+          console.log(JSON.stringify(report, null, 2));
+          console.log(`::notice title=Ephemeral FFmpeg render evidence::${JSON.stringify(report)}`);
           NODE
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           printf 'Workflow run: %s\n' "$run_url"
