@@ -29,6 +29,12 @@ END $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS storage;
 CREATE SCHEMA IF NOT EXISTS extensions;
+-- Test-only deterministic digest shim: the embedded pgserver build omits pgcrypto.
+-- Production migrations install/use the real pgcrypto extension; this stub is never deployed.
+CREATE OR REPLACE FUNCTION extensions.digest(p_data bytea, p_type text)
+RETURNS bytea LANGUAGE sql IMMUTABLE STRICT AS $$
+  SELECT decode(md5(encode(p_data, 'hex')) || md5(md5(encode(p_data, 'hex')) || p_type), 'hex')
+$$;
 -- Test-only Supabase Vault shim. It is intentionally inaccessible to client roles;
 -- production uses the managed supabase_vault extension and encrypted storage.
 CREATE SCHEMA IF NOT EXISTS vault;
@@ -123,6 +129,7 @@ def main():
         "admin-assertions.sql", "automation-foundation-assertions.sql", "article-intake-assertions.sql", "automation-orchestration-assertions.sql", "security-ai-assertions.sql",
         "automation-run-monitor-assertions.sql",
         "admin-ai-autopilot-assertions.sql", "admin-ai-ceo-assertions.sql", "admin-ai-predictive-assertions.sql",
+        "distribution-assertions.sql",
     ):
         assertions = os.path.join(ROOT, "scripts", name)
         if os.path.exists(assertions):

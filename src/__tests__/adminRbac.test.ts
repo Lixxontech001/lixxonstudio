@@ -57,6 +57,7 @@ describe('admin RBAC map vs the database catalogue', () => {
     expect(ROUTE_PERMISSIONS['admin-automation-check']).toBe('automation.check');
     expect(ROUTE_PERMISSIONS['admin-automation-articles']).toBe('content.read');
     expect(ROUTE_PERMISSIONS['admin-automation-runs']).toBe('automation.check');
+    expect(ROUTE_PERMISSIONS['admin-automation-distribution']).toBe('automation.check');
   });
 
   it('resolves exact automation deep links without changing the shared route parser', () => {
@@ -68,6 +69,8 @@ describe('admin RBAC map vs the database catalogue', () => {
     expect(resolveAutomationAdminRoute('/admin/automation/articles/')).toBe('admin-automation-articles');
     expect(resolveAutomationAdminRoute('/admin/automation/runs')).toBe('admin-automation-runs');
     expect(resolveAutomationAdminRoute('/admin/automation/runs/')).toBe('admin-automation-runs');
+    expect(resolveAutomationAdminRoute('/admin/automation/distribution')).toBe('admin-automation-distribution');
+    expect(resolveAutomationAdminRoute('/admin/automation/distribution/')).toBe('admin-automation-distribution');
     expect(resolveAutomationAdminRoute('/admin/automation/check/unknown')).toBeNull();
   });
 
@@ -76,14 +79,17 @@ describe('admin RBAC map vs the database catalogue', () => {
     expect(ADMIN_APP).toContain("const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));");
     expect(ADMIN_APP).toContain("const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));");
     expect(ADMIN_APP).toContain("const AutomationRuns = lazy(() => import('./pages/AutomationRuns'));");
+    expect(ADMIN_APP).toContain("const AutomationDistribution = lazy(() => import('./pages/AutomationDistribution'));");
     expect(ADMIN_APP).toContain('resolveAutomationAdminRoute(path) ?? route.name');
     expect(ADMIN_APP).toContain("case 'admin-automation-check':");
     expect(ADMIN_APP).toContain("case 'admin-automation-articles':");
     expect(ADMIN_APP).toContain("case 'admin-automation-runs':");
+    expect(ADMIN_APP).toContain("case 'admin-automation-distribution':");
     expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/keys'");
     expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/check'");
     expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/articles'");
     expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/runs'");
+    expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/distribution'");
   });
 
   it('refuses a route when the permission is absent, and allows it when present', () => {
@@ -97,6 +103,8 @@ describe('admin RBAC map vs the database catalogue', () => {
     expect(canAccess(access(['automation.keys']), 'admin-automation-keys')).toBe(false);
     expect(canAccess(access(['automation.keys']), 'admin-automation-check')).toBe(false);
     expect(canAccess(access(['automation.check']), 'admin-automation-check')).toBe(true);
+    expect(canAccess(access(['automation.check']), 'admin-automation-distribution')).toBe(true);
+    expect(canAccess(access(['content.read']), 'admin-automation-distribution')).toBe(false);
     expect(canAccess(access(['content.read']), 'admin-automation-articles')).toBe(true);
     expect(canAccess(access(['ops.health']), 'admin-automation-articles')).toBe(false);
     expect(canAccess(access([], { is_owner: true }), 'admin-data')).toBe(true);

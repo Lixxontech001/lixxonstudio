@@ -54,6 +54,7 @@ const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
 const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
 const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));
 const AutomationRuns = lazy(() => import('./pages/AutomationRuns'));
+const AutomationDistribution = lazy(() => import('./pages/AutomationDistribution'));
 
 const LazyPage = ({ children }: { children: ReactNode }) => (
   <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading editor...</div>}>{children}</Suspense>
@@ -141,6 +142,8 @@ export default function AdminApp() {
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading article queue…</div>}><ArticleQueueCalendar /></Suspense>;
       case 'admin-automation-runs':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation runs…</div>}><AutomationRuns /></Suspense>;
+      case 'admin-automation-distribution':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading the Distribution Kit…</div>}><AutomationDistribution /></Suspense>;
       case 'admin-dashboard': return <AdminDashboard />;
       case 'admin-articles': return <AdminArticles />;
       case 'admin-article-new': return <LazyPage><AdminArticleEditor isNew /></LazyPage>;

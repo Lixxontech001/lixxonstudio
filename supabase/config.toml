@@ -26,3 +26,6 @@ verify_jwt = false
 # GitHub Actions sends a signed OIDC token; the handler verifies its issuer, claims and signature.
 [functions.automation-runner]
 verify_jwt = false
+# Owner-only distribution readbacks and Telegram delivery re-check identity and DB approvals in the handler.
+[functions.automation-distribution]
+verify_jwt = true
