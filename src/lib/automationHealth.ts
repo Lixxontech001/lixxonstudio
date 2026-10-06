@@ -98,7 +98,7 @@ function parseEvidence(key: AutomationHealthKey, input: unknown): SafeHealthEvid
     github_actions: ['credential_tested_at', 'last_job_at'],
     daily_schedule: ['last_run_at'],
     ai_providers: [], ai_quota: [], distribution: [],
-    video: ['last_render_at'], push: [],
+    video: ['last_render_at'], push: ['last_test_at'],
     commerce: ['flutterwave_tested_at'],
     incidents: ['last_incident_at', 'last_telemetry_at'], automation_safety: [],
   };
@@ -108,7 +108,7 @@ function parseEvidence(key: AutomationHealthKey, input: unknown): SafeHealthEvid
     daily_schedule: [['last_run_status', RUN_STATUSES]],
     ai_providers: [], ai_quota: [], distribution: [],
     video: [['last_render_status', RUN_STATUSES]],
-    push: [],
+    push: [['last_test_status', new Set(['sent', 'failed'])]],
     commerce: [['flutterwave_test_status', TEST_STATUSES], ['webhook_test_status', TEST_STATUSES]],
     incidents: [], automation_safety: [],
   };
@@ -190,8 +190,14 @@ function detailFor(key: AutomationHealthKey, status: AutomationHealthStatus, evi
       }
       return `Last render: ${evidence.last_render_status || 'not recorded'}; FFmpeg toolchain verified: ${evidence.toolchain_verified ? 'yes' : 'no'}; Android playback: not verified.`;
     case 'push':
+      if (evidence.delivery_verified) {
+        return `A confirmed test notification was delivered to an owner device${evidence.last_test_at ? ` at ${evidence.last_test_at}` : ''}; ${evidence.vapid_values_configured} of 3 VAPID values are stored.`;
+      }
+      if (evidence.last_test_status === 'failed') {
+        return `The last test notification failed${evidence.last_test_at ? ` at ${evidence.last_test_at}` : ''}; ${evidence.vapid_values_configured} of 3 VAPID values are stored. Owner alerts still fall back to email and Telegram.`;
+      }
       return evidence.feature_enabled
-        ? `${evidence.vapid_values_configured} of 3 VAPID values are stored; delivery is not verified.`
+        ? `${evidence.vapid_values_configured} of 3 VAPID values are stored; no confirmed test delivery is recorded yet.`
         : 'Web Push is off; no delivery check has been run.';
     case 'commerce':
       return evidence.vault_credentials_configured === 0

@@ -3,6 +3,7 @@ import {Settings as SettingsIcon, Info, CreditCard, BookOpen, Check, Copy} from 
 import SiteSettingsPanel from '../components/SiteSettingsPanel';
 import SearchSynonymsPanel from '../components/SearchSynonymsPanel';
 import PwaInstallPanel from '../../components/PwaInstallPanel';
+import PushNotificationsPanel from '../../components/PushNotificationsPanel';
 
 export default function AdminSettings() {
   const [copied, setCopied] = useState('');
