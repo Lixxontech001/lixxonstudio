@@ -51,7 +51,7 @@ The key catalogue includes these exact Vault names:
 | Actions | `github_dispatch_token` |
 | Commerce | `flutterwave_secret_key`, `flutterwave_webhook_hash` |
 | Email | `resend_api_key` |
-| Social and messaging | `telegram_bot_token`, `meta_app_id`, `meta_app_secret`, `meta_access_token`, `instagram_user_id`, `facebook_page_id`, `threads_user_id`, `threads_access_token`, `youtube_client_id`, `youtube_client_secret`, `youtube_refresh_token`, `tiktok_client_key`, `tiktok_client_secret`, `tiktok_access_token`, `pinterest_access_token`, `pinterest_board_id`, `linkedin_client_id`, `linkedin_client_secret`, `linkedin_access_token`, `linkedin_organization_id`, `x_api_key`, `x_api_secret`, `x_access_token`, `x_access_token_secret`, `tumblr_consumer_key`, `tumblr_consumer_secret`, `tumblr_access_token`, `tumblr_token_secret`, `tumblr_blog_identifier`, `whatsapp_phone_number_id`, `whatsapp_access_token` |
+| Social and messaging | `telegram_bot_token`, `telegram_chat_id`, `meta_app_id`, `meta_app_secret`, `meta_access_token`, `instagram_user_id`, `facebook_page_id`, `threads_user_id`, `threads_access_token`, `youtube_client_id`, `youtube_client_secret`, `youtube_refresh_token`, `tiktok_client_key`, `tiktok_client_secret`, `tiktok_access_token`, `pinterest_access_token`, `pinterest_board_id`, `linkedin_client_id`, `linkedin_client_secret`, `linkedin_access_token`, `linkedin_organization_id`, `x_api_key`, `x_api_secret`, `x_access_token`, `x_access_token_secret`, `tumblr_consumer_key`, `tumblr_consumer_secret`, `tumblr_access_token`, `tumblr_token_secret`, `tumblr_blog_identifier`, `whatsapp_phone_number_id`, `whatsapp_access_token` |
 | Video | `coverr_api_key` |
 | Web Push | `vapid_public_key`, `vapid_private_key`, `vapid_subject` |
 
