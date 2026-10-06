@@ -120,7 +120,7 @@ def main():
     for name in (
         "db-assertions.sql", "search-assertions.sql", "personalisation-assertions.sql",
         "community-assertions.sql", "commerce-assertions.sql", "editor-assertions.sql",
-        "admin-assertions.sql", "automation-foundation-assertions.sql", "security-ai-assertions.sql",
+        "admin-assertions.sql", "automation-foundation-assertions.sql", "article-intake-assertions.sql", "security-ai-assertions.sql",
         "admin-ai-autopilot-assertions.sql", "admin-ai-ceo-assertions.sql", "admin-ai-predictive-assertions.sql",
     ):
         assertions = os.path.join(ROOT, "scripts", name)

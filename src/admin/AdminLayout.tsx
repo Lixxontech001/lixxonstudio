@@ -47,6 +47,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', route: { name: 'admin-dashboard' }, icon: LayoutDashboard },
       { label: 'Articles', route: { name: 'admin-articles' }, icon: FileText },
+      { label: 'Article queue & calendar', route: { name: 'admin-automation-articles' }, href: '/admin/automation/articles', icon: Calendar },
       { label: 'Categories', route: { name: 'admin-categories' }, icon: FolderTree },
       { label: 'Authors', route: { name: 'admin-authors' }, icon: Users },
       { label: 'Comments', route: { name: 'admin-comments' }, icon: MessageSquare },

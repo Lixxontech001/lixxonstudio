@@ -59,6 +59,7 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   'admin-frontend': 'settings.frontend',
   'admin-automation-keys': 'automation.keys',
   'admin-automation-check': 'automation.check',
+  'admin-automation-articles': 'content.read',
   // 'admin-security' (own 2FA), 'admin', 'admin-login' need no capability
 };
 

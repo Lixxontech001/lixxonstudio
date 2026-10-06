@@ -52,6 +52,7 @@ const AdminProductEditor = lazy(() => import('./pages/AdminProductEditor'));
 const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor'));
 const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
 const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
+const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));
 
 const LazyPage = ({ children }: { children: ReactNode }) => (
   <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading editor...</div>}>{children}</Suspense>
@@ -60,8 +61,8 @@ const LazyPage = ({ children }: { children: ReactNode }) => (
 export default function AdminApp() {
   const { route, navigate } = useNavigation();
   const { session, loading, isAdmin, adminAccess, email, signOut, refreshAdmin } = useAuth();
-  // NavigationContext intentionally remains untouched; resolve only the two
-  // protected automation deep links at the admin boundary and keep both lazy.
+  // NavigationContext intentionally remains untouched; resolve protected
+  // automation deep links at the admin boundary and keep their pages lazy.
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
   const routeName = resolveAutomationAdminRoute(path) ?? route.name;
   const routeId = 'id' in route ? route.id : undefined;
@@ -135,6 +136,8 @@ export default function AdminApp() {
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation keys…</div>}><AutomationKeys /></Suspense>;
       case 'admin-automation-check':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading System Check…</div>}><AutomationCheck /></Suspense>;
+      case 'admin-automation-articles':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading article queue…</div>}><ArticleQueueCalendar /></Suspense>;
       case 'admin-dashboard': return <AdminDashboard />;
       case 'admin-articles': return <AdminArticles />;
       case 'admin-article-new': return <LazyPage><AdminArticleEditor isNew /></LazyPage>;

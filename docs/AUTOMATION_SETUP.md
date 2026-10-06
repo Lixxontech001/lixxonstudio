@@ -11,6 +11,18 @@ This is the owner-facing setup and key-handling guide. Do not paste credentials 
 - Paste one credential into its labelled field and choose **Save**. For an existing value, confirm **Replace**. The field clears after the save attempt. The app stores the value in Supabase Vault; the Keys page only receives the catalogue name, type, configured state and redacted test metadata. A saved value cannot be viewed or copied back. Replace it with the provider's newly issued value if it is lost or rotated.
 - **Delete** asks for confirmation and permanently removes the Vault value. Saving/replacing/deleting is audited as metadata only; provider values and provider response bodies are not included.
 
+## Article intake and calendar
+
+- Admin page: `/admin/automation/articles`
+- Production test URL after the final merge and migration deployment: `https://lixxonstudio.vercel.app/admin/automation/articles`. This branch is not deployed; do not treat the production URL as proof that the new page is live.
+- Sign in as an active admin and complete MFA. `content.read` opens the page; `content.write` is required to import/edit queue metadata; scheduling or rescheduling an actual post additionally requires the existing database-enforced `content.publish` capability.
+- Choose up to ten Microsoft Word `.docx` files in one batch (15 MB each, 60 MB total). Text extraction and SHA-256 checks run in the browser. The original document bytes are not retained or uploaded; keep your source DOCX files safely. Password-protected, multipart/ZIP64, damaged, or tracked-change documents must be reviewed/re-saved in Word before import.
+- The page imports only the extracted article text into the existing unpublished `posts.content` draft. It does not call an AI model, summarize or transform prose, or store a second article-body copy. Verify the read-only preview, then enter the owner-written title, category, tags, selected image with owner-written alt text and a proposed Lagos date. To upload a new image, open **Media library** in a new tab and return; the picker refreshes when the intake tab becomes visible. Complete the excerpt and SEO title/description in **Edit article** before scheduling; the database blocks an intake draft from scheduling until required metadata is complete. The 3,500–4,000-word band is a warning target, not an instruction to change prose.
+- Proposed dates are Africa/Lagos (WAT) and stored as UTC. A database guard allows at most two published/scheduled/active-proposal articles per Lagos day. A proposal is not a schedule or publishing approval.
+- **To schedule:** review the draft in the existing Article editor, make any owner-authorized correction there, and explicitly choose its schedule/publish action with `content.publish`. The existing five-minute publisher remains the only article publisher. Channel-distribution approval is separate. Dragging a scheduled calendar entry always asks for confirmation and is subject to the same database daily cap.
+- **Correction/rejection:** use **Edit article** to open the existing editor. An owner/editor can explicitly select a replacement DOCX and confirm **Replace article prose**; the normal article revision history retains the earlier body. **Reject item** keeps the unpublished draft and all prose, marks the intake record rejected and releases its proposed-day slot. Reopening requires a future date with available capacity.
+- Local/preview test URL: `http://localhost:5173/admin/automation/articles` after `npm run dev`; sign in using the configured Supabase test project. Do not use production for destructive tests.
+
 ## System Check
 
 - Owner/admin page: `/admin/automation/check`
