@@ -1,21 +1,35 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, Clipboard, ExternalLink, ImageDown, Loader2,
+  AlertTriangle, CheckCircle2, Clipboard, Download, ExternalLink, ImageDown, Loader2,
   Pause, Play, RefreshCw, ShieldCheck, Share2, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import {
   DISTRIBUTION_CHANNELS,
-  downloadDistributionImage,
+  DISTRIBUTION_DEEP_LINKS,
+  KIT_SLOTS,
+  channelNeedsVideo,
+  distributionKitSteps,
   distributionShareUrl,
+  downloadDistributionImage,
+  downloadDistributionVideo,
+  parseDailyKitState,
   parseDistributionArticles,
   parseDistributionSnapshot,
+  type DailyKitMark,
+  type DailyKitState,
   type DistributionArticleOption,
   type DistributionChannel,
   type DistributionPayload,
   type DistributionSnapshot,
+  type KitSlot,
 } from '../../lib/automationDistribution';
+import { lagosDateKey } from '../../lib/articleIntake';
+
+function lagosDayKey(offsetDays = 0): string {
+  return lagosDateKey(new Date(Date.now() + offsetDays * 86_400_000));
+}
 
 const STATE_LABELS: Record<DistributionChannel['state'], string> = {
   connected: 'Connected · approval required',
@@ -103,6 +117,10 @@ export default function AutomationDistribution() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, { title: string; subject: string; caption: string; hashtags: string }>>({});
+  const [kitDay, setKitDay] = useState<'today' | 'tomorrow'>('today');
+  const [slot, setSlot] = useState<KitSlot>('morning');
+  const [kitState, setKitState] = useState<DailyKitState | null>(null);
+  const [videoDraft, setVideoDraft] = useState('');
 
   const loadArticles = useCallback(async () => {
     setError(null);
@@ -145,8 +163,23 @@ export default function AutomationDistribution() {
     }
   }, []);
 
+  const dayKey = kitDay === 'tomorrow' ? lagosDayKey(1) : lagosDayKey(0);
+
+  const loadKitState = useCallback(async (postId: string, lagosDay: string) => {
+    if (!postId) { setKitState(null); return; }
+    try {
+      const { data, error: rpcError } = await supabase.rpc('automation_daily_kit_state', { p_post_id: postId, p_lagos_day: lagosDay });
+      if (rpcError) throw rpcError;
+      setKitState(parseDailyKitState(data));
+    } catch {
+      setKitState(null);
+    }
+  }, []);
+
   useEffect(() => { void loadArticles(); }, [loadArticles]);
   useEffect(() => { if (selectedPostId) void loadSnapshot(selectedPostId); }, [selectedPostId, loadSnapshot]);
+  useEffect(() => { void loadKitState(selectedPostId, dayKey); }, [selectedPostId, dayKey, loadKitState]);
+  useEffect(() => { setVideoDraft(kitState?.videoUrl || ''); }, [kitState?.videoUrl]);
 
   const counts = useMemo(() => {
     const result = { ready: 0, manual: 0, blocked: 0, paused: 0 };
@@ -321,7 +354,49 @@ export default function AutomationDistribution() {
     setNotice(ok ? `${label} copied for ${channel.label}.` : 'Copy was not available in this browser. Select and copy the text manually.');
   };
 
+  const attachVideo = (url: string) => withAction('attach-video', async () => {
+    if (!canManage || !selectedPostId) return;
+    setError(null);
+    const { error: rpcError } = await supabase.rpc('automation_attach_article_video', {
+      p_post_id: selectedPostId, p_video_url: url.trim() || null,
+    });
+    if (rpcError) throw rpcError;
+    await loadKitState(selectedPostId, dayKey);
+    setNotice(url.trim()
+      ? 'The vertical video is attached to this article for the kit. It is only a link to your own file; nothing was uploaded or posted.'
+      : 'The video attachment was cleared for this article.');
+  });
+
+  const markPosted = (channel: DistributionChannel) => withAction(`mark:${channel.key}`, async () => {
+    const draft = channel.draft;
+    if (!canManage || !draft) return;
+    const slotLabel = KIT_SLOTS.find(item => item.key === slot)?.label || slot;
+    const confirmed = window.confirm(`Record that you posted the approved ${channel.label} copy yourself in the ${slotLabel} slot for ${kitDay === 'tomorrow' ? 'tomorrow' : 'today'} in Lagos? This records your own statement; it is not a provider receipt and it never posts anything.`);
+    if (!confirmed) return;
+    const { data, error: rpcError } = await supabase.rpc('automation_mark_channel_posted', {
+      p_draft_id: draft.id, p_slot: slot, p_lagos_day: dayKey, p_note: null,
+    });
+    if (rpcError) throw rpcError;
+    const duplicate = Boolean(data && typeof data === 'object' && (data as { duplicate?: boolean }).duplicate);
+    await loadKitState(selectedPostId, dayKey);
+    setNotice(duplicate
+      ? `${channel.label} was already marked as posted in the ${slotLabel} slot for that Lagos day.`
+      : `${channel.label} is recorded as posted by you in the ${slotLabel} slot. Keep the platform's own copy as the source of truth.`);
+  });
+
   const channels = snapshot?.channels || [];
+  const dayArticles = useMemo(() => articles.filter(article => (
+    article.scheduledAtUtc ? lagosDateKey(article.scheduledAtUtc) === dayKey : kitDay === 'today'
+  )), [articles, dayKey, kitDay]);
+  const marksByChannel = useMemo(() => {
+    const grouped = new Map<string, DailyKitMark[]>();
+    for (const mark of kitState?.marks || []) {
+      const list = grouped.get(mark.channelKey) || [];
+      list.push(mark);
+      grouped.set(mark.channelKey, list);
+    }
+    return grouped;
+  }, [kitState]);
 
   return (
     <div className="space-y-6">
@@ -354,17 +429,26 @@ export default function AutomationDistribution() {
         </section>
       )}
 
+      <section className="rounded-sm border border-gray-200 bg-white p-4" aria-label="Kit day and posting slot">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div><label htmlFor="kit-day" className="mb-2 block text-sm font-medium text-charcoal">Kit day (Lagos)</label><select id="kit-day" value={kitDay} onChange={event => setKitDay(event.target.value === 'tomorrow' ? 'tomorrow' : 'today')} className="min-h-11 w-full rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze"><option value="today">Today · {lagosDayKey(0)}</option><option value="tomorrow">Tomorrow · {lagosDayKey(1)}</option></select></div>
+          <div><label htmlFor="kit-slot" className="mb-2 block text-sm font-medium text-charcoal">Posting slot</label><select id="kit-slot" value={slot} onChange={event => setSlot(event.target.value as KitSlot)} className="min-h-11 w-full rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze">{KIT_SLOTS.map(item => <option key={item.key} value={item.key}>{item.label} · {item.at}</option>)}</select><p className="mt-1 text-xs text-gray-500">A mark records the day and slot you choose here. The same channel can be marked again in another slot.</p></div>
+          <div>{canManage && <><label htmlFor="kit-video" className="mb-2 block text-sm font-medium text-charcoal">Vertical video for this article</label><div className="flex gap-2"><input id="kit-video" value={videoDraft} onChange={event => setVideoDraft(event.target.value)} placeholder="https://…/clip-vertical.mp4" className="min-h-11 min-w-0 flex-1 rounded-sm border border-gray-300 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze" /><button type="button" disabled={busy !== null || !selectedPostId} onClick={() => void attachVideo(videoDraft)} className="inline-flex min-h-11 items-center rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:opacity-50">{busy === 'attach-video' ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : 'Save'}</button></div><p className="mt-1 text-xs text-gray-500">Your own public file link, never uploaded here. Video channels offer a one-tap download and tailored steps once it is set.</p></>}</div>
+        </div>
+      </section>
+
       <section className="rounded-sm border border-gray-200 bg-white p-4">
         <label htmlFor="distribution-article" className="mb-2 block text-sm font-medium text-charcoal">Scheduled or published article</label>
         <div className="flex flex-col gap-3 sm:flex-row">
           <select id="distribution-article" value={selectedPostId} onChange={event => setSelectedPostId(event.target.value)} disabled={loading || busy !== null || articles.length === 0} className="min-h-11 min-w-0 flex-1 rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze">
-            {articles.length === 0 && <option value="">No scheduled or published articles</option>}
-            {articles.map(article => <option key={article.id} value={article.id}>{article.title} · {article.status} · {timeLabel(article.scheduledAtUtc)}</option>)}
+            {dayArticles.length === 0 && <option value="">No article scheduled or published for this Lagos day</option>}
+            {dayArticles.map(article => <option key={article.id} value={article.id}>{article.title} · {article.status} · {timeLabel(article.scheduledAtUtc)}</option>)}
           </select>
           <button type="button" onClick={() => void prepareKit()} disabled={!canManage || !selectedPostId || busy !== null} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-charcoal px-4 text-sm font-medium text-white hover:bg-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:cursor-not-allowed disabled:opacity-50">
             {busy === 'prepare' ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Sparkles size={15} aria-hidden="true" />} Prepare 13-channel kit
           </button>
         </div>
+        {dayArticles.length === 0 && articles.length > 0 && <p className="mt-2 text-xs text-amber-900">{kitDay === 'tomorrow' ? 'Nothing is scheduled for tomorrow in Lagos yet. Schedule tomorrow\u2019s article first, or switch the kit day to today.' : 'Nothing is scheduled or published for today in Lagos. Use the article queue to schedule one.'}</p>}
         {snapshot && <p className="mt-2 text-xs text-gray-600">Selected: <strong>{snapshot.title}</strong> · {snapshot.status} · {timeLabel(snapshot.scheduledAtUtc)} · {snapshot.channels.length} channel targets</p>}
         {!canManage && <p className="mt-2 text-xs text-amber-900">Only an active owner or founder can generate, edit, approve or pause distribution drafts.</p>}
       </section>
@@ -410,6 +494,7 @@ export default function AutomationDistribution() {
               const shareReady = approved && !dirty;
               const delivered = draft?.reviewStatus === 'sent' || draft?.delivery?.status === 'sent';
               const isSaving = busy === `save:${channel.key}`;
+              const marksForChannel = marksByChannel.get(channel.key) || [];
               return (
                 <article key={channel.key} className="overflow-hidden rounded-sm border border-gray-200 bg-white">
                   <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
@@ -477,6 +562,21 @@ export default function AutomationDistribution() {
                           {channel.key === 'telegram' && canManage && <button type="button" disabled={busy !== null || channel.state !== 'approval_required' || !snapshot?.flags['automation.enabled'] || !snapshot?.flags['automation.distribution'] || channel.quotaRemaining === 0} onClick={() => void sendTelegram(channel)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-emerald-800 px-3 text-sm font-medium text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:cursor-not-allowed disabled:opacity-50">{busy === 'send:telegram' ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Share2 size={15} aria-hidden="true" />}Send approved message</button>}
                         </>}
                       </div>
+                      <div className="rounded-sm border border-gray-200 bg-gray-50 p-3">
+                        <ol className="list-decimal space-y-1 pl-5 text-xs leading-5 text-gray-700">
+                          {distributionKitSteps(channel.key, Boolean(kitState?.videoUrl)).map(step => <li key={step}>{step}</li>)}
+                        </ol>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {DISTRIBUTION_DEEP_LINKS[channel.key] && <a href={DISTRIBUTION_DEEP_LINKS[channel.key] as string} className="inline-flex min-h-11 items-center gap-2 rounded-sm border border-sky-200 bg-sky-50 px-3 text-sm text-sky-950 hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze">Open {metadata.label} app<ExternalLink size={14} aria-hidden="true" /></a>}
+                          {channelNeedsVideo(channel.key) && (kitState?.videoUrl
+                            ? <button type="button" onClick={() => void downloadDistributionVideo(kitState.videoUrl as string, draft.payload.title).then(ok => setNotice(ok ? 'Vertical video downloaded.' : 'This video host did not allow a safe browser download. Open the link from the video field above instead.'))} className="inline-flex min-h-11 items-center gap-2 rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze"><Download size={15} aria-hidden="true" />Download video</button>
+                            : <span className="inline-flex min-h-11 items-center text-xs text-amber-900">No vertical video attached for this article yet — save a public video URL in the field above.</span>)}
+                          {canManage && <button type="button" disabled={busy !== null || draft.reviewStatus !== 'approved'} onClick={() => void markPosted(channel)} className="inline-flex min-h-11 items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50 px-3 text-sm text-emerald-900 hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:opacity-50"><CheckCircle2 size={15} aria-hidden="true" />Mark posted · {KIT_SLOTS.find(item => item.key === slot)?.label}</button>}
+                        </div>
+                        {marksForChannel.length > 0 && <p role="status" className="mt-2 text-xs text-emerald-900">Posted by you: {marksForChannel.map(mark => `${KIT_SLOTS.find(item => item.key === mark.slot)?.label || mark.slot}${mark.lagosDay === dayKey ? '' : ` (${mark.lagosDay})`}`).join(', ')}. Your own record; the platform remains the source of truth.</p>}
+                        {canManage && draft.reviewStatus !== 'approved' && <p className="mt-1 text-xs text-gray-500">Approve this exact copy to enable Mark posted.</p>}
+                      </div>
+
                       {shareReady && <p className="mt-2 text-xs leading-5 text-amber-900">This kit is approved for this channel only. Review the external platform's final preview and audience before confirming there; the platform action is not recorded as a verified success here.</p>}
                       {delivered && <p className="mt-2 text-xs text-gray-600">A receipt was recorded. Further edits or sends require a new owner-reviewed copy.</p>}
                     </div>

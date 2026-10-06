@@ -138,6 +138,7 @@ def main():
         "agent-status-assertions.sql",
         "executive-governance-assertions.sql",
         "queue-reschedule-assertions.sql",
+        "daily-kit-assertions.sql",
     ):
         assertions = os.path.join(ROOT, "scripts", name)
         if os.path.exists(assertions):

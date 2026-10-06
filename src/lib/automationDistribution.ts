@@ -473,3 +473,163 @@ export async function downloadDistributionImage(url: string, filename: string): 
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// V16 — Daily Kit completeness helpers: posting slots, the platforms' own app
+// schemes, a deterministic numbered step list per channel, the video download and
+// the read-back of the owner's own "posted by hand" records.
+//
+// Everything here is static text and pure parsing: no provider call, no credential,
+// no tracking parameter. The deep links use each platform app's own public URL scheme,
+// so a browser that has the app installed opens it and a browser without it does
+// nothing at all — the kit never pretends a post happened.
+// ---------------------------------------------------------------------------
+
+export const KIT_SLOTS = [
+  { key: 'morning', label: 'Morning', at: '08:00 WAT' },
+  { key: 'midday', label: 'Midday', at: '13:00 WAT' },
+  { key: 'evening', label: 'Evening', at: '18:00 WAT' },
+] as const;
+export type KitSlot = (typeof KIT_SLOTS)[number]['key'];
+export const KIT_SLOT_KEYS: readonly KitSlot[] = KIT_SLOTS.map(slot => slot.key);
+
+const VIDEO_CHANNEL_KEYS = new Set<DistributionChannelKey>(['instagram', 'facebook', 'youtube_shorts', 'tiktok']);
+export function channelNeedsVideo(channel: DistributionChannelKey): boolean {
+  return VIDEO_CHANNEL_KEYS.has(channel);
+}
+
+/** Each platform app's own public scheme. `null` means the channel is worked on-site. */
+export const DISTRIBUTION_DEEP_LINKS: Record<DistributionChannelKey, string | null> = {
+  instagram: 'instagram://app',
+  facebook: 'fb://feed',
+  youtube_shorts: 'youtube://',
+  tiktok: 'tiktok://',
+  pinterest: 'pinterest://',
+  telegram: 'tg://resolve',
+  threads: 'barcelona://',
+  linkedin: 'linkedin://feed/',
+  x: 'twitter://timeline',
+  tumblr: 'tumblr://x-callback-url/dashboard',
+  whatsapp: 'whatsapp://send',
+  newsletter: null,
+  site_widget: null,
+};
+
+/**
+ * Three to five numbered steps for one channel, in the order the work is really done.
+ * The steps are derived from the channel's own mode and formats, so they cannot drift
+ * from the kit's actual capabilities.
+ */
+export function distributionKitSteps(channel: DistributionChannelKey, hasVideo = false): string[] {
+  const needsVideo = channelNeedsVideo(channel);
+  const media = needsVideo
+    ? (hasVideo ? 'Download the attached vertical video' : 'Attach the vertical video URL for this article')
+    : 'Download the article image';
+  switch (channel) {
+    case 'newsletter':
+      return [
+        'Copy the email subject and the email body',
+        'Open the subscriber admin and confirm the audience',
+        'Send it yourself, then come back to this page',
+        'Mark this channel as posted to record the day and slot',
+      ];
+    case 'site_widget':
+      return [
+        'Copy the safe widget snippet',
+        'Open the article to check the placement',
+        'Paste the snippet in the page builder',
+        'Mark this channel as posted to record the day and slot',
+      ];
+    case 'telegram':
+      return [
+        'Copy the caption',
+        'Open telegram app (or send the approved message directly)',
+        'Paste and post in the private chat',
+        'Mark this channel as posted to record the day and slot',
+      ];
+    case 'whatsapp':
+      return [
+        'Copy the caption and the UTM link',
+        'Open whatsapp app',
+        'Send only to people who opted in',
+        'Mark this channel as posted to record the day and slot',
+      ];
+    default:
+      return [
+        'Copy the caption',
+        media,
+        `Open ${DISTRIBUTION_CHANNELS[channel].label}`,
+        'Paste the caption, attach the media and post',
+        'Mark this channel as posted to record the day and slot',
+      ];
+  }
+}
+
+/** Video download for the article's owner-attached asset. Never a provider call. */
+export async function downloadDistributionVideo(url: string, filename: string): Promise<boolean> {
+  if (!safeHttps(url)) return false;
+  try {
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'no-store', redirect: 'error' });
+    if (!response.ok || !response.headers.get('content-type')?.startsWith('video/')) return false;
+    const blob = await response.blob();
+    if (blob.size === 0 || blob.size > 120_000_000) return false;
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `${filename.replace(/[^a-z0-9-]/gi, '-').slice(0, 80) || 'lixxon-video'}.mp4`;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export interface DailyKitMark {
+  channelKey: DistributionChannelKey;
+  slot: KitSlot;
+  note: string | null;
+  markedAt: string;
+  lagosDay: string;
+}
+export interface DailyKitState {
+  postId: string;
+  lagosDay: string;
+  isToday: boolean;
+  videoUrl: string | null;
+  marks: DailyKitMark[];
+}
+
+/** Strict parse of the read-only kit state so the page never renders unverified data. */
+export function parseDailyKitState(value: unknown): DailyKitState | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.post_id !== 'string' || !/^[0-9a-f-]{36}$/.test(row.post_id)) return null;
+  if (typeof row.lagos_day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.lagos_day)) return null;
+  if (typeof row.is_today !== 'boolean') return null;
+  const videoUrl = row.video_url === null || row.video_url === undefined ? null : safeHttps(row.video_url) ? row.video_url : null;
+  if (!Array.isArray(row.marks)) return null;
+  const marks: DailyKitMark[] = [];
+  for (const entry of row.marks) {
+    if (!entry || typeof entry !== 'object') return null;
+    const mark = entry as Record<string, unknown>;
+    if (typeof mark.channel_key !== 'string' || !DISTRIBUTION_CHANNEL_KEYS.includes(mark.channel_key as DistributionChannelKey)) return null;
+    if (typeof mark.slot !== 'string' || !KIT_SLOT_KEYS.includes(mark.slot as KitSlot)) return null;
+    if (typeof mark.lagos_day !== 'string' || typeof mark.marked_at !== 'string') return null;
+    if (mark.note !== null && mark.note !== undefined && typeof mark.note !== 'string') return null;
+    marks.push({
+      channelKey: mark.channel_key as DistributionChannelKey,
+      slot: mark.slot as KitSlot,
+      note: typeof mark.note === 'string' ? mark.note.slice(0, 400) : null,
+      markedAt: mark.marked_at,
+      lagosDay: mark.lagos_day,
+    });
+  }
+  return { postId: row.post_id, lagosDay: row.lagos_day, isToday: row.is_today, videoUrl, marks };
+}

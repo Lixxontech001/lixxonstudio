@@ -321,6 +321,133 @@ describe('Daily Distribution Kit page', () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
+  it('shows tomorrow\u2019s kit state and explains when nothing is scheduled for that Lagos day', async () => {
+    const state = emptySnapshot();
+    mocks.rpc.mockImplementation(async (name: string, args?: Record<string, unknown>) => {
+      if (name === 'automation_distribution_articles') return { data: { articles: [
+        { id: POST_ID, title: 'Owner title', slug: SLUG, status: 'published', scheduled_at_utc: null },
+      ] }, error: null };
+      if (name === 'automation_distribution_snapshot') return { data: state, error: null };
+      if (name === 'automation_daily_kit_state') {
+        expect(args?.p_lagos_day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        return { data: { post_id: POST_ID, lagos_day: args?.p_lagos_day, is_today: args?.p_lagos_day === undefined, video_url: null, marks: [] }, error: null };
+      }
+      return { data: null, error: null };
+    });
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root.render(<AutomationDistribution />); });
+    await settle();
+
+    const daySelect = host.querySelector('#kit-day') as HTMLSelectElement;
+    const slotSelect = host.querySelector('#kit-slot') as HTMLSelectElement;
+    expect(daySelect).not.toBeNull();
+    expect(slotSelect).not.toBeNull();
+    expect(Array.from(slotSelect.options).map(option => option.value)).toEqual(['morning', 'midday', 'evening']);
+    // The published fixture has no schedule date, so it belongs to today's kit only.
+    expect(host.textContent).toContain('Owner title');
+
+    await act(async () => {
+      daySelect.value = 'tomorrow';
+      daySelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await settle();
+    expect(host.textContent).toContain('Nothing is scheduled for tomorrow in Lagos yet');
+  });
+
+  it('offers the video download and marks a channel as posted in the chosen slot', async () => {
+    const state = emptySnapshot();
+    for (const channel of state.channels) {
+      channel.draft = {
+        id: DRAFT_ID, payload: payloadFor(channel.channel_key as DistributionChannelKey),
+        payload_sha256: HASH_A, review_status: 'approved', approved_at: '2026-10-06T08:00:00.000Z',
+        delivery: null, test_delivery: null,
+      };
+    }
+    const marked: Record<string, unknown>[] = [];
+    mocks.rpc.mockImplementation(async (name: string, args?: Record<string, unknown>) => {
+      if (name === 'automation_distribution_articles') return { data: { articles: [
+        { id: POST_ID, title: 'Owner title', slug: SLUG, status: 'published', scheduled_at_utc: null },
+      ] }, error: null };
+      if (name === 'automation_distribution_snapshot') return { data: structuredClone(state), error: null };
+      if (name === 'automation_daily_kit_state') return { data: {
+        post_id: POST_ID, lagos_day: args?.p_lagos_day, is_today: true,
+        video_url: 'https://cdn.lixxonstudio.com/kit/clip-vertical.mp4',
+        marks: marked,
+      }, error: null };
+      if (name === 'automation_mark_channel_posted') {
+        expect(args?.p_draft_id).toBe(DRAFT_ID);
+        expect(args?.p_slot).toBe('evening');
+        marked.push({ channel_key: 'instagram', slot: 'evening', note: null, marked_at: '2026-10-06T18:04:00.000Z', lagos_day: args?.p_lagos_day, kind: 'manual' });
+        return { data: { ok: true, duplicate: false, channel_key: 'instagram', slot: 'evening' }, error: null };
+      }
+      if (name === 'automation_attach_article_video') return { data: { ok: true }, error: null };
+      return { data: null, error: null };
+    });
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root.render(<AutomationDistribution />); });
+    await settle();
+
+    const slotSelect = host.querySelector('#kit-slot') as HTMLSelectElement;
+    await act(async () => {
+      slotSelect.value = 'evening';
+      slotSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await settle();
+
+    const instagram = cardFor(host, 'instagram');
+    expect(instagram.textContent).toContain('Copy the caption');
+    expect(instagram.textContent).toContain('Mark this channel as posted to record the day and slot');
+    expect(instagram.textContent?.toLowerCase()).toContain('open instagram app');
+    expect(buttonFor(instagram, 'Download video')).toBeTruthy();
+
+    const widget = cardFor(host, 'site_widget');
+    expect(widget.textContent).not.toContain('Download video');
+    expect(Array.from(widget.querySelectorAll('a')).some(link => (link.textContent || '').includes('app'))).toBe(false);
+
+    await act(async () => { buttonFor(instagram, 'Mark posted').click(); });
+    await settle();
+    expect(mocks.rpc).toHaveBeenCalledWith('automation_mark_channel_posted', expect.objectContaining({ p_draft_id: DRAFT_ID, p_slot: 'evening' }));
+    expect(host.textContent).toContain('recorded as posted by you in the Evening slot');
+    expect(cardFor(host, 'instagram').textContent).toContain('Posted by you: Evening');
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it('disables Mark posted until the exact copy is approved and never for a reviewer', async () => {
+    const state = emptySnapshot();
+    state.channels = state.channels.map(channel => ({
+      ...channel,
+      draft: { id: DRAFT_ID, payload: payloadFor(channel.channel_key as DistributionChannelKey), payload_sha256: HASH_A, review_status: 'pending', approved_at: null, delivery: null, test_delivery: null },
+    }));
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === 'automation_distribution_articles') return { data: { articles: [
+        { id: POST_ID, title: 'Owner title', slug: SLUG, status: 'published', scheduled_at_utc: null },
+      ] }, error: null };
+      if (name === 'automation_distribution_snapshot') return { data: structuredClone(state), error: null };
+      if (name === 'automation_daily_kit_state') return { data: { post_id: POST_ID, lagos_day: '2026-10-06', is_today: true, video_url: null, marks: [] }, error: null };
+      return { data: null, error: null };
+    });
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root.render(<AutomationDistribution />); });
+    await settle();
+    expect(buttonFor(cardFor(host, 'instagram'), 'Mark posted').disabled).toBe(true);
+
+    act(() => root.unmount());
+    document.body.innerHTML = '';
+    mocks.access = { status: 'active', is_owner: false, is_founder: false, role: 'editor', permissions: ['automation.check'] };
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root.render(<AutomationDistribution />); });
+    await settle();
+    expect(Array.from(cardFor(host, 'instagram').querySelectorAll('button')).some(button => (button.textContent || '').includes('Mark posted'))).toBe(false);
+  });
+
   it('prepares and demonstrates copy/share controls for all 13 owner-approved manual channels', async () => {
     const state = emptySnapshot();
     const copy = () => structuredClone(state);
