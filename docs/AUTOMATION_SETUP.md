@@ -80,6 +80,11 @@ This is the owner-facing setup and key-handling guide. Do not paste credentials 
   field empty renders the checked-in default look. The workflow's job allows both a push to an
   `arena/**` branch while the harness is being changed and an owner-triggered dispatch on the default
   branch; a push to the default branch still never starts a render on its own.
+- **Not deployed yet, and stated as such:** `automation-video-template` is code on this branch; it is
+  not deployed and no dispatch has been sent from here (this environment's GitHub token has no
+  `actions:write`; the Vault token is the owner's). Until it is deployed, **Copy template JSON** →
+  Run workflow is the whole owner path, and that path was verified locally end to end with a changed
+  look (25 fps, 10 s, watermark text and a payload hash in the evidence).
 - The render stays what it always was: a silent, watermark-marked, non-publishable test artifact in
   `$RUNNER_TEMP`. It is not uploaded, not published and not attached to an article. Getting a rendered
   file into the kit is V21 and remains a separate, unfinished step.
