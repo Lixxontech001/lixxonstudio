@@ -295,7 +295,7 @@ export default function PushNotificationsPanel() {
           type="button"
           onClick={registerThisDevice}
           disabled={busy || !config?.keysReady || !canRegister}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-charcoal px-4 py-2 text-sm font-medium text-white hover:bg-charcoal-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-charcoal px-4 py-2 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal disabled:opacity-60"
         >
           <Smartphone size={16} aria-hidden="true" /> {thisDevice ? 'Update this device' : 'Register this device'}
         </button>

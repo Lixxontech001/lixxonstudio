@@ -25,7 +25,7 @@ function BuddySignInNotice() {
     <div className="mx-auto max-w-xl rounded-sm border border-taupe/40 bg-white p-6 text-center shadow-sm">
       <h1 className="mt-3 font-serif text-2xl text-charcoal">Sign in to Buddy</h1>
       <p className="mt-2 text-sm leading-relaxed text-charcoal-muted">Buddy is an owner/admin surface. It uses the existing Admin sign-in, permissions and MFA; installing this app does not grant access.</p>
-      <a href="/admin/login" className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-charcoal px-4 py-2 text-sm font-medium text-white hover:bg-charcoal-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal">
+      <a href="/admin/login" className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-charcoal px-4 py-2 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal">
         Open Admin sign-in
       </a>
     </div>
@@ -212,7 +212,7 @@ function BuddyWorkspace() {
   const previewFor = preview ? preview.value : null;
 
   return (
-    <main className="min-h-screen bg-taupe-light px-4 py-6 text-charcoal sm:px-6 sm:py-10">
+    <main className="min-h-screen bg-taupe-light px-4 py-6 text-charcoal sm:px-5 sm:py-10">
       <div className="mx-auto max-w-3xl">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div>
@@ -244,7 +244,7 @@ function BuddyWorkspace() {
               placeholder="status, daily kit, help, pause automation"
               className="min-h-11 min-w-0 flex-1 rounded-sm border border-taupe/50 bg-white px-3 py-2.5 text-sm text-charcoal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal"
             />
-            <button type="submit" disabled={!commandText.trim()} className="min-h-11 rounded-sm bg-charcoal px-5 py-2.5 text-sm font-medium text-white hover:bg-charcoal-light focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal disabled:cursor-not-allowed disabled:opacity-50">Save as draft</button>
+            <button type="submit" disabled={!commandText.trim()} className="min-h-11 rounded-sm bg-charcoal px-5 py-2.5 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal disabled:cursor-not-allowed disabled:opacity-50">Save as draft</button>
           </form>
           <p role="status" aria-live="polite" className="mt-3 text-sm text-charcoal-muted">{notice}</p>
           <p className="mt-2 text-xs leading-relaxed text-charcoal-muted">A draft stores only an allow-listed operation name, its typed arguments and a timestamp — never the typed text, an account token, article text or customer data. The safety-focused service worker does not cache navigations, so a first launch with no network is not guaranteed.</p>
@@ -274,7 +274,7 @@ function BuddyWorkspace() {
                     onClick={() => void requestPreview(item)}
                     disabled={!online || busyId === item.id}
                     aria-label={`Preview live state for ${operationLabel(item)}`}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-charcoal/30 px-4 py-2 text-sm font-medium text-charcoal hover:border-charcoal hover:text-charcoal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-charcoal px-4 py-2 text-sm font-medium text-charcoal hover:bg-taupe-light/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {busyId === item.id ? 'Reading live state…' : 'Preview live state'}
                   </button>
@@ -317,7 +317,7 @@ function BuddyWorkspace() {
                     if (item) void confirmPreview(item);
                   }}
                   disabled={busyId !== null}
-                  className="inline-flex min-h-11 items-center justify-center rounded-sm border border-charcoal/30 px-4 py-2 text-sm font-medium text-charcoal hover:border-charcoal hover:text-charcoal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal disabled:opacity-60"
+                  className="inline-flex min-h-11 items-center justify-center rounded-sm border border-charcoal px-4 py-2 text-sm font-medium text-charcoal hover:bg-taupe-light/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal disabled:opacity-60"
                 >
                   Continue (read-only)
                 </button>
@@ -339,7 +339,7 @@ function BuddyWorkspace() {
         </section>
 
         <PwaInstallPanel currentApp="buddy" />
-        <footer className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        <footer className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm">
           <a href="/admin/dashboard" className="min-h-11 inline-flex items-center text-charcoal underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal">Owner/Admin</a>
           <a href="/" className="min-h-11 inline-flex items-center text-charcoal underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal">Reader</a>
         </footer>
@@ -353,7 +353,7 @@ export default function BuddyPwaApp() {
   if (loading) return <div className="min-h-screen bg-taupe-light p-8 text-center text-sm text-charcoal-muted" role="status">Checking your Admin sign-in…</div>;
   if (!session) return <main className="min-h-screen bg-taupe-light p-5 pt-16"><BuddySignInNotice /></main>;
   if (!isAdmin) {
-    return <main className="min-h-screen bg-taupe-light p-5 pt-16"><div className="mx-auto max-w-xl rounded-sm border border-taupe/40 bg-white p-6 text-center"><h1 className="mt-3 font-serif text-2xl">Buddy is restricted</h1><p className="mt-2 text-sm text-charcoal-muted">This account does not have active Admin access. No queued command was sent.</p><a href="/admin/login" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-sm border border-charcoal/30 px-4 py-2 text-sm underline">Open Admin sign-in</a></div></main>;
+    return <main className="min-h-screen bg-taupe-light p-5 pt-16"><div className="mx-auto max-w-xl rounded-sm border border-taupe/40 bg-white p-6 text-center"><h1 className="mt-3 font-serif text-2xl">Buddy is restricted</h1><p className="mt-2 text-sm text-charcoal-muted">This account does not have active Admin access. No queued command was sent.</p><a href="/admin/login" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-sm border border-charcoal px-4 py-2 text-sm underline">Open Admin sign-in</a></div></main>;
   }
   return <MfaGate onVerified={refreshAdmin}><BuddyWorkspace /></MfaGate>;
 }
