@@ -11,7 +11,7 @@ DECLARE
   post_a uuid; cust uuid; ord uuid;
   draft_exp uuid; started_exp uuid;
   proposal_id uuid; decision_id uuid; brief_id uuid;
-  soft_block uuid; hard_block uuid; channel_id uuid;
+  soft_block uuid; hard_block uuid; channel_id uuid; commerce_block uuid;
   result jsonb; audit jsonb; v_verdict text; v_status text; v_draft uuid;
   v_sha text; v_logs bigint; v_links jsonb; v_kind text;
   raised boolean; role_key text; v_kill_initial boolean;
@@ -155,6 +155,41 @@ BEGIN
      WHERE x.action_id = soft_block AND x.reviewer_agent = 'auditor' AND x.proposer_agent = 'strategist'
        AND x.blocked_reason LIKE '%measured basis%'
   ) THEN RAISE EXCEPTION 'the block did not record its reason and reviewer separation'; END IF;
+
+  -- V9: the block must also carry the exact fix, in plain English, and the fix must
+  -- be visible in the action's own decision note where the owner reads the block.
+  IF jsonb_array_length(COALESCE((SELECT x.findings -> 'fixes' FROM admin_ai_action_audits x WHERE x.action_id = soft_block ORDER BY x.created_at DESC LIMIT 1), '[]'::jsonb)) = 0 THEN
+    RAISE EXCEPTION 'the block carried no exact fix';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM admin_ai_action_queue q WHERE q.id = soft_block
+      AND q.decision_note LIKE 'Blocked by the independent Auditor:%' AND q.decision_note LIKE '%. Fix: %'
+  ) THEN RAISE EXCEPTION 'the decision note does not show the fix next to the block reason'; END IF;
+
+  -- V32: a proposal that would change a price, refund or payment value is blocked,
+  -- and the fix explains that commerce is owner-only.
+  commerce_block := admin_ai_queue_action('strategist', 'strategy_brief', 'Gap-slice commerce fixture',
+    'A proposal must never carry a commercial change.', 'low', 'suggest', 'admin.ai.experiments',
+    'admin_ai_experiments', NULL, jsonb_build_object('basis', 'fixture', 'metric_keys', jsonb_build_array('x'),
+    'note', 'set price to 999 for the winter discount'), NULL, NULL);
+  audit := admin_ai_audit_action(commerce_block);
+  IF audit ->> 'verdict' <> 'blocked' THEN RAISE EXCEPTION 'a commerce-mutating agent proposal was not blocked'; END IF;
+  IF (SELECT x.findings -> 'fixes' ->> 0 FROM admin_ai_action_audits x WHERE x.action_id = commerce_block ORDER BY x.created_at DESC LIMIT 1)
+     NOT LIKE '%owner-only%' THEN RAISE EXCEPTION 'the commerce block did not explain that commerce is owner-only'; END IF;
+  UPDATE admin_ai_action_queue SET status = 'rejected' WHERE id = commerce_block;
+
+  -- The guard report proves the invariant across every queued action, and that the
+  -- settlement path is unreachable by a browser role.
+  audit := admin_ai_commerce_guard_report();
+  IF (audit ->> 'violation_count')::integer <> 0 THEN
+    RAISE EXCEPTION 'an agent action is carrying a commerce mutation: %', audit -> 'agent_commerce_mutations';
+  END IF;
+  IF jsonb_array_length(audit -> 'commerce_mutating_dispatchable_types') <> 0 THEN
+    RAISE EXCEPTION 'a dispatchable action type could mutate commerce';
+  END IF;
+  IF (audit ->> 'settlement_is_service_role_only')::boolean IS NOT TRUE THEN
+    RAISE EXCEPTION 'the settlement function is callable by an authenticated browser role';
+  END IF;
 
   -- The block holds against approval and execution.
   PERFORM admin_ai_decide_action(soft_block, 'approve', 'owner approved despite the block');
@@ -314,8 +349,8 @@ BEGIN
   DELETE FROM admin_ai_experiment_variants WHERE experiment_id IN (SELECT id FROM admin_ai_experiments WHERE hypothesis LIKE '%repeated search%' OR name LIKE 'Gap2%');
   DELETE FROM admin_ai_experiments WHERE hypothesis LIKE '%repeated search%' OR name LIKE 'Gap2%';
   DELETE FROM admin_ai_jobs WHERE agent_key IN ('strategist','ceo','auditor','chief_of_staff');
-  DELETE FROM admin_ai_action_queue WHERE id IN (proposal_id, decision_id, soft_block, hard_block, channel_id, started_exp)
-     OR title IN ('Gap2 self-review fixture', 'Gap2 publish fixture')
+  DELETE FROM admin_ai_action_queue WHERE id IN (proposal_id, decision_id, soft_block, hard_block, channel_id, started_exp, commerce_block)
+     OR title IN ('Gap2 self-review fixture', 'Gap2 publish fixture', 'Gap-slice commerce fixture')
      OR action_type IN ('experiment_proposal','experiment_start','channel_prepare','publish_now');
   DELETE FROM admin_ai_action_audits WHERE action_id NOT IN (SELECT id FROM admin_ai_action_queue);
   DELETE FROM search_history WHERE query = 'retinol for beginners';
