@@ -136,6 +136,7 @@ def main():
         "push-subscriptions-assertions.sql", "push-delivery-assertions.sql",
         "automation-retention-assertions.sql",
         "agent-status-assertions.sql",
+        "executive-governance-assertions.sql",
     ):
         assertions = os.path.join(ROOT, "scripts", name)
         if os.path.exists(assertions):

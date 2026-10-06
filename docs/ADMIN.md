@@ -248,6 +248,50 @@ came from — for example `"Measured article" recorded 9 of 10 views (90.0%) in 
 The agents' own `admin_ai_metrics` counters are still included, under `ai_metric_aggregates`, so
 nothing that was previously visible was removed.
 
+### 8.2.2 Grounded strategy, CEO decisions, the independent Auditor and approved dispatch
+
+The four executive roles now produce grounded, reviewable work instead of static snapshots. Every
+step stays suggestion-only, approval-gated and free of external publishing.
+
+* **Strategist — grounded experiment proposal.** The Strategist reads the measured metrics
+  (`analyst_metrics`, §8.2.1) and proposes an experiment only when a measured signal crosses the
+  grounding threshold: a repeated search term (3+ hits in 30 days) or one article carrying 25%+ of
+  measured views. The proposal carries its `basis` sentence, the `metric_keys` behind it and the
+  signal object; the experiment is created as a **draft** with two variants and guardrails
+  (`traffic_percent` 50, `no_paid_spend`, `max_duration_days` 30, `external_publishing` false). One
+  open experiment per hypothesis — a second run never duplicates the study, and when nothing is
+  grounded the brief says so explicitly instead of inventing a target.
+* **CEO — one decision per run.** If a grounded draft experiment is waiting, the CEO raises exactly
+  one action (`experiment_start`, target = that experiment, permission `admin.ai.approve`) that also
+  carries the whole operating scorecard under `proposed.scorecard`. Otherwise it raises the
+  scorecard. Nothing starts without the owner approving **and** dispatching it.
+* **Auditor — independent review that can block.** `admin_ai_audit_action` records a verdict
+  (`clear` / `concern` / `blocked`) for each proposal with the proposer, the reviewer, the criteria
+  and the findings. The Auditor can never review its own proposal, and it reviews every boardroom
+  agent's queued or approved work. Blocks come from evidence-based criteria: an empty proposal, a
+  claim with no `basis`/`metric_keys`, a critical-risk action, a health claim, and three
+  **non-overridable** hard blocks — possible credential exposure, any external publishing/sending
+  action type, and `auto_apply` on a boardroom agent.
+* **A block holds.** A blocked proposal is paused and cannot be executed or dispatched. The only
+  release is `admin_ai_override_block` with a **written reason of at least 10 characters**, recorded
+  with who wrote it and when; hard blocks cannot be overridden at all. The owner then approves the
+  proposal normally.
+* **Approved dispatch, never publishing.** `admin_ai_dispatch_approved` requires an owner-approved
+  action and dispatches only three allow-listed types: `analyze` (the existing executor), 
+  `experiment_start` (sets the experiment to running — internal state only) and `channel_prepare`
+  (creates or refreshes a **pending** draft in `automation_distribution_drafts` with its SHA-256
+  payload hash, for the owner to approve in the Daily Kit). It refuses everything else, so there is
+  no automation path that publishes, sends, emails or campaigns; the kill switch stops `analyze` and
+  `experiment_start` dispatches.
+* **Chief of Staff — linked digest.** The digest carries `links`, one item per thing that needs the
+  owner: actions (with their latest Auditor verdict and what each needs), open experiments and open
+  incidents, each with the record's id. It states that it sends nothing externally.
+* **In the control room** (Admin → Admin AI → Action queue) each action now shows its decision note
+  (which is where an Auditor block reason appears), an optional note field, and — for owners with
+  `admin.ai.approve` — a **Dispatch** button on approved allow-listed actions and an
+  **Override block** button on Auditor-blocked ones. A reviewer without that permission sees none of
+  those controls.
+
 ## 9. Front end as data (Admin → Front end)
 
 `site_settings` public rows drive the storefront without a deploy: `nav_menu`, `footer`,

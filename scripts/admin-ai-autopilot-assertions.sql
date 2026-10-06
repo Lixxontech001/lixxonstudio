@@ -112,8 +112,10 @@ BEGIN
   FOREACH role_key IN ARRAY ARRAY['analyst','strategist','ceo','auditor','chief_of_staff'] LOOP
     PERFORM admin_ai_set_agent(role_key,true,'suggest',1440,10);
     SELECT admin_ai_run_agent(role_key) INTO result;
-    IF COALESCE((result->>'queued')::integer,0) <> 1 THEN
-      RAISE EXCEPTION 'Phase 4 handler % did not create one deterministic suggestion', role_key;
+    -- Bounded and deterministic, not necessarily one: with measured data the Strategist
+    -- adds a single grounded experiment proposal alongside its brief (Phase 4 gap 2).
+    IF COALESCE((result->>'queued')::integer,0) NOT BETWEEN 1 AND 2 THEN
+      RAISE EXCEPTION 'Phase 4 handler % created % suggestions, expected 1-2', role_key, result->>'queued';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM admin_ai_action_queue
@@ -123,7 +125,15 @@ BEGIN
   SELECT count(DISTINCT action_type) INTO role_count
     FROM admin_ai_action_queue
    WHERE agent_key = ANY(ARRAY['analyst','strategist','ceo','auditor','chief_of_staff']);
-  IF role_count <> 5 THEN RAISE EXCEPTION 'Phase 4 read-only agents do not have distinct handlers'; END IF;
+  -- Each read-only role must own at least one distinct handler. Gap 2 adds
+  -- experiment_proposal/experiment_start, so this is a floor, not an exact count.
+  IF role_count < 5 THEN RAISE EXCEPTION 'Phase 4 read-only agents do not have distinct handlers'; END IF;
+  -- A grounded proposal must never exist without its measured basis attached.
+  IF EXISTS (
+    SELECT 1 FROM admin_ai_action_queue
+     WHERE action_type = 'experiment_proposal'
+       AND (NOT (proposed ? 'basis') OR jsonb_array_length(COALESCE(proposed -> 'metric_keys', '[]'::jsonb)) = 0)
+  ) THEN RAISE EXCEPTION 'A grounded experiment proposal was queued without its measured basis'; END IF;
 
   PERFORM admin_ai_set_agent('executioner',true,'suggest',1440,10);
   SELECT admin_ai_queue_action(
