@@ -86,6 +86,16 @@ Client IDs, account IDs, public keys and other identifiers are also stored encry
 
 Provider permissions, app review and no-cost quota vary by account. A saved key is not evidence of a working channel. The health screen and each adapter must use measured provider evidence before anything is marked connected. If a service is unavailable or requires a paid tier, leave it paused/manual; do not enable a paid fallback.
 
+## Buddy (`/buddy`)
+
+Buddy is an owner/admin surface behind the existing Admin sign-in, role checks and MFA. It accepts only four typed operations: `status`, `daily kit`, `help`, and `pause automation` / `resume automation` (the 08:00 Lagos daily schedule). Command phrases are matched exactly; product/price/payment/refund requests and every publishing, sending, approval or editorial request are blocked before they can become a draft, and **no publishing operation exists** for Buddy to run.
+
+- A queued entry is a **draft**: an operation name, its typed arguments and a timestamp. Typed text is never stored, and drafts never run automatically — loading the app or reconnecting only updates the online/offline indicator.
+- Any state change needs a **live preview** first (a fresh server read showing the current value and the exact change), and then an explicit confirmation. The preview expires after two minutes, is refreshed rather than reused, and is refused while offline or without the required permission.
+- The only state change Buddy can make is pausing/resuming the scheduled daily pipeline through the existing owner-only audited flag RPC. It is reversible with the same command and publishes nothing; distribution still requires your per-item approval in the Daily Kit.
+- Clearing the queue removes only Buddy's own storage key; reader bookmarks and other site data are untouched.
+- Cold offline launch is not guaranteed: the service worker deliberately does not cache navigations, so Buddy must have loaded at least once.
+
 ## Existing infrastructure-only values
 
 The Keys page stores credentials for the new automation runtime; it does not silently replace existing deployment settings. Until a later migration is implemented and verified:
