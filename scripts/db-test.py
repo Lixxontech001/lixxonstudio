@@ -130,6 +130,7 @@ def main():
         "automation-run-monitor-assertions.sql",
         "admin-ai-autopilot-assertions.sql", "admin-ai-ceo-assertions.sql", "admin-ai-predictive-assertions.sql",
         "distribution-assertions.sql", "distribution-safety-assertions.sql",
+        "push-subscriptions-assertions.sql",
     ):
         assertions = os.path.join(ROOT, "scripts", name)
         if os.path.exists(assertions):
