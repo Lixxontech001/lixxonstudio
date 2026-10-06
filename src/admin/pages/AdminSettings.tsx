@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {Settings as SettingsIcon, Info, CreditCard, BookOpen, Check, Copy} from 'lucide-react';
 import SiteSettingsPanel from '../components/SiteSettingsPanel';
 import SearchSynonymsPanel from '../components/SearchSynonymsPanel';
+import PwaInstallPanel from '../../components/PwaInstallPanel';
 
 export default function AdminSettings() {
   const [copied, setCopied] = useState('');
@@ -23,6 +24,7 @@ export default function AdminSettings() {
       </div>
 
       <SiteSettingsPanel />
+      <PwaInstallPanel currentApp="owner" />
 
       {/* ==================== SEARCH SYNONYMS ==================== */}
       <SearchSynonymsPanel />
