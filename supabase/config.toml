@@ -20,3 +20,9 @@ verify_jwt = false
 # Owner-only Vault key checks; verify the caller JWT at the gateway and again in the handler.
 [functions.automation-keys]
 verify_jwt = true
+# Internal pg_cron invocation authenticates with the Vault-backed scheduler secret.
+[functions.automation-scheduler]
+verify_jwt = false
+# GitHub Actions sends a signed OIDC token; the handler verifies its issuer, claims and signature.
+[functions.automation-runner]
+verify_jwt = false

@@ -3,12 +3,13 @@
  * frozen for this work. Resolve these protected automation paths at the admin
  * boundary so direct loads, refresh and back/forward remain usable.
  */
-export type AutomationAdminRoute = 'admin-automation-keys' | 'admin-automation-check' | 'admin-automation-articles';
+export type AutomationAdminRoute = 'admin-automation-keys' | 'admin-automation-check' | 'admin-automation-articles' | 'admin-automation-runs';
 
 const PATH_TO_ROUTE: Record<string, AutomationAdminRoute> = {
   '/admin/automation/keys': 'admin-automation-keys',
   '/admin/automation/check': 'admin-automation-check',
   '/admin/automation/articles': 'admin-automation-articles',
+  '/admin/automation/runs': 'admin-automation-runs',
 };
 
 export function resolveAutomationAdminRoute(pathname: string): AutomationAdminRoute | null {

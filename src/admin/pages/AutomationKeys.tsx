@@ -28,6 +28,7 @@ function testNote(name: string): string {
   if (name.startsWith('x_')) return 'Local format check only. No X request is made because API access can consume paid credit.';
   if (name.startsWith('tumblr_')) return 'Local format check only. A provider probe needs the complete OAuth 1.0a channel adapter.';
   if (name.startsWith('youtube_')) return 'When the client ID, client secret and refresh token are all stored, this tests OAuth and reads the channel ID. Otherwise it checks format only.';
+  if (name === 'telegram_chat_id') return 'Private destination for failure alerts; the test checks numeric format locally and sends no message.';
   if (name === 'whatsapp_access_token' || name === 'whatsapp_phone_number_id') return 'With both the token and phone-number ID stored, this makes one read-only Graph API request; otherwise it checks format only.';
   if (name === 'github_dispatch_token') return 'Checks read access to this repository only. Workflow-dispatch write permission is not exercised.';
   if (name === 'coverr_api_key') return 'Makes one read-only video-list request and consumes one Coverr API request from your account quota.';

@@ -62,7 +62,10 @@ real number, not a memory.
 
 Recorded after the Vite 7, Supabase client and Tailwind 4 upgrades on 2026-10-04. The
 entry never contains admin or reader code; `admin-pages` is guarded separately so its
-intentional lazy cost cannot hide a public-reader regression. The full raw output remains
+intentional lazy cost cannot hide a public-reader regression. Protected article-intake,
+System Check and run-monitor route chunks are also excluded from the public-reader total
+and each has an explicit gzip hard ceiling in `scripts/size-budget.mjs`. The frozen
+baseline in `scripts/size-budget.json` remains unchanged. The full raw output remains
 available from `node scripts/size-budget.mjs --json`.
 
 

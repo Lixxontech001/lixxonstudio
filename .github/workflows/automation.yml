@@ -1,0 +1,189 @@
+name: Article automation pipeline
+run-name: Article automation ${{ inputs.run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Non-secret Supabase article-run UUID
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: article-automation-${{ inputs.run_id }}
+  cancel-in-progress: false
+jobs:
+  pipeline:
+    name: Verify and prepare owner review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RUN_ID: ${{ inputs.run_id }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Validate non-secret run identifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RUN_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then
+            echo '::error::Invalid article-run identifier.'
+            exit 1
+          fi
+          node -e 'require("node:fs").writeFileSync("run-summary.json", JSON.stringify({run_id: process.env.RUN_ID, status: "runner_started", stages: []}, null, 2))'
+      - name: Exchange GitHub OIDC for a short-lived run capability
+        id: bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+
+          const projectRef = process.env.PROJECT_REF || '';
+          const runId = process.env.RUN_ID || '';
+          if (!/^[a-z0-9]{20}$/.test(projectRef) || !/^[0-9a-f-]{36}$/i.test(runId)) {
+            throw new Error('Runner configuration is incomplete.');
+          }
+          const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL || '';
+          const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN || '';
+          if (!requestUrl || !requestToken) throw new Error('GitHub OIDC is unavailable.');
+          const oidcUrl = new URL(requestUrl);
+          oidcUrl.searchParams.set('audience', 'urn:lixxonstudio:automation:runner');
+          const oidcResponse = await fetch(oidcUrl, {
+            headers: { Authorization: `Bearer ${requestToken}`, Accept: 'application/json' },
+            cache: 'no-store',
+            redirect: 'error',
+          });
+          if (!oidcResponse.ok) {
+            await oidcResponse.body?.cancel();
+            throw new Error('GitHub OIDC token request failed.');
+          }
+          const oidcPayload = await oidcResponse.json();
+          const oidcToken = typeof oidcPayload?.value === 'string' ? oidcPayload.value : '';
+          if (!oidcToken) throw new Error('GitHub OIDC token response was invalid.');
+          process.stdout.write(`::add-mask::${oidcToken}\n`);
+
+          const edgeUrl = `https://${projectRef}.supabase.co/functions/v1/automation-runner`;
+          const response = await fetch(edgeUrl, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${oidcToken}`, 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            redirect: 'error',
+            body: JSON.stringify({ action: 'bootstrap', run_id: runId }),
+          });
+          if (!response.ok) {
+            await response.body?.cancel();
+            throw new Error('Runner identity was not authorized for this run.');
+          }
+          const payload = await response.json();
+          const capability = typeof payload?.capability === 'string' ? payload.capability : '';
+          if (!/^[0-9a-f]{64}$/.test(capability) || payload?.run_id !== runId) {
+            throw new Error('Runner capability response was invalid.');
+          }
+          process.stdout.write(`::add-mask::${capability}\n`);
+          appendFileSync(process.env.GITHUB_ENV, `AUTOMATION_EDGE_URL=${edgeUrl}\nAUTOMATION_CAPABILITY=${capability}\n`, { mode: 0o600 });
+          NODE
+      - name: Redeem one-use capability and execute safe pipeline stages
+        id: execute
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFileSync, writeFileSync } from 'node:fs';
+
+          const runId = process.env.RUN_ID || '';
+          const edgeUrl = process.env.AUTOMATION_EDGE_URL || '';
+          const capability = process.env.AUTOMATION_CAPABILITY || '';
+          if (!edgeUrl || !/^[0-9a-f]{64}$/.test(capability)) throw new Error('Runner capability is unavailable.');
+          const response = await fetch(edgeUrl, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${capability}`, 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            redirect: 'error',
+            body: JSON.stringify({ action: 'execute', run_id: runId }),
+          });
+          if (!response.ok) {
+            await response.body?.cancel();
+            throw new Error('The single-use pipeline capability could not be redeemed.');
+          }
+          const payload = await response.json();
+          if (payload?.run_id !== runId || !['awaiting_approval', 'failed', 'paused'].includes(payload?.status)) {
+            throw new Error('The pipeline returned an invalid safe status.');
+          }
+          const reviewFlags = payload.review_flags;
+          const reviewFlagNames = [
+            'image_attribution_review_required', 'claim_review_required',
+            'disclaimer_required', 'disclaimer_present',
+          ];
+          if (!reviewFlags || typeof reviewFlags !== 'object' || Array.isArray(reviewFlags)
+            || Object.keys(reviewFlags).length !== reviewFlagNames.length
+            || reviewFlagNames.some(name => typeof reviewFlags[name] !== 'boolean')) {
+            throw new Error('The pipeline returned invalid safe review flags.');
+          }
+          const summary = {
+            run_id: runId,
+            status: payload.status,
+            safe_error_code: typeof payload.safe_error_code === 'string' ? payload.safe_error_code : null,
+            review_flags: reviewFlags,
+            stages: Array.isArray(payload.stages) ? payload.stages : [],
+          };
+          writeFileSync('run-summary.json', JSON.stringify(summary, null, 2), { mode: 0o600 });
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Article automation',
+            '',
+            `- Run: \`${runId}\``,
+            `- Outcome: **${payload.status}**`,
+            `- Article text and credentials were not included in this workflow report.`,
+            '',
+          ].join('\n'));
+          if (payload.status === 'failed') throw new Error('A safe pipeline stage failed; no external channel action was attempted.');
+          NODE
+      - name: Mark an interrupted runner attempt safely
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const projectRef = process.env.PROJECT_REF || '';
+          const runId = process.env.RUN_ID || '';
+          if (!/^[a-z0-9]{20}$/.test(projectRef) || !/^[0-9a-f-]{36}$/i.test(runId)) process.exit(0);
+          try {
+            const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL || '';
+            const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN || '';
+            if (!requestUrl || !requestToken) process.exit(0);
+            const oidcUrl = new URL(requestUrl);
+            oidcUrl.searchParams.set('audience', 'urn:lixxonstudio:automation:runner');
+            const oidcResponse = await fetch(oidcUrl, {
+              headers: { Authorization: `Bearer ${requestToken}`, Accept: 'application/json' },
+              cache: 'no-store',
+              redirect: 'error',
+            });
+            if (!oidcResponse.ok) { await oidcResponse.body?.cancel(); process.exit(0); }
+            const oidcPayload = await oidcResponse.json();
+            const oidcToken = typeof oidcPayload?.value === 'string' ? oidcPayload.value : '';
+            if (!oidcToken) process.exit(0);
+            process.stdout.write(`::add-mask::${oidcToken}\n`);
+            const failureResponse = await fetch(`https://${projectRef}.supabase.co/functions/v1/automation-runner`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${oidcToken}`, 'Content-Type': 'application/json' },
+              cache: 'no-store',
+              redirect: 'error',
+              body: JSON.stringify({ action: 'fail', run_id: runId }),
+            });
+            await failureResponse.body?.cancel();
+          } catch {
+            // Failure-report transport is best-effort; the run remains safely non-publishing.
+          }
+          NODE
+      - name: Retain a redacted run summary for one day
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: automation-run-${{ inputs.run_id }}
+          path: run-summary.json
+          if-no-files-found: ignore
+          retention-days: 1
+          compression-level: 6

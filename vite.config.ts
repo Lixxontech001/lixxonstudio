@@ -105,6 +105,7 @@ export default defineConfig(({ mode }) => {
             // Route-level modules stay out of the shared admin chunk. The lazy
             // article intake/calendar and System Check remain size-budgeted as
             // separate chunks rather than inflating the core admin route bundle.
+            if (id.includes('/src/admin/pages/AutomationRuns.tsx')) return 'automation-runs';
             if (id.includes('/src/admin/pages/AutomationCheck.tsx')) return 'automation-check';
             if (id.includes('/src/admin/pages/ArticleQueueCalendar.tsx')) return 'article-intake';
             if (id.includes('/src/admin/')) return 'admin-pages';

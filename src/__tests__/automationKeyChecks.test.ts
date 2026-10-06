@@ -73,6 +73,9 @@ describe('server-side automation credential checks', () => {
     expect(request.init.redirect).toBe('error');
     expect(localCredentialCheck('telegram_bot_token', token)).toBeNull();
     expect(localCredentialCheck('telegram_bot_token', 'bad')).toBe('invalid');
+    expect(buildProviderCheckRequest('telegram_chat_id', '-1001234567890')).toBeNull();
+    expect(localCredentialCheck('telegram_chat_id', '-1001234567890')).toBe('local_ok');
+    expect(localCredentialCheck('telegram_chat_id', 'chat-id-with-text')).toBe('invalid');
   });
 
   it('marks local-only values as local and does not make paid X API requests', () => {

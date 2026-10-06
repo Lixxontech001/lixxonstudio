@@ -43,6 +43,7 @@ const LOCAL_ONLY_IDENTIFIERS = new Set([
   "pinterest_board_id",
   "linkedin_organization_id",
   "tumblr_blog_identifier",
+  "telegram_chat_id",
 ]);
 
 const FETCH_GUARDS: Pick<RequestInit, "cache" | "redirect" | "referrerPolicy"> = {
@@ -123,6 +124,9 @@ export function localCredentialCheck(name: string, secret: string): "local_ok" |
   if (!value || value.length > 10000 || hasControlCharacters(value)) return "invalid";
   if (name === "telegram_bot_token") {
     return /^[0-9]{5,15}:[A-Za-z0-9_-]{20,128}$/.test(value) ? null : "invalid";
+  }
+  if (name === "telegram_chat_id") {
+    return /^-?[0-9]{1,32}$/.test(value) ? "local_ok" : "invalid";
   }
 
   if (name === "vapid_private_key") {
