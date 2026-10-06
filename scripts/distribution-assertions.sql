@@ -234,6 +234,11 @@ BEGIN
      OR v_payload::text LIKE '%' || v_sentinel || '%' THEN
     RAISE EXCEPTION 'Channel payload/link was not derived solely from the approved excerpt and safe metadata';
   END IF;
+  v_result := _distribution_text('authenticated', v_owner,
+    format('automation_approve_distribution_draft(%L::uuid, %L)', v_draft_id, v_hash))::jsonb;
+  IF v_result->>'review_status' <> 'approved' OR v_result->>'side_effects' <> '0' THEN
+    RAISE EXCEPTION 'The experiment baseline was not explicitly owner-approved';
+  END IF;
   IF NOT _distribution_raises('authenticated', v_owner, format(
        'SELECT automation_save_distribution_draft(%L::uuid, %L::jsonb)',
        v_draft_id, (v_payload || jsonb_build_object('posts.content', v_sentinel))::text))
@@ -248,9 +253,11 @@ BEGIN
   v_variant := _distribution_text('authenticated', v_owner, format(
     'automation_create_ab_variant(%L::uuid, ''telegram'', ''B'', ''Compare a question-led excerpt with the current owner-approved copy.'', ''click_through_rate'', ''negative_feedback_rate'', %L::jsonb)',
     v_post, v_payload::text))::jsonb;
-  IF v_variant->>'status' <> 'pending_approval'
-     OR (SELECT count(*) FROM ab_test_variants WHERE post_id = v_post AND status = 'pending_approval') <> 1 THEN
-    RAISE EXCEPTION 'A/B variants did not remain owner-review pending';
+  IF v_variant->>'status' <> 'approved'
+     OR (SELECT count(*) FROM ab_test_variants WHERE post_id = v_post AND status = 'approved'
+          AND approved_by = (v_owner->>'sub')::uuid AND approved_at IS NOT NULL
+          AND hypothesis IS NOT NULL AND primary_metric IS NOT NULL AND guardrail_metric IS NOT NULL) <> 1 THEN
+    RAISE EXCEPTION 'A/B variants were stored without explicit owner approval and stated metrics';
   END IF;
   IF NOT _distribution_raises('authenticated', v_editor, format(
        'SELECT automation_create_ab_variant(%L::uuid, ''telegram'', ''C'', ''A non-owner cannot create a distribution experiment.'', ''click_through_rate'', ''negative_feedback_rate'', %L::jsonb)',
@@ -313,6 +320,16 @@ BEGIN
   INSERT INTO distribution_test_log (draft_id, payload_sha256, actor_id, status)
   VALUES (v_newsletter_id, repeat('b', 64), (v_owner->>'sub')::uuid, 'dispatching'),
          (v_newsletter_id, repeat('c', 64), (v_owner->>'sub')::uuid, 'dispatching');
+  -- Mirror the two ambiguous attempts in the atomic daily counter used by the cap.
+  INSERT INTO automation_channel_usage_daily (channel_key, usage_day, owner_test_email_attempts)
+  VALUES ('newsletter', (now() AT TIME ZONE 'Africa/Lagos')::date, 2)
+  ON CONFLICT (channel_key, usage_day) DO UPDATE SET
+    owner_test_email_attempts = automation_channel_usage_daily.owner_test_email_attempts + 2,
+    updated_at = now();
+  IF (SELECT owner_test_email_attempts FROM automation_channel_usage_daily
+       WHERE channel_key = 'newsletter' AND usage_day = (now() AT TIME ZONE 'Africa/Lagos')::date) <> 3 THEN
+    RAISE EXCEPTION 'Newsletter daily counter did not match the simulated attempts';
+  END IF;
   PERFORM _distribution_text('authenticated', v_owner,
     format('automation_prepare_daily_kit(%L::uuid)', v_post_two));
   SELECT id, payload_sha256 INTO v_newsletter_id, v_newsletter_hash
@@ -392,7 +409,9 @@ BEGIN
   IF v_claim->>'ok' <> 'false' OR v_claim->>'safe_error_code' <> 'PROVIDER_QUOTA'
      OR (SELECT state FROM automation_distribution_channels WHERE channel_key = 'telegram') <> 'quota_exhausted'
      OR (SELECT quota_remaining FROM automation_distribution_channels WHERE channel_key = 'telegram') <> 0
-     OR (SELECT status FROM distribution_log WHERE post_id = v_post_two AND channel_key = 'telegram') <> 'approved' THEN
+     OR (SELECT status FROM distribution_log WHERE post_id = v_post_two AND channel_key = 'telegram') <> 'approved'
+     OR NOT EXISTS (SELECT 1 FROM automation_logs WHERE event_code = 'DISTRIBUTION.CIRCUIT'
+       AND entity_type = 'distribution_draft' AND entity_id = v_draft_id AND details->>'channel' = 'telegram') THEN
     RAISE EXCEPTION 'The daily safety cap did not stop additional Telegram delivery safely';
   END IF;
 

@@ -182,9 +182,13 @@ function detailFor(key: AutomationHealthKey, status: AutomationHealthStatus, evi
         ? `Distribution is enabled with ${evidence.configured_provider_tokens} provider tokens, but no channel readback is verified.`
         : 'Distribution is off; channel connectivity is not yet configured.';
     case 'video':
-      return evidence.feature_enabled
-        ? `Last render: ${evidence.last_render_status || 'not recorded'}; FFmpeg toolchain verified: ${evidence.toolchain_verified ? 'yes' : 'no'}.`
-        : 'Video rendering is off; the runner toolchain has not been verified.';
+      if (!evidence.feature_enabled && !evidence.stock_api_key_configured) {
+        return 'Video rendering is deliberately disabled: no Coverr stock key is configured in Vault, and hosted FFmpeg, approved asset attribution and Android playback have not been verified. Keep video upload off; the manual Daily Kit remains available.';
+      }
+      if (!evidence.feature_enabled) {
+        return `Video rendering is deliberately disabled. Coverr key is present, but no enabled owner-approved render has completed; hosted FFmpeg verified: ${evidence.toolchain_verified ? 'yes' : 'no'}, Android playback: not verified.`;
+      }
+      return `Last render: ${evidence.last_render_status || 'not recorded'}; FFmpeg toolchain verified: ${evidence.toolchain_verified ? 'yes' : 'no'}; Android playback: not verified.`;
     case 'push':
       return evidence.feature_enabled
         ? `${evidence.vapid_values_configured} of 3 VAPID values are stored; delivery is not verified.`
