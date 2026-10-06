@@ -31,8 +31,21 @@ function snapshotFixture() {
       quota_remaining: channel === 'telegram' ? 10 : null,
       last_readback_status: 'not_tested',
       last_readback_at: null,
+      circuit_state: 'closed',
+      failure_streak: 0,
+      last_failure_class: null,
+      retry_after: null,
+      usage_today: {
+        usage_day: '2026-10-06', readback_attempts: 0, delivery_attempts: 0,
+        delivery_successes: 0, delivery_failures: 0, owner_test_email_attempts: 0,
+      },
       draft: null,
     })),
+    metrics: [{
+      channel_key: 'telegram', metric_key: 'clicks', value: 17,
+      measurement_kind: 'measured', collection_basis: 'provider_aggregate',
+      period_start: '2026-10-05', period_end: '2026-10-05', sample_count: 1, variant_id: null,
+    }],
   };
 }
 

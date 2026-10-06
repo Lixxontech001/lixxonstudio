@@ -1,3 +1,5 @@
+import { distributionFailureMessage, type DistributionFailureClass } from './distributionSafety.ts';
+
 interface AutomationAlertClient {
   rpc(name: string, args?: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }>;
 }
@@ -195,6 +197,135 @@ export async function deliverPendingAutomationFailureAlerts(
     } catch {
       await logDelivery(sb, row.run_id, "failed", "none");
       results.push({ runId: row.run_id, event: row.event, channel: "none", delivered: false });
+    }
+  }
+  return results;
+}
+
+interface ClaimedDistributionFailureAlert {
+  alert_id: number;
+  channel_key: string;
+  failure_class: DistributionFailureClass;
+  safe_error_code: string;
+  attempt_count: number;
+}
+
+export interface DistributionFailureAlertDelivery {
+  alertId: number;
+  channel: AlertChannel;
+  failureClass: DistributionFailureClass;
+  delivered: boolean;
+}
+
+const DISTRIBUTION_CHANNEL_LABELS: Record<string, string> = {
+  instagram: 'Instagram', facebook: 'Facebook Pages', youtube_shorts: 'YouTube Shorts',
+  tiktok: 'TikTok', pinterest: 'Pinterest', telegram: 'Telegram', threads: 'Threads',
+  linkedin: 'LinkedIn', x: 'X', tumblr: 'Tumblr', whatsapp: 'WhatsApp',
+  newsletter: 'Email test', site_widget: 'Site widget',
+};
+const DISTRIBUTION_FAILURE_CLASSES = new Set<DistributionFailureClass>([
+  'quota', 'authentication', 'policy', 'transient',
+]);
+const DISTRIBUTION_KIT_URL = 'https://lixxonstudio.com/admin/automation/distribution';
+
+function validDistributionFailure(value: unknown): value is ClaimedDistributionFailureAlert {
+  if (!isRecord(value) || !Number.isSafeInteger(value.alert_id) || (value.alert_id as number) < 1
+      || typeof value.channel_key !== 'string' || !Object.hasOwn(DISTRIBUTION_CHANNEL_LABELS, value.channel_key)
+      || typeof value.failure_class !== 'string' || !DISTRIBUTION_FAILURE_CLASSES.has(value.failure_class as DistributionFailureClass)
+      || typeof value.safe_error_code !== 'string' || !/^[A-Z0-9_.:-]{1,64}$/.test(value.safe_error_code)
+      || !Number.isInteger(value.attempt_count) || (value.attempt_count as number) < 1 || (value.attempt_count as number) > 3) return false;
+  return true;
+}
+
+async function deliverDistributionFailureAlert(
+  sb: AutomationAlertClient,
+  failure: ClaimedDistributionFailureAlert,
+  fetcher: typeof fetch,
+): Promise<DistributionFailureAlertDelivery> {
+  const channelLabel = DISTRIBUTION_CHANNEL_LABELS[failure.channel_key];
+  const plainMessage = distributionFailureMessage(channelLabel, failure.failure_class);
+  const subject = `[Lixxon Studio] ${channelLabel} distribution paused`;
+  const text = [plainMessage, `Safe status: ${failure.safe_error_code}`, `Daily Distribution Kit: ${DISTRIBUTION_KIT_URL}`].join('\n');
+  const html = `<p>${htmlEscape(plainMessage)}</p><p>Safe status: <code>${htmlEscape(failure.safe_error_code)}</code></p><p><a href="${DISTRIBUTION_KIT_URL}">Open the Daily Distribution Kit</a></p><p>No article prose, customer data, credentials or provider response was included.</p>`;
+
+  let owners: string[] = [];
+  try {
+    const { data, error } = await sb.rpc('automation_alert_recipients');
+    if (!error && Array.isArray(data)) {
+      owners = data.slice(0, 5).flatMap((row: unknown) => {
+        if (!isRecord(row) || typeof row.email !== 'string') return [];
+        const address = row.email.trim().toLowerCase();
+        return /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/.test(address) ? [address] : [];
+      });
+    }
+  } catch { owners = []; }
+
+  let emailAttempted = false;
+  let delivered = false;
+  if (owners.length > 0) {
+    const emailKey = await getInternalSecret(sb, 'resend_api_key');
+    if (emailKey && emailKey.length <= 10000 && !/[\r\n]/.test(emailKey)) {
+      const configuredFrom = typeof Deno !== 'undefined' ? Deno.env.get('EMAIL_FROM') || 'Lixxon Studio <onboarding@resend.dev>' : 'Lixxon Studio <onboarding@resend.dev>';
+      const from = configuredFrom.length <= 200 && !/[\r\n]/.test(configuredFrom)
+        ? configuredFrom : 'Lixxon Studio <onboarding@resend.dev>';
+      emailAttempted = true;
+      const outcomes = await Promise.all(owners.map(address => requestStatus(fetcher, 'https://api.resend.com/emails', {
+        method: 'POST', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+        headers: { ...JSON_HEADERS, Authorization: `Bearer ${emailKey}` },
+        body: JSON.stringify({ from, to: [address], subject, text, html }),
+      })));
+      delivered = outcomes.some(Boolean);
+    }
+  }
+
+  let deliveryChannel: AlertChannel = delivered ? 'email' : 'none';
+  if (!delivered) {
+    const botToken = await getInternalSecret(sb, 'telegram_bot_token');
+    const chatId = await getInternalSecret(sb, 'telegram_chat_id');
+    if (botToken && /^[0-9]{5,15}:[A-Za-z0-9_-]{20,128}$/.test(botToken)
+        && chatId && /^-?[0-9]{1,32}$/.test(chatId)) {
+      const telegramText = `${plainMessage}\nSafe status: ${failure.safe_error_code}\n${DISTRIBUTION_KIT_URL}`;
+      delivered = await requestStatus(fetcher, `https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ chat_id: chatId, text: telegramText, disable_web_page_preview: true }),
+      });
+      if (delivered) deliveryChannel = 'telegram';
+    }
+  }
+
+  try {
+    await sb.rpc('automation_complete_distribution_failure_alert', {
+      p_alert_id: failure.alert_id,
+      p_status: delivered ? 'delivered' : emailAttempted ? 'failed' : 'blocked',
+      p_delivery_channel: deliveryChannel,
+    });
+  } catch { /* The channel's plain-English state reason remains visible in the Daily Kit. */ }
+  return { alertId: failure.alert_id, channel: deliveryChannel, failureClass: failure.failure_class, delivered };
+}
+
+/** Deliver deduplicated distribution blocks to active owners; never include post or customer data. */
+export async function deliverPendingDistributionFailureAlerts(
+  sb: AutomationAlertClient,
+  fetcher: typeof fetch = fetch,
+): Promise<DistributionFailureAlertDelivery[]> {
+  let rows: unknown[];
+  try {
+    const response = await sb.rpc('automation_claim_distribution_failure_alerts', { p_limit: 5 });
+    if (response.error || !Array.isArray(response.data)) return [];
+    rows = response.data;
+  } catch { return []; }
+  const results: DistributionFailureAlertDelivery[] = [];
+  for (const row of rows) {
+    if (!validDistributionFailure(row)) continue;
+    try { results.push(await deliverDistributionFailureAlert(sb, row, fetcher)); }
+    catch {
+      try {
+        await sb.rpc('automation_complete_distribution_failure_alert', {
+          p_alert_id: row.alert_id, p_status: 'failed', p_delivery_channel: 'none',
+        });
+      } catch { /* Keep the queue and safe UI reason for a later attempt. */ }
+      results.push({ alertId: row.alert_id, channel: 'none', failureClass: row.failure_class, delivered: false });
     }
   }
   return results;

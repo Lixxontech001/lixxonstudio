@@ -54,6 +54,18 @@ type ChannelFixture = {
   quota_remaining: number | null;
   last_readback_status: string;
   last_readback_at: string | null;
+  circuit_state: 'closed' | 'open' | 'half_open';
+  failure_streak: number;
+  last_failure_class: 'quota' | 'authentication' | 'policy' | 'transient' | null;
+  retry_after: string | null;
+  usage_today: {
+    usage_day: string;
+    readback_attempts: number;
+    delivery_attempts: number;
+    delivery_successes: number;
+    delivery_failures: number;
+    owner_test_email_attempts: number;
+  };
   draft: DraftFixture | null;
 };
 type SnapshotFixture = {
@@ -67,6 +79,7 @@ type SnapshotFixture = {
   cover_image_alt: string;
   flags: { 'automation.enabled': boolean; 'automation.distribution': boolean };
   channels: ChannelFixture[];
+  metrics: never[];
 };
 
 function emptySnapshot(): SnapshotFixture {
@@ -80,8 +93,15 @@ function emptySnapshot(): SnapshotFixture {
       approval_required: true, auto_publish_enabled: false,
       daily_free_quota: key === 'telegram' ? 10 : null,
       quota_remaining: key === 'telegram' ? 10 : null,
-      last_readback_status: 'not_tested', last_readback_at: null, draft: null,
+      last_readback_status: 'not_tested', last_readback_at: null,
+      circuit_state: 'closed', failure_streak: 0, last_failure_class: null, retry_after: null,
+      usage_today: {
+        usage_day: '2026-10-06', readback_attempts: 0, delivery_attempts: 0,
+        delivery_successes: 0, delivery_failures: 0, owner_test_email_attempts: 0,
+      },
+      draft: null,
     })),
+    metrics: [],
   };
 }
 
@@ -126,6 +146,7 @@ beforeEach(() => {
 
 afterEach(() => {
   if (root) act(() => root.unmount());
+  vi.unstubAllGlobals();
 });
 
 describe('Daily Distribution Kit page', () => {
@@ -251,6 +272,121 @@ describe('Daily Distribution Kit page', () => {
     });
     expect(host.textContent).toContain('Telegram accepted the message. Receipt ID 42.');
     expect(host.textContent).toContain('Provider receipt confirmed');
+  });
+
+  it('keeps a paused channel usable as an owner-approved manual kit without invoking a provider', async () => {
+    const state = emptySnapshot();
+    const telegram = getChannel(state, 'telegram');
+    telegram.state = 'paused';
+    telegram.state_reason = 'Paused by the owner. The manual kit remains available.';
+    telegram.draft = {
+      id: DRAFT_ID, payload: payloadFor('telegram'), payload_sha256: HASH_A,
+      review_status: 'approved', approved_at: '2026-10-06T12:00:00.000Z', delivery: null, test_delivery: null,
+    };
+    const copy = () => structuredClone(state);
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === 'automation_distribution_articles') return { data: { articles: [{
+        id: POST_ID, title: 'Owner title', slug: SLUG, status: 'published', scheduled_at_utc: null,
+      }] }, error: null };
+      if (name === 'automation_distribution_snapshot') return { data: copy(), error: null };
+      return { data: null, error: { code: 'PGRST202' } };
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', new Proxy(navigator, {
+      get(target, property) {
+        if (property === 'clipboard') return { writeText };
+        return Reflect.get(target, property, target);
+      },
+    }));
+
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root.render(<AutomationDistribution />); await Promise.resolve(); });
+    await settle();
+
+    const card = cardFor(host, 'telegram');
+    expect(card.textContent).toContain('Paused');
+    expect(card.textContent).toContain('The manual kit remains available.');
+    expect(buttonFor(card, 'Copy caption').disabled).toBe(false);
+    expect(buttonFor(card, 'Copy UTM link').disabled).toBe(false);
+    expect(buttonFor(card, 'Send approved message').disabled).toBe(true);
+    const shareLink = card.querySelector<HTMLAnchorElement>('a[href^="https://t.me/share/url?"]');
+    expect(shareLink?.href).toContain(encodeURIComponent(payloadFor('telegram').link));
+
+    await act(async () => { buttonFor(card, 'Copy caption').click(); await Promise.resolve(); });
+    await settle();
+    expect(writeText).toHaveBeenCalledWith(payloadFor('telegram').caption);
+    expect(host.textContent).toContain('Caption copied for telegram.');
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it('prepares and demonstrates copy/share controls for all 13 owner-approved manual channels', async () => {
+    const state = emptySnapshot();
+    const copy = () => structuredClone(state);
+    mocks.rpc.mockImplementation(async (name: string, args?: Record<string, unknown>) => {
+      if (name === 'automation_distribution_articles') return { data: { articles: [{
+        id: POST_ID, title: 'Owner title', slug: SLUG, status: 'published', scheduled_at_utc: null,
+      }] }, error: null };
+      if (name === 'automation_distribution_snapshot') return { data: copy(), error: null };
+      if (name === 'automation_prepare_daily_kit') {
+        state.channels = state.channels.map((channel, index) => ({
+          ...channel,
+          state: 'manual_kit',
+          draft: {
+            id: `85000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+            payload: payloadFor(channel.channel_key), payload_sha256: HASH_A,
+            review_status: 'pending', approved_at: null, delivery: null, test_delivery: null,
+          },
+        }));
+        return { data: copy(), error: null };
+      }
+      if (name === 'automation_approve_distribution_draft') {
+        const draftId = String(args?.p_draft_id);
+        const channel = state.channels.find(row => row.draft?.id === draftId);
+        if (!channel?.draft) throw new Error('Missing manual-kit approval draft');
+        channel.draft.review_status = 'approved';
+        channel.draft.approved_at = '2026-10-06T12:00:00.000Z';
+        return { data: { review_status: 'approved', side_effects: 0 }, error: null };
+      }
+      return { data: null, error: { code: 'PGRST202' } };
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', new Proxy(navigator, {
+      get(target, property) {
+        if (property === 'clipboard') return { writeText };
+        return Reflect.get(target, property, target);
+      },
+    }));
+
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => { root.render(<AutomationDistribution />); await Promise.resolve(); });
+    await settle();
+    await act(async () => { buttonFor(host, 'Prepare 13-channel kit').click(); await Promise.resolve(); });
+    await settle();
+    expect(host.querySelectorAll('article')).toHaveLength(13);
+
+    for (const channelKey of DISTRIBUTION_CHANNEL_KEYS) {
+      const label = channelKey === 'youtube_shorts' ? 'YouTube Shorts' : channelKey;
+      let card = cardFor(host, label);
+      await act(async () => { buttonFor(card, 'Approve this copy').click(); await Promise.resolve(); });
+      await settle();
+      card = cardFor(host, label);
+      expect(buttonFor(card, 'Copy caption').disabled).toBe(false);
+      expect(buttonFor(card, 'Copy UTM link').disabled).toBe(false);
+      const platformLink = card.querySelector<HTMLAnchorElement>('a');
+      expect(platformLink?.getAttribute('href')).toBeTruthy();
+      if (channelKey === 'telegram') expect(buttonFor(card, 'Send approved message').disabled).toBe(true);
+      await act(async () => { buttonFor(card, 'Copy caption').click(); await Promise.resolve(); });
+      await settle();
+      expect(writeText).toHaveBeenLastCalledWith(payloadFor(channelKey).caption);
+    }
+
+    expect(window.confirm).toHaveBeenCalledTimes(13);
+    expect(writeText).toHaveBeenCalledTimes(13);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
   it('previews approved newsletter copy and confirms a test only to the signed-in owner', async () => {
