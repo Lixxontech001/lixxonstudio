@@ -74,11 +74,22 @@ jobs:
           else
             printf 'Rendering with the checked-in default look.\n'
           fi
-          node scripts/render-video-test.mjs \
+          # The renderer's own messages are safe by contract (they never carry prose,
+          # credentials or provider data), so a failed run explains itself in the step log
+          # and as a job annotation the owner can read from the run page.
+          set +e
+          render_output=$(node scripts/render-video-test.mjs \
             --mode test \
             --fixture scripts/fixtures/video-test-article.json \
             --output "$RUNNER_TEMP/automation-video-test/lixxon-video-test.mp4" \
-            "${template_args[@]}"
+            "${template_args[@]}" 2>&1)
+          render_status=$?
+          set -e
+          printf '%s\n' "$render_output"
+          if [ "$render_status" -ne 0 ]; then
+            printf '::error title=Video render failed::%s\n' "$(printf '%s' "$render_output" | tail -n 4 | tr '\n' ' ')"
+            exit "$render_status"
+          fi
       - name: Independently assert ffprobe streams, duration, size and immutable source
         shell: bash
         env:
