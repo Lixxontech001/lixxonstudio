@@ -286,6 +286,21 @@ step stays suggestion-only, approval-gated and free of external publishing.
 * **Chief of Staff — linked digest.** The digest carries `links`, one item per thing that needs the
   owner: actions (with their latest Auditor verdict and what each needs), open experiments and open
   incidents, each with the record's id. It states that it sends nothing externally.
+* **CEO — proposed re-dating of your Lagos queue (V8).** When no experiment is awaiting a
+  decision, the CEO reads the next 14 Lagos days against the same two-a-day counter the
+  scheduling guard uses. If one day holds two articles while another is empty, it proposes moving
+  the **least-visited** item (fewest measured views in 30 days, newest first on a tie) into the
+  earliest empty day at that item's own clock time — one reason per move, the measured basis
+  attached and the limits stated in the payload: `max_moves`, `capacity_per_day: 2`, the window,
+  future-only, published untouched, content untouched, status untouched, owner-apply-only. With
+  nothing to spread it stays the aggregate scorecard, so the CEO still raises exactly one action
+  per run. A re-dating moves `scheduled_at`/`published_at` together through the owner's own
+  calendar path and queued intake items through the same capacity counter; article text, article
+  status and every published article are never touched, the Auditor hard-blocks any move against a
+  non-scheduled or published article or any field outside the re-dating contract, and
+  `admin_ai_execute_action` does not know the action type, so nothing automatic can move a date.
+  The owner presses **Apply schedule** in the action queue; the apply honours the Auditor's block
+  gate and the kill switch and refuses a stale proposal.
 * **In the control room** (Admin → Admin AI → Action queue) each action now shows its decision note
   (which is where an Auditor block reason appears), an optional note field, and — for owners with
   `admin.ai.approve` — a **Dispatch** button on approved allow-listed actions and an
