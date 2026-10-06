@@ -132,6 +132,24 @@ describe('video template panel', () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
+  it('dispatches the render from admin with the document the server holds, not one from the browser', async () => {
+    mocks.invoke.mockResolvedValue({
+      data: { status: 'dispatched', message: 'The render workflow was dispatched with the live look.' },
+      error: null,
+    });
+    const page = await render();
+    await act(async () => { button(page, 'Render the live look')?.click(); });
+    await settle();
+    expect(mocks.invoke).toHaveBeenCalledWith('automation-video-template', { body: { action: 'dispatch' } });
+    expect(page.textContent).toContain('dispatched with the live look');
+
+    // A refusal from GitHub is surfaced as a plain sentence and never as a crash.
+    mocks.invoke.mockResolvedValue({ data: { status: 'blocked', message: 'GitHub refused or could not be reached. Nothing was rendered; the live look is unchanged.' }, error: null });
+    await act(async () => { button(page, 'Render the live look')?.click(); });
+    await settle();
+    expect(page.textContent).toContain('Nothing was rendered');
+  });
+
   it('offers Activate and Delete only for an inactive template, and only to the owner', async () => {
     const page = await render();
     expect(button(page, 'Activate')).toBeTruthy();

@@ -24,7 +24,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   render-test-fixture:
-    if: startsWith(github.ref, 'refs/heads/arena/')
+    # Two ways in, both deliberate: a feature-branch push while the harness is being changed,
+    # and an owner-triggered dispatch from Admin → Daily Kit → Video templates, which is how a
+    # template change reaches a render without any code deploy. Pushes to the default branch
+    # still do not start a render on their own.
+    if: startsWith(github.ref, 'refs/heads/arena/') || github.event_name == 'workflow_dispatch'
     name: Render and probe a non-publishable fixture
     runs-on: ubuntu-24.04
     timeout-minutes: 12

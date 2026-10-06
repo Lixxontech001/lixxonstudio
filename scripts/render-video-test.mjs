@@ -214,7 +214,8 @@ export async function renderTestVideo({
   }
   let templateDocument;
   try {
-    templateDocument = templateText === null ? DEFAULT_VIDEO_TEMPLATE : JSON.parse(templateText);
+    // No --template means the checked-in default, which is already the validated copy.
+    templateDocument = templateText === null ? VALIDATED_DEFAULT_VIDEO_TEMPLATE : JSON.parse(templateText);
   } catch {
     throw new Error('The video template is not valid JSON.');
   }

@@ -58,6 +58,19 @@ export type VideoTemplateErrorCode =
   | "GITHUB_UNEXPECTED"
   | "GITHUB_NETWORK_ERROR";
 
+/**
+ * Free text reaches the render only through `textfile=`, but it must still be plain:
+ * letters, digits, punctuation, spaces and the newlines a multi-line end card needs.
+ */
+function hasOnlySafeText(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code === 10) continue;
+    if (code < 32 || code === 127) return false;
+  }
+  return true;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -80,7 +93,7 @@ function documentIsRenderable(value: unknown): value is Record<string, unknown> 
     if (sectionKeys.length !== expected.length || sectionKeys.some((key, index) => key !== [...expected].sort()[index])) return false;
     for (const entry of Object.values(body)) {
       if (typeof entry === "string") {
-        if (entry.length === 0 || entry.length > 200 || /[\u0000-\u001f\u007f]/.test(entry.replace(/\n/g, ""))) return false;
+        if (entry.length === 0 || entry.length > 200 || !hasOnlySafeText(entry)) return false;
       } else if (typeof entry !== "number" || !Number.isFinite(entry) || entry < 0) {
         return false;
       }
