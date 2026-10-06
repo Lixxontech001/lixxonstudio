@@ -7,10 +7,16 @@ on:
       - '.github/workflows/video-render-test.yml'
       - 'scripts/render-video-test.mjs'
       - 'scripts/video-asset-validation.mjs'
+      - 'scripts/video-template.mjs'
       - 'scripts/fixtures/video-test-article.json'
       - 'public/assets/images/lixxon-studio-logo.webp'
       - 'src/__tests__/videoAssetValidation.test.ts'
   workflow_dispatch:
+    inputs:
+      template_json:
+        description: 'Optional video template JSON copied from Admin → Daily Kit → Video templates. Empty uses the checked-in default look.'
+        required: false
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -45,13 +51,28 @@ jobs:
           node --version
       - name: Render the fixture into the runner-only test namespace
         shell: bash
+        # The template reaches this step only through the environment, never through
+        # shell interpolation, and is written to a private file the renderer validates.
+        env:
+          TEMPLATE_JSON: ${{ inputs.template_json }}
         run: |
           set -euo pipefail
           mkdir -m 700 -p "$RUNNER_TEMP/automation-video-test"
+          template_args=()
+          if [ -n "${TEMPLATE_JSON:-}" ]; then
+            printf '%s' "$TEMPLATE_JSON" > "$RUNNER_TEMP/automation-video-test/template.json"
+            chmod 600 "$RUNNER_TEMP/automation-video-test/template.json"
+            node -e 'const fs=require("node:fs");const raw=fs.readFileSync(process.env.RUNNER_TEMP+"/automation-video-test/template.json","utf8");const bytes=Buffer.byteLength(raw,"utf8");if(bytes<2||bytes>4096){throw new Error("template too large or empty")};JSON.parse(raw);console.log("template JSON accepted, bytes="+bytes)'
+            template_args+=(--template "$RUNNER_TEMP/automation-video-test/template.json")
+            printf 'Rendering with a dispatched owner template.\n'
+          else
+            printf 'Rendering with the checked-in default look.\n'
+          fi
           node scripts/render-video-test.mjs \
             --mode test \
             --fixture scripts/fixtures/video-test-article.json \
-            --output "$RUNNER_TEMP/automation-video-test/lixxon-video-test.mp4"
+            --output "$RUNNER_TEMP/automation-video-test/lixxon-video-test.mp4" \
+            "${template_args[@]}"
       - name: Independently assert ffprobe streams, duration, size and immutable source
         shell: bash
         env:
@@ -79,7 +100,10 @@ jobs:
           assert.equal(video[0].width, 1080);
           assert.equal(video[0].height, 1920);
           assert.equal(video[0].pix_fmt, 'yuv420p');
-          assert(Math.abs(duration - 12) <= 0.25, `expected 12 seconds, received ${duration}`);
+          const expectedDuration = Number(evidence.template?.durationSeconds);
+          assert(Number.isInteger(expectedDuration) && expectedDuration >= 8 && expectedDuration <= 60,
+            `the evidence must state a bounded template duration, received ${evidence.template?.durationSeconds}`);
+          assert(Math.abs(duration - expectedDuration) <= 0.25, `expected ${expectedDuration} seconds, received ${duration}`);
           assert.equal(subtitles.length, 1, 'one embedded caption track is required');
           assert.equal(subtitles[0].codec_name, 'mov_text');
           assert.equal(audio.length, 0, 'test video must be explicitly silent');
@@ -90,6 +114,9 @@ jobs:
           assert.equal(evidence.altTextPresent, true, 'silent video requires bounded alt text');
           assert.equal(evidence.articleBodySha256Before, evidence.articleBodySha256After);
           assert.equal(evidence.articleBodyImmutable, true);
+          assert.equal(typeof evidence.template?.name, 'string');
+          assert(/^[a-f0-9]{64}$/.test(String(evidence.template?.payloadSha256)), 'the evidence must carry the validated template hash');
+          assert.equal(evidence.template?.music, 'none', 'the render is silent by contract');
           const report = {
             ffprobeAssertions: 'PASS', fixtureId: evidence.fixtureId, namespace: evidence.namespace,
             testOnly: evidence.testOnly, codec: video[0].codec_name,
@@ -99,6 +126,9 @@ jobs:
             audioStreams: 0, audioMode: 'intentionally silent',
             altTextPresent: evidence.altTextPresent, bytes, maxBytes: 100 * 1024 * 1024,
             videoSha256: evidence.videoSha256,
+            templateName: evidence.template?.name,
+            templateSource: evidence.template?.source,
+            templateSha256: evidence.template?.payloadSha256,
             articleBodySha256Before: evidence.articleBodySha256Before,
             articleBodySha256After: evidence.articleBodySha256After,
             articleBodyImmutable: evidence.articleBodyImmutable,

@@ -29,6 +29,11 @@ verify_jwt = false
 # Owner-only distribution readbacks and Telegram delivery re-check identity and DB approvals in the handler.
 [functions.automation-distribution]
 verify_jwt = true
+
+# Owner-only render dispatch for the live video look; the document comes from the database, never the browser.
+[functions.automation-video-template]
+verify_jwt = true
+
 # Owner-only Web Push config + explicitly confirmed test notification; identity is verified again in the handler.
 [functions.automation-push]
 verify_jwt = true

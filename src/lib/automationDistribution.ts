@@ -633,3 +633,164 @@ export function parseDailyKitState(value: unknown): DailyKitState | null {
   }
   return { postId: row.post_id, lagosDay: row.lagos_day, isToday: row.is_today, videoUrl, marks };
 }
+
+// ---------------------------------------------------------------------------
+// V22 — video templates: the look of a rendered vertical video is owner-editable data,
+// stored in `video_templates` and handed to the renderer as one validated document.
+// The panel edits the essentials and always saves the whole document, so a save can
+// never drop a field the renderer needs.
+// ---------------------------------------------------------------------------
+
+export interface VideoTemplateMovement {
+  zoom_step: number;
+  zoom_max: number;
+  pan_x: number;
+  pan_y: number;
+  pan_x_period: number;
+  pan_y_period: number;
+}
+export interface VideoTemplateDocument {
+  schema: 'lixxon.video-template.v1';
+  name: string;
+  duration_seconds: number;
+  music: 'none';
+  fps: 24 | 25 | 30;
+  movement: VideoTemplateMovement;
+  title: { font_size: number; line_spacing: number; color: string; box_height: number; seconds: number };
+  caption: {
+    font_size: number; line_spacing: number; color: string; box_top: number; box_height: number;
+    max_characters_per_line: number; max_lines: number;
+  };
+  end_card: { font_size: number; line_spacing: number; color: string; text: string };
+  watermark: { text: string; font_size: number };
+}
+export interface VideoTemplateSummary {
+  id: string;
+  name: string;
+  isActive: boolean;
+  durationSeconds: number;
+  fps: number;
+  music: 'none';
+  createdAt: string | null;
+}
+export interface VideoTemplateList {
+  activeId: string | null;
+  templates: VideoTemplateSummary[];
+  activeDocument: VideoTemplateDocument | null;
+}
+
+const COLOR_PATTERN = /^0x[0-9A-Fa-f]{6}$/;
+
+function boundedInteger(value: unknown, min: number, max: number): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+function boundedNumber(value: unknown, min: number, max: number): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
+function boundedColor(value: unknown): string | null {
+  return typeof value === 'string' && COLOR_PATTERN.test(value) ? value : null;
+}
+function boundedText(value: unknown, maxLength: number, maxLines: number): string | null {
+  if (typeof value !== 'string' || value.length < 1 || value.length > maxLength) return null;
+  if (value.split('\n').length > maxLines) return null;
+  return value;
+}
+
+/**
+ * Parse a template document with the same bounds the database and the renderer enforce,
+ * so the panel can never display — or save — a look the renderer would reject.
+ */
+export function parseVideoTemplateDocument(value: unknown): VideoTemplateDocument | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  if (row.schema !== 'lixxon.video-template.v1' || row.music !== 'none') return null;
+  const name = typeof row.name === 'string' && row.name.trim().length >= 1 && row.name.length <= 80 ? row.name : null;
+  const duration = boundedInteger(row.duration_seconds, 8, 60);
+  const fps = boundedInteger(row.fps, 24, 30);
+  const movement = (row.movement || {}) as Record<string, unknown>;
+  const title = (row.title || {}) as Record<string, unknown>;
+  const caption = (row.caption || {}) as Record<string, unknown>;
+  const endCard = (row.end_card || {}) as Record<string, unknown>;
+  const watermark = (row.watermark || {}) as Record<string, unknown>;
+
+  const zoomStep = boundedNumber(movement.zoom_step, 0.0001, 0.002);
+  const zoomMax = boundedNumber(movement.zoom_max, 1.02, 1.25);
+  const panX = boundedNumber(movement.pan_x, 0, 0.4);
+  const panY = boundedNumber(movement.pan_y, 0, 0.4);
+  const panXPeriod = boundedInteger(movement.pan_x_period, 30, 300);
+  const panYPeriod = boundedInteger(movement.pan_y_period, 30, 300);
+  const titleFont = boundedInteger(title.font_size, 28, 96);
+  const titleSpacing = boundedInteger(title.line_spacing, 0, 40);
+  const titleColor = boundedColor(title.color);
+  const titleBox = boundedInteger(title.box_height, 200, 900);
+  const titleSeconds = boundedNumber(title.seconds, 1, 6);
+  const captionFont = boundedInteger(caption.font_size, 24, 72);
+  const captionSpacing = boundedInteger(caption.line_spacing, 0, 40);
+  const captionColor = boundedColor(caption.color);
+  const captionTop = boundedInteger(caption.box_top, 200, 1700);
+  const captionBox = boundedInteger(caption.box_height, 200, 900);
+  const captionWidth = boundedInteger(caption.max_characters_per_line, 16, 48);
+  const captionLines = boundedInteger(caption.max_lines, 3, 10);
+  const endFont = boundedInteger(endCard.font_size, 28, 96);
+  const endSpacing = boundedInteger(endCard.line_spacing, 0, 48);
+  const endColor = boundedColor(endCard.color);
+  const endText = boundedText(endCard.text, 200, 4);
+  const watermarkText = boundedText(watermark.text, 60, 1);
+  const watermarkFont = boundedInteger(watermark.font_size, 16, 48);
+
+  if (name === null || duration === null || fps === null || ![24, 25, 30].includes(fps)
+      || zoomStep === null || zoomMax === null || panX === null || panY === null
+      || panXPeriod === null || panYPeriod === null
+      || titleFont === null || titleSpacing === null || titleColor === null || titleBox === null || titleSeconds === null
+      || captionFont === null || captionSpacing === null || captionColor === null
+      || captionTop === null || captionBox === null || captionWidth === null || captionLines === null
+      || endFont === null || endSpacing === null || endColor === null || endText === null
+      || watermarkText === null || watermarkFont === null
+      || titleBox + 100 > 1920 || captionTop + captionBox > 1900) {
+    return null;
+  }
+  return {
+    schema: 'lixxon.video-template.v1',
+    name,
+    duration_seconds: duration,
+    music: 'none',
+    fps: fps as 24 | 25 | 30,
+    movement: { zoom_step: zoomStep, zoom_max: zoomMax, pan_x: panX, pan_y: panY, pan_x_period: panXPeriod, pan_y_period: panYPeriod },
+    title: { font_size: titleFont, line_spacing: titleSpacing, color: titleColor, box_height: titleBox, seconds: titleSeconds },
+    caption: {
+      font_size: captionFont, line_spacing: captionSpacing, color: captionColor,
+      box_top: captionTop, box_height: captionBox,
+      max_characters_per_line: captionWidth, max_lines: captionLines,
+    },
+    end_card: { font_size: endFont, line_spacing: endSpacing, color: endColor, text: endText },
+    watermark: { text: watermarkText, font_size: watermarkFont },
+  };
+}
+
+/** Parse the template list RPC; anything unrecognised is refused rather than rendered. */
+export function parseVideoTemplates(value: unknown): VideoTemplateList | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  if (!Array.isArray(row.templates)) return null;
+  const templates: VideoTemplateSummary[] = [];
+  for (const entry of row.templates) {
+    if (!entry || typeof entry !== 'object') return null;
+    const item = entry as Record<string, unknown>;
+    if (typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.is_active !== 'boolean') return null;
+    const duration = boundedInteger(item.duration_seconds, 8, 60);
+    const fps = boundedInteger(item.fps, 24, 30);
+    if (duration === null || fps === null || item.music !== 'none') return null;
+    templates.push({
+      id: item.id, name: item.name.slice(0, 80), isActive: item.is_active,
+      durationSeconds: duration, fps, music: 'none',
+      createdAt: typeof item.created_at === 'string' ? item.created_at : null,
+    });
+  }
+  const activeId = typeof row.active_id === 'string' ? row.active_id : null;
+  return {
+    activeId,
+    templates,
+    activeDocument: row.active_document === null || row.active_document === undefined
+      ? null : parseVideoTemplateDocument(row.active_document),
+  };
+}

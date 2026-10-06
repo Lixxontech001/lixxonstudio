@@ -17,8 +17,11 @@ import {
   parseDailyKitState,
   parseDistributionArticles,
   parseDistributionSnapshot,
+  parseVideoTemplates,
   type DailyKitMark,
   type DailyKitState,
+  type VideoTemplateDocument,
+  type VideoTemplateList,
   type DistributionArticleOption,
   type DistributionChannel,
   type DistributionPayload,
@@ -121,6 +124,9 @@ export default function AutomationDistribution() {
   const [slot, setSlot] = useState<KitSlot>('morning');
   const [kitState, setKitState] = useState<DailyKitState | null>(null);
   const [videoDraft, setVideoDraft] = useState('');
+  const [templates, setTemplates] = useState<VideoTemplateList | null>(null);
+  const [templateDraft, setTemplateDraft] = useState<VideoTemplateDocument | null>(null);
+  const [activateOnSave, setActivateOnSave] = useState(true);
 
   const loadArticles = useCallback(async () => {
     setError(null);
@@ -180,6 +186,20 @@ export default function AutomationDistribution() {
   useEffect(() => { if (selectedPostId) void loadSnapshot(selectedPostId); }, [selectedPostId, loadSnapshot]);
   useEffect(() => { void loadKitState(selectedPostId, dayKey); }, [selectedPostId, dayKey, loadKitState]);
   useEffect(() => { setVideoDraft(kitState?.videoUrl || ''); }, [kitState?.videoUrl]);
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const { data, error: rpcError } = await supabase.rpc('automation_video_templates');
+      if (rpcError) throw rpcError;
+      const safe = parseVideoTemplates(data);
+      setTemplates(safe);
+      setTemplateDraft(current => current ?? safe?.activeDocument ?? null);
+    } catch {
+      setTemplates(null);
+    }
+  }, []);
+
+  useEffect(() => { void loadTemplates(); }, [loadTemplates]);
 
   const counts = useMemo(() => {
     const result = { ready: 0, manual: 0, blocked: 0, paused: 0 };
@@ -383,6 +403,54 @@ export default function AutomationDistribution() {
       ? `${channel.label} was already marked as posted in the ${slotLabel} slot for that Lagos day.`
       : `${channel.label} is recorded as posted by you in the ${slotLabel} slot. Keep the platform's own copy as the source of truth.`);
   });
+
+  const saveTemplate = () => withAction('save-template', async () => {
+    if (!canManage || !templateDraft) return;
+    const { data, error: rpcError } = await supabase.rpc('automation_save_video_template', {
+      p_document: templateDraft, p_activate: activateOnSave,
+    });
+    if (rpcError) throw rpcError;
+    const safe = parseVideoTemplates(data);
+    if (safe) { setTemplates(safe); setTemplateDraft(safe.activeDocument); }
+    setNotice(activateOnSave
+      ? `Saved “${templateDraft.name}” as a new video template and made it the live look. Copy its JSON below and dispatch the render workflow to see it rendered; nothing was uploaded or published.`
+      : `Saved “${templateDraft.name}” as a new, inactive video template. Activate it when you are ready.`);
+  });
+
+  const activateTemplate = (id: string) => withAction(`activate-template:${id}`, async () => {
+    if (!canManage) return;
+    const { data, error: rpcError } = await supabase.rpc('automation_activate_video_template', { p_id: id });
+    if (rpcError) throw rpcError;
+    const safe = parseVideoTemplates(data);
+    if (safe) { setTemplates(safe); setTemplateDraft(safe.activeDocument); }
+    setNotice('That template is now the live look. The next render uses it once you dispatch it with this JSON.');
+  });
+
+  const deleteTemplate = (id: string) => withAction(`delete-template:${id}`, async () => {
+    if (!canManage) return;
+    const { data, error: rpcError } = await supabase.rpc('automation_delete_video_template', { p_id: id });
+    if (rpcError) throw rpcError;
+    const safe = parseVideoTemplates(data);
+    if (safe) { setTemplates(safe); setTemplateDraft(safe.activeDocument); }
+    setNotice('Template deleted. The live look was not touched.');
+  });
+
+  const copyTemplateJson = async () => {
+    if (!templateDraft) return;
+    const ok = await copyText(JSON.stringify(templateDraft, null, 2));
+    setNotice(ok
+      ? 'Template JSON copied. In GitHub open Actions → “Ephemeral video render contract test” → Run workflow on this branch and paste it into the template_json field.'
+      : 'Copy was not available in this browser. Select the JSON below and copy it manually.');
+  };
+
+  const updateTemplate = (patch: Partial<VideoTemplateDocument>) => {
+    setTemplateDraft(current => (current ? { ...current, ...patch } : current));
+  };
+  const updateTemplateSection = <K extends 'title' | 'caption' | 'end_card' | 'watermark' | 'movement'>(
+    section: K, patch: Partial<VideoTemplateDocument[K]>,
+  ) => {
+    setTemplateDraft(current => (current ? { ...current, [section]: { ...current[section], ...patch } } : current));
+  };
 
   const channels = snapshot?.channels || [];
   const dayArticles = useMemo(() => articles.filter(article => (
@@ -588,6 +656,63 @@ export default function AutomationDistribution() {
             })}
           </section>
         </>
+      )}
+
+      {templates && templateDraft && (
+        <section className="rounded-sm border border-gray-200 bg-white p-4" aria-label="Video templates">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-charcoal">Video templates · the look of a rendered video</h2>
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-gray-600">The zoom, title, captions, end card, watermark and duration are data now, not code. Edit them here, save a new version, then copy the JSON and run the render workflow: Actions → “Ephemeral video render contract test” → Run workflow → paste into <code>template_json</code>. No deploy, no upload, and the render stays a silent, non-publishable test.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void copyTemplateJson()} className="inline-flex min-h-11 items-center gap-2 rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze"><Clipboard size={15} aria-hidden="true" />Copy template JSON</button>
+              {canManage && <button type="button" disabled={busy !== null} onClick={saveTemplate} className="inline-flex min-h-11 items-center gap-2 rounded-sm bg-charcoal px-3 text-sm font-medium text-white hover:bg-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:opacity-50">{busy === 'save-template' ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={15} aria-hidden="true" />}Save as new version</button>}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div><label htmlFor="template-name" className="mb-1 block text-xs font-medium text-gray-700">Template name</label><input id="template-name" maxLength={80} disabled={!canManage} value={templateDraft.name} onChange={event => updateTemplate({ name: event.target.value })} className="min-h-11 w-full rounded-sm border border-gray-300 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50" /></div>
+                <div><label htmlFor="template-duration" className="mb-1 block text-xs font-medium text-gray-700">Duration (8–60 s)</label><input id="template-duration" type="number" min={8} max={60} disabled={!canManage} value={templateDraft.duration_seconds} onChange={event => updateTemplate({ duration_seconds: Number(event.target.value) })} className="min-h-11 w-full rounded-sm border border-gray-300 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50" /></div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div><label htmlFor="template-fps" className="mb-1 block text-xs font-medium text-gray-700">Frame rate</label><select id="template-fps" disabled={!canManage} value={templateDraft.fps} onChange={event => updateTemplate({ fps: Number(event.target.value) as 24 | 25 | 30 })} className="min-h-11 w-full rounded-sm border border-gray-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50">{[24, 25, 30].map(rate => <option key={rate} value={rate}>{rate} fps</option>)}</select></div>
+                <div><label htmlFor="template-title-font" className="mb-1 block text-xs font-medium text-gray-700">Title size (28–96)</label><input id="template-title-font" type="number" min={28} max={96} disabled={!canManage} value={templateDraft.title.font_size} onChange={event => updateTemplateSection('title', { font_size: Number(event.target.value) })} className="min-h-11 w-full rounded-sm border border-gray-300 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50" /></div>
+                <div><label htmlFor="template-title-seconds" className="mb-1 block text-xs font-medium text-gray-700">Title hold (1–6 s)</label><input id="template-title-seconds" type="number" min={1} max={6} step="0.5" disabled={!canManage} value={templateDraft.title.seconds} onChange={event => updateTemplateSection('title', { seconds: Number(event.target.value) })} className="min-h-11 w-full rounded-sm border border-gray-300 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50" /></div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div><label htmlFor="template-caption-font" className="mb-1 block text-xs font-medium text-gray-700">Caption size (24–72)</label><input id="template-caption-font" type="number" min={24} max={72} disabled={!canManage} value={templateDraft.caption.font_size} onChange={event => updateTemplateSection('caption', { font_size: Number(event.target.value) })} className="min-h-11 w-full rounded-sm border border-gray-300 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50" /></div>
+                <div><label htmlFor="template-caption-width" className="mb-1 block text-xs font-medium text-gray-700">Caption line width (16–48)</label><input id="template-caption-width" type="number" min={16} max={48} disabled={!canManage} value={templateDraft.caption.max_characters_per_line} onChange={event => updateTemplateSection('caption', { max_characters_per_line: Number(event.target.value) })} className="min-h-11 w-full rounded-sm border border-gray-300 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50" /></div>
+                <div><label htmlFor="template-watermark" className="mb-1 block text-xs font-medium text-gray-700">Watermark (60 chars)</label><input id="template-watermark" maxLength={60} disabled={!canManage} value={templateDraft.watermark.text} onChange={event => updateTemplateSection('watermark', { text: event.target.value })} className="min-h-11 w-full rounded-sm border border-gray-300 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50" /></div>
+              </div>
+              <div><label htmlFor="template-end-card" className="mb-1 block text-xs font-medium text-gray-700">End card text (up to 4 lines)</label><textarea id="template-end-card" maxLength={200} rows={3} disabled={!canManage} value={templateDraft.end_card.text} onChange={event => updateTemplateSection('end_card', { text: event.target.value })} className="w-full rounded-sm border border-gray-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-50" /></div>
+              {canManage && <label className="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" checked={activateOnSave} onChange={event => setActivateOnSave(event.target.checked)} className="h-5 w-5" />Make this the live look when I save</label>}
+              <p className="text-xs text-gray-500">Music is silent-only by contract: a soundtrack needs an owner-supplied, licence-checked audio asset, so the renderer refuses anything but <code>none</code>. Movement and box geometry travel with the document unchanged unless you edit the JSON.</p>
+              <p className="text-xs text-gray-500">Rendering a video into Storage so the kit can attach it automatically is the remaining, separate step; the kit accepts your own public video link today.</p>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Saved looks</h3><span className="text-xs text-gray-500">{templates.templates.length} version(s)</span></div>
+              <ul className="mt-2 space-y-2">
+                {templates.templates.map(template => (
+                  <li key={template.id} className="flex flex-wrap items-center gap-2 rounded-sm border border-gray-200 bg-gray-50 p-3 text-sm">
+                    <strong className="text-charcoal">{template.name}</strong>
+                    <span className="text-xs text-gray-600">{template.durationSeconds}s · {template.fps} fps · silent</span>
+                    {template.isActive && <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-900">Live look</span>}
+                    <span className="ml-auto flex gap-2">
+                      {canManage && !template.isActive && <button type="button" disabled={busy !== null} onClick={() => void activateTemplate(template.id)} className="inline-flex min-h-11 items-center rounded-sm border border-gray-300 bg-white px-3 text-xs text-charcoal hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:opacity-50">Activate</button>}
+                      {canManage && !template.isActive && <button type="button" disabled={busy !== null} onClick={() => void deleteTemplate(template.id)} className="inline-flex min-h-11 items-center rounded-sm border border-red-200 bg-white px-3 text-xs text-red-800 hover:border-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:opacity-50">Delete</button>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <label htmlFor="template-json" className="mt-3 block text-xs font-medium text-gray-700">The document the renderer receives</label>
+              <textarea id="template-json" readOnly rows={10} value={JSON.stringify(templateDraft, null, 2)} className="mt-1 w-full rounded-sm border border-gray-300 bg-gray-50 px-3 py-2 font-mono text-[11px] leading-4" />
+            </div>
+          </div>
+        </section>
       )}
 
       {loading && <p role="status" className="text-sm text-gray-500">Loading eligible articles…</p>}

@@ -111,7 +111,7 @@ export function validateTestVideoFixture(fixture) {
 /** Validate a real owner-approved asset or an isolated, never-publishable test fixture. */
 export function validateVideoAssetContract({
   mode = 'production', fixture, bodyChecksumBefore, bodyChecksumAfter,
-  probe, captions, altText, approval, attribution, videoBytes,
+  probe, captions, altText, approval, attribution, videoBytes, expectedDurationSeconds,
 }) {
   let approvedExcerpt;
   let immutableBefore;
@@ -169,7 +169,15 @@ export function validateVideoAssetContract({
   const subtitle = subtitleStreams[0];
   const duration = Number(probe.format.duration);
   const formatNames = String(probe.format.format_name || '').split(',');
-  const expectedDuration = mode === 'test' ? fixture.expected_duration_seconds : null;
+  // A video template may set its own duration (V22), so the expected duration is an
+  // explicit, bounded input to the contract rather than an implicit fixture value.
+  if (expectedDurationSeconds !== undefined
+      && (!Number.isInteger(expectedDurationSeconds) || expectedDurationSeconds < 8 || expectedDurationSeconds > 60)) {
+    throw new Error('An expected duration must be an integer from 8 to 60 seconds.');
+  }
+  const expectedDuration = mode === 'test'
+    ? (expectedDurationSeconds ?? fixture.expected_duration_seconds)
+    : null;
   if (videoStreams.length !== 1 || audioStreams.length !== 0 || subtitleStreams.length !== 1
       || video?.codec_name !== 'h264' || video.width !== 1080 || video.height !== 1920 || video.pix_fmt !== 'yuv420p'
       || subtitle?.codec_name !== 'mov_text' || !formatNames.includes('mp4')
@@ -227,7 +235,8 @@ async function readBounded(path, maxBytes) {
 
 export async function validateVideoFiles({
   mode = 'production', videoPath, captionsPath, altTextPath, approvalPath, attributionPath,
-  fixture, bodyChecksumBefore, bodyChecksumAfter, ffmpegPath = 'ffmpeg', ffprobePath = 'ffprobe',
+  fixture, bodyChecksumBefore, bodyChecksumAfter, expectedDurationSeconds,
+  ffmpegPath = 'ffmpeg', ffprobePath = 'ffprobe',
 }) {
   if (extname(videoPath).toLowerCase() !== '.mp4') throw new Error('Only an MP4 asset can be validated.');
   const videoInfo = await stat(videoPath);
@@ -251,7 +260,7 @@ export async function validateVideoFiles({
   try { probe = JSON.parse(probeText); }
   catch { throw new Error('FFprobe metadata is invalid.'); }
   const result = validateVideoAssetContract({
-    mode, fixture, bodyChecksumBefore, bodyChecksumAfter,
+    mode, fixture, bodyChecksumBefore, bodyChecksumAfter, expectedDurationSeconds,
     probe, captions, altText: altText.trim(), approval,
     attribution: mode === 'test' ? { background: 'brand_asset', stock_asset: null } : attribution,
     videoBytes: videoInfo.size,

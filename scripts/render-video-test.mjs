@@ -6,6 +6,9 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { validateTestVideoFixture, validateVideoFiles } from './video-asset-validation.mjs';
+import {
+  VALIDATED_DEFAULT_VIDEO_TEMPLATE, templateCaptionWindow, templateNumber, validateVideoTemplate,
+} from './video-template.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_FIXTURE = resolve(REPO_ROOT, 'scripts/fixtures/video-test-article.json');
@@ -32,7 +35,7 @@ async function hashFile(path) {
   return hash.digest('hex');
 }
 
-function wrapTextWithoutRewriting(text, maxCharacters = 34) {
+function wrapTextWithoutRewriting(text, maxCharacters = 34, maxLines = 6) {
   const normalized = String(text).normalize('NFC').replace(/\s+/gu, ' ').trim();
   const words = normalized.split(' ');
   const lines = [];
@@ -46,7 +49,7 @@ function wrapTextWithoutRewriting(text, maxCharacters = 34) {
     } else line = candidate;
   }
   if (line) lines.push(line);
-  if (lines.length > 6) throw new Error('The exact excerpt does not fit the bounded test caption layout.');
+  if (lines.length > maxLines) throw new Error('The exact excerpt does not fit the bounded test caption layout.');
   return lines.join('\n');
 }
 
@@ -57,7 +60,16 @@ function ffmpegPath(value) {
   return value;
 }
 
-export function buildVideoFilterGraph({ titlePath, captionTextPath, watermarkPath, endCardPath, serifFont, sansFont }) {
+export function buildVideoFilterGraph({
+  titlePath, captionTextPath, watermarkPath, endCardPath, serifFont, sansFont,
+  template = VALIDATED_DEFAULT_VIDEO_TEMPLATE,
+}) {
+  // The template is validated on the way in (see video-template.mjs); numbers are
+  // re-formatted here so a filter string can never receive a locale or exponent form.
+  const t = validateVideoTemplate(template);
+  const { movement, title: titleStyle, caption, end_card: endCardStyle, watermark: watermarkStyle } = t;
+  const window = templateCaptionWindow(t);
+  const captionEnable = `gte(t,${templateNumber(window.start, 3)})*lt(t,${templateNumber(window.end, 3)})`;
   const title = ffmpegPath(titlePath);
   const captionText = ffmpegPath(captionTextPath);
   const watermark = ffmpegPath(watermarkPath);
@@ -67,17 +79,23 @@ export function buildVideoFilterGraph({ titlePath, captionTextPath, watermarkPat
   const drawText = (font, textFile, extra) =>
     `drawtext=fontfile=${font}:textfile=${textFile}:expansion=none:${extra}`;
 
+  const hold = templateNumber(titleStyle.seconds, 1);
+  const captionBoxWidth = 972;
+  const captionBoxX = Math.round((1080 - captionBoxWidth) / 2);
   return [
     '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920',
-    "zoompan=z='min(zoom+0.00035,1.08)':x='(iw-iw/zoom)/2+(iw-iw/zoom)*0.12*sin(on/90)':y='(ih-ih/zoom)/2+(ih-ih/zoom)*0.08*cos(on/110)':d=1:s=1080x1920:fps=30",
-    "drawbox=x=24:y=28:w=585:h=68:color=0x1A1A1A@0.88:t=fill",
-    drawText(sans, watermark, 'fontcolor=0xFDFBF7:fontsize=29:x=44:y=45'),
-    "drawbox=x=0:y=0:w=iw:h=330:color=0x1A1A1A@0.84:t=fill:enable='lt(t,2)'",
-    drawText(serif, title, "fontcolor=0xFDFBF7:fontsize=50:line_spacing=10:x=(w-text_w)/2:y=104:enable='lt(t,2)'"),
-    "drawbox=x=54:y=1120:w=972:h=500:color=0x1A1A1A@0.88:t=fill:enable='gte(t,2)*lt(t,10)'",
-    drawText(sans, captionText, "fontcolor=0xFFFFFF:fontsize=40:line_spacing=16:x=(w-text_w)/2:y=(h-text_h)/2:enable='gte(t,2)*lt(t,10)'"),
-    "drawbox=x=0:y=0:w=iw:h=ih:color=0x1A1A1A@0.97:t=fill:enable='gte(t,10)'",
-    drawText(serif, endCard, "fontcolor=0xF2EDE7:fontsize=58:line_spacing=22:x=(w-text_w)/2:y=(h-text_h)/2"),
+    `zoompan=z='min(zoom+${templateNumber(movement.zoom_step, 5)},${templateNumber(movement.zoom_max, 3)})'`
+      + `:x='(iw-iw/zoom)/2+(iw-iw/zoom)*${templateNumber(movement.pan_x, 3)}*sin(on/${movement.pan_x_period})'`
+      + `:y='(ih-ih/zoom)/2+(ih-ih/zoom)*${templateNumber(movement.pan_y, 3)}*cos(on/${movement.pan_y_period})'`
+      + `:d=1:s=1080x1920:fps=${t.fps}`,
+    'drawbox=x=24:y=28:w=585:h=68:color=0x1A1A1A@0.88:t=fill',
+    drawText(sans, watermark, `fontcolor=${watermarkStyle.color}:fontsize=${watermarkStyle.font_size}:x=44:y=45`),
+    `drawbox=x=0:y=0:w=iw:h=${titleStyle.box_height}:color=0x1A1A1A@0.84:t=fill:enable='lt(t,${hold})'`,
+    drawText(serif, title, `fontcolor=${titleStyle.color}:fontsize=${titleStyle.font_size}:line_spacing=${titleStyle.line_spacing}:x=(w-text_w)/2:y=104:enable='lt(t,${hold})'`),
+    `drawbox=x=${captionBoxX}:y=${caption.box_top}:w=${captionBoxWidth}:h=${caption.box_height}:color=0x1A1A1A@0.88:t=fill:enable='${captionEnable}'`,
+    drawText(sans, captionText, `fontcolor=${caption.color}:fontsize=${caption.font_size}:line_spacing=${caption.line_spacing}:x=(w-text_w)/2:y=(h-text_h)/2:enable='${captionEnable}'`),
+    `drawbox=x=0:y=0:w=iw:h=ih:color=0x1A1A1A@0.97:t=fill:enable='gte(t,${templateNumber(window.end, 3)})'`,
+    drawText(serif, endCard, `fontcolor=${endCardStyle.color}:fontsize=${endCardStyle.font_size}:line_spacing=${endCardStyle.line_spacing}:x=(w-text_w)/2:y=(h-text_h)/2`),
     'format=yuv420p[vout]',
   ].join(',');
 }
@@ -176,11 +194,31 @@ function vttTimestamp(seconds) {
 export async function renderTestVideo({
   fixturePath = DEFAULT_FIXTURE,
   outputPath,
+  templatePath = null,
   ffmpeg = 'ffmpeg',
   ffprobe = 'ffprobe',
   serifFont = FONT_SERIF,
   sansFont = FONT_SANS,
 } = {}) {
+  // The look comes from a validated document (V22): the owner's template when one is
+  // supplied, otherwise the checked-in default, which reproduces the original look.
+  let templateSource = 'code default';
+  let templateText = null;
+  if (templatePath !== null && templatePath !== undefined) {
+    const resolvedTemplatePath = resolve(templatePath);
+    if (extname(resolvedTemplatePath).toLowerCase() !== '.json') {
+      throw new Error('A video template must be a JSON document.');
+    }
+    templateText = await readFile(resolvedTemplatePath, 'utf8');
+    templateSource = basename(resolvedTemplatePath);
+  }
+  let templateDocument;
+  try {
+    templateDocument = templateText === null ? DEFAULT_VIDEO_TEMPLATE : JSON.parse(templateText);
+  } catch {
+    throw new Error('The video template is not valid JSON.');
+  }
+  const template = validateVideoTemplate(templateDocument);
   const resolvedFixturePath = resolve(fixturePath);
   if (resolvedFixturePath !== DEFAULT_FIXTURE) throw new Error('Only the checked-in, non-publishable video test fixture is accepted.');
   const fixtureRealPath = await realpath(resolvedFixturePath);
@@ -207,23 +245,24 @@ export async function renderTestVideo({
   const watermarkPath = target.replace(/\.mp4$/i, '.watermark.txt');
   const endCardPath = target.replace(/\.mp4$/i, '.end-card.txt');
   const evidencePath = target.replace(/\.mp4$/i, '.evidence.json');
-  const expectedDuration = fixture.expected_duration_seconds;
-  const captionStart = Math.min(2, expectedDuration / 4);
-  const captionEnd = expectedDuration - Math.min(2, expectedDuration / 6);
+  const expectedDuration = template.duration_seconds;
+  const window = templateCaptionWindow(template);
+  const captionStart = window.start;
+  const captionEnd = window.end;
   const captions = `WEBVTT\n\n${vttTimestamp(captionStart)} --> ${vttTimestamp(captionEnd)}\n${fixture.test_excerpt}\n`;
   const sidecars = [captionTextPath, captionsPath, titlePath, watermarkPath, endCardPath, evidencePath];
   for (const sidecar of sidecars) await ensureNonexistent(sidecar);
 
   const articleBodyChecksumBefore = sha256(fixture.article_body);
   await Promise.all([
-    writeFile(captionTextPath, wrapTextWithoutRewriting(fixture.test_excerpt), { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
+    writeFile(captionTextPath, wrapTextWithoutRewriting(fixture.test_excerpt, template.caption.max_characters_per_line, template.caption.max_lines), { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
     writeFile(captionsPath, captions, { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
     writeFile(titlePath, fixture.title, { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
-    writeFile(watermarkPath, 'TEST ONLY — NOT FOR POSTING', { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
-    writeFile(endCardPath, 'Lixxon Studio\nTEST ONLY · NOT FOR POSTING', { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
+    writeFile(watermarkPath, template.watermark.text, { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
+    writeFile(endCardPath, template.end_card.text, { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
   ]);
 
-  const filterGraph = buildVideoFilterGraph({ titlePath, captionTextPath, watermarkPath, endCardPath, serifFont, sansFont });
+  const filterGraph = buildVideoFilterGraph({ titlePath, captionTextPath, watermarkPath, endCardPath, serifFont, sansFont, template });
   const args = buildFfmpegArguments({
     heroPath, captionsPath, outputPath: target, filterGraph, durationSeconds: expectedDuration,
   });
@@ -239,6 +278,7 @@ export async function renderTestVideo({
   const validation = await validateVideoFiles({
     mode: 'test', videoPath: target, captionsPath, altTextPath: await writeAltText(target, fixture.alt_text),
     fixture, bodyChecksumBefore: articleBodyChecksumBefore, bodyChecksumAfter: articleBodyChecksumAfter,
+    expectedDurationSeconds: expectedDuration,
     ffmpegPath: ffmpeg, ffprobePath: ffprobe,
   });
   const info = await stat(target);
@@ -264,6 +304,15 @@ export async function renderTestVideo({
     fileBytes: info.size,
     maxFileBytes: MAX_VIDEO_BYTES,
     videoSha256: await hashFile(target),
+    template: {
+      name: template.name,
+      source: templateSource,
+      schema: template.schema,
+      payloadSha256: sha256(JSON.stringify(template)),
+      durationSeconds: template.duration_seconds,
+      fps: template.fps,
+      music: template.music,
+    },
     articleBodySha256Before: articleBodyChecksumBefore,
     articleBodySha256After: articleBodyChecksumAfter,
     articleBodyImmutable: validation.articleBodyImmutable,
@@ -277,6 +326,7 @@ export async function renderTestVideo({
       '## Ephemeral video renderer test — not for posting', '',
       `- Namespace: \`${fixture.namespace}\``,
       `- Result: **${summary.valid ? 'PASS' : 'FAIL'}**`,
+      `- Template: \`${summary.template.name}\` (${summary.template.source}), look hash \`${summary.template.payloadSha256}\``,
       `- Video: ${summary.codec}, ${summary.width}×${summary.height}, ${summary.durationSeconds}s; subtitle ${summary.subtitleCodec}; silent with alt text`,
       `- File: ${summary.fileBytes} bytes; SHA-256 \`${summary.videoSha256}\``,
       `- Fixture article body unchanged: \`${summary.articleBodyImmutable}\``,
@@ -293,18 +343,25 @@ async function writeAltText(target, altText) {
   return path;
 }
 
+const ALLOWED_CLI_KEYS = ['--mode', '--fixture', '--output', '--template'];
+
 function parseCli(args) {
   const values = new Map();
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index];
     const value = args[index + 1];
-    if (!key?.startsWith('--') || !value || values.has(key)) throw new Error('Use --mode test --fixture <checked-in fixture> --output <runner temp MP4>.');
+    if (!key?.startsWith('--') || !value || values.has(key) || !ALLOWED_CLI_KEYS.includes(key)) {
+      throw new Error('Use --mode test --fixture <checked-in fixture> --output <runner temp MP4> [--template <JSON>].');
+    }
     values.set(key, value);
   }
-  if (values.get('--mode') !== 'test' || !values.get('--fixture') || !values.get('--output') || values.size !== 3) {
+  if (values.get('--mode') !== 'test' || !values.get('--fixture') || !values.get('--output')) {
     throw new Error('Only --mode test with the checked-in fixture and a temporary output MP4 is supported.');
   }
-  return { mode: values.get('--mode'), fixturePath: values.get('--fixture'), outputPath: values.get('--output') };
+  return {
+    mode: values.get('--mode'), fixturePath: values.get('--fixture'),
+    outputPath: values.get('--output'), templatePath: values.get('--template') ?? null,
+  };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
