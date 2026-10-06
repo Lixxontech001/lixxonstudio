@@ -50,6 +50,42 @@ This is the owner-facing setup and key-handling guide. Do not paste credentials 
 - The kit is day-aware (V16). **Kit day** selects Today or Tomorrow in Lagos and filters the article list to that Lagos day; when nothing is scheduled for tomorrow the page says so instead of showing a stale article. **Posting slot** is Morning 08:00, Midday 13:00 or Evening 18:00 WAT and is recorded on every mark. Each channel shows three to five numbered steps derived from its format (a video channel asks for the vertical video first; text and chat channels do not), plus an **Open <label> app** button that uses the platform's own public URL scheme — an installed app opens, a browser without it does nothing, and no tracking parameters are added. **Vertical video for this article** attaches your own public `https://` link to the article (owner-only; non-https and credential-bearing URLs are refused). Video channels then offer **Download video**; without an attachment the card says there is none, because rendering a video into Storage is still a separate, unfinished step. **Mark posted · <slot>** records, in your own words, that you posted the exact approved copy yourself; it requires the approved checksum, refuses a past or unknown day, is idempotent per Lagos day and slot, writes to the same distribution ledger as `status = sent` with no remote receipt, and never posts anything. The card then shows "Posted by you: …" for that day. This is your own record; the external platform remains the source of truth.
 - Direct distribution receipts store only a safe Telegram message ID or Resend test receipt ID, payload checksum, channel/status and safe error code. The test ledger never stores the recipient address. Provider response bodies, message text and credentials are not logged or returned. Pausing a channel, rejecting copy, changing content, and disabling either switch remain owner-audited controls; auto-publishing and bulk newsletter delivery are disabled for all 13 targets.
 
+## Video template (V22) — the look of the daily vertical video is data, not code
+
+- Owner page: `/admin/automation/distribution` → **Video templates**. The look of the Ephemeral video
+  render test (zoom, pan, title, caption, end card, watermark, duration, frame rate) is one JSON
+  document, `lixxon.video-template.v1`, stored in the `video_templates` table. Change it in admin and
+  press **Render the live look**; no code deploy and no pull request is involved.
+- Exactly one row is the live look. **Save as new version** always inserts a *new, inactive* row
+  (so a saved edit can never silently change what is rendered), and **Activate** is a separate,
+  deliberate action. The partial unique index `video_templates_single_active` keeps exactly one live
+  row, and the active row cannot be deleted.
+- Bounds are enforced three times over — in the panel parser, in the database CHECK constraints and
+  RPCs, and in the renderer's own validator (`scripts/video-template.mjs`). A number outside its
+  range, a colour that is not `0xRRGGBB`, an unknown key, a template over 4096 bytes, or any music
+  other than `none` is refused rather than rendered. The renderer keeps the checked-in default
+  (`DEFAULT_VIDEO_TEMPLATE`) as its fallback, so an empty queue or a missing document never changes
+  the output silently.
+- Free text is never interpolated into the filter graph: title, captions, watermark and end-card text
+  reach FFmpeg only through `textfile=`, and control characters are refused. The look is a styling
+  document — it cannot add a filter, a file path or an extra FFmpeg argument.
+- Dispatch: `POST /functions/v1/automation-video-template` with `{"action":"dispatch"}` and the
+  signed-in owner's session. The function re-reads the single active row through a `service_role`-only
+  reader, re-checks it against the same contract, requires the Vault `github_dispatch_token`, and
+  dispatches `.github/workflows/video-render-test.yml` on the default branch with the document as the
+  only input. The browser never supplies the document, and it never appears in a URL, a query string
+  or a log line — it travels as an `env:` value into a mode-600 file under `$RUNNER_TEMP`.
+- Manual path (no function deployed yet): **Copy template JSON**, then GitHub → Actions →
+  “Ephemeral video render contract test” → Run workflow → paste into `template_json`. Leaving the
+  field empty renders the checked-in default look. The workflow's job allows both a push to an
+  `arena/**` branch while the harness is being changed and an owner-triggered dispatch on the default
+  branch; a push to the default branch still never starts a render on its own.
+- The render stays what it always was: a silent, watermark-marked, non-publishable test artifact in
+  `$RUNNER_TEMP`. It is not uploaded, not published and not attached to an article. Getting a rendered
+  file into the kit is V21 and remains a separate, unfinished step.
+- `music` is `none` by contract. A soundtrack needs an owner-supplied, licence-checked audio asset, so
+  the validator refuses anything else instead of pretending to add music.
+
 ## System Check
 
 - Owner/admin page: `/admin/automation/check`

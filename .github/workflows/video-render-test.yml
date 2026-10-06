@@ -57,8 +57,10 @@ jobs:
         shell: bash
         # The template reaches this step only through the environment, never through
         # shell interpolation, and is written to a private file the renderer validates.
+        # `github.event.inputs` is used rather than `inputs` because the latter is only
+        # defined for a dispatched run; on a push it fails the step instantly.
         env:
-          TEMPLATE_JSON: ${{ inputs.template_json }}
+          TEMPLATE_JSON: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.template_json || '' }}
         run: |
           set -euo pipefail
           mkdir -m 700 -p "$RUNNER_TEMP/automation-video-test"
