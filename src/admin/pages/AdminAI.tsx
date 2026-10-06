@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Btn, Empty, Loading, Notice, Panel, Severity, useAdminAction, useAdminRpc } from '../components/ui';
 
 type Autonomy = 'observe' | 'suggest' | 'draft' | 'auto_apply' | 'approval_required' | 'disabled';
-type Agent = { agent_key: string; label: string; description: string; enabled: boolean; autonomy_level: Autonomy; cadence_minutes: number; max_actions: number; last_run_at?: string; next_run_at?: string };
+type Agent = { agent_key: string; label: string; description: string; enabled: boolean; autonomy_level: Autonomy; cadence_minutes: number; max_actions: number; config?: Record<string, unknown>; last_run_at?: string; next_run_at?: string };
 type Action = { id: string; agent_key?: string; action_type: string; title: string; detail: string; risk: string; autonomy_level: Autonomy; required_permission?: string; target_type?: string; target_id?: string; proposed: Record<string, unknown>; status: string; created_at: string; decision_note?: string; source?: 'legacy' };
 type Mission = { id: string; title: string; objective: string; metric_key: string; target_value?: number; deadline?: string; status: string; priority: number; agent_keys: string[]; created_at: string };
 type Workflow = { id: string; name: string; description: string; trigger_type: string; enabled: boolean; autonomy_level: Autonomy; run_count: number; last_run_at?: string };
@@ -51,6 +51,7 @@ export default function AdminAI() {
   const { can } = useAuth();
   const allowed = can('admin.ai.run');
   const canApprove = can('admin.ai.approve');
+  const canManageAgents = can('admin.ai.policy');
   const tower = useAdminRpc<Tower>('admin_ai_control_tower', undefined, allowed);
   const action = useAdminAction();
   const [tab, setTab] = useState<Tab>('overview');
@@ -86,7 +87,7 @@ export default function AdminAI() {
   const draftReply = () => run('draft-reply', async () => { const { error } = await rpc('admin_ai_draft_reply', { p_comment_id: commentId.trim() }); return { error: error?.message || null, text: error ? '' : 'Reply draft queued for approval.' }; });
   const saveSettings = () => run('settings', async () => { const { error } = await rpc('admin_ai_set_autopilot', { p_enabled: enabled, p_kill_switch: killSwitch, p_default_autonomy: autonomy, p_budget: budget, p_provider: 'rules' }); return { error: error?.message || null, text: error ? '' : 'Autopilot policy saved.' }; });
   const runAgent = (key: string) => run(`agent-${key}`, async () => { const { data, error } = await rpc('admin_ai_run_agent', { p_agent_key: key }); return { error: error?.message || null, text: error ? '' : `${key} agent queued ${String((data as { queued?: number } | null)?.queued || 0)} action(s).` }; });
-  const saveAgent = (agent: Agent) => { const d = agentDrafts[agent.agent_key]; if (!d) return; return run(`save-agent-${agent.agent_key}`, async () => { const { error } = await rpc('admin_ai_set_agent', { p_agent_key: agent.agent_key, p_enabled: d.enabled, p_autonomy: d.autonomy, p_cadence: d.cadence, p_max_actions: d.max }); return { error: error?.message || null, text: error ? '' : `${agent.label} policy saved.` }; }); };
+  const saveAgent = (agent: Agent) => { const d = agentDrafts[agent.agent_key]; if (!d) return; return run(`save-agent-${agent.agent_key}`, async () => { const { error } = await rpc('admin_ai_set_agent', { p_agent_key: agent.agent_key, p_enabled: d.enabled, p_autonomy: d.autonomy, p_cadence: d.cadence, p_max_actions: d.max, p_config: agent.config || {} }); return { error: error?.message || null, text: error ? '' : `${agent.label} policy saved.` }; }); };
 
   if (!allowed) return <Notice tone="warn">You need the <code>admin.ai.run</code> permission to open the Admin AI control tower.</Notice>;
   if (tower.loading && !tower.data) return <Loading />;
@@ -104,7 +105,7 @@ export default function AdminAI() {
     {tab === 'overview' && <Overview data={data} onTab={setTab} />}
     {tab === 'strategy' && <Strategy data={data} run={run} busy={action.busy} />}
     {tab === 'command' && <CommandCenter data={data} run={run} busy={action.busy} />}
-    {tab === 'agents' && <Agents data={data} drafts={agentDrafts} setDrafts={setAgentDrafts} onRun={runAgent} onSave={saveAgent} busy={action.busy} />}
+    {tab === 'agents' && <Agents data={data} drafts={agentDrafts} setDrafts={setAgentDrafts} onRun={runAgent} onSave={saveAgent} busy={action.busy} canManage={canManageAgents} canApprove={canApprove} />}
     {tab === 'missions' && <Missions data={data} run={run} />}
     {tab === 'queue' && <Queue data={data} canApprove={canApprove} decide={decide} applyLegacy={applyLegacy} dismissLegacy={dismissLegacy} busy={action.busy} />}
     {tab === 'workflows' && <Workflows data={data} run={run} busy={action.busy} />}
@@ -133,7 +134,85 @@ function Overview({ data, onTab }: { data: Tower; onTab: (tab: Tab) => void }) {
 }
 function Stat({ label, value, onClick, tone = 'text-charcoal' }: { label: string; value: string | number; onClick?: () => void; tone?: string }) { return <button type="button" onClick={onClick} className="text-left bg-white border border-taupe/30 rounded-sm p-4"><p className="text-[10px] uppercase tracking-wide text-charcoal-muted">{label}</p><p className={`text-xl font-serif mt-1 ${tone}`}>{value}</p></button>; }
 
-function Agents({ data, drafts, setDrafts, onRun, onSave, busy }: { data: Tower; drafts: Record<string, { enabled: boolean; autonomy: Autonomy; cadence: number; max: number }>; setDrafts: Dispatch<SetStateAction<Record<string, { enabled: boolean; autonomy: Autonomy; cadence: number; max: number }>>>; onRun: (key: string) => void; onSave: (agent: Agent) => void; busy: string | null }) { return <Panel title="Agent fleet" icon={<Target size={15} className="text-bronze" />}><div className="space-y-3">{data.agents.map(a => { const d = drafts[a.agent_key] || { enabled: a.enabled, autonomy: a.autonomy_level, cadence: a.cadence_minutes, max: a.max_actions }; return <div key={a.agent_key} className="border border-taupe/30 rounded-sm p-4"><div className="flex flex-wrap gap-3 items-start"><div className="flex-1"><div className="flex items-center gap-2"><input type="checkbox" checked={d.enabled} onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, enabled: e.target.checked } }))} /><strong className="text-sm text-charcoal">{a.label}</strong><Severity level={d.autonomy === 'auto_apply' ? 'warning' : d.autonomy === 'disabled' ? 'critical' : 'info'} /></div><p className="text-xs text-charcoal-muted mt-1">{a.description}</p></div><select value={d.autonomy} onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, autonomy: e.target.value as Autonomy } }))} className="border border-taupe/50 px-2 py-1 text-xs rounded-sm">{autonomyOptions.map(x => <option key={x} value={x}>{x}</option>)}</select><input type="number" min="5" value={d.cadence} onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, cadence: Number(e.target.value) } }))} className="w-20 border border-taupe/50 px-2 py-1 text-xs rounded-sm" title="Cadence minutes" /><Btn variant="ghost" onClick={() => onRun(a.agent_key)} busy={busy === `agent-${a.agent_key}`} icon={<Play size={12} />}>Run</Btn><Btn onClick={() => onSave(a)} busy={busy === `save-agent-${a.agent_key}`}>Save</Btn></div></div>; })}</div></Panel>; }
+function Agents({ data, drafts, setDrafts, onRun, onSave, busy, canManage, canApprove }: {
+  data: Tower;
+  drafts: Record<string, { enabled: boolean; autonomy: Autonomy; cadence: number; max: number }>;
+  setDrafts: Dispatch<SetStateAction<Record<string, { enabled: boolean; autonomy: Autonomy; cadence: number; max: number }>>>;
+  onRun: (key: string) => void;
+  onSave: (agent: Agent) => void;
+  busy: string | null;
+  canManage: boolean;
+  canApprove: boolean;
+}) {
+  return <Panel title="Agent fleet" icon={<Target size={15} className="text-bronze" />}>
+    {!canManage && <Notice tone="info">Agent policies are owner-managed. You can review each agent, but cannot change its pause or autonomy settings.</Notice>}
+    <div className="space-y-3">
+      {data.agents.map(a => {
+        const d = drafts[a.agent_key] || { enabled: a.enabled, autonomy: a.autonomy_level, cadence: a.cadence_minutes, max: a.max_actions };
+        const suggestionOnly = boardroomAgentKeys.has(a.agent_key);
+        const options = suggestionOnly ? suggestionOnlyAutonomyOptions : autonomyOptions;
+        const canRun = a.enabled && d.enabled && a.autonomy_level !== 'disabled' && d.autonomy !== 'disabled' && (a.agent_key !== 'executioner' || canApprove);
+        return <div key={a.agent_key} className="border border-taupe/30 rounded-sm p-4">
+          <div className="flex flex-wrap gap-3 items-start">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex min-h-11 min-w-[44px] items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={d.enabled}
+                    disabled={!canManage}
+                    aria-label={`Enable ${a.label} agent`}
+                    onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, enabled: e.target.checked } }))}
+                  />
+                  <span className="text-sm text-charcoal">{a.label}</span>
+                </label>
+                {suggestionOnly
+                  ? <span className="text-[10px] uppercase tracking-wide text-blue-700">Suggestion only</span>
+                  : <Severity level={d.autonomy === 'auto_apply' ? 'warning' : d.autonomy === 'disabled' ? 'critical' : 'info'} />}
+              </div>
+              <p className="text-xs text-charcoal-muted mt-1">{a.description}</p>
+            </div>
+            <select
+              aria-label={`${a.label} autonomy level`}
+              value={d.autonomy}
+              disabled={!canManage}
+              onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, autonomy: e.target.value as Autonomy } }))}
+              className="min-h-11 border border-taupe/50 px-2 py-1 text-xs rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:cursor-not-allowed disabled:opacity-60"
+            >{options.map(x => <option key={x} value={x}>{x}</option>)}</select>
+            <input
+              type="number"
+              min="5"
+              value={d.cadence}
+              disabled={!canManage}
+              aria-label={`${a.label} cadence in minutes`}
+              onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, cadence: Number(e.target.value) } }))}
+              className="min-h-11 w-20 border border-taupe/50 px-2 py-1 text-xs rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:cursor-not-allowed disabled:opacity-60"
+            />
+            <Btn
+              variant="ghost"
+              onClick={() => onRun(a.agent_key)}
+              busy={busy === `agent-${a.agent_key}`}
+              disabled={!canRun}
+              ariaLabel={`Run ${a.label}`}
+              title={a.agent_key === 'executioner' && !canApprove ? 'Requires admin.ai.approve' : undefined}
+              icon={<Play size={12} />}
+              className="min-h-11"
+            >Run</Btn>
+            <Btn
+              onClick={() => onSave(a)}
+              busy={busy === `save-agent-${a.agent_key}`}
+              disabled={!canManage}
+              ariaLabel={`Save ${a.label} policy`}
+              className="min-h-11"
+            >Save</Btn>
+          </div>
+        </div>;
+      })}
+    </div>
+  </Panel>;
+}
+const boardroomAgentKeys = new Set(['analyst','strategist','ceo','auditor','executioner','chief_of_staff']);
+const suggestionOnlyAutonomyOptions: Autonomy[] = ['suggest','disabled'];
 const autonomyOptions: Autonomy[] = ['observe','suggest','draft','auto_apply','approval_required','disabled'];
 
 function Missions({ data, run }: { data: Tower; run: (key: string, fn: () => Promise<{ error: string | null; text: string }>) => void }) { const [title,setTitle]=useState(''); const [objective,setObjective]=useState(''); const [metric,setMetric]=useState('organic_traffic'); const [agents,setAgents]=useState('growth,seo'); const [priority,setPriority]=useState(60); const create=()=>run('mission',async()=>{const {error}=await supabase.rpc('admin_ai_create_mission',{p_title:title,p_objective:objective,p_metric:metric,p_target:null,p_deadline:null,p_agents:agents.split(',').map(x=>x.trim()).filter(Boolean),p_priority:priority});return{error:error?.message||null,text:error?'':'Mission created.'};});return <><Panel title="Create a growth mission" icon={<Target size={15} className="text-bronze" />}><div className="grid md:grid-cols-2 gap-3"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Increase organic traffic" className="border border-taupe/50 px-3 py-2 text-sm rounded-sm"/><input value={metric} onChange={e=>setMetric(e.target.value)} placeholder="Metric key" className="border border-taupe/50 px-3 py-2 text-sm rounded-sm"/><textarea value={objective} onChange={e=>setObjective(e.target.value)} placeholder="What should the AI accomplish?" className="md:col-span-2 border border-taupe/50 px-3 py-2 text-sm rounded-sm"/><input value={agents} onChange={e=>setAgents(e.target.value)} placeholder="growth,seo" className="border border-taupe/50 px-3 py-2 text-sm rounded-sm"/><input type="number" value={priority} onChange={e=>setPriority(Number(e.target.value))} placeholder="Priority" className="border border-taupe/50 px-3 py-2 text-sm rounded-sm"/></div><Btn className="mt-3" onClick={create} disabled={!title.trim()}>Create mission</Btn></Panel><Panel title="Missions"><div className="space-y-2">{data.missions.length?data.missions.map(m=><div key={m.id} className="flex flex-wrap gap-2 items-center border-b border-taupe/20 py-3"><strong className="text-sm">{m.title}</strong><Severity level={m.status==='active'?'ok':m.status}/><span className="text-xs text-charcoal-muted">{m.objective}</span><span className="ml-auto text-xs">{m.metric_key}</span></div>):<Empty>No missions yet.</Empty>}</div></Panel></>; }

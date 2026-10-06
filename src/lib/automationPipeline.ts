@@ -5,6 +5,7 @@ export const AUTOMATION_WORKFLOW_PATH = '.github/workflows/automation.yml';
 export const AUTOMATION_ALLOWED_REFS = Object.freeze([
   'refs/heads/main',
   'refs/heads/arena/4da46b60-lixxonstudio',
+  'refs/heads/arena/aa5e24a0-lixxonstudio',
 ] as const);
 export const AUTOMATION_RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const GITHUB_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
@@ -133,13 +134,11 @@ export async function verifyGitHubActionsOidc(
     );
     const signedBytes = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
     const signatureBytes = new Uint8Array(signature);
-    const signedBuffer = new Uint8Array(signedBytes).buffer as ArrayBuffer;
-    const signatureBuffer = signatureBytes.buffer as ArrayBuffer;
     const signatureValid = await crypto.subtle.verify(
       { name: 'RSASSA-PKCS1-v1_5' },
       publicKey,
-      signatureBuffer,
-      signedBuffer,
+      signatureBytes,
+      signedBytes,
     );
     if (!signatureValid) return null;
   } catch {
