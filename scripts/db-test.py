@@ -124,6 +124,9 @@ def main():
         run_sql(uri, file=m, label=os.path.basename(m))
         print(f"✓ {os.path.basename(m)}")
     for name in (
+        # Must run first: its empty-window assertions depend on the post-migration state,
+        # and it restores every row it touches.
+        "analyst-metrics-assertions.sql",
         "db-assertions.sql", "search-assertions.sql", "personalisation-assertions.sql",
         "community-assertions.sql", "commerce-assertions.sql", "commerce-fulfillment-assertions.sql", "editor-assertions.sql",
         "admin-assertions.sql", "automation-foundation-assertions.sql", "article-intake-assertions.sql", "automation-orchestration-assertions.sql", "security-ai-assertions.sql",

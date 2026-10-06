@@ -219,6 +219,35 @@ Status and transcript reads require `admin.ai.reports`, match the existing contr
 are scoped to a single agent: a transcript can only return that agent's own jobs. The per-agent read
 model adds **no new table**, makes no provider call and changes no existing M7–M10 behavior.
 
+### 8.2.1 Analyst measured metrics (Admin → Admin AI → Action queue)
+
+The Analyst brief is built by `analyst_metrics(window_days)` (default 30, clamped to 1–365) over the
+tables that actually record events, and it is written to the queued `analytics_brief` action so the
+readable summary appears as the action detail and the full object appears under the action's
+`proposed` payload. Opening it from the Action queue always requires `admin.ai.reports`.
+
+Measured sections, each naming its real source table:
+
+| Section | Source | What it reports |
+|---|---|---|
+| `article_views` | `article_views` | total views, articles viewed, top 5 articles by views |
+| `search` | `search_history` | total searches, distinct queries, top 5 queries (queries containing `@` are excluded and text is truncated to 60 characters) |
+| `orders` | `orders`, `order_items`, `refund_requests` | paid orders only, revenue and average order value per currency, top products by revenue, refund requests |
+| `email` | `email_queue` | queued, sent, failed and skipped counts plus the top kinds — queue records, not provider readback |
+| `channels` | `distribution_metric_samples` | per-channel metrics with `measured` and `estimated` **kept separate**, each carrying its `collection_basis` |
+| `conversions` | derived | paid orders per 1,000 recorded views, explicitly labelled a coarse ratio rather than a tracked funnel |
+
+**Honest gaps are part of the output.** A section with no rows in the window reports
+`available: false` plus an `unavailable_reason` (never a zero that looks measured), and seven metrics
+that nothing records are always listed as unavailable with a reason: `email.open_rate`,
+`email.click_rate`, `search.zero_result_rate`, `article.avg_time_on_page`, `traffic.unique_visitors`,
+`checkout.conversion_funnel` and `channel.provider_readback`. Recommendations are emitted only when
+the measured numbers support them, and each carries the exact `basis` figures plus the metric keys it
+came from — for example `"Measured article" recorded 9 of 10 views (90.0%) in the last 30 days`.
+
+The agents' own `admin_ai_metrics` counters are still included, under `ai_metric_aggregates`, so
+nothing that was previously visible was removed.
+
 ## 9. Front end as data (Admin → Front end)
 
 `site_settings` public rows drive the storefront without a deploy: `nav_menu`, `footer`,
