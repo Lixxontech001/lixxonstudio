@@ -378,6 +378,25 @@ export default function AutomationDistribution() {
             <div className="rounded-sm border border-gray-200 bg-gray-50 p-3 text-gray-800"><p className="text-xs uppercase">Paused by owner</p><p className="mt-1 text-2xl font-semibold">{counts.paused}</p></div>
           </section>
 
+          <section className="rounded-sm border border-gray-200 bg-white p-4" aria-label="Aggregate distribution measurement">
+            <h2 className="text-sm font-semibold text-charcoal">Performance · aggregate only · last 30 days</h2>
+            <p className="mt-1 text-xs leading-5 text-gray-600">Provider or consented-site totals are labeled measured; estimates are labeled separately. No customer-level identifiers or event rows are stored.</p>
+            {snapshot.metrics.length === 0 ? (
+              <p className="mt-3 text-sm text-gray-600">No aggregate metrics have been measured for this article yet. No provider measurement is claimed while channels remain unconfigured.</p>
+            ) : (
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {snapshot.metrics.map((metric, index) => (
+                  <li key={`${metric.channelKey}-${metric.metricKey}-${metric.measurementKind}-${metric.collectionBasis}-${metric.variantId || 'article'}-${index}`} className="rounded-sm border border-gray-200 bg-gray-50 p-3 text-sm">
+                    <p className="font-medium text-charcoal">{metric.channelKey.replace(/_/g, ' ')} · {metric.metricKey.replace(/_/g, ' ')}</p>
+                    <p className="mt-1 text-lg font-semibold text-charcoal">{metric.metricKey.endsWith('_rate') ? `${(metric.value * 100).toFixed(1)}%` : new Intl.NumberFormat().format(metric.value)}</p>
+                    <p className="text-xs text-gray-600">{metric.measurementKind === 'measured' ? 'Measured' : 'Estimate'} · {metric.collectionBasis.replace(/_/g, ' ')} · {metric.periodStart}–{metric.periodEnd}</p>
+                    {metric.variantId && <p className="mt-1 text-xs text-gray-600">Owner-approved A/B variant</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           {snapshot.excerpt && <section className="rounded-sm border border-gray-200 bg-white p-4"><h2 className="text-sm font-semibold text-charcoal">Owner-entered excerpt source</h2><p className="mt-2 text-sm leading-6 text-gray-700">{snapshot.excerpt}</p><p className="mt-2 text-xs text-gray-500">This is the saved article excerpt field, not the article body. Review copy per channel below before approval.</p></section>}
 
           <section className="space-y-4" aria-label="Distribution channels">
@@ -398,7 +417,8 @@ export default function AutomationDistribution() {
                       <div className="flex flex-wrap items-center gap-2"><h2 className="font-serif text-xl text-charcoal">{channel.label}</h2><span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${STATE_STYLES[channel.state]}`}>{STATE_LABELS[channel.state]}</span>{draft && <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700">Copy: {draft.reviewStatus.replace('_', ' ')}</span>}</div>
                       <p className="mt-2 max-w-3xl text-sm leading-5 text-gray-600">{channel.stateReason}</p>
                       <p className="mt-1 text-xs text-gray-500">{metadata.instructions}</p>
-                      <p className="mt-1 text-xs text-gray-500">{channel.dailyFreeQuota === null ? 'No provider quota has been measured.' : `Owner-set daily safety cap: ${channel.dailyFreeQuota} · remaining: ${channel.quotaRemaining ?? 'not measured'}`} · Last provider readback: {channel.lastReadbackAt ? timeLabel(channel.lastReadbackAt) : 'not tested'}</p>
+                      <p className="mt-1 text-xs text-gray-500">{channel.dailyFreeQuota === null ? 'Provider free-tier quota: not measured.' : `Owner-set daily safety cap: ${channel.dailyFreeQuota} · remaining: ${channel.quotaRemaining ?? 'not measured'}`} · Last provider readback: {channel.lastReadbackAt ? timeLabel(channel.lastReadbackAt) : 'not tested'}</p>
+                      <p className="mt-1 text-xs text-gray-600">Today in Lagos: {channel.usageToday.deliveryAttempts} delivery attempts ({channel.usageToday.deliverySuccesses} accepted, {channel.usageToday.deliveryFailures} failed), {channel.usageToday.readbackAttempts} read-only checks{channel.key === 'newsletter' ? `, ${channel.usageToday.ownerTestEmailAttempts}/3 owner-only test emails` : ''}. Circuit: {channel.circuitState.replace('_', ' ')}{channel.failureStreak > 0 ? ` · failure streak ${channel.failureStreak} (${channel.lastFailureClass || 'unclassified'})` : ''}{channel.retryAfter ? ` · retry after ${timeLabel(channel.retryAfter)}` : ''}.</p>
                     </div>
                     {canManage && <div className="flex flex-wrap gap-2 sm:justify-end">
                       <button type="button" disabled={busy !== null} onClick={() => void checkConnection(channel)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-sm border border-sky-200 bg-sky-50 px-3 text-sm text-sky-950 hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:opacity-50">{busy === `check:${channel.key}` ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" />}Read-only check</button>

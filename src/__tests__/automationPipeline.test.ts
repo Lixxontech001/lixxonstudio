@@ -99,8 +99,10 @@ describe('GitHub Actions OIDC verification', () => {
     });
   });
 
-  it('accepts the Arena integration ref while binding the exact workflow path', async () => {
-    const ref = 'refs/heads/arena/4da46b60-lixxonstudio';
+  it.each([
+    'refs/heads/arena/4da46b60-lixxonstudio',
+    'refs/heads/arena/aa5e24a0-lixxonstudio',
+  ])('accepts the explicitly allowed Arena ref %s while binding the exact workflow path', async ref => {
     const token = await signToken(claims({
       ref,
       sub: `repo:${AUTOMATION_GITHUB_REPOSITORY}:ref:${ref}`,

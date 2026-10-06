@@ -8,8 +8,15 @@
      network fallback and a synthetic 504 when an asset cannot be fetched.
    - respondWith() is used only for an intercepted asset and always receives a real Response.
    - Cache writes are best-effort and can never fail or alter the network response.
+
+   Web Push additions (owner opt-in only):
+   - Push payloads are treated as untrusted input: every field is length-capped and
+     the click target must be a same-origin path. Only the fixed owner test
+     notification is ever sent, and it carries no article, customer or secret data.
+   - pushsubscriptionchange never invents or posts credentials; it only asks an open
+     page to re-register, so the server keeps seeing owner-confirmed devices.
 */
-const CACHE = 'lixxon-v4';
+const CACHE = 'lixxon-v5';
 const SHELL = ['/offline.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -61,6 +68,66 @@ const putSafe = async (key, res) => {
     /* caching is an optimisation, never a requirement */
   }
 };
+
+/** Same-origin path only (never an absolute or protocol-relative URL). */
+const safePath = (value) => {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/';
+  return value.slice(0, 200);
+};
+
+const capText = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
+
+self.addEventListener('push', (e) => {
+  let payload = {};
+  try {
+    payload = e.data ? e.data.json() : {};
+  } catch {
+    payload = {};
+  }
+  if (!payload || typeof payload !== 'object') payload = {};
+  const link = payload.data && typeof payload.data === 'object' ? payload.data : {};
+  e.waitUntil(
+    self.registration.showNotification(capText(payload.title, 80) || 'Lixxon Studio', {
+      body: capText(payload.body, 180),
+      tag: capText(payload.tag, 64) || 'lixxon-push',
+      data: { url: safePath(link.url) },
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const target = safePath(e.notification.data && e.notification.data.url);
+  e.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of windows) {
+        if (typeof client.focus === 'function') {
+          await client.focus();
+          if (typeof client.navigate === 'function') await client.navigate(target).catch(() => undefined);
+          return;
+        }
+      }
+      if (typeof self.clients.openWindow === 'function') await self.clients.openWindow(target);
+    })()
+  );
+});
+
+/** The endpoint may have rotated: ask an open page to re-register. No payload is sent. */
+self.addEventListener('pushsubscriptionchange', (e) => {
+  e.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windows) => {
+        for (const client of windows) {
+          if (typeof client.postMessage === 'function') client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+        }
+      })
+      .catch(() => undefined)
+  );
+});
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;

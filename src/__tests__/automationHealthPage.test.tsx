@@ -52,6 +52,7 @@ describe('Automation System Check page', () => {
     expect(el.textContent).toContain('Database & migrations');
     expect(el.textContent).toContain('No AI provider keys are stored.');
     expect(el.textContent).toContain('Distribution is off; channel connectivity is not yet configured.');
+    expect(el.textContent).toContain('Video rendering is deliberately disabled: no Coverr stock key is configured in Vault, and hosted FFmpeg, approved asset attribution and Android playback have not been verified. Keep video upload off; the manual Daily Kit remains available.');
     expect(el.textContent).not.toContain(HEALTH_TEST_SECRET);
     expect(fetch).toHaveBeenCalledWith('/api/automation/health', expect.objectContaining({
       method: 'GET', cache: 'no-store',

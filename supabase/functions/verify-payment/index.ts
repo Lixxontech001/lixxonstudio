@@ -1,197 +1,228 @@
 /**
- * verify-payment — confirms a Flutterwave charge and fulfils the order.
- *
- * Three entry points, all converging on fulfilOrder():
- *   A. Browser callback   POST { transaction_id, tx_ref, order_id }
- *      → verifies with Flutterwave; amount/currency compared to orders.amount (DB), NOT the client.
- *   B. Flutterwave webhook POST with `verif-hash` header (set FLW_WEBHOOK_HASH)
- *      → same verification; makes fulfilment reliable even if the buyer closes the tab.
- *   C. Internal           POST { internal_fulfil: true, order_id } + x-internal-secret
- *      → for $0 orders fully covered by promo/gift card (called by create-order).
- *
- * Idempotent: a paid order returns its existing entitlements and never double-fulfils.
+ * verify-payment — verifies Flutterwave transactions and settles orders atomically.
+ * Browser callbacks, Flutterwave webhooks, and zero-balance orders converge on the
+ * service-role-only commerce_settle_verified_order() database function.
  */
-import { json, preflight, serviceClient, sendEmail, emailShell, escapeHtml, siteUrl, clientIp, rateLimit } from "../_shared/http.ts";
+import { json, preflight, serviceClient, clientIp, rateLimit } from "../_shared/http.ts";
+import { deliverCommerceNotifications } from "../_shared/commerceFulfillment.ts";
+import {
+  checkFlutterwaveTransaction,
+  normalizeFlutterwaveTransactionId,
+  paymentReferenceMatches,
+  timingSafeSecretEqual,
+  type FlutterwaveTransaction,
+} from "../../../src/lib/paymentVerification.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
-
-interface Entitlement { product_id: string; product_name: string; download_token: string }
 
 const FLW_SECRET = Deno.env.get("FLW_SECRET_KEY");
 const FLW_WEBHOOK_HASH = Deno.env.get("FLW_WEBHOOK_HASH");
-const INTERNAL_SECRET = Deno.env.get("INTERNAL_FN_SECRET");
+const JSON_HEADERS = { "Cache-Control": "no-store" };
 
-async function existingEntitlements(sb: SupabaseClient, orderId: string): Promise<Entitlement[]> {
-  const { data } = await sb
-    .from("download_entitlements")
-    .select("download_token, product_id, product:products(name)")
-    .eq("order_id", orderId);
-  // deno-lint-ignore no-explicit-any
-  return ((data || []) as { product_id: string; product?: { name?: string } | null; download_token: string }[]).map((e) => ({ product_id: e.product_id, product_name: e.product?.name || "Digital product", download_token: e.download_token }));
+interface OrderReference {
+  id: string;
+  order_number: string;
+  amount: number | string;
+  currency: string;
+  payment_status: string;
+  payment_reference: string | null;
+  payment_provider: string | null;
 }
 
-async function fulfilOrder(sb: SupabaseClient, orderId: string, paymentRef: string | null, provider: string, viaWebhook: boolean) {
-  const { data: order } = await sb.from("orders").select("*").eq("id", orderId).maybeSingle();
-  if (!order) return { ok: false as const, status: 404, error: "Order not found" };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
 
-  // idempotency — only the first caller flips pending → paid
-  const { data: flipped } = await sb
-    .from("orders")
-    .update({
-      payment_status: "paid", status: "fulfilled", payment_reference: paymentRef, payment_provider: provider,
-      paid_at: new Date().toISOString(), webhook_verified: viaWebhook, updated_at: new Date().toISOString(),
-    })
-    .eq("id", orderId)
-    .neq("payment_status", "paid")
-    .select("id")
-    .maybeSingle();
-
-  if (!flipped) {
-    if (viaWebhook) await sb.from("orders").update({ webhook_verified: true }).eq("id", orderId);
-    return { ok: true as const, order, entitlements: await existingEntitlements(sb, orderId), already: true };
-  }
-
-  const { data: items } = await sb.from("order_items").select("product_id, quantity").eq("order_id", orderId);
-  const ids = (items || []).map((i) => i.product_id).filter(Boolean);
-  const { data: products } = ids.length
-    ? await sb.from("products").select("id, name, file_path, is_digital, product_type").in("id", ids)
-    : { data: [] };
-
-  const entitlements: Entitlement[] = [];
-  const rows = [];
-  for (const item of items || []) {
-    const p = (products || []).find((x) => x.id === item.product_id);
-    if (!p || !(p.is_digital || p.product_type === "digital") || !p.file_path) continue;
-    const token = crypto.randomUUID();
-    rows.push({
-      order_id: orderId, customer_email: order.customer_email, product_id: p.id, file_path: p.file_path,
-      download_token: token, download_count: 0, max_downloads: 5 * Math.max(1, item.quantity || 1),
-      expires_at: new Date(Date.now() + 30 * 864e5).toISOString(),
-    });
-    entitlements.push({ product_id: p.id, product_name: p.name, download_token: token });
-  }
-  if (rows.length) await sb.from("download_entitlements").insert(rows);
-
-  // gift-card purchase → issue the card and email the recipient
-  const gift = order.meta?.gift_card;
-  if (gift && Number(gift.amount) > 0) {
-    const code = `LXG-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase().match(/.{1,4}/g)!.join("-")}`;
-    const { error: gErr } = await sb.from("gift_cards").insert({
-      code, initial_balance: gift.amount, balance: gift.amount, buyer_email: order.customer_email,
-      recipient_email: gift.recipient_email, message: gift.message || null, is_active: true, order_id: orderId,
-      expires_at: new Date(Date.now() + 365 * 864e5).toISOString(), delivered_at: new Date().toISOString(),
-    });
-    if (!gErr) {
-      await sendEmail({
-        to: gift.recipient_email,
-        subject: `${order.customer_name || "Someone"} sent you a Lixxon Studio gift card`,
-        html: emailShell(`A gift for you${gift.recipient_name ? `, ${escapeHtml(gift.recipient_name)}` : ""}`, `
-          <p>${escapeHtml(order.customer_name || order.customer_email)} sent you a <strong>${order.currency} ${Number(gift.amount).toFixed(2)}</strong> gift card.</p>
-          ${gift.message ? `<blockquote style="border-left:3px solid #C48B71;margin:16px 0;padding:8px 16px;color:#2D2D2D;font-style:italic;">${escapeHtml(gift.message)}</blockquote>` : ""}
-          <p style="font-size:22px;letter-spacing:.15em;font-family:monospace;background:#F2EDE7;padding:16px;text-align:center;">${code}</p>
-          <p>Enter this code at checkout on <a href="${siteUrl()}/shop" style="color:#A87056;">${siteUrl().replace(/^https?:\/\//, "")}/shop</a>. Valid for 12 months.</p>`),
-      });
+async function readBoundedJson(req: Request, limit: number): Promise<unknown | null> {
+  if (!req.body) return null;
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
     }
+  } catch {
+    return null;
   }
-
-  // mark gift card as delivered if this order bought one (handled by gift-card function), clear abandoned cart
-  await sb.from("abandoned_carts").update({ recovered: true }).eq("email", order.customer_email).eq("recovered", false);
-
-  // receipt + download email (Resend free tier; silently skipped if not configured)
-  const site = siteUrl();
-  const list = entitlements.map((e) =>
-    `<tr><td style="padding:10px 0;border-bottom:1px solid #E8DFD8;">${escapeHtml(e.product_name)}</td>
-     <td style="padding:10px 0;border-bottom:1px solid #E8DFD8;text-align:right;"><a href="${site}/account/downloads?token=${e.download_token}" style="color:#A87056;font-weight:600;">Download →</a></td></tr>`
-  ).join("");
-  await sendEmail({
-    to: order.customer_email,
-    subject: `Your receipt — Order ${order.order_number}`,
-    html: emailShell(`Thank you, ${order.customer_name || "there"}.`, `
-      <p>Order <strong>${escapeHtml(order.order_number)}</strong> is confirmed.</p>
-      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr><td style="padding:6px 0;color:#5A5A5A;">Subtotal</td><td style="text-align:right;">${order.currency} ${Number(order.subtotal ?? order.amount).toFixed(2)}</td></tr>
-        ${Number(order.discount_amount) > 0 ? `<tr><td style="padding:6px 0;color:#5A5A5A;">Discount${order.promo_code ? ` (${escapeHtml(order.promo_code)})` : ""}</td><td style="text-align:right;">− ${order.currency} ${Number(order.discount_amount).toFixed(2)}</td></tr>` : ""}
-        ${Number(order.gift_card_amount) > 0 ? `<tr><td style="padding:6px 0;color:#5A5A5A;">Gift card</td><td style="text-align:right;">− ${order.currency} ${Number(order.gift_card_amount).toFixed(2)}</td></tr>` : ""}
-        <tr><td style="padding:10px 0;font-weight:600;border-top:1px solid #1A1A1A;">Paid</td><td style="text-align:right;font-weight:600;border-top:1px solid #1A1A1A;">${order.currency} ${Number(order.amount).toFixed(2)}</td></tr>
-      </table>
-      ${entitlements.length ? `<h3 style="font-weight:500;margin:24px 0 8px;">Your downloads</h3><table style="width:100%;border-collapse:collapse;">${list}</table>
-      <p style="color:#5A5A5A;font-size:13px;">Each link allows 5 downloads and expires in 30 days. Sign in at <a href="${site}/account" style="color:#A87056;">${site.replace(/^https?:\/\//, "")}/account</a> with this email any time to download again.</p>` : ""}
-    `),
-  });
-
-  return { ok: true as const, order, entitlements, already: false };
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try { return JSON.parse(new TextDecoder().decode(body)); } catch { return null; }
 }
 
-async function verifyWithFlutterwave(transactionId: string) {
-  const r = await fetch(`https://api.flutterwave.com/v3/transactions/${encodeURIComponent(transactionId)}/verify`, {
-    headers: { Authorization: `Bearer ${FLW_SECRET}`, "Content-Type": "application/json" },
-  });
-  const data = await r.json().catch(() => null);
-  return data && data.status === "success" ? data.data : null;
+async function verifyWithFlutterwave(transactionId: string): Promise<
+  { kind: "verified"; transaction: FlutterwaveTransaction } | { kind: "invalid" } | { kind: "unavailable" }
+> {
+  if (!FLW_SECRET) return { kind: "unavailable" };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  let response: Response | null = null;
+  try {
+    response = await fetch(`https://api.flutterwave.com/v3/transactions/${encodeURIComponent(transactionId)}/verify`, {
+      method: "GET",
+      redirect: "error",
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${FLW_SECRET}`, Accept: "application/json" },
+    });
+    if (!response.ok) return response.status === 429 || response.status >= 500
+      ? { kind: "unavailable" }
+      : { kind: "invalid" };
+    const payload: unknown = await response.json().catch(() => null);
+    if (!isRecord(payload)) return { kind: "unavailable" };
+    if (payload.status !== "success") return { kind: "invalid" };
+    if (!isRecord(payload.data)) return { kind: "unavailable" };
+    return { kind: "verified", transaction: payload.data as FlutterwaveTransaction };
+  } catch {
+    return { kind: "unavailable" };
+  } finally {
+    clearTimeout(timeout);
+    try { await response?.body?.cancel(); } catch { /* Provider payloads are never logged. */ }
+  }
 }
 
-/** Shared check: FLW tx must match the DB order exactly. */
-async function settle(sb: SupabaseClient, orderId: string, transactionId: string, viaWebhook: boolean) {
-  const { data: order } = await sb.from("orders").select("id, order_number, amount, currency, payment_status").eq("id", orderId).maybeSingle();
-  if (!order) return json({ verified: false, error: "Order not found" }, 404);
-  if (order.payment_status === "paid") {
-    const r = await fulfilOrder(sb, orderId, String(transactionId), "flutterwave", viaWebhook);
-    return json({ verified: true, status: "success", already_paid: true, entitlements: r.ok ? r.entitlements : [], order_number: order.order_number });
-  }
-  if (!FLW_SECRET) return json({ verified: false, error: "Payment verification not configured (FLW_SECRET_KEY)." }, 503);
-
-  const tx = await verifyWithFlutterwave(transactionId);
-  const fail = async (reason: string, status = "failed") => {
-    await sb.from("orders").update({ payment_status: status, status: "failed", payment_reference: String(transactionId) }).eq("id", orderId).neq("payment_status", "paid");
-    return json({ verified: false, error: reason, status }, 400);
+function verificationFailure(reason: string): Response {
+  const messages: Record<string, string> = {
+    transaction_id_invalid: "Flutterwave could not verify this transaction.",
+    transaction_not_successful: "This transaction has not completed successfully.",
+    reference_mismatch: "The payment reference does not match this order.",
+    amount_mismatch: "The verified payment amount does not match this order.",
+    currency_mismatch: "The verified payment currency does not match this order.",
   };
-  if (!tx) return fail("Flutterwave could not verify this transaction");
-  if (tx.status !== "successful") return fail(`Transaction ${tx.status}`, tx.status === "cancelled" ? "cancelled" : "failed");
-  if (tx.tx_ref !== order.order_number) return fail("Transaction reference mismatch");
-  if (Math.abs(parseFloat(tx.amount) - Number(order.amount)) > 0.009) return fail("Amount mismatch");
-  if (String(tx.currency).toUpperCase() !== String(order.currency).toUpperCase()) return fail("Currency mismatch");
+  return json({ verified: false, error: messages[reason] || "Payment verification failed." }, 400, JSON_HEADERS);
+}
 
-  const r = await fulfilOrder(sb, orderId, String(tx.id ?? transactionId), "flutterwave", viaWebhook);
-  if (!r.ok) return json({ verified: false, error: r.error }, r.status);
-  return json({ verified: true, status: "success", order_id: orderId, order_number: r.order.order_number, customer_email: r.order.customer_email, entitlements: r.entitlements });
+async function settleVerified(
+  sb: SupabaseClient,
+  order: OrderReference,
+  transactionId: string | null,
+  amount: number,
+  currency: string,
+  internalZero: boolean,
+  viaWebhook: boolean,
+): Promise<Response> {
+  const { data, error } = await sb.rpc("commerce_settle_verified_order", {
+    p_order_id: order.id,
+    p_transaction_id: transactionId,
+    p_amount: amount,
+    p_currency: currency,
+    p_internal_zero: internalZero,
+    p_via_webhook: viaWebhook,
+  });
+  if (error) {
+    if (error.code === "P0002") return json({ verified: false, error: "Order not found." }, 404, JSON_HEADERS);
+    if (error.code === "22023") return json({ verified: false, error: "Payment could not be safely matched to this order." }, 409, JSON_HEADERS);
+    return json({ verified: false, error: "Order fulfilment is temporarily unavailable. The payment reference remains unchanged; retry shortly." }, 503, JSON_HEADERS);
+  }
+  if (!isRecord(data) || data.ok !== true || !isRecord(data.order)
+      || typeof data.order.order_number !== "string" || !Array.isArray(data.entitlements)) {
+    return json({ verified: false, error: "Order fulfilment returned an incomplete result. Please retry shortly." }, 503, JSON_HEADERS);
+  }
+
+  try { await deliverCommerceNotifications(sb, data); } catch { /* durable mail jobs remain retryable */ }
+  return json({
+    verified: true,
+    status: "success",
+    already_paid: data.already_paid === true,
+    order_id: order.id,
+    order_number: data.order.order_number,
+    entitlements: data.entitlements,
+  }, 200, JSON_HEADERS);
+}
+
+async function settleFlutterwave(
+  sb: SupabaseClient,
+  orderId: string,
+  requestedTransactionId: unknown,
+  viaWebhook: boolean,
+): Promise<Response> {
+  const transactionId = normalizeFlutterwaveTransactionId(requestedTransactionId);
+  if (!transactionId) return verificationFailure("transaction_id_invalid");
+
+  const { data: rawOrder, error: orderError } = await sb
+    .from("orders")
+    .select("id, order_number, amount, currency, payment_status, payment_reference, payment_provider")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (orderError) return json({ verified: false, error: "Order status is temporarily unavailable." }, 503, JSON_HEADERS);
+  const order = rawOrder as OrderReference | null;
+  if (!order) return json({ verified: false, error: "Order not found." }, 404, JSON_HEADERS);
+
+  // A paid callback is accepted only for the exact Flutterwave reference recorded
+  // by an earlier successful verification. No browser/webhook field can replace it.
+  if (order.payment_status === "paid") {
+    if (order.payment_provider !== "flutterwave"
+        || !paymentReferenceMatches(order.payment_reference, transactionId)) {
+      return json({ verified: false, error: "This transaction does not match the order's recorded payment." }, 409, JSON_HEADERS);
+    }
+    return await settleVerified(sb, order, transactionId, Number(order.amount), order.currency, false, viaWebhook);
+  }
+
+  if (!FLW_SECRET) return json({ verified: false, error: "Payment verification is not configured." }, 503, JSON_HEADERS);
+  const providerResult = await verifyWithFlutterwave(transactionId);
+  if (providerResult.kind === "unavailable") {
+    return json({ verified: false, error: "Flutterwave verification is temporarily unavailable. Please retry." }, 503, JSON_HEADERS);
+  }
+  if (providerResult.kind === "invalid") return verificationFailure("transaction_id_invalid");
+
+  const check = checkFlutterwaveTransaction({
+    orderNumber: order.order_number,
+    amount: Number(order.amount),
+    currency: order.currency,
+  }, providerResult.transaction, transactionId);
+  if (!check.ok) return verificationFailure(check.reason);
+  return await settleVerified(sb, order, check.transactionId, check.amount, check.currency, false, viaWebhook);
 }
 
 Deno.serve(async (req) => {
   const pf = preflight(req);
   if (pf) return pf;
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, JSON_HEADERS);
+
   const sb = serviceClient();
-
-  // ---- B. Flutterwave webhook
   const verifHash = req.headers.get("verif-hash");
-  if (verifHash) {
-    if (!FLW_WEBHOOK_HASH || verifHash !== FLW_WEBHOOK_HASH) return json({ error: "Invalid webhook signature" }, 401);
-    const payload = await req.json().catch(() => null);
-    const data = payload?.data ?? payload;
-    const txRef = data?.tx_ref || data?.txRef;
-    const txId = data?.id;
-    if (!txRef || !txId) return json({ received: true, ignored: "no tx_ref" });
-    const { data: order } = await sb.from("orders").select("id").eq("order_number", txRef).maybeSingle();
-    if (!order) return json({ received: true, ignored: "unknown order" });
-    const res = await settle(sb, order.id, String(txId), true);
-    return json({ received: true, result: await res.json() });
+  if (verifHash !== null) {
+    if (!FLW_WEBHOOK_HASH || !timingSafeSecretEqual(verifHash, FLW_WEBHOOK_HASH)) {
+      return json({ error: "Invalid webhook signature." }, 401, JSON_HEADERS);
+    }
+    const payload = await readBoundedJson(req, 16 * 1024);
+    if (!isRecord(payload)) return json({ error: "Invalid webhook payload." }, 400, JSON_HEADERS);
+    const webhookData = isRecord(payload.data) ? payload.data : payload;
+    const txRef = webhookData.tx_ref ?? webhookData.txRef;
+    const transactionId = normalizeFlutterwaveTransactionId(webhookData.id);
+    if (typeof txRef !== "string" || !transactionId) {
+      return json({ received: true, ignored: "missing_payment_reference" }, 200, JSON_HEADERS);
+    }
+    const { data: order, error } = await sb.from("orders").select("id").eq("order_number", txRef).maybeSingle();
+    if (error) return json({ received: false, error: "Order lookup is temporarily unavailable." }, 503, JSON_HEADERS);
+    if (!order) return json({ received: true, ignored: "unknown_order" }, 200, JSON_HEADERS);
+    const result = await settleFlutterwave(sb, order.id, transactionId, true);
+    const resultBody = await result.json().catch(() => null);
+    if (result.status >= 500) return json({ received: false, error: "Payment verification is temporarily unavailable; retry this webhook." }, 503, JSON_HEADERS);
+    return json({ received: true, result: resultBody }, 200, JSON_HEADERS);
   }
 
-  let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return json({ verified: false, error: "Invalid JSON" }, 400); }
-
-  // ---- C. internal fulfilment of $0 orders
+  const body = await readBoundedJson(req, 8 * 1024);
+  if (!isRecord(body)) return json({ verified: false, error: "Invalid request." }, 400, JSON_HEADERS);
   if (body.internal_fulfil === true) {
-    if (!INTERNAL_SECRET || req.headers.get("x-internal-secret") !== INTERNAL_SECRET) return json({ error: "Forbidden" }, 403);
-    const { data: order } = await sb.from("orders").select("id, amount").eq("id", String(body.order_id)).maybeSingle();
-    if (!order || Number(order.amount) !== 0) return json({ error: "Not a zero-amount order" }, 400);
-    const r = await fulfilOrder(sb, order.id, null, "promo_or_gift_card", false);
-    return r.ok ? json({ verified: true, entitlements: r.entitlements }) : json({ error: r.error }, r.status);
+    return json({ verified: false, error: "The internal zero-balance settlement route has been retired." }, 410, JSON_HEADERS);
   }
 
-  // ---- A. browser callback
   const ok = await rateLimit(sb, clientIp(req), "verify_payment", 30, 600);
-  if (!ok) return json({ verified: false, error: "Too many attempts" }, 429);
-  const { transaction_id, order_id } = body as { transaction_id?: string | number; order_id?: string };
-  if (!transaction_id || !order_id || !/^[0-9a-f-]{36}$/i.test(String(order_id))) return json({ verified: false, error: "Missing required fields" }, 400);
-  return settle(sb, String(order_id), String(transaction_id), false);
+  if (!ok) return json({ verified: false, error: "Too many attempts. Please wait and retry." }, 429, JSON_HEADERS);
+  const transactionId = normalizeFlutterwaveTransactionId(body.transaction_id);
+  const orderId = typeof body.order_id === "string" && /^[0-9a-f-]{36}$/i.test(body.order_id) ? body.order_id : null;
+  if (!transactionId || !orderId) return json({ verified: false, error: "Missing required payment details." }, 400, JSON_HEADERS);
+  return await settleFlutterwave(sb, orderId, transactionId, false);
 });

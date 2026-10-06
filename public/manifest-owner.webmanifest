@@ -1,0 +1,22 @@
+{
+  "id": "/pwa/owner-admin",
+  "name": "Lixxon Studio Owner",
+  "short_name": "Lixxon Admin",
+  "description": "Secure Lixxon Studio owner and admin workspace.",
+  "start_url": "/admin/dashboard?source=pwa-owner",
+  "scope": "/admin/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E9E5DC",
+  "theme_color": "#E9E5DC",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Daily Kit", "url": "/admin/automation/distribution", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "System Check", "url": "/admin/automation/check", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}

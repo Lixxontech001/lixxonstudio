@@ -188,6 +188,37 @@ The M10 RPCs are `admin_ai_refresh_predictive`, `admin_ai_refresh_digital_twin`,
 `rules`; external providers must remain authenticated edge-function integrations that can only
 create proposals.
 
+## 8.2 Operations agents and per-agent status, transcript and incidents (Admin → Admin AI → Agents)
+
+The six operations roles — **Analyst, Strategist, CEO, Auditor, Executioner and Chief of Staff** —
+extend the M7–M10 model rather than replacing it. They share the existing `admin_ai_agents`, jobs,
+action queue, events, approvals, critic and audit paths, and they seed **disabled and
+suggestion-only**. The five read-only roles produce deterministic aggregate briefs only (the Analyst
+reads server-side metrics; the others summarise missions, queue counts and governance counts), so
+no browser-supplied sales figure is ever accepted and no unavailable business metric is invented.
+Executioner is limited to its own owner-approved `analyze` rows and never publishes to a channel.
+
+Each agent card in the Agents tab now shows a status strip and a transcript, both read from the
+server. Nothing here is estimated in the browser:
+
+* **Last run / Next run** come from the recorded timestamps, and **Schedule** states one of
+  `Scheduled`, `Due now`, `No next run yet` or `Paused — will not run`. A disabled agent always reads
+  Paused, even if a stale timestamp exists. **Last 24h** shows the run count and how many proposals
+  are still queued; failed runs (7 days) and open incidents appear only when they are non-zero.
+* **Transcript & incidents** loads on demand (`admin_ai_agent_transcript`, at most 25 runs, default
+  10). Each run shows its status, when it happened, how many proposals it created, its duration and
+  any error text, plus the incidents recorded against that specific run. A failed run is never
+  displayed as a success.
+* **Incident controls** reuse the existing `admin_ai_resolve_incident` RPC from the card:
+  **Acknowledge** stamps the acknowledgement, **Resolve** records the resolution, the owner who made
+  the decision and a time. A resolved incident leaves the open count but stays in the transcript as
+  history. Both controls require `admin.ai.incidents`, so a reviewer without it can read the history
+  but not change it — and a refused control reports the refusal instead of appearing to succeed.
+
+Status and transcript reads require `admin.ai.reports`, match the existing control-tower gate, and
+are scoped to a single agent: a transcript can only return that agent's own jobs. The per-agent read
+model adds **no new table**, makes no provider call and changes no existing M7–M10 behavior.
+
 ## 9. Front end as data (Admin → Front end)
 
 `site_settings` public rows drive the storefront without a deploy: `nav_menu`, `footer`,

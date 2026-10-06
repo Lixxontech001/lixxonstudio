@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Btn, Empty, Loading, Notice, Panel, Severity, useAdminAction, useAdminRpc } from '../components/ui';
 
 type Autonomy = 'observe' | 'suggest' | 'draft' | 'auto_apply' | 'approval_required' | 'disabled';
-type Agent = { agent_key: string; label: string; description: string; enabled: boolean; autonomy_level: Autonomy; cadence_minutes: number; max_actions: number; last_run_at?: string; next_run_at?: string };
+type Agent = { agent_key: string; label: string; description: string; enabled: boolean; autonomy_level: Autonomy; cadence_minutes: number; max_actions: number; config?: Record<string, unknown>; last_run_at?: string; next_run_at?: string };
 type Action = { id: string; agent_key?: string; action_type: string; title: string; detail: string; risk: string; autonomy_level: Autonomy; required_permission?: string; target_type?: string; target_id?: string; proposed: Record<string, unknown>; status: string; created_at: string; decision_note?: string; source?: 'legacy' };
 type Mission = { id: string; title: string; objective: string; metric_key: string; target_value?: number; deadline?: string; status: string; priority: number; agent_keys: string[]; created_at: string };
 type Workflow = { id: string; name: string; description: string; trigger_type: string; enabled: boolean; autonomy_level: Autonomy; run_count: number; last_run_at?: string };
@@ -51,7 +51,10 @@ export default function AdminAI() {
   const { can } = useAuth();
   const allowed = can('admin.ai.run');
   const canApprove = can('admin.ai.approve');
+  const canManageAgents = can('admin.ai.policy');
+  const canResolveIncidents = can('admin.ai.incidents');
   const tower = useAdminRpc<Tower>('admin_ai_control_tower', undefined, allowed);
+  const agentStatus = useAdminRpc<{ agents: AgentStatusRow[] }>('admin_ai_agent_status', undefined, allowed);
   const action = useAdminAction();
   const [tab, setTab] = useState<Tab>('overview');
   const [postId, setPostId] = useState('');
@@ -86,7 +89,7 @@ export default function AdminAI() {
   const draftReply = () => run('draft-reply', async () => { const { error } = await rpc('admin_ai_draft_reply', { p_comment_id: commentId.trim() }); return { error: error?.message || null, text: error ? '' : 'Reply draft queued for approval.' }; });
   const saveSettings = () => run('settings', async () => { const { error } = await rpc('admin_ai_set_autopilot', { p_enabled: enabled, p_kill_switch: killSwitch, p_default_autonomy: autonomy, p_budget: budget, p_provider: 'rules' }); return { error: error?.message || null, text: error ? '' : 'Autopilot policy saved.' }; });
   const runAgent = (key: string) => run(`agent-${key}`, async () => { const { data, error } = await rpc('admin_ai_run_agent', { p_agent_key: key }); return { error: error?.message || null, text: error ? '' : `${key} agent queued ${String((data as { queued?: number } | null)?.queued || 0)} action(s).` }; });
-  const saveAgent = (agent: Agent) => { const d = agentDrafts[agent.agent_key]; if (!d) return; return run(`save-agent-${agent.agent_key}`, async () => { const { error } = await rpc('admin_ai_set_agent', { p_agent_key: agent.agent_key, p_enabled: d.enabled, p_autonomy: d.autonomy, p_cadence: d.cadence, p_max_actions: d.max }); return { error: error?.message || null, text: error ? '' : `${agent.label} policy saved.` }; }); };
+  const saveAgent = (agent: Agent) => { const d = agentDrafts[agent.agent_key]; if (!d) return; return run(`save-agent-${agent.agent_key}`, async () => { const { error } = await rpc('admin_ai_set_agent', { p_agent_key: agent.agent_key, p_enabled: d.enabled, p_autonomy: d.autonomy, p_cadence: d.cadence, p_max_actions: d.max, p_config: agent.config || {} }); return { error: error?.message || null, text: error ? '' : `${agent.label} policy saved.` }; }); };
 
   if (!allowed) return <Notice tone="warn">You need the <code>admin.ai.run</code> permission to open the Admin AI control tower.</Notice>;
   if (tower.loading && !tower.data) return <Loading />;
@@ -104,7 +107,7 @@ export default function AdminAI() {
     {tab === 'overview' && <Overview data={data} onTab={setTab} />}
     {tab === 'strategy' && <Strategy data={data} run={run} busy={action.busy} />}
     {tab === 'command' && <CommandCenter data={data} run={run} busy={action.busy} />}
-    {tab === 'agents' && <Agents data={data} drafts={agentDrafts} setDrafts={setAgentDrafts} onRun={runAgent} onSave={saveAgent} busy={action.busy} />}
+    {tab === 'agents' && <Agents data={data} drafts={agentDrafts} setDrafts={setAgentDrafts} onRun={runAgent} onSave={saveAgent} busy={action.busy} canManage={canManageAgents} canApprove={canApprove} canResolveIncidents={canResolveIncidents} statusRows={agentStatus.data?.agents || null} onIncidentsChanged={agentStatus.reload} />}
     {tab === 'missions' && <Missions data={data} run={run} />}
     {tab === 'queue' && <Queue data={data} canApprove={canApprove} decide={decide} applyLegacy={applyLegacy} dismissLegacy={dismissLegacy} busy={action.busy} />}
     {tab === 'workflows' && <Workflows data={data} run={run} busy={action.busy} />}
@@ -133,7 +136,215 @@ function Overview({ data, onTab }: { data: Tower; onTab: (tab: Tab) => void }) {
 }
 function Stat({ label, value, onClick, tone = 'text-charcoal' }: { label: string; value: string | number; onClick?: () => void; tone?: string }) { return <button type="button" onClick={onClick} className="text-left bg-white border border-taupe/30 rounded-sm p-4"><p className="text-[10px] uppercase tracking-wide text-charcoal-muted">{label}</p><p className={`text-xl font-serif mt-1 ${tone}`}>{value}</p></button>; }
 
-function Agents({ data, drafts, setDrafts, onRun, onSave, busy }: { data: Tower; drafts: Record<string, { enabled: boolean; autonomy: Autonomy; cadence: number; max: number }>; setDrafts: Dispatch<SetStateAction<Record<string, { enabled: boolean; autonomy: Autonomy; cadence: number; max: number }>>>; onRun: (key: string) => void; onSave: (agent: Agent) => void; busy: string | null }) { return <Panel title="Agent fleet" icon={<Target size={15} className="text-bronze" />}><div className="space-y-3">{data.agents.map(a => { const d = drafts[a.agent_key] || { enabled: a.enabled, autonomy: a.autonomy_level, cadence: a.cadence_minutes, max: a.max_actions }; return <div key={a.agent_key} className="border border-taupe/30 rounded-sm p-4"><div className="flex flex-wrap gap-3 items-start"><div className="flex-1"><div className="flex items-center gap-2"><input type="checkbox" checked={d.enabled} onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, enabled: e.target.checked } }))} /><strong className="text-sm text-charcoal">{a.label}</strong><Severity level={d.autonomy === 'auto_apply' ? 'warning' : d.autonomy === 'disabled' ? 'critical' : 'info'} /></div><p className="text-xs text-charcoal-muted mt-1">{a.description}</p></div><select value={d.autonomy} onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, autonomy: e.target.value as Autonomy } }))} className="border border-taupe/50 px-2 py-1 text-xs rounded-sm">{autonomyOptions.map(x => <option key={x} value={x}>{x}</option>)}</select><input type="number" min="5" value={d.cadence} onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, cadence: Number(e.target.value) } }))} className="w-20 border border-taupe/50 px-2 py-1 text-xs rounded-sm" title="Cadence minutes" /><Btn variant="ghost" onClick={() => onRun(a.agent_key)} busy={busy === `agent-${a.agent_key}`} icon={<Play size={12} />}>Run</Btn><Btn onClick={() => onSave(a)} busy={busy === `save-agent-${a.agent_key}`}>Save</Btn></div></div>; })}</div></Panel>; }
+type AgentScheduleState = 'paused' | 'unscheduled' | 'due' | 'scheduled';
+type AgentStatusRow = {
+  agent_key: string; label: string; enabled: boolean; autonomy_level: Autonomy; cadence_minutes: number;
+  last_run_at: string | null; next_run_at: string | null; schedule_state: AgentScheduleState;
+  runs_last_24h: number; failed_runs_last_7d: number; queued_actions: number; open_incidents: number;
+};
+type TranscriptJob = {
+  id: string; kind: string; status: string; created_at: string; started_at: string | null; finished_at: string | null;
+  duration_ms: number | null; error: string | null; actions_created: number;
+  incidents: { id: string; severity: string; status: string; title: string }[];
+};
+type TranscriptIncident = {
+  id: string; severity: string; status: string; title: string; detail: string; resolution: string | null;
+  created_at: string; acknowledged_at: string | null; resolved_at: string | null;
+};
+type AgentTranscriptData = { agent_key: string; jobs: TranscriptJob[]; incidents: TranscriptIncident[] };
+
+const scheduleCopy: Record<AgentScheduleState, string> = {
+  paused: 'Paused — will not run',
+  unscheduled: 'No next run yet',
+  due: 'Due now',
+  scheduled: 'Scheduled',
+};
+
+function formatStamp(value: string | null): string {
+  if (!value) return 'Not recorded';
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? 'Not recorded' : at.toLocaleString();
+}
+
+/** Last/next run and honest counters for one agent, from the server read model. */
+function AgentStatusStrip({ row, loaded }: { row: AgentStatusRow | null; loaded: boolean }) {
+  if (!row) return <p className="text-xs text-charcoal-muted mt-3">{loaded ? 'No status row was returned for this agent.' : 'Loading last run, next run and counters...'}</p>;
+  return <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mt-3 text-xs border-t border-taupe/30 pt-3">
+    <div><dt className="text-charcoal-muted">Last run</dt><dd className="text-charcoal">{formatStamp(row.last_run_at)}</dd></div>
+    <div><dt className="text-charcoal-muted">Next run</dt><dd className="text-charcoal">{formatStamp(row.next_run_at)}</dd></div>
+    <div><dt className="text-charcoal-muted">Schedule</dt><dd className="text-charcoal">{scheduleCopy[row.schedule_state]}</dd></div>
+    <div><dt className="text-charcoal-muted">Last 24h</dt><dd className="text-charcoal">{row.runs_last_24h} run(s), {row.queued_actions} queued</dd></div>
+    {(row.failed_runs_last_7d > 0 || row.open_incidents > 0) && <div className="col-span-2 sm:col-span-4">
+      <dt className="sr-only">Needs attention</dt>
+      <dd className="text-charcoal">{row.failed_runs_last_7d} failed run(s) in 7 days, {row.open_incidents} open incident(s)</dd>
+    </div>}
+  </dl>;
+}
+
+/** What this agent actually did, plus the incident controls for its own runs. */
+function AgentTranscript({ agentKey, canResolve, onChanged }: { agentKey: string; canResolve: boolean; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<AgentTranscriptData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [note, setNote] = useState('');
+  const [busyIncident, setBusyIncident] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+
+  const load = async () => {
+    setLoading(true); setError(null);
+    const { data: row, error: rpcError } = await supabase.rpc('admin_ai_agent_transcript', { p_agent_key: agentKey, p_limit: 10 });
+    if (rpcError) { setError(rpcError.message); setData(null); } else { setData(row as unknown as AgentTranscriptData); }
+    setLoading(false);
+  };
+
+  const toggle = async () => { const next = !open; setOpen(next); if (next && !data && !loading) await load(); };
+
+  const setIncidentStatus = async (id: string, next: 'acknowledged' | 'resolved') => {
+    setBusyIncident(id); setMessage('');
+    const { error: rpcError } = await supabase.rpc('admin_ai_resolve_incident', { p_id: id, p_status: next, p_resolution: note.trim() || null });
+    if (rpcError) setMessage(`Refused: ${rpcError.message}`);
+    else { setMessage(next === 'acknowledged' ? 'Incident acknowledged.' : 'Incident resolved.'); await load(); onChanged(); }
+    setBusyIncident(null);
+  };
+
+  const openIncidents = data?.incidents.filter(i => i.status === 'open' || i.status === 'acknowledged') || [];
+
+  return <div className="mt-3">
+    <Btn variant="ghost" onClick={toggle} ariaExpanded={open} ariaControls={`transcript-${agentKey}`} icon={<FileText size={12} />} className="min-h-11">{open ? 'Hide transcript' : 'Transcript & incidents'}</Btn>
+    {open && <section id={`transcript-${agentKey}`} className="mt-3 border border-taupe/30 rounded-sm p-3" aria-label={`${agentKey} job transcript and incidents`}>
+      <div aria-live="polite" className="text-xs text-charcoal-muted">{message}</div>
+      {loading && <p className="text-xs text-charcoal-muted mt-2">Loading transcript...</p>}
+      {error && <p className="text-xs text-charcoal mt-2">Transcript unavailable: {error}</p>}
+      {data && !loading && <>
+        <h3 className="text-xs font-medium text-charcoal mt-2">Recent runs</h3>
+        {data.jobs.length === 0
+          ? <p className="text-xs text-charcoal-muted mt-1">This agent has no recorded runs yet.</p>
+          : <ul className="space-y-2 mt-2">{data.jobs.map(job => <li key={job.id} className="text-xs border-b border-taupe/20 pb-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Severity level={job.status === 'failed' ? 'critical' : job.status === 'completed' ? 'ok' : 'info'} />
+                <span className="text-charcoal">{job.status}</span>
+                <span className="text-charcoal-muted">{formatStamp(job.created_at)}</span>
+                <span className="text-charcoal-muted ml-auto">{job.actions_created} proposal(s){job.duration_ms === null ? '' : `, ${job.duration_ms} ms`}</span>
+              </div>
+              {job.error && <p className="text-charcoal mt-1">Error: {job.error}</p>}
+              {job.incidents.length > 0 && <p className="text-charcoal-muted mt-1">{job.incidents.length} incident(s): {job.incidents.map(i => i.title).join('; ')}</p>}
+            </li>)}</ul>}
+        <h3 className="text-xs font-medium text-charcoal mt-3">Incidents from this agent</h3>
+        {data.incidents.length === 0
+          ? <p className="text-xs text-charcoal-muted mt-1">No incidents are linked to this agent's runs.</p>
+          : <ul className="space-y-2 mt-2">{data.incidents.map(incident => <li key={incident.id} className="text-xs border-b border-taupe/20 pb-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Severity level={incident.severity === 'critical' ? 'critical' : incident.severity === 'warning' ? 'warning' : 'info'} />
+                <span className="text-charcoal">{incident.title}</span>
+                <span className="text-charcoal-muted ml-auto">{incident.status} · {formatStamp(incident.created_at)}</span>
+              </div>
+              <p className="text-charcoal-muted mt-1">{incident.detail}</p>
+              {incident.resolution && <p className="text-charcoal-muted mt-1">Resolution: {incident.resolution}</p>}
+              {(incident.status === 'open' || incident.status === 'acknowledged') && canResolve && <div className="flex flex-wrap items-center gap-2 mt-2">
+                <input
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  aria-label={`Resolution note for ${incident.title}`}
+                  placeholder="Resolution note (optional)"
+                  className="min-h-11 border border-taupe/50 px-2 py-1 text-xs rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze"
+                />
+                <Btn variant="ghost" busy={busyIncident === incident.id} onClick={() => setIncidentStatus(incident.id, 'acknowledged')} className="min-h-11" ariaLabel={`Acknowledge ${incident.title}`}>Acknowledge</Btn>
+                <Btn busy={busyIncident === incident.id} onClick={() => setIncidentStatus(incident.id, 'resolved')} className="min-h-11" ariaLabel={`Resolve ${incident.title}`}>Resolve</Btn>
+              </div>}
+              {(incident.status === 'open' || incident.status === 'acknowledged') && !canResolve && <p className="text-charcoal-muted mt-1">Requires the admin.ai.incidents permission.</p>}
+            </li>)}</ul>}
+        {openIncidents.length > 0 && <p className="text-charcoal-muted mt-2">{openIncidents.length} incident(s) still need a decision.</p>}
+      </>}
+    </section>}
+  </div>;
+}
+
+function Agents({ data, drafts, setDrafts, onRun, onSave, busy, canManage, canApprove, canResolveIncidents, statusRows, onIncidentsChanged }: {
+  data: Tower;
+  statusRows: AgentStatusRow[] | null;
+  onIncidentsChanged: () => void;
+  drafts: Record<string, { enabled: boolean; autonomy: Autonomy; cadence: number; max: number }>;
+  setDrafts: Dispatch<SetStateAction<Record<string, { enabled: boolean; autonomy: Autonomy; cadence: number; max: number }>>>;
+  onRun: (key: string) => void;
+  onSave: (agent: Agent) => void;
+  busy: string | null;
+  canManage: boolean;
+  canApprove: boolean;
+  canResolveIncidents: boolean;
+}) {
+  const statusByKey = new Map((statusRows || []).map(row => [row.agent_key, row]));
+  return <Panel title="Agent fleet" icon={<Target size={15} className="text-bronze" />}>
+    {!canManage && <Notice tone="info">Agent policies are owner-managed. You can review each agent, but cannot change its pause or autonomy settings.</Notice>}
+    <div className="space-y-3">
+      {data.agents.map(a => {
+        const d = drafts[a.agent_key] || { enabled: a.enabled, autonomy: a.autonomy_level, cadence: a.cadence_minutes, max: a.max_actions };
+        const suggestionOnly = boardroomAgentKeys.has(a.agent_key);
+        const options = suggestionOnly ? suggestionOnlyAutonomyOptions : autonomyOptions;
+        const canRun = a.enabled && d.enabled && a.autonomy_level !== 'disabled' && d.autonomy !== 'disabled' && (a.agent_key !== 'executioner' || canApprove);
+        return <div key={a.agent_key} className="border border-taupe/30 rounded-sm p-4">
+          <div className="flex flex-wrap gap-3 items-start">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex min-h-11 min-w-[44px] items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={d.enabled}
+                    disabled={!canManage}
+                    aria-label={`Enable ${a.label} agent`}
+                    onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, enabled: e.target.checked } }))}
+                  />
+                  <span className="text-sm text-charcoal">{a.label}</span>
+                </label>
+                {suggestionOnly
+                  ? <span className="text-[10px] uppercase tracking-wide text-blue-700">Suggestion only</span>
+                  : <Severity level={d.autonomy === 'auto_apply' ? 'warning' : d.autonomy === 'disabled' ? 'critical' : 'info'} />}
+              </div>
+              <p className="text-xs text-charcoal-muted mt-1">{a.description}</p>
+            </div>
+            <select
+              aria-label={`${a.label} autonomy level`}
+              value={d.autonomy}
+              disabled={!canManage}
+              onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, autonomy: e.target.value as Autonomy } }))}
+              className="min-h-11 border border-taupe/50 px-2 py-1 text-xs rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:cursor-not-allowed disabled:opacity-60"
+            >{options.map(x => <option key={x} value={x}>{x}</option>)}</select>
+            <input
+              type="number"
+              min="5"
+              value={d.cadence}
+              disabled={!canManage}
+              aria-label={`${a.label} cadence in minutes`}
+              onChange={e => setDrafts(x => ({ ...x, [a.agent_key]: { ...d, cadence: Number(e.target.value) } }))}
+              className="min-h-11 w-20 border border-taupe/50 px-2 py-1 text-xs rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:cursor-not-allowed disabled:opacity-60"
+            />
+            <Btn
+              variant="ghost"
+              onClick={() => onRun(a.agent_key)}
+              busy={busy === `agent-${a.agent_key}`}
+              disabled={!canRun}
+              ariaLabel={`Run ${a.label}`}
+              title={a.agent_key === 'executioner' && !canApprove ? 'Requires admin.ai.approve' : undefined}
+              icon={<Play size={12} />}
+              className="min-h-11"
+            >Run</Btn>
+            <Btn
+              onClick={() => onSave(a)}
+              busy={busy === `save-agent-${a.agent_key}`}
+              disabled={!canManage}
+              ariaLabel={`Save ${a.label} policy`}
+              className="min-h-11"
+            >Save</Btn>
+          </div>
+          <AgentStatusStrip row={statusByKey.get(a.agent_key) || null} loaded={statusRows !== null} />
+          <AgentTranscript agentKey={a.agent_key} canResolve={canResolveIncidents} onChanged={onIncidentsChanged} />
+        </div>;
+      })}
+    </div>
+  </Panel>;
+}
+const boardroomAgentKeys = new Set(['analyst','strategist','ceo','auditor','executioner','chief_of_staff']);
+const suggestionOnlyAutonomyOptions: Autonomy[] = ['suggest','disabled'];
 const autonomyOptions: Autonomy[] = ['observe','suggest','draft','auto_apply','approval_required','disabled'];
 
 function Missions({ data, run }: { data: Tower; run: (key: string, fn: () => Promise<{ error: string | null; text: string }>) => void }) { const [title,setTitle]=useState(''); const [objective,setObjective]=useState(''); const [metric,setMetric]=useState('organic_traffic'); const [agents,setAgents]=useState('growth,seo'); const [priority,setPriority]=useState(60); const create=()=>run('mission',async()=>{const {error}=await supabase.rpc('admin_ai_create_mission',{p_title:title,p_objective:objective,p_metric:metric,p_target:null,p_deadline:null,p_agents:agents.split(',').map(x=>x.trim()).filter(Boolean),p_priority:priority});return{error:error?.message||null,text:error?'':'Mission created.'};});return <><Panel title="Create a growth mission" icon={<Target size={15} className="text-bronze" />}><div className="grid md:grid-cols-2 gap-3"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Increase organic traffic" className="border border-taupe/50 px-3 py-2 text-sm rounded-sm"/><input value={metric} onChange={e=>setMetric(e.target.value)} placeholder="Metric key" className="border border-taupe/50 px-3 py-2 text-sm rounded-sm"/><textarea value={objective} onChange={e=>setObjective(e.target.value)} placeholder="What should the AI accomplish?" className="md:col-span-2 border border-taupe/50 px-3 py-2 text-sm rounded-sm"/><input value={agents} onChange={e=>setAgents(e.target.value)} placeholder="growth,seo" className="border border-taupe/50 px-3 py-2 text-sm rounded-sm"/><input type="number" value={priority} onChange={e=>setPriority(Number(e.target.value))} placeholder="Priority" className="border border-taupe/50 px-3 py-2 text-sm rounded-sm"/></div><Btn className="mt-3" onClick={create} disabled={!title.trim()}>Create mission</Btn></Panel><Panel title="Missions"><div className="space-y-2">{data.missions.length?data.missions.map(m=><div key={m.id} className="flex flex-wrap gap-2 items-center border-b border-taupe/20 py-3"><strong className="text-sm">{m.title}</strong><Severity level={m.status==='active'?'ok':m.status}/><span className="text-xs text-charcoal-muted">{m.objective}</span><span className="ml-auto text-xs">{m.metric_key}</span></div>):<Empty>No missions yet.</Empty>}</div></Panel></>; }

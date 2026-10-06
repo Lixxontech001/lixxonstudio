@@ -15,7 +15,7 @@ function fixtureSnapshot() {
     ai_quota: { quota_samples_last_24h: 0, quota_measured: false, all_recent_samples_positive: false, measurement_window_hours: 24 },
     distribution: { feature_enabled: false, configured_provider_tokens: 0, provider_readback_verified: false },
     video: { feature_enabled: false, stock_api_key_configured: false, last_render_status: null, last_render_at: null, toolchain_verified: false },
-    push: { feature_enabled: false, vapid_values_configured: 0, delivery_verified: false },
+    push: { feature_enabled: false, vapid_values_configured: 0, delivery_verified: false, last_test_status: null, last_test_at: null },
     commerce: { vault_credentials_configured: 0, flutterwave_secret_configured: false, flutterwave_test_status: 'not_tested', flutterwave_tested_at: null, webhook_hash_configured: false, webhook_test_status: 'not_tested', webhook_signature_verified: false, legacy_checkout_infrastructure_verified: false },
     incidents: { failed_or_blocked_last_24h: 0, last_incident_at: null, telemetry_seen: false, last_telemetry_at: null },
     automation_safety: { master_enabled: false, daily_pipeline_enabled: false, distribution_enabled: false, video_enabled: false, push_enabled: false },

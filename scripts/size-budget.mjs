@@ -89,6 +89,8 @@ const ADMIN_ROUTE_LIMITS = new Map([
   ['article-intake-', 15 * 1024],
   ['automation-runs-', 9 * 1024],
   ['automation-distribution-', 24 * 1024],
+  // Owner Web Push opt-in panel: lazy, admin-only, and never part of a reader download.
+  ['automation-push-panel-', 8 * 1024],
 ]);
 const adminRouteFiles = jsFiles.filter((f) => [...ADMIN_ROUTE_LIMITS.keys()].some((prefix) => f.startsWith(prefix)));
 const publicJsFiles = jsFiles.filter((f) => !adminJsFiles.includes(f) && !adminRouteFiles.includes(f));
