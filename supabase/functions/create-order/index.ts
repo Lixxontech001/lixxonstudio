@@ -15,6 +15,7 @@
 import {
   json, preflight, serviceClient, callerUser, clientIp, rateLimit, normEmail, cleanText,
 } from "../_shared/http.ts";
+import { deliverCommerceNotifications } from "../_shared/commerceFulfillment.ts";
 
 interface CartLine { id: string; quantity: number; pwyw_price?: number }
 interface GiftCardPurchase { amount: number; recipient_email: string; recipient_name?: string; message?: string }
@@ -198,8 +199,10 @@ Deno.serve(async (req) => {
       customer_email: email,
       customer_name: name,
       user_id: user?.id ?? null,
-      status: fullyCovered ? "fulfilled" : "pending",
-      payment_status: fullyCovered ? "paid" : "pending",
+      // Even a zero-balance order starts pending; the settlement RPC marks it paid
+      // only after the line items exist and unlocks are committed atomically.
+      status: "pending",
+      payment_status: "pending",
       payment_provider: fullyCovered ? (giftApplied > 0 ? "gift_card" : "promo") : "flutterwave",
       amount,
       subtotal,
@@ -230,15 +233,30 @@ Deno.serve(async (req) => {
     return json({ error: "Could not save your order items." }, 500);
   }
 
-  // $0 orders (fully covered by promo/gift card) are fulfilled immediately via verify-payment's fulfil path
+  // Zero-balance orders are settled directly through a privileged database
+  // function. No internal HTTP secret is sent between Edge Functions.
   let entitlements: unknown[] = [];
   if (fullyCovered) {
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/verify-payment`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-internal-secret": Deno.env.get("INTERNAL_FN_SECRET") || "", Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") || ""}` },
-      body: JSON.stringify({ internal_fulfil: true, order_id: order.id }),
-    }).catch(() => null);
-    if (r?.ok) entitlements = (await r.json()).entitlements || [];
+    let settlement: unknown = null;
+    for (let attempt = 0; attempt < 2 && !settlement; attempt += 1) {
+      const { data, error } = await sb.rpc("commerce_settle_verified_order", {
+        p_order_id: order.id,
+        p_transaction_id: null,
+        p_amount: 0,
+        p_currency: CURRENCY,
+        p_internal_zero: true,
+        p_via_webhook: false,
+      });
+      if (!error && data && typeof data === "object" && (data as { ok?: unknown }).ok === true) settlement = data;
+    }
+    if (!settlement) {
+      // Do not report a completed/unlocked order when the atomic commit failed.
+      // Avoid a second checkout that could redeem the customer's promo/gift card again.
+      return json({ error: "Your order was created, but we could not confirm the zero-balance unlock. Please contact support with the order number before retrying this payment method.", order_id: order.id, order_number: order.order_number }, 503);
+    }
+    const settledEntitlements = (settlement as { entitlements?: unknown }).entitlements;
+    entitlements = Array.isArray(settledEntitlements) ? settledEntitlements : [];
+    try { await deliverCommerceNotifications(sb, settlement); } catch { /* email is retryable; unlocks are already committed */ }
   }
 
   return json({

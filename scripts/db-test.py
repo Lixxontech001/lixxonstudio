@@ -125,7 +125,7 @@ def main():
         print(f"✓ {os.path.basename(m)}")
     for name in (
         "db-assertions.sql", "search-assertions.sql", "personalisation-assertions.sql",
-        "community-assertions.sql", "commerce-assertions.sql", "editor-assertions.sql",
+        "community-assertions.sql", "commerce-assertions.sql", "commerce-fulfillment-assertions.sql", "editor-assertions.sql",
         "admin-assertions.sql", "automation-foundation-assertions.sql", "article-intake-assertions.sql", "automation-orchestration-assertions.sql", "security-ai-assertions.sql",
         "automation-run-monitor-assertions.sql",
         "admin-ai-autopilot-assertions.sql", "admin-ai-ceo-assertions.sql", "admin-ai-predictive-assertions.sql",

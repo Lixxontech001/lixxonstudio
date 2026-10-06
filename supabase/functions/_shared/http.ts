@@ -116,19 +116,27 @@ export function escapeHtml(s: string): string {
 }
 
 /** Send an email through Resend (free tier). No-op when RESEND_API_KEY is absent. */
-export async function sendEmail(opts: { to: string; subject: string; html: string; replyTo?: string }): Promise<boolean> {
+export async function sendEmail(opts: { to: string; subject: string; html: string; replyTo?: string; idempotencyKey?: string }): Promise<boolean> {
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return false;
   const from = Deno.env.get("EMAIL_FROM") || "Lixxon Studio <onboarding@resend.dev>";
+  const idempotencyKey = opts.idempotencyKey && /^[A-Za-z0-9:_-]{1,128}$/.test(opts.idempotencyKey)
+    ? opts.idempotencyKey
+    : undefined;
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      },
       body: JSON.stringify({ from, to: [opts.to], subject: opts.subject, html: opts.html, reply_to: opts.replyTo }),
     });
     return r.ok;
-  } catch (e) {
-    console.error("email send failed", e);
+  } catch {
+    // Never include transport errors, headers or recipient data in function logs.
+    console.error("email send failed");
     return false;
   }
 }
