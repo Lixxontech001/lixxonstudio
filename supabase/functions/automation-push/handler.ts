@@ -117,6 +117,19 @@ async function readVault(sb: ReturnType<typeof serviceClient>, name: string): Pr
   }
 }
 
+/** Records a delivery outcome. A bookkeeping failure must never alter the send result. */
+async function recordQuietly(
+  sb: ReturnType<typeof serviceClient>,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await sb.rpc(name, args);
+  } catch {
+    // Outcomes are best-effort; the response already reflects the real send.
+  }
+}
+
 async function isPushEnabled(sb: ReturnType<typeof serviceClient>): Promise<boolean> {
   try {
     const { data, error } = await sb.rpc("automation_feature_flags");
@@ -199,7 +212,7 @@ export async function handleAutomationPush(
     subject: (await readVault(sb, "vapid_subject")) ?? "",
   };
   if (!credentials.publicKey || !credentials.privateKey || !credentials.subject) {
-    await sb.rpc("push_record_test_delivery", { p_owner_user_id: user.id, p_status: "failed" }).catch(() => undefined);
+    await recordQuietly(sb, "push_record_test_delivery", { p_owner_user_id: user.id, p_status: "failed" });
     return reply({ ok: false, reason: "missing_keys" });
   }
 
@@ -233,14 +246,14 @@ export async function handleAutomationPush(
     }
     // Expired subscriptions are revoked and scrubbed by the record function.
     if (target.id && result.status !== "failed") {
-      await sb.rpc("push_record_delivery", { p_id: target.id, p_status: result.status }).catch(() => undefined);
+      await recordQuietly(sb, "push_record_delivery", { p_id: target.id, p_status: result.status });
     }
   }
 
-  await sb.rpc("push_record_test_delivery", {
+  await recordQuietly(sb, "push_record_test_delivery", {
     p_owner_user_id: user.id,
     p_status: sent > 0 ? "sent" : "failed",
-  }).catch(() => undefined);
+  });
 
   // Safe aggregates only: no endpoint, key material or device label.
   return reply({

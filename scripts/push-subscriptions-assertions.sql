@@ -125,9 +125,12 @@ BEGIN
       RAISE EXCEPTION '% must be SECURITY DEFINER with a pinned search_path', v_fn.proname;
     END IF;
   END LOOP;
-  IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-       WHERE n.nspname = 'public' AND p.proname LIKE 'push\_%') <> 6 THEN
-    RAISE EXCEPTION 'Unexpected number of push functions';
+  IF (SELECT array_agg(p.proname::text ORDER BY p.proname::text) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public' AND p.proname LIKE 'push\_%')
+     <> ARRAY['push_audit_event', 'push_delivery_targets', 'push_device_revoke', 'push_device_revoke_all',
+              'push_device_upsert', 'push_owner_check', 'push_record_delivery', 'push_record_test_delivery',
+              'push_test_targets'] THEN
+    RAISE EXCEPTION 'Unexpected push function surface';
   END IF;
 
   SELECT md5(string_agg(id::text || ':' || COALESCE(content, ''), '|' ORDER BY id)) INTO v_hash_before FROM posts;

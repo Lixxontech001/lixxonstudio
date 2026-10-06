@@ -68,7 +68,8 @@ function safeTime(value: unknown): string | null {
 }
 
 /** Base64url VAPID public key -> applicationServerKey bytes. Null when malformed. */
-export function urlBase64ToUint8Array(value: unknown): Uint8Array | null {
+/** Returns an ArrayBuffer-backed view so it can be used as applicationServerKey. */
+export function urlBase64ToUint8Array(value: unknown): Uint8Array<ArrayBuffer> | null {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{80,120}={0,2}$/.test(value.trim())) return null;
   const normalised = value.trim().replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalised.padEnd(Math.ceil(normalised.length / 4) * 4, '=');
@@ -80,15 +81,6 @@ export function urlBase64ToUint8Array(value: unknown): Uint8Array | null {
   } catch {
     return null;
   }
-}
-
-export function arrayBufferToBase64Url(buffer: ArrayBuffer | ArrayBufferView): string {
-  const bytes = buffer instanceof ArrayBuffer
-    ? new Uint8Array(buffer)
-    : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /** Stable per-install device id. Never derived from a user agent or an account id. */
@@ -193,18 +185,19 @@ export function pushSupportAvailable(scope: {
 }
 
 export function pushTestReasonMessage(reason: PushTestReason): string {
-  switch (reason) {
-    case 'delivered': return 'Test notification delivered to your confirmed device.';
-    case 'confirmation_required': return 'Confirmation is required before a test notification is sent.';
-    case 'missing_keys': return 'This needs the three Web Push keys in the Keys page before a test can be sent.';
-    case 'no_device': return 'No confirmed device yet: confirm this device first, then send the test.';
-    case 'rate_limited': return 'Too many test notifications just now. Try again in a few minutes.';
-    case 'credentials_invalid': return 'The stored VAPID key pair does not match. Re-save both VAPID values in the Keys page.';
-    case 'provider_rejected': return 'The push service rejected the test. Confirm the device again and retry.';
-    case 'encryption_failed': return 'The device subscription could not be encrypted. Revoke this device and confirm it again.';
-    case 'network_error':
-    case 'timeout': return 'The push service could not be reached. This is retryable.';
-    case 'unavailable': return 'The delivery check is temporarily unavailable.';
-    case 'not_sent': return 'No test notification was sent.';
-  }
+  const messages: Record<PushTestReason, string> = {
+    delivered: 'Test notification delivered to your confirmed device.',
+    confirmation_required: 'Confirmation is required before sending a test.',
+    missing_keys: 'Add the Web Push keys in the Keys page first.',
+    no_device: 'No confirmed device yet: confirm this device, then send the test.',
+    rate_limited: 'Too many tests just now. Try again in a few minutes.',
+    credentials_invalid: 'The stored VAPID key pair does not match. Re-save both VAPID values in the Keys page.',
+    provider_rejected: 'The push service rejected the test. Confirm the device again and retry.',
+    encryption_failed: 'This device subscription could not be encrypted. Revoke it and confirm again.',
+    network_error: 'The push service could not be reached. This is retryable.',
+    timeout: 'The push service did not answer in time. This is retryable.',
+    unavailable: 'The delivery check is temporarily unavailable.',
+    not_sent: 'No test notification was sent.',
+  };
+  return messages[reason];
 }

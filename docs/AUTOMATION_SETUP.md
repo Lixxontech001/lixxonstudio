@@ -79,7 +79,8 @@ Client IDs, account IDs, public keys and other identifiers are also stored encry
 - WhatsApp uses the stored phone-number ID and token together for a read-only Graph API lookup when both are present.
 - X is deliberately not contacted: an API request can consume paid credit. Its credentials receive a local-format check only until a zero-cost provider test is available and explicitly approved.
 - Tumblr OAuth credentials receive a local-format check until the signed OAuth 1.0a adapter is implemented.
-- Flutterwave webhook hash and VAPID values receive local-format checks; the real webhook signature and push delivery are verified by their later end-to-end flows.
+- Flutterwave webhook hash and VAPID values receive local-format checks. The webhook signature still has no live end-to-end test.
+- **Web Push** has a real delivery check: `/admin/settings` → *Owner notifications* → **Register this device** (browser asks for notification permission), then **Send test notification** → **Confirm: send the test now**. The confirmation sends exactly one fixed test payload to your own confirmed devices and records the real result; nothing else is ever pushed. `automation.push` stays off until you turn it on, and with it off the test still works but scheduled alerts stay silent. Blocked notifications degrade honestly — allow them again in the browser's site settings, and owner alerts still arrive on Telegram in the meantime. Revoke (or Revoke all devices) erases a device's endpoint and keys immediately.
 - Coverr's test makes one read-only video-list call and consumes one provider API request. Account limits depend on the Coverr application's status; check the provider dashboard before repeated tests.
 - For other providers the test makes one HTTPS read-only request, consumes/discards the response server-side and stores only a safe result code/time. Provider response text, account data and credentials are never returned to the page.
 

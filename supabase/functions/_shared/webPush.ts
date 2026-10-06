@@ -25,6 +25,9 @@ export interface VapidCredentials {
   privateKey: string;
 }
 
+/** ArrayBuffer-backed view: WebCrypto and fetch body types require it under strict lib types. */
+type Bytes = Uint8Array<ArrayBuffer>;
+
 export type PushSendStatus = 'sent' | 'expired' | 'failed';
 export type PushSendReason =
   | 'delivered'
@@ -48,14 +51,14 @@ const P256_SCALAR_BYTES = 32;
 const VAPID_TTL_SECONDS = 24 * 60 * 60;
 const REQUEST_TIMEOUT_MS = 8_000;
 
-export function bytesToBase64Url(bytes: Uint8Array): string {
+export function bytesToBase64Url(bytes: Uint8Array<ArrayBufferLike>): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /** Strict base64url decode: rejects anything that is not the base64url alphabet. */
-export function base64UrlToBytes(value: unknown): Uint8Array | null {
+export function base64UrlToBytes(value: unknown): Bytes | null {
   if (typeof value !== 'string' || value.length === 0 || value.length > 4096) return null;
   if (!/^[A-Za-z0-9_-]+={0,2}$/.test(value)) return null;
   const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
@@ -69,7 +72,7 @@ export function base64UrlToBytes(value: unknown): Uint8Array | null {
   }
 }
 
-function concatBytes(...parts: Uint8Array[]): Uint8Array {
+function concatBytes(...parts: Bytes[]): Bytes {
   const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
   const out = new Uint8Array(total);
   let offset = 0;
@@ -80,11 +83,11 @@ function concatBytes(...parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-function utf8(value: string): Uint8Array {
+function utf8(value: string): Bytes {
   return new TextEncoder().encode(value);
 }
 
-function uint32BE(value: number): Uint8Array {
+function uint32BE(value: number): Bytes {
   const out = new Uint8Array(4);
   new DataView(out.buffer).setUint32(0, value, false);
   return out;
@@ -96,7 +99,7 @@ function uint32BE(value: number): Uint8Array {
  */
 export function decodeVapidCredentials(
   credentials: Partial<VapidCredentials> | null | undefined,
-): { publicKey: Uint8Array; publicKeyBase64Url: string; privateKey: Uint8Array; subject: string } | null {
+): { publicKey: Bytes; publicKeyBase64Url: string; privateKey: Bytes; subject: string } | null {
   if (!credentials) return null;
   const publicBytes = base64UrlToBytes(credentials.publicKey);
   const privateBytes = base64UrlToBytes(credentials.privateKey);
@@ -183,7 +186,7 @@ export async function buildVapidAuthorization(
   }
 }
 
-async function hkdf(ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, lengthBytes: number): Promise<Uint8Array> {
+async function hkdf(ikm: Bytes, salt: Bytes, info: Bytes, lengthBytes: number): Promise<Bytes> {
   const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
     { name: 'HKDF', hash: 'SHA-256', salt, info },
@@ -197,7 +200,7 @@ async function hkdf(ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, lengthB
  * RFC 8291 payload encryption. `payload` must already be the exact bytes to
  * show the device; the caller builds a minimal, data-free notification body.
  */
-export async function encryptPushPayload(payload: Uint8Array, target: PushTarget): Promise<Uint8Array | null> {
+export async function encryptPushPayload(payload: Bytes, target: PushTarget): Promise<Bytes | null> {
   const userAgentPublic = base64UrlToBytes(target.p256dh);
   const authSecret = base64UrlToBytes(target.auth_key);
   if (!userAgentPublic || userAgentPublic.byteLength !== P256_POINT_BYTES || userAgentPublic[0] !== 0x04) return null;

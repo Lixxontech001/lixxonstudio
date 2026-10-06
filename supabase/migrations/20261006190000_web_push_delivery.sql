@@ -261,7 +261,7 @@ BEGIN
   SELECT l.event_code, l.created_at INTO v_push_test_event, v_push_test_at
     FROM public.automation_logs l
    WHERE l.event_code IN ('PUSH_TEST_DELIVERY_SENT', 'PUSH_TEST_DELIVERY_FAILED')
-   ORDER BY l.created_at DESC LIMIT 1;
+   ORDER BY l.created_at DESC, l.id DESC LIMIT 1;
 
   SELECT count(*) FILTER (WHERE s.vault_secret_id IS NOT NULL)
     INTO v_commerce_configured

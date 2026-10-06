@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import {Settings as SettingsIcon, Info, CreditCard, BookOpen, Check, Copy} from 'lucide-react';
 import SiteSettingsPanel from '../components/SiteSettingsPanel';
 import SearchSynonymsPanel from '../components/SearchSynonymsPanel';
 import PwaInstallPanel from '../../components/PwaInstallPanel';
-import PushNotificationsPanel from '../../components/PushNotificationsPanel';
+import { lazyWithRetry } from '../../lib/chunkRecovery';
+
+// Lazy: most admin sessions never open push settings, so it stays out of the admin chunk.
+const PushNotificationsPanel = lazyWithRetry(() => import('../../components/automation-push-panel'));
 
 export default function AdminSettings() {
   const [copied, setCopied] = useState('');
@@ -25,6 +28,9 @@ export default function AdminSettings() {
       </div>
 
       <SiteSettingsPanel />
+      <Suspense fallback={<p className="mb-6 text-sm text-charcoal-muted">Loading notification settings…</p>}>
+        <PushNotificationsPanel />
+      </Suspense>
       <PwaInstallPanel currentApp="owner" />
 
       {/* ==================== SEARCH SYNONYMS ==================== */}
