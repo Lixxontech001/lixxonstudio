@@ -103,7 +103,11 @@ Run history (UTC):
 - 2026-10-07 13:03, run 37625488292 (`optimize`, `dry_run=true`, main@cf32c0f):
   FAILED in <1 s at startup validation — `SUPABASE_SECRET_KEY` repository
   secret not configured. Script behaved as designed (clean error, nothing
-  written). Pending: owner adds the secret, then runs selftest → audit.
+  written). Cause confirmed by owner answers (task=optimize, secret unsure).
+- 2026-10-07 13:12, run 37626646553 (`audit`, `dry_run=true`, main@cf32c0f):
+  FAILED in <1 s at the media step even after the owner added a secret —
+  the value still isn't reaching the job (wrong tab/scope/name?) or the run
+  pre-dates it. Pending: owner confirms placement + pastes the FAILED: line.
 
 Expect up to ~1 h of stale CDN copies after the live run; browsers refresh
 on their own. **Re-check the Supabase usage page in 48 hours** and compare
