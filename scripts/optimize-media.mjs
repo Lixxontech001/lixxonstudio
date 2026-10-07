@@ -19,6 +19,9 @@
  *                 with DEDUPE_CONFIRM=DELETE — delete the spare copies when at
  *                 least one copy is still referenced by the database. Groups
  *                 with no referenced copy are NEVER auto-deleted (manual review).
+ *   TASK=selftest Prove the ImageMagick encoder works on this runner using
+ *                 generated images. Needs no Supabase credentials and touches
+ *                 nothing. Run it before the first live optimize.
  *
  * Environment (all set by .github/workflows/optimize-media.yml):
  *   SUPABASE_URL, SUPABASE_SECRET_KEY (service role — Action runner only, never
@@ -81,16 +84,26 @@ const HEAD_TIMEOUT_MS = 8000;
 const HEAD_BUDGET = 40; // max remote HEAD requests for the page-load estimates
 const ENCODE_TIMEOUT_MS = 180_000;
 
-if (!SUPABASE_URL) throw new Error('SUPABASE_URL is required.');
-if (!SECRET_KEY) throw new Error('The SUPABASE_SECRET_KEY repository secret is not configured.');
-if (BUCKETS.length === 0) throw new Error('STORAGE_BUCKETS is empty.');
-if (!['audit', 'optimize', 'dedupe'].includes(TASK)) {
-  throw new Error(`TASK must be audit|optimize|dedupe, got "${TASK}".`);
+function validateConfig() {
+  if (!['audit', 'optimize', 'dedupe', 'selftest'].includes(TASK)) {
+    throw new Error(`TASK must be audit|optimize|dedupe|selftest, got "${TASK}".`);
+  }
+  if (TASK === 'selftest') return; // no credentials, no Storage, nothing touched
+  if (!SUPABASE_URL) throw new Error('SUPABASE_URL is required.');
+  if (!SECRET_KEY) throw new Error('The SUPABASE_SECRET_KEY repository secret is not configured.');
+  if (BUCKETS.length === 0) throw new Error('STORAGE_BUCKETS is empty.');
 }
 
-const supabase = createClient(SUPABASE_URL, SECRET_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+// Created lazily in main() so TASK=selftest needs no credentials at all.
+let supabase = null;
+function db() {
+  if (!supabase) {
+    supabase = createClient(SUPABASE_URL, SECRET_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return supabase;
+}
 
 // --------------------------------------------------------------- helpers ---
 
@@ -206,7 +219,7 @@ async function listBucket(bucket) {
     const prefix = prefixes.shift();
     let offset = 0;
     for (;;) {
-      const { data, error } = await supabase.storage.from(bucket).list(prefix, {
+      const { data, error } = await db().storage.from(bucket).list(prefix, {
         limit: 1000,
         offset,
         sortBy: { column: 'name', order: 'asc' },
@@ -238,7 +251,7 @@ async function listBucket(bucket) {
 
 async function fetchTable(table, columns) {
   try {
-    const { data, error } = await supabase.from(table).select(columns).limit(2000);
+    const { data, error } = await db().from(table).select(columns).limit(2000);
     if (error) return { rows: [], note: `${table}: ${error.message}` };
     return { rows: data || [], note: null };
   } catch (e) {
@@ -403,8 +416,94 @@ async function identify(file) {
 
 async function encode(input, output, args) {
   const bin = IM.flavor === 'magick' ? 'magick' : 'convert';
-  const full = IM.flavor === 'magick' ? [input, ...args, output] : [input, ...args, output];
-  await execFileAsync(bin, full, { timeout: ENCODE_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 });
+  await execFileAsync(bin, [input, ...args, output], { timeout: ENCODE_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 });
+}
+
+/**
+ * The single encode pipeline used by both optimize (Storage files) and
+ * selftest (generated files): shrink-only resize + same-format recompress.
+ * Returns the strategy label for the before/after table.
+ */
+async function encodeImage(ext, input, output, width, height, originalBytes) {
+  const geometry = `${MAX_WIDTH}x${MAX_WIDTH}>`; // shrink-only: never upscale
+  const base = ['-auto-orient', '-resize', geometry];
+  const resized = Math.max(width, height) > MAX_WIDTH ? `+resize→${MAX_WIDTH}` : '';
+  if (ext === 'jpg' || ext === 'jpeg') {
+    await encode(input, output, [...base, '-sampling-factor', '4:2:0', '-strip', '-quality', String(QUALITY), '-interlace', 'Plane']);
+    return `jpeg-q${QUALITY}${resized}`;
+  }
+  if (ext === 'webp') {
+    await encode(input, output, [...base, '-strip', '-quality', String(QUALITY)]);
+    return `webp-q${QUALITY}${resized}`;
+  }
+  // PNG: lossless first (resize + strip + max compression); quantize to 256
+  // colors only for big files where lossless alone saves too little.
+  await encode(input, output, [...base, '-strip', '-define', 'png:compression-level=9', '-define', 'png:compression-filter=5']);
+  let strategy = `png-lossless${resized}`;
+  const outSize = (await stat(output)).size;
+  if (originalBytes > 0 && (originalBytes - outSize) / originalBytes < MIN_SAVING && originalBytes >= PNG_QUANT_MIN_BYTES) {
+    await encode(input, output, [...base, '-strip', '-colors', '256', '-dither', 'FloydSteinberg', '-define', 'png:compression-level=9']);
+    strategy = `png-quant256${resized}`;
+  }
+  return strategy;
+}
+
+// --------------------------------------------------------------- selftest ---
+
+async function runSelftest() {
+  console.log('\n===== SELFTEST (no Supabase access, nothing touched) =====');
+  const tools = await detectImageTools();
+  if (!tools) throw new Error('No ImageMagick CLI found on this runner (tried `magick` and `convert`).');
+  console.log(`Encoder: ${tools.version} (${tools.flavor}) · max_width=${MAX_WIDTH} · quality=${QUALITY}.`);
+
+  const bin = IM.flavor === 'magick' ? 'magick' : 'convert';
+  const dir = await mkdtemp(join(tmpdir(), 'lx-selftest-'));
+  try {
+    // Photo-like 2400px sources (fractal plasma at q100 compresses poorly on purpose).
+    const bigJpg = join(dir, 'big.jpg');
+    const bigPng = join(dir, 'big.png');
+    const smallJpg = join(dir, 'small.jpg');
+    await execFileAsync(bin, ['-size', '2400x1600', 'plasma:fractal', '-quality', '100', bigJpg], { timeout: 120000 });
+    await execFileAsync(bin, ['-size', '2400x1600', 'plasma:fractal', bigPng], { timeout: 120000 });
+    await execFileAsync(bin, ['-size', '400x300', 'plasma:fractal', '-quality', '100', smallJpg], { timeout: 60000 });
+    const bigWebp = join(dir, 'big.webp');
+    await execFileAsync(bin, [bigJpg, '-quality', '100', bigWebp], { timeout: 120000 });
+
+    const cases = [
+      { ext: 'jpg', input: bigJpg, label: 'big JPEG 2400px' },
+      { ext: 'png', input: bigPng, label: 'big PNG 2400px' },
+      { ext: 'webp', input: bigWebp, label: 'big WebP 2400px' },
+      { ext: 'jpg', input: smallJpg, label: 'small JPEG 400px (must never upscale)' },
+    ];
+    const rows = [];
+    for (const c of cases) {
+      const before = await identify(c.input);
+      const beforeBytes = (await stat(c.input)).size;
+      const output = join(dir, `out-${basename(c.input)}`);
+      const strategy = await encodeImage(c.ext, c.input, output, before.width, before.height, beforeBytes);
+      const after = await identify(output);
+      const afterBytes = (await stat(output)).size;
+      const saving = beforeBytes > 0 ? (beforeBytes - afterBytes) / beforeBytes : 0;
+      rows.push([c.label, `${before.width}×${before.height}`, fmtBytes(beforeBytes), `${after.width}×${after.height}`, fmtBytes(afterBytes), pct(Math.max(0, beforeBytes - afterBytes), beforeBytes), strategy]);
+
+      if (c.label.startsWith('small')) {
+        if (after.width !== before.width || after.height !== before.height) {
+          throw new Error(`SELFTEST FAILED: small image was resized ${before.width}×${before.height} → ${after.width}×${after.height} (upscale forbidden).`);
+        }
+      } else {
+        if (after.width > MAX_WIDTH || after.height > MAX_WIDTH) {
+          throw new Error(`SELFTEST FAILED: ${c.label} not shrunk to ${MAX_WIDTH}px (got ${after.width}×${after.height}).`);
+        }
+        if (afterBytes >= beforeBytes) {
+          throw new Error(`SELFTEST FAILED: ${c.label} did not shrink (${fmtBytes(beforeBytes)} → ${fmtBytes(afterBytes)}).`);
+        }
+      }
+    }
+    console.log(table(rows, ['case', 'before', 'bytes', 'after', 'bytes', 'saved', 'strategy']));
+    console.log('\nSELFTEST PASSED: resize-down-only, same-format recompress, and identify parsing all work on this runner.');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 // ------------------------------------------------------------------ audit ---
@@ -552,55 +651,15 @@ async function optimizeOne(obj) {
   const ext = extOf(obj.path);
   const dir = await mkdtemp(join(tmpdir(), 'lx-opt-'));
   try {
-    const { data, error } = await supabase.storage.from(obj.bucket).download(obj.path);
+    const { data, error } = await db().storage.from(obj.bucket).download(obj.path);
     if (error || !data) throw new Error(`download failed: ${error?.message || 'empty response'}`);
     const original = Buffer.from(await data.arrayBuffer());
     const input = join(dir, `input.${ext}`);
     await writeFile(input, original);
     const { width, height } = await identify(input);
 
-    const geometry = `${MAX_WIDTH}x${MAX_WIDTH}>`; // shrink-only: never upscale
-    const base = ['-auto-orient', '-resize', geometry];
-    let strategy = '';
-    let output;
-
-    if (ext === 'jpg' || ext === 'jpeg') {
-      output = join(dir, `output.${ext}`);
-      await encode(input, output, [...base, '-sampling-factor', '4:2:0', '-strip', '-quality', String(QUALITY), '-interlace', 'Plane']);
-      strategy = `jpeg-q${QUALITY}${Math.max(width, height) > MAX_WIDTH ? `+resize→${MAX_WIDTH}` : ''}`;
-    } else if (ext === 'webp') {
-      output = join(dir, `output.${ext}`);
-      await encode(input, output, [...base, '-strip', '-quality', String(QUALITY)]);
-      strategy = `webp-q${QUALITY}${Math.max(width, height) > MAX_WIDTH ? `+resize→${MAX_WIDTH}` : ''}`;
-    } else {
-      // PNG: lossless first (resize + strip + max compression); quantize to 256
-      // colors only for big files where lossless alone saves too little.
-      output = join(dir, 'output.png');
-      await encode(input, output, [
-        ...base,
-        '-strip',
-        '-define',
-        'png:compression-level=9',
-        '-define',
-        'png:compression-filter=5',
-      ]);
-      strategy = `png-lossless${Math.max(width, height) > MAX_WIDTH ? `+resize→${MAX_WIDTH}` : ''}`;
-      let outSize = (await stat(output)).size;
-      if (original.length > 0 && (original.length - outSize) / original.length < MIN_SAVING && original.length >= PNG_QUANT_MIN_BYTES) {
-        await encode(input, output, [
-          ...base,
-          '-strip',
-          '-colors',
-          '256',
-          '-dither',
-          'FloydSteinberg',
-          '-define',
-          'png:compression-level=9',
-        ]);
-        strategy = `png-quant256${Math.max(width, height) > MAX_WIDTH ? `+resize→${MAX_WIDTH}` : ''}`;
-        outSize = (await stat(output)).size;
-      }
-    }
+    const output = join(dir, `output.${ext === 'jpeg' ? 'jpeg' : ext}`);
+    const strategy = await encodeImage(ext, input, output, width, height, original.length);
 
     const outSize = (await stat(output)).size;
     const saved = original.length - outSize;
@@ -611,7 +670,7 @@ async function optimizeOne(obj) {
     let observedCache = '';
     if (!DRY_RUN && worthIt) {
       const contentType = guessContentType(obj.path, obj.mimetype);
-      const { error: upError } = await supabase.storage.from(obj.bucket).upload(obj.path, await readFile(output), {
+      const { error: upError } = await db().storage.from(obj.bucket).upload(obj.path, await readFile(output), {
         upsert: true,
         contentType,
         cacheControl: '31536000',
@@ -732,7 +791,7 @@ async function runOptimize(objects) {
 // ----------------------------------------------------------------- dedupe ---
 
 async function sha256Of(bucket, path) {
-  const { data, error } = await supabase.storage.from(bucket).download(path);
+  const { data, error } = await db().storage.from(bucket).download(path);
   if (error || !data) throw new Error(`download failed for ${bucket}/${path}: ${error?.message || 'empty response'}`);
   return createHash('sha256').update(Buffer.from(await data.arrayBuffer())).digest('hex');
 }
@@ -814,7 +873,7 @@ async function runDedupe(objects, refs) {
     return;
   }
   for (const [bucket, paths] of deletionsByBucket) {
-    const { error } = await supabase.storage.from(bucket).remove(paths);
+    const { error } = await db().storage.from(bucket).remove(paths);
     if (error) throw new Error(`Could not delete from ${bucket}: ${error.message}`);
     console.log(`Deleted ${paths.length} spare file(s) from ${bucket}.`);
   }
@@ -825,6 +884,11 @@ async function runDedupe(objects, refs) {
 // -------------------------------------------------------------------- main ---
 
 async function main() {
+  validateConfig();
+  if (TASK === 'selftest') {
+    await runSelftest();
+    return;
+  }
   console.log(`Storage media ${TASK} · buckets=[${BUCKETS.join(', ')}] · dry_run=${DRY_RUN}`);
   console.log(`Supabase host: ${(() => { try { return new URL(SUPABASE_URL).host; } catch { return '(unparseable)'; } })()}`);
 

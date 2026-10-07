@@ -9,11 +9,11 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: 'audit = read-only inventory + page-cost estimates · optimize = resize+recompress in place · dedupe = delete byte-identical spares'
+        description: 'audit = read-only inventory + page-cost estimates · optimize = resize+recompress in place · dedupe = delete byte-identical spares · selftest = prove the encoder on generated images (no secrets needed)'
         type: choice
         required: true
         default: optimize
-        options: [optimize, audit, dedupe]
+        options: [optimize, audit, dedupe, selftest]
       bucket:
         description: 'Storage bucket(s), comma-separated'
         type: string

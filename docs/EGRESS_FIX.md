@@ -48,7 +48,9 @@ small PostgREST JSON row — zero Supabase image bytes.
 
 ### Action audit results (from `optimize-media.yml`, TASK=audit)
 
-> Status: **PENDING** — filled in from the dry-run output before any write.
+> Status: **PENDING owner click** — the sandbox token cannot dispatch workflows
+> (403), so runs 0–5 above need one click each in the GitHub UI. Paste the
+> tables here from the run logs before any LIVE write.
 
 - Stored total: … in … object(s) across bucket(s) …
 - Top 20 by size: (paste table)
@@ -75,13 +77,21 @@ Manual workflow `.github/workflows/optimize-media.yml` (`scripts/optimize-media.
 - GIF/SVG/AVIF/TIFF and non-images are never touched. Dedupe deletes only when
   a run is live **and** `confirm=DELETE` **and** a referenced keeper exists.
 
-Runs (times in UTC):
+How to run (GitHub → Actions → “Optimize Storage media in place” → Run workflow,
+branch `arena/f8271914-lixxonstudio`; no new secrets needed — it reuses
+`SUPABASE_SECRET_KEY`, plus `SUPABASE_ACCESS_TOKEN`/`SUPABASE_PROJECT_REF` for
+the optional logs peek):
 
-1. `audit` dry-run (read-only): …
-2. `optimize` dry run: projected saving … (paste before/after total)
-3. `optimize` LIVE: actual saving … (paste before/after total)
-4. `dedupe` dry run: … spare(s) across … group(s); keeper rule …
-5. `dedupe` LIVE (only if safe): deleted …
+0. `task=selftest`, `dry_run=true` — proves the encoder on generated images
+   (no credentials needed). Sandbox result 2026-10-07: PASSED on ImageMagick
+   6.9.11 (JPEG 5.69 MB→205 KB, PNG lossless 19.3→8.4 MB, quantize fallback
+   10.1→3.4 MB verified separately, 400px file never upscaled).
+1. `task=audit`, `dry_run=true` (read-only): …
+2. `task=optimize`, `dry_run=true`: projected saving … (paste before/after total)
+3. `task=optimize`, `dry_run=false` (LIVE upsert): actual saving … (paste total)
+4. `task=dedupe`, `dry_run=true`: … spare(s) across … group(s); keeper rule …
+5. `task=dedupe`, `dry_run=false` + `confirm=DELETE` (only if every group has a
+   referenced keeper): deleted …
 
 Expect up to ~1 h of stale CDN copies after the live run; browsers refresh
 on their own. **Re-check the Supabase usage page in 48 hours** and compare
