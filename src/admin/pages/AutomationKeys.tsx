@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, FlaskConical, KeyRound, Loader2,
+  AlertTriangle, CheckCircle2, ChevronDown, Copy, FlaskConical, KeyRound, Loader2,
   LockKeyhole, RefreshCw, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
@@ -13,6 +13,8 @@ import {
   type AutomationKeyCategory,
   type AutomationKeyEntry,
 } from '../../lib/automationKeys';
+
+const DEFAULT_VAPID_SUBJECT = 'mailto:owner@lixxonstudio.com';
 
 const CATEGORY_LABELS: Record<AutomationKeyCategory, string> = {
   ai: 'AI providers',
@@ -61,6 +63,9 @@ export default function AutomationKeys() {
   const [busyName, setBusyName] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'warning' | 'error' | 'info'; message: string } | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [vapidSubject, setVapidSubject] = useState(DEFAULT_VAPID_SUBJECT);
+  const [generatedVapidPublicKey, setGeneratedVapidPublicKey] = useState('');
+  const [vapidBusy, setVapidBusy] = useState(false);
 
   const refresh = useCallback(async (showSpinner = false): Promise<boolean> => {
     if (showSpinner) setRefreshing(true);
@@ -178,6 +183,47 @@ export default function AutomationKeys() {
     }
   };
 
+  const generateVapid = async () => {
+    const subject = vapidSubject.trim() || DEFAULT_VAPID_SUBJECT;
+    if (!/^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subject) && !(subject.startsWith('https://') && !/\s/.test(subject))) {
+      setNotice({ tone: 'warning', message: 'Use a contact subject in mailto:owner@example.com or https://example.com form.' });
+      return;
+    }
+    const hasExistingVapid = items.some(item => item.name.startsWith('vapid_') && item.configured);
+    if (hasExistingVapid && !window.confirm('Replace the stored VAPID keypair and contact subject? The current private key will be permanently replaced.')) return;
+
+    setVapidBusy(true);
+    setNotice(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('automation-keys', {
+        body: { action: 'generate_vapid', subject, replace: true },
+      });
+      const result = data as { public_key?: unknown; subject?: unknown } | null;
+      if (error || !result || typeof result.public_key !== 'string' || typeof result.subject !== 'string') {
+        setNotice({ tone: 'error', message: 'The VAPID pair could not be generated. No private key was returned; existing values were left unchanged.' });
+        return;
+      }
+      setGeneratedVapidPublicKey(result.public_key);
+      setVapidSubject(result.subject);
+      setNotice({ tone: 'success', message: 'Generated and stored the VAPID pair. The private key went straight to Vault and was never returned to this page.' });
+      await refresh();
+    } catch {
+      setNotice({ tone: 'error', message: 'The VAPID pair could not be generated. No private key was returned.' });
+    } finally {
+      setVapidBusy(false);
+    }
+  };
+
+  const copyVapidPublicKey = async () => {
+    if (!generatedVapidPublicKey) return;
+    try {
+      await navigator.clipboard.writeText(generatedVapidPublicKey);
+      setNotice({ tone: 'success', message: 'The public key was copied. It is safe to share with the browser push subscription.' });
+    } catch {
+      setNotice({ tone: 'warning', message: 'Copy was not available in this browser. Select the public key and copy it manually.' });
+    }
+  };
+
   const configuredCount = items.filter(item => item.configured).length;
 
   return (
@@ -249,6 +295,67 @@ export default function AutomationKeys() {
             <span><strong className="text-charcoal">{configuredCount}</strong> of {items.length} credentials stored</span>
             <span>Feature switches remain off until an owner enables them separately.</span>
           </div>
+
+          <section className="space-y-4 rounded-sm border border-sky-200 bg-sky-50 p-4 sm:p-5" aria-labelledby="vapid-generation-title">
+            <div>
+              <div className="flex items-center gap-2 text-sky-900">
+                <ShieldCheck size={18} aria-hidden="true" />
+                <h2 id="vapid-generation-title" className="font-medium">Generate VAPID keypair</h2>
+              </div>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-950">
+                Generate a fresh Web Push pair on the server. The private key goes straight into Vault and is never returned to this browser; only the public key is shown for copying.
+              </p>
+              <p className="mt-2 text-sm font-medium leading-6 text-sky-950">
+                To turn push on: enter your VAPID values, then open /admin/settings on your phone and tap Register this device.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <div>
+                <label htmlFor="vapid-subject" className="mb-1 block text-xs font-medium text-sky-950">VAPID contact subject</label>
+                <input
+                  id="vapid-subject"
+                  value={vapidSubject}
+                  onChange={event => setVapidSubject(event.target.value)}
+                  autoComplete="email"
+                  spellCheck={false}
+                  maxLength={320}
+                  className="min-h-11 w-full rounded-sm border border-sky-300 bg-white px-3 text-sm text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze"
+                />
+                <p className="mt-1 text-xs text-sky-900">Use a contact such as mailto:owner@example.com, or an HTTPS URL.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void generateVapid()}
+                disabled={vapidBusy || busyName !== null}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-charcoal px-4 text-sm font-medium text-white hover:bg-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {vapidBusy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <KeyRound size={15} aria-hidden="true" />}
+                Generate VAPID keypair
+              </button>
+            </div>
+            {generatedVapidPublicKey && (
+              <div>
+                <label htmlFor="generated-vapid-public-key" className="mb-1 block text-xs font-medium text-sky-950">Public key — copy this if needed</label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    id="generated-vapid-public-key"
+                    value={generatedVapidPublicKey}
+                    readOnly
+                    spellCheck={false}
+                    className="min-h-11 min-w-0 flex-1 rounded-sm border border-sky-300 bg-white px-3 font-mono text-xs text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void copyVapidPublicKey()}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-sky-300 bg-white px-4 text-sm text-charcoal hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze"
+                  >
+                    <Copy size={15} aria-hidden="true" />
+                    Copy public key
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
 
           <div className="space-y-4">
             {AUTOMATION_KEY_CATEGORIES.map(category => {
