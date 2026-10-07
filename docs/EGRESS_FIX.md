@@ -48,23 +48,31 @@ small PostgREST JSON row — zero Supabase image bytes.
 
 ### Action audit results (from `optimize-media.yml`, TASK=audit)
 
-> Status: **PENDING owner runs** — the sandbox token cannot dispatch workflows
-> (403, re-verified 2026-10-07), so runs 0–5 need one click each in the
-> GitHub UI (Actions → Optimize Storage media in place → Run workflow,
-> branch `main`). Paste the tables here from the run logs before any LIVE
-> write. Toolchain fixes PR #38 (ImageMagick) and PR #39 (Node 22) are merged
-> on main@051a481; re-run `selftest` first, then `audit`.
+> Status: **AUDIT COMPLETE 2026-10-07** (run 37628617538, `audit`,
+> `bucket=media`, main@051a481). Numbers below are from the job summary;
+> the per-file tables live in the run logs — paste them here before any
+> LIVE write.
 
-- Stored total: … in … object(s) across bucket(s) …
-- Top 20 by size: (paste table)
-- Oversized (≥1 MB): … file(s), … bytes
-- Same-size duplicate suspects: … group(s); byte-verified (TASK=dedupe dry-run): …
-- Reference coverage: … of … storage images referenced by exact DB path
-- **Cost per page load:** home **… KB** · article **… KB** · shop **… KB**
+- Stored total: **44.56 MB in 20 object(s)** across bucket(s) media
+- Top 20 by size: (pending — paste the `-- top 20 by size --` table from run
+  37628617538's “Run media task” log; the bucket holds exactly 20 objects,
+  so this table IS the full inventory)
+- Oversized (≥1 MB): **12 file(s)** (60% of all objects)
+- Same-size duplicate suspects: **0 group(s)**; byte-verified
+  (TASK=dedupe dry-run): still to run — expected to confirm zero
+- Reference coverage: (pending — paste the `-- reference coverage --` lines
+  from the run log)
+- **Cost per page load:** home **26390 KB (~25.8 MB)** · article **19636 KB
+  (~19.2 MB)** · shop **919 KB (~0.9 MB)**
   (method: Storage files counted whole — no srcset; Pexels covers at the w=800
   phone pick via HEAD; see script output for the per-file breakdown)
-- Top requested Storage paths / user agents (last day): … (or “not visible
-  from the Action token — read Supabase dashboard → Logs → Storage”)
+- Interpretation: 5.23 GB served ÷ ~26 MB per home-load ≈ **~200 page loads
+  explain the entire cycle's cached egress**. A handful of crawlers walking
+  the site + unfurling og:images accounts for the 105% quota. The library is
+  served ~120× over (5.23 GB ÷ 44.56 MB).
+- Top requested Storage paths / user agents (last day): (pending — paste the
+  `-- storage request logs --` lines from the run log, or read Supabase
+  dashboard → Logs → Storage)
 
 ## Phase 1 — optimise the media in place (this session, no frontend changes)
 
@@ -93,7 +101,8 @@ the optional logs peek):
    check — `ubuntu-latest` (24.04) no longer ships ImageMagick. Fixed by
    PR #38 (per-run `apt-get install imagemagick` + convert/identify version
    assertion). Re-run `selftest` on `main` to confirm green before the audit.
-1. `task=audit`, `dry_run=true` (read-only): …
+1. `task=audit`, `dry_run=true` (read-only): DONE 2026-10-07 (run 37628617538 —
+   results in §Action audit results above; per-file tables to paste from logs).
 2. `task=optimize`, `dry_run=true`: projected saving … (paste before/after total)
 3. `task=optimize`, `dry_run=false` (LIVE upsert): actual saving … (paste total)
 4. `task=dedupe`, `dry_run=true`: … spare(s) across … group(s); keeper rule …
@@ -111,6 +120,10 @@ Run history (UTC):
   `createClient` crashed (the secret was fine all along). Fixed by PR #39
   (`node-version: 22`), merged 13:24 UTC as 051a481. Lesson: the sandbox
   runs Node 22, the workflow ran Node 20 — engine drift hides crashes.
+- 2026-10-07 ~13:30, run 37628617538 (`audit`, `dry_run=true`, main@051a481):
+  SUCCESS. 44.56 MB / 20 objects, 12 oversized, 0 duplicate suspects;
+  page cost home 26390 KB / article 19636 KB / shop 919 KB. Per-file tables
+  still to paste from the run log.
 
 Expect up to ~1 h of stale CDN copies after the live run; browsers refresh
 on their own. **Re-check the Supabase usage page in 48 hours** and compare
