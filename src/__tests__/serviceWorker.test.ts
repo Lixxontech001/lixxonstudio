@@ -39,6 +39,7 @@ type PutImpl = (key: string, res: Response) => Promise<void> | void;
 
 interface Harness {
   dispatchFetch(req: MockRequest): Promise<Response> | undefined;
+  dispatchExtendable(type: string, event: Record<string, unknown>): Promise<unknown>;
   runExtendable(type: 'install' | 'activate'): Promise<void>;
   dispatchMessage(data: unknown): void;
   fetchMock: ReturnType<typeof vi.fn>;
@@ -58,6 +59,7 @@ function loadWorker(opts: {
   putImpl?: PutImpl;
   store?: Map<string, Response>;
   cacheNames?: string[];
+  selfExtra?: Record<string, unknown>;
 }): Harness {
   const store = opts.store ?? new Map<string, Response>();
   const cacheNames = opts.cacheNames ?? ['lixxon-v3'];
@@ -105,6 +107,7 @@ function loadWorker(opts: {
     },
     skipWaiting,
     clients: { claim },
+    ...(opts.selfExtra ?? {}),
   };
 
   // Execute the real worker source in a mocked service-worker scope.
@@ -121,6 +124,18 @@ function loadWorker(opts: {
       };
       for (const fn of listeners.get('fetch') ?? []) fn(event);
       return responded;
+    },
+    async dispatchExtendable(type: string, event: Record<string, unknown>) {
+      let waited: Promise<unknown> | undefined;
+      const withWait = {
+        ...event,
+        waitUntil(p: Promise<unknown>) {
+          waited = p;
+        },
+      };
+      for (const fn of listeners.get(type) ?? []) fn(withWait);
+      await waited;
+      return waited;
     },
     async runExtendable(type: 'install' | 'activate') {
       let waited: Promise<unknown> | undefined;
@@ -146,10 +161,11 @@ function loadWorker(opts: {
 
 describe('public/sw.js', () => {
   it('uses a new cache version and purges every previous cache on activate', async () => {
-    const cacheNames = ['lixxon-v1', 'lixxon-v2', 'lixxon-v0-old', 'lixxon-v4'];
+    // The current cache is created by install; every older cache must be purged.
+    const cacheNames = ['lixxon-v1', 'lixxon-v2', 'lixxon-v0-old', 'lixxon-v4', 'lixxon-v5'];
     const h = loadWorker({ cacheNames });
     await h.runExtendable('activate');
-    expect(cacheNames).toEqual(['lixxon-v4']);
+    expect(cacheNames).toEqual(['lixxon-v5']);
     expect(h.claim).toHaveBeenCalled();
   });
 
@@ -266,4 +282,81 @@ describe('public/sw.js', () => {
       expect(h.dispatchFetch(mockRequest(url))).toBeUndefined();
     }
   });
+  describe('owner push handling', () => {
+    const pushScope = () => {
+      const showNotification = vi.fn(async () => undefined);
+      const postMessage = vi.fn();
+      const focus = vi.fn(async () => undefined);
+      const navigate = vi.fn(async () => undefined);
+      const openWindow = vi.fn(async () => undefined);
+      const matchAll = vi.fn(async () => [{ focus, navigate }]);
+      const h = loadWorker({
+        selfExtra: {
+          registration: { showNotification },
+          clients: { claim: vi.fn(), matchAll, openWindow },
+        },
+      });
+      return { h, showNotification, postMessage, focus, navigate, openWindow, matchAll };
+    };
+
+    it('shows a capped notification for the fixed test payload', async () => {
+      const { h, showNotification } = pushScope();
+      await h.dispatchExtendable('push', {
+        data: { json: () => ({ title: 'Lixxon Studio', body: 'Test notification.', tag: 'lixxon-push-test', data: { url: '/admin/settings' } }) },
+      });
+      expect(showNotification).toHaveBeenCalledTimes(1);
+      const [title, options] = showNotification.mock.calls[0] as unknown as [string, Record<string, unknown>];
+      expect(title).toBe('Lixxon Studio');
+      expect(options).toMatchObject({ body: 'Test notification.', tag: 'lixxon-push-test', data: { url: '/admin/settings' } });
+    });
+
+    it('treats the payload as untrusted: caps text and refuses off-site links', async () => {
+      const { h, showNotification } = pushScope();
+      await h.dispatchExtendable('push', {
+        data: { json: () => ({ title: 'x'.repeat(500), body: 'y'.repeat(500), data: { url: 'https://evil.example/steal' } }) },
+      });
+      const [title, options] = showNotification.mock.calls[0] as unknown as [string, Record<string, unknown>];
+      expect(title.length).toBe(80);
+      expect(String(options.body).length).toBe(180);
+      expect(options.data).toEqual({ url: '/' });
+    });
+
+    it('falls back to a safe default when the payload is missing or invalid', async () => {
+      const { h, showNotification } = pushScope();
+      await h.dispatchExtendable('push', { data: { json: () => { throw new Error('bad json'); } } });
+      const [title, options] = showNotification.mock.calls[0] as unknown as [string, Record<string, unknown>];
+      expect(title).toBe('Lixxon Studio');
+      expect(options.data).toEqual({ url: '/' });
+    });
+
+    it('focuses an open window and navigates to the same-origin target on click', async () => {
+      const { h, focus, navigate, openWindow } = pushScope();
+      await h.dispatchExtendable('notificationclick', {
+        notification: { close: vi.fn(), data: { url: '/admin/settings' } },
+      });
+      expect(focus).toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith('/admin/settings');
+      expect(openWindow).not.toHaveBeenCalled();
+    });
+
+    it('opens a window for an unsafe click target and never fetches anything', async () => {
+      const { h, focus, openWindow, matchAll } = pushScope();
+      matchAll.mockResolvedValue([]);
+      await h.dispatchExtendable('notificationclick', {
+        notification: { close: vi.fn(), data: { url: '//evil.example' } },
+      });
+      expect(openWindow).toHaveBeenCalledWith('/');
+      expect(focus).not.toHaveBeenCalled();
+      expect(h.fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('relays a changed subscription to open pages without posting credentials', async () => {
+      const { h, postMessage, matchAll } = pushScope();
+      matchAll.mockResolvedValue([{ postMessage }]);
+      await h.dispatchExtendable('pushsubscriptionchange', {});
+      expect(postMessage).toHaveBeenCalledWith({ type: 'PUSH_SUBSCRIPTION_CHANGED' });
+      expect(h.fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
 });

@@ -188,6 +188,125 @@ The M10 RPCs are `admin_ai_refresh_predictive`, `admin_ai_refresh_digital_twin`,
 `rules`; external providers must remain authenticated edge-function integrations that can only
 create proposals.
 
+## 8.2 Operations agents and per-agent status, transcript and incidents (Admin → Admin AI → Agents)
+
+The six operations roles — **Analyst, Strategist, CEO, Auditor, Executioner and Chief of Staff** —
+extend the M7–M10 model rather than replacing it. They share the existing `admin_ai_agents`, jobs,
+action queue, events, approvals, critic and audit paths, and they seed **disabled and
+suggestion-only**. The five read-only roles produce deterministic aggregate briefs only (the Analyst
+reads server-side metrics; the others summarise missions, queue counts and governance counts), so
+no browser-supplied sales figure is ever accepted and no unavailable business metric is invented.
+Executioner is limited to its own owner-approved `analyze` rows and never publishes to a channel.
+
+Each agent card in the Agents tab now shows a status strip and a transcript, both read from the
+server. Nothing here is estimated in the browser:
+
+* **Last run / Next run** come from the recorded timestamps, and **Schedule** states one of
+  `Scheduled`, `Due now`, `No next run yet` or `Paused — will not run`. A disabled agent always reads
+  Paused, even if a stale timestamp exists. **Last 24h** shows the run count and how many proposals
+  are still queued; failed runs (7 days) and open incidents appear only when they are non-zero.
+* **Transcript & incidents** loads on demand (`admin_ai_agent_transcript`, at most 25 runs, default
+  10). Each run shows its status, when it happened, how many proposals it created, its duration and
+  any error text, plus the incidents recorded against that specific run. A failed run is never
+  displayed as a success.
+* **Incident controls** reuse the existing `admin_ai_resolve_incident` RPC from the card:
+  **Acknowledge** stamps the acknowledgement, **Resolve** records the resolution, the owner who made
+  the decision and a time. A resolved incident leaves the open count but stays in the transcript as
+  history. Both controls require `admin.ai.incidents`, so a reviewer without it can read the history
+  but not change it — and a refused control reports the refusal instead of appearing to succeed.
+
+Status and transcript reads require `admin.ai.reports`, match the existing control-tower gate, and
+are scoped to a single agent: a transcript can only return that agent's own jobs. The per-agent read
+model adds **no new table**, makes no provider call and changes no existing M7–M10 behavior.
+
+### 8.2.1 Analyst measured metrics (Admin → Admin AI → Action queue)
+
+The Analyst brief is built by `analyst_metrics(window_days)` (default 30, clamped to 1–365) over the
+tables that actually record events, and it is written to the queued `analytics_brief` action so the
+readable summary appears as the action detail and the full object appears under the action's
+`proposed` payload. Opening it from the Action queue always requires `admin.ai.reports`.
+
+Measured sections, each naming its real source table:
+
+| Section | Source | What it reports |
+|---|---|---|
+| `article_views` | `article_views` | total views, articles viewed, top 5 articles by views |
+| `search` | `search_history` | total searches, distinct queries, top 5 queries (queries containing `@` are excluded and text is truncated to 60 characters) |
+| `orders` | `orders`, `order_items`, `refund_requests` | paid orders only, revenue and average order value per currency, top products by revenue, refund requests |
+| `email` | `email_queue` | queued, sent, failed and skipped counts plus the top kinds — queue records, not provider readback |
+| `channels` | `distribution_metric_samples` | per-channel metrics with `measured` and `estimated` **kept separate**, each carrying its `collection_basis` |
+| `conversions` | derived | paid orders per 1,000 recorded views, explicitly labelled a coarse ratio rather than a tracked funnel |
+
+**Honest gaps are part of the output.** A section with no rows in the window reports
+`available: false` plus an `unavailable_reason` (never a zero that looks measured), and seven metrics
+that nothing records are always listed as unavailable with a reason: `email.open_rate`,
+`email.click_rate`, `search.zero_result_rate`, `article.avg_time_on_page`, `traffic.unique_visitors`,
+`checkout.conversion_funnel` and `channel.provider_readback`. Recommendations are emitted only when
+the measured numbers support them, and each carries the exact `basis` figures plus the metric keys it
+came from — for example `"Measured article" recorded 9 of 10 views (90.0%) in the last 30 days`.
+
+The agents' own `admin_ai_metrics` counters are still included, under `ai_metric_aggregates`, so
+nothing that was previously visible was removed.
+
+### 8.2.2 Grounded strategy, CEO decisions, the independent Auditor and approved dispatch
+
+The four executive roles now produce grounded, reviewable work instead of static snapshots. Every
+step stays suggestion-only, approval-gated and free of external publishing.
+
+* **Strategist — grounded experiment proposal.** The Strategist reads the measured metrics
+  (`analyst_metrics`, §8.2.1) and proposes an experiment only when a measured signal crosses the
+  grounding threshold: a repeated search term (3+ hits in 30 days) or one article carrying 25%+ of
+  measured views. The proposal carries its `basis` sentence, the `metric_keys` behind it and the
+  signal object; the experiment is created as a **draft** with two variants and guardrails
+  (`traffic_percent` 50, `no_paid_spend`, `max_duration_days` 30, `external_publishing` false). One
+  open experiment per hypothesis — a second run never duplicates the study, and when nothing is
+  grounded the brief says so explicitly instead of inventing a target.
+* **CEO — one decision per run.** If a grounded draft experiment is waiting, the CEO raises exactly
+  one action (`experiment_start`, target = that experiment, permission `admin.ai.approve`) that also
+  carries the whole operating scorecard under `proposed.scorecard`. Otherwise it raises the
+  scorecard. Nothing starts without the owner approving **and** dispatching it.
+* **Auditor — independent review that can block.** `admin_ai_audit_action` records a verdict
+  (`clear` / `concern` / `blocked`) for each proposal with the proposer, the reviewer, the criteria
+  and the findings. The Auditor can never review its own proposal, and it reviews every boardroom
+  agent's queued or approved work. Blocks come from evidence-based criteria: an empty proposal, a
+  claim with no `basis`/`metric_keys`, a critical-risk action, a health claim, and three
+  **non-overridable** hard blocks — possible credential exposure, any external publishing/sending
+  action type, and `auto_apply` on a boardroom agent.
+* **A block holds.** A blocked proposal is paused and cannot be executed or dispatched. The only
+  release is `admin_ai_override_block` with a **written reason of at least 10 characters**, recorded
+  with who wrote it and when; hard blocks cannot be overridden at all. The owner then approves the
+  proposal normally.
+* **Approved dispatch, never publishing.** `admin_ai_dispatch_approved` requires an owner-approved
+  action and dispatches only three allow-listed types: `analyze` (the existing executor), 
+  `experiment_start` (sets the experiment to running — internal state only) and `channel_prepare`
+  (creates or refreshes a **pending** draft in `automation_distribution_drafts` with its SHA-256
+  payload hash, for the owner to approve in the Daily Kit). It refuses everything else, so there is
+  no automation path that publishes, sends, emails or campaigns; the kill switch stops `analyze` and
+  `experiment_start` dispatches.
+* **Chief of Staff — linked digest.** The digest carries `links`, one item per thing that needs the
+  owner: actions (with their latest Auditor verdict and what each needs), open experiments and open
+  incidents, each with the record's id. It states that it sends nothing externally.
+* **CEO — proposed re-dating of your Lagos queue (V8).** When no experiment is awaiting a
+  decision, the CEO reads the next 14 Lagos days against the same two-a-day counter the
+  scheduling guard uses. If one day holds two articles while another is empty, it proposes moving
+  the **least-visited** item (fewest measured views in 30 days, newest first on a tie) into the
+  earliest empty day at that item's own clock time — one reason per move, the measured basis
+  attached and the limits stated in the payload: `max_moves`, `capacity_per_day: 2`, the window,
+  future-only, published untouched, content untouched, status untouched, owner-apply-only. With
+  nothing to spread it stays the aggregate scorecard, so the CEO still raises exactly one action
+  per run. A re-dating moves `scheduled_at`/`published_at` together through the owner's own
+  calendar path and queued intake items through the same capacity counter; article text, article
+  status and every published article are never touched, the Auditor hard-blocks any move against a
+  non-scheduled or published article or any field outside the re-dating contract, and
+  `admin_ai_execute_action` does not know the action type, so nothing automatic can move a date.
+  The owner presses **Apply schedule** in the action queue; the apply honours the Auditor's block
+  gate and the kill switch and refuses a stale proposal.
+* **In the control room** (Admin → Admin AI → Action queue) each action now shows its decision note
+  (which is where an Auditor block reason appears), an optional note field, and — for owners with
+  `admin.ai.approve` — a **Dispatch** button on approved allow-listed actions and an
+  **Override block** button on Auditor-blocked ones. A reviewer without that permission sees none of
+  those controls.
+
 ## 9. Front end as data (Admin → Front end)
 
 `site_settings` public rows drive the storefront without a deploy: `nav_menu`, `footer`,

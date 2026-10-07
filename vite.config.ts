@@ -88,6 +88,8 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: 'es2020',
+      minify: 'terser',
+      terserOptions: { module: true, compress: { module: true, passes: 2 }, mangle: { module: true }, format: { comments: false } },
       cssCodeSplit: true,
       // Admin is reached through a route-level dynamic import; do not make readers
       // download its shared chunk as a modulepreload dependency.
@@ -100,6 +102,13 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // Route-level modules stay out of the shared admin chunk. The lazy
+            // article intake/calendar and System Check remain size-budgeted as
+            // separate chunks rather than inflating the core admin route bundle.
+            if (id.includes('/src/admin/pages/AutomationRuns.tsx')) return 'automation-runs';
+            if (id.includes('/src/admin/pages/AutomationDistribution.tsx') || id.includes('/src/lib/automationDistribution.ts')) return 'automation-distribution';
+            if (id.includes('/src/admin/pages/AutomationCheck.tsx')) return 'automation-check';
+            if (id.includes('/src/admin/pages/ArticleQueueCalendar.tsx')) return 'article-intake';
             if (id.includes('/src/admin/')) return 'admin-pages';
             if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'react-vendor';
             if (id.includes('node_modules/react-helmet-async')) return 'helmet';

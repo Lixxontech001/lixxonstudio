@@ -486,16 +486,15 @@ export function useAdminMedia() {
   useEffect(() => {
     let cancelled = false;
     const fetchMedia = async () => {
-      const { data } = await supabase
-        .from('media')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data } = await supabase.from('media').select('*').order('created_at', { ascending: false });
       if (cancelled) return;
       setMedia(data || []);
       setLoading(false);
     };
-    fetchMedia();
-    return () => { cancelled = true; };
+    const onVisible = () => { if (document.visibilityState === 'visible') void fetchMedia(); };
+    void fetchMedia();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   return { media, loading, setMedia };

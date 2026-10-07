@@ -64,4 +64,136 @@ BEGIN
   PERFORM admin_ai_set_autopilot(false,false,'suggest',0,'rules');
 END $$;
 
+-- Phase 4 boardroom: paused/suggestion-only defaults, distinct aggregate handlers,
+-- owner-only Executioner dispatch, pause behavior, and article-body immutability.
+DO $$
+DECLARE
+  owner jsonb := '{"role":"authenticated","sub":"00000000-0000-0000-0000-000000000001","email":"owner@lixxonstudio.com"}';
+  editor jsonb := '{"role":"authenticated","sub":"00000000-0000-0000-0000-0000000000c3","email":"editor@example.com"}';
+  role_key text;
+  role_count integer;
+  queued_count integer;
+  result jsonb;
+  unapproved_analyze uuid;
+  approved_analyze uuid;
+  other_agent_analyze uuid;
+  approved_unsafe uuid;
+  body_before text;
+  body_after text;
+  fixture_post uuid := '00000000-0000-4000-8000-000000000401';
+  added_editor_run boolean := false;
+BEGIN
+  PERFORM set_config('request.jwt.claims', owner::text, true);
+  PERFORM set_config('request.jwt.claim.sub', owner->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  SET LOCAL ROLE authenticated;
+
+  SELECT count(*) INTO role_count
+    FROM admin_ai_agents
+   WHERE agent_key = ANY(ARRAY['analyst','strategist','ceo','auditor','executioner','chief_of_staff']);
+  IF role_count <> 6 THEN RAISE EXCEPTION 'Phase 4 agent registry must contain exactly six roles'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM admin_ai_agents
+     WHERE agent_key = ANY(ARRAY['analyst','strategist','ceo','auditor','executioner','chief_of_staff'])
+       AND (enabled OR autonomy_level <> 'suggest')
+  ) THEN RAISE EXCEPTION 'Phase 4 agents must seed paused and suggestion-only'; END IF;
+  IF NOT _m8_raises('authenticated', owner, 'SELECT admin_ai_run_agent(''analyst'')') THEN
+    RAISE EXCEPTION 'disabled Analyst agent was allowed to run';
+  END IF;
+  IF NOT _m8_raises('authenticated', owner, 'SELECT admin_ai_set_agent(''analyst'',true,''auto_apply'',1440,10)') THEN
+    RAISE EXCEPTION 'Analyst autonomy was raised above suggestion-only';
+  END IF;
+
+  INSERT INTO posts (id, title, slug, content, status, published_at)
+  VALUES (fixture_post, 'Phase 4 body immutability fixture', 'phase-4-body-immutability-fixture', 'Owner-authored fixture prose must remain byte-for-byte unchanged.', 'draft', '1900-01-01T00:00:00Z')
+  ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, status = 'draft', published_at = EXCLUDED.published_at;
+  SELECT md5(content) INTO body_before FROM posts WHERE id = fixture_post;
+
+  FOREACH role_key IN ARRAY ARRAY['analyst','strategist','ceo','auditor','chief_of_staff'] LOOP
+    PERFORM admin_ai_set_agent(role_key,true,'suggest',1440,10);
+    SELECT admin_ai_run_agent(role_key) INTO result;
+    -- Bounded and deterministic, not necessarily one: with measured data the Strategist
+    -- adds a single grounded experiment proposal alongside its brief (Phase 4 gap 2).
+    IF COALESCE((result->>'queued')::integer,0) NOT BETWEEN 1 AND 2 THEN
+      RAISE EXCEPTION 'Phase 4 handler % created % suggestions, expected 1-2', role_key, result->>'queued';
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM admin_ai_action_queue
+       WHERE agent_key = role_key AND autonomy_level = 'suggest' AND status = 'queued'
+    ) THEN RAISE EXCEPTION 'Phase 4 handler % did not leave a suggestion in the approval queue', role_key; END IF;
+  END LOOP;
+  SELECT count(DISTINCT action_type) INTO role_count
+    FROM admin_ai_action_queue
+   WHERE agent_key = ANY(ARRAY['analyst','strategist','ceo','auditor','chief_of_staff']);
+  -- Each read-only role must own at least one distinct handler. Gap 2 adds
+  -- experiment_proposal/experiment_start, so this is a floor, not an exact count.
+  IF role_count < 5 THEN RAISE EXCEPTION 'Phase 4 read-only agents do not have distinct handlers'; END IF;
+  -- A grounded proposal must never exist without its measured basis attached.
+  IF EXISTS (
+    SELECT 1 FROM admin_ai_action_queue
+     WHERE action_type = 'experiment_proposal'
+       AND (NOT (proposed ? 'basis') OR jsonb_array_length(COALESCE(proposed -> 'metric_keys', '[]'::jsonb)) = 0)
+  ) THEN RAISE EXCEPTION 'A grounded experiment proposal was queued without its measured basis'; END IF;
+
+  PERFORM admin_ai_set_agent('executioner',true,'suggest',1440,10);
+  SELECT admin_ai_queue_action(
+    'executioner','analyze','M8 unapproved Executioner fixture','Must remain queued until an owner approves it.',
+    'low','approval_required','ops.fix','system',NULL,'{"fixture":"executioner-unapproved"}'::jsonb,NULL,NULL
+  ) INTO unapproved_analyze;
+  SELECT admin_ai_queue_action(
+    'executioner','analyze','M8 approved Executioner fixture','Owner-approved safe statistics maintenance.',
+    'low','approval_required','ops.fix','system',NULL,'{"fixture":"executioner-approved"}'::jsonb,NULL,NULL
+  ) INTO approved_analyze;
+  SELECT admin_ai_queue_action(
+    'analyst','analyze','M8 other-agent approved fixture','Must remain approved; Executioner only dispatches its own row.',
+    'low','approval_required','ops.fix','system',NULL,'{"fixture":"other-agent-approved"}'::jsonb,NULL,NULL
+  ) INTO other_agent_analyze;
+  SELECT admin_ai_queue_action(
+    'executioner','requeue_email','M8 non-allow-listed fixture','Must not be dispatched by Executioner.',
+    'low','approval_required','ops.fix','system',NULL,'{"fixture":"executioner-not-allow-listed"}'::jsonb,NULL,NULL
+  ) INTO approved_unsafe;
+  PERFORM admin_ai_decide_action(approved_analyze,'approve','Owner-approved Executioner fixture');
+  PERFORM admin_ai_decide_action(other_agent_analyze,'approve','Approved for Analyst; not executable by Executioner');
+  PERFORM admin_ai_decide_action(approved_unsafe,'approve','Owner approval does not expand Executioner allow-list');
+
+  IF NOT EXISTS (SELECT 1 FROM role_permissions WHERE role='editor' AND permission='admin.ai.run') THEN
+    INSERT INTO role_permissions(role,permission) VALUES ('editor','admin.ai.run') ON CONFLICT DO NOTHING;
+    added_editor_run := true;
+  END IF;
+  IF NOT _m8_raises('authenticated', editor, 'SELECT admin_ai_run_agent(''executioner'')') THEN
+    RAISE EXCEPTION 'Executioner ran without admin.ai.approve';
+  END IF;
+  IF added_editor_run THEN DELETE FROM role_permissions WHERE role='editor' AND permission='admin.ai.run'; END IF;
+
+  PERFORM set_config('request.jwt.claims', owner::text, true);
+  PERFORM set_config('request.jwt.claim.sub', owner->>'sub', true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  SET LOCAL ROLE authenticated;
+  SELECT admin_ai_run_agent('executioner') INTO result;
+  queued_count := COALESCE((result->>'queued')::integer,0);
+  IF queued_count <> 1 THEN RAISE EXCEPTION 'Executioner did not dispatch exactly one owner-approved allow-listed action'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=approved_analyze AND agent_key='executioner' AND action_type='analyze' AND status='applied') THEN
+    RAISE EXCEPTION 'Executioner-owned approved ANALYZE action did not pass through the existing executor';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=unapproved_analyze AND agent_key='executioner' AND status='queued') THEN
+    RAISE EXCEPTION 'Executioner dispatched an unapproved action';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=other_agent_analyze AND agent_key='analyst' AND status='approved') THEN
+    RAISE EXCEPTION 'Executioner dispatched an approved ANALYZE action owned by another agent';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM admin_ai_action_queue WHERE id=approved_unsafe AND agent_key='executioner' AND status='approved') THEN
+    RAISE EXCEPTION 'Executioner dispatched an action outside its allow-list';
+  END IF;
+
+  PERFORM admin_ai_set_agent('analyst',false,'suggest',1440,10);
+  IF NOT _m8_raises('authenticated', owner, 'SELECT admin_ai_run_agent(''analyst'')') THEN
+    RAISE EXCEPTION 'paused Analyst agent was allowed to run';
+  END IF;
+  SELECT md5(content) INTO body_after FROM posts WHERE id = fixture_post;
+  IF body_before IS DISTINCT FROM body_after THEN RAISE EXCEPTION 'Phase 4 changed posts.content'; END IF;
+  IF lower(pg_get_functiondef('public.admin_ai_run_agent(text,uuid)'::regprocedure)) LIKE '%update posts set content%' THEN
+    RAISE EXCEPTION 'Phase 4 runner contains a posts.content write';
+  END IF;
+END $$;
+
 DROP FUNCTION _m8_raises(text, jsonb, text);

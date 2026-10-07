@@ -81,7 +81,19 @@ for (const [group, file] of Object.entries(chunks)) {
 // Vite entry never loads them for readers. They still get their own explicit budget below.
 const jsFiles = files.filter((f) => f.endsWith('.js'));
 const adminJsFiles = jsFiles.filter((f) => f.startsWith('admin-pages-'));
-const publicJsFiles = jsFiles.filter((f) => !adminJsFiles.includes(f));
+// Protected, route-only admin modules are lazy loaded and are not part of a
+// public reader's download. Keep them out of public total-js but guard each
+// route with an explicit, non-baseline hard ceiling below.
+const ADMIN_ROUTE_LIMITS = new Map([
+  ['automation-check-', 4 * 1024],
+  ['article-intake-', 15 * 1024],
+  ['automation-runs-', 9 * 1024],
+  ['automation-distribution-', 24 * 1024],
+  // Owner Web Push opt-in panel: lazy, admin-only, and never part of a reader download.
+  ['automation-push-panel-', 8 * 1024],
+]);
+const adminRouteFiles = jsFiles.filter((f) => [...ADMIN_ROUTE_LIMITS.keys()].some((prefix) => f.startsWith(prefix)));
+const publicJsFiles = jsFiles.filter((f) => !adminJsFiles.includes(f) && !adminRouteFiles.includes(f));
 const cssFiles = files.filter((f) => f.endsWith('.css'));
 const sumFiles = (list) => ({
   file: `${list.length} chunks`,
@@ -90,6 +102,7 @@ const sumFiles = (list) => ({
 });
 measured['total-js'] = sumFiles(publicJsFiles);
 measured['admin-total-js'] = sumFiles(adminJsFiles);
+measured['admin-route-js'] = sumFiles(adminRouteFiles);
 measured['total-css'] = {
   file: `${cssFiles.length} file(s)`,
   raw: cssFiles.reduce((n, f) => n + readFileSync(join(ASSETS, f)).length, 0),
@@ -117,6 +130,15 @@ if (update || !baseline) {
 
 const failures = [];
 const rows = [];
+const routeBudgets = [];
+for (const [prefix, limit] of ADMIN_ROUTE_LIMITS) {
+  const routeFiles = jsFiles.filter((file) => file.startsWith(prefix));
+  const current = sumFiles(routeFiles);
+  const route = prefix.slice(0, -1);
+  routeBudgets.push({ route, files: routeFiles.length, current: current.gzip, limit });
+  if (routeFiles.length === 0) failures.push(`${route}: expected lazy route chunk is missing`);
+  else if (current.gzip > limit) failures.push(`${route}: ${formatKb(current.gzip)} > hard limit ${formatKb(limit)}`);
+}
 for (const [group, current] of Object.entries(measured)) {
   const budget = baseline.budgets?.[group];
   if (budget === undefined) {
@@ -131,13 +153,17 @@ for (const [group, current] of Object.entries(measured)) {
 }
 
 if (asJson) {
-  console.log(JSON.stringify({ rows, failures }, null, 2));
+  console.log(JSON.stringify({ rows, routeBudgets, failures }, null, 2));
 } else {
   console.log('[size-budget] gzip budgets (limit = baseline + 5%)\n');
   for (const r of rows.sort((a, b) => b.current - a.current)) {
     const budget = r.budget === null ? '   —   ' : formatKb(r.budget);
     const delta = r.delta === null ? '' : `${r.delta > 0 ? '+' : ''}${(r.delta / 1024).toFixed(2)} kB`;
     console.log(`  ${r.status.padEnd(5)} ${r.group.padEnd(18)} ${formatKb(r.current).padStart(11)}  budget ${budget.padStart(10)}  ${delta}`);
+  }
+  console.log('\n[size-budget] protected lazy admin routes (hard limits)');
+  for (const r of routeBudgets) {
+    console.log(`  ${r.files ? 'ok' : 'FAIL'}    ${r.route.padEnd(18)} ${formatKb(r.current).padStart(11)}  limit ${formatKb(r.limit).padStart(10)}`);
   }
 }
 

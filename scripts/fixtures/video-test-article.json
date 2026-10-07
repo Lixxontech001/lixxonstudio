@@ -1,0 +1,15 @@
+{
+  "fixture_id": "lixxon-video-fixture-3.2-v1",
+  "mode": "test",
+  "namespace": "automation-video-test",
+  "article_id": "test-article-do-not-publish-3-2",
+  "status": "fixture_only",
+  "title": "TEST ONLY — Lixxon vertical-video fixture",
+  "article_body": "TEST ONLY. This fixture is not editorial content or a publishable article. An isolated test verifies a calm vertical image movement, exact captions, and a muted MP4 metadata contract. This source text exists only to prove that rendering leaves the fixture article body unchanged.",
+  "test_excerpt": "An isolated test verifies a calm vertical image movement, exact captions, and a muted MP4 metadata contract.",
+  "hero_image": "public/assets/images/lixxon-studio-logo.webp",
+  "alt_text": "TEST ONLY: Slow zoom over the Lixxon Studio logo on cream, with charcoal and bronze title cards.",
+  "expected_duration_seconds": 12,
+  "publish_eligible": false,
+  "approval_eligible": false
+}
