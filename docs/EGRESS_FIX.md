@@ -48,9 +48,11 @@ small PostgREST JSON row — zero Supabase image bytes.
 
 ### Action audit results (from `optimize-media.yml`, TASK=audit)
 
-> Status: **PENDING owner click** — the sandbox token cannot dispatch workflows
-> (403), so runs 0–5 above need one click each in the GitHub UI. Paste the
-> tables here from the run logs before any LIVE write.
+> Status: **PENDING owner runs** — the sandbox token cannot dispatch workflows
+> (403, re-verified 2026-10-07), so runs 0–5 need one click each in the
+> GitHub UI (Actions → Optimize Storage media in place → Run workflow,
+> branch `main`). Paste the tables here from the run logs before any LIVE
+> write. Toolchain fix PR #38 is merged; re-run `selftest` first.
 
 - Stored total: … in … object(s) across bucket(s) …
 - Top 20 by size: (paste table)
@@ -86,6 +88,10 @@ the optional logs peek):
    (no credentials needed). Sandbox result 2026-10-07: PASSED on ImageMagick
    6.9.11 (JPEG 5.69 MB→205 KB, PNG lossless 19.3→8.4 MB, quantize fallback
    10.1→3.4 MB verified separately, 400px file never upscaled).
+   Runner note: the first `main` run (37561308404) failed in 19 s at the tools
+   check — `ubuntu-latest` (24.04) no longer ships ImageMagick. Fixed by
+   PR #38 (per-run `apt-get install imagemagick` + convert/identify version
+   assertion). Re-run `selftest` on `main` to confirm green before the audit.
 1. `task=audit`, `dry_run=true` (read-only): …
 2. `task=optimize`, `dry_run=true`: projected saving … (paste before/after total)
 3. `task=optimize`, `dry_run=false` (LIVE upsert): actual saving … (paste total)
