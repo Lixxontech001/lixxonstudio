@@ -1,0 +1,162 @@
+name: Ephemeral video render contract test
+run-name: Ephemeral video test ${{ github.ref_name }} #${{ github.run_number }}
+on:
+  push:
+    branches: ['arena/**']
+    paths:
+      - '.github/workflows/video-render-test.yml'
+      - 'scripts/render-video-test.mjs'
+      - 'scripts/video-asset-validation.mjs'
+      - 'scripts/video-template.mjs'
+      - 'scripts/fixtures/video-test-article.json'
+      - 'public/assets/images/lixxon-studio-logo.webp'
+      - 'src/__tests__/videoAssetValidation.test.ts'
+  workflow_dispatch:
+    inputs:
+      template_json:
+        description: 'Optional video template JSON copied from Admin → Daily Kit → Video templates. Empty uses the checked-in default look.'
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: private-video-test-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  render-test-fixture:
+    # Two ways in, both deliberate: a feature-branch push while the harness is being changed,
+    # and an owner-triggered dispatch from Admin → Daily Kit → Video templates, which is how a
+    # template change reaches a render without any code deploy. Pushes to the default branch
+    # still do not start a render on their own.
+    if: startsWith(github.ref, 'refs/heads/arena/') || github.event_name == 'workflow_dispatch'
+    name: Render and probe a non-publishable fixture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the fixture without a persisted credential
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install and verify free media toolchain and fallback fonts
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install --yes --no-install-recommends ffmpeg fonts-dejavu-core
+          ffmpeg -hide_banner -version | sed -n '1p'
+          ffprobe -hide_banner -version | sed -n '1p'
+          ffmpeg -filters > "$RUNNER_TEMP/ffmpeg-filters.txt" 2>&1
+          grep -qE '[[:space:]]zoompan[[:space:]]' "$RUNNER_TEMP/ffmpeg-filters.txt"
+          grep -qE '[[:space:]]drawtext[[:space:]]' "$RUNNER_TEMP/ffmpeg-filters.txt"
+          test -s /usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf
+          test -s /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+          node --version
+      - name: Render the fixture into the runner-only test namespace
+        shell: bash
+        # The template reaches this step only through the environment, never through
+        # shell interpolation, and is written to a private file the renderer validates.
+        # `github.event.inputs` is used rather than `inputs` because the latter is only
+        # defined for a dispatched run; on a push it fails the step instantly.
+        env:
+          TEMPLATE_JSON: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.template_json || '' }}
+        run: |
+          set -euo pipefail
+          mkdir -m 700 -p "$RUNNER_TEMP/automation-video-test"
+          template_args=()
+          if [ -n "${TEMPLATE_JSON:-}" ]; then
+            printf '%s' "$TEMPLATE_JSON" > "$RUNNER_TEMP/automation-video-test/template.json"
+            chmod 600 "$RUNNER_TEMP/automation-video-test/template.json"
+            node -e 'const fs=require("node:fs");const raw=fs.readFileSync(process.env.RUNNER_TEMP+"/automation-video-test/template.json","utf8");const bytes=Buffer.byteLength(raw,"utf8");if(bytes<2||bytes>4096){throw new Error("template too large or empty")};JSON.parse(raw);console.log("template JSON accepted, bytes="+bytes)'
+            template_args+=(--template "$RUNNER_TEMP/automation-video-test/template.json")
+            printf 'Rendering with a dispatched owner template.\n'
+          else
+            printf 'Rendering with the checked-in default look.\n'
+          fi
+          # The renderer's own messages are safe by contract (they never carry prose,
+          # credentials or provider data), so a failed run explains itself in the step log
+          # and as a job annotation the owner can read from the run page.
+          set +e
+          render_output=$(node scripts/render-video-test.mjs \
+            --mode test \
+            --fixture scripts/fixtures/video-test-article.json \
+            --output "$RUNNER_TEMP/automation-video-test/lixxon-video-test.mp4" \
+            "${template_args[@]}" 2>&1)
+          render_status=$?
+          set -e
+          printf '%s\n' "$render_output"
+          if [ "$render_status" -ne 0 ]; then
+            printf '::error title=Video render failed::%s\n' "$(printf '%s' "$render_output" | tail -n 4 | tr '\n' ' ')"
+            exit "$render_status"
+          fi
+      - name: Independently assert ffprobe streams, duration, size and immutable source
+        shell: bash
+        env:
+          VIDEO_PATH: ${{ runner.temp }}/automation-video-test/lixxon-video-test.mp4
+        run: |
+          set -euo pipefail
+          ffprobe -v error \
+            -show_entries format=duration,format_name:stream=codec_type,codec_name,width,height,pix_fmt \
+            -of json "$VIDEO_PATH" > "$RUNNER_TEMP/automation-video-test/ffprobe.json"
+          cat "$RUNNER_TEMP/automation-video-test/ffprobe.json"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync, statSync } from 'node:fs';
+          const videoPath = process.env.VIDEO_PATH;
+          const root = `${process.env.RUNNER_TEMP}/automation-video-test`;
+          const probe = JSON.parse(readFileSync(`${root}/ffprobe.json`, 'utf8'));
+          const evidence = JSON.parse(readFileSync(`${videoPath.replace(/\.mp4$/i, '.evidence.json')}`, 'utf8'));
+          const video = (probe.streams || []).filter(stream => stream.codec_type === 'video');
+          const subtitles = (probe.streams || []).filter(stream => stream.codec_type === 'subtitle');
+          const audio = (probe.streams || []).filter(stream => stream.codec_type === 'audio');
+          const duration = Number(probe.format?.duration);
+          const bytes = statSync(videoPath).size;
+          assert.equal(video.length, 1, 'exactly one video stream is required');
+          assert.equal(video[0].codec_name, 'h264');
+          assert.equal(video[0].width, 1080);
+          assert.equal(video[0].height, 1920);
+          assert.equal(video[0].pix_fmt, 'yuv420p');
+          const expectedDuration = Number(evidence.template?.durationSeconds);
+          assert(Number.isInteger(expectedDuration) && expectedDuration >= 8 && expectedDuration <= 60,
+            `the evidence must state a bounded template duration, received ${evidence.template?.durationSeconds}`);
+          assert(Math.abs(duration - expectedDuration) <= 0.25, `expected ${expectedDuration} seconds, received ${duration}`);
+          assert.equal(subtitles.length, 1, 'one embedded caption track is required');
+          assert.equal(subtitles[0].codec_name, 'mov_text');
+          assert.equal(audio.length, 0, 'test video must be explicitly silent');
+          assert(bytes > 0 && bytes <= 100 * 1024 * 1024, `invalid MP4 size: ${bytes}`);
+          assert.equal(evidence.testOnly, true);
+          assert.equal(evidence.approvalEligible, false);
+          assert.equal(evidence.publishEligible, false);
+          assert.equal(evidence.altTextPresent, true, 'silent video requires bounded alt text');
+          assert.equal(evidence.articleBodySha256Before, evidence.articleBodySha256After);
+          assert.equal(evidence.articleBodyImmutable, true);
+          assert.equal(typeof evidence.template?.name, 'string');
+          assert(/^[a-f0-9]{64}$/.test(String(evidence.template?.payloadSha256)), 'the evidence must carry the validated template hash');
+          assert.equal(evidence.template?.music, 'none', 'the render is silent by contract');
+          const report = {
+            ffprobeAssertions: 'PASS', fixtureId: evidence.fixtureId, namespace: evidence.namespace,
+            testOnly: evidence.testOnly, codec: video[0].codec_name,
+            width: video[0].width, height: video[0].height, pixelFormat: video[0].pix_fmt,
+            durationSeconds: duration, subtitleCodec: subtitles[0].codec_name,
+            captionTrackPresent: true, captionCount: evidence.captionCount,
+            audioStreams: 0, audioMode: 'intentionally silent',
+            altTextPresent: evidence.altTextPresent, bytes, maxBytes: 100 * 1024 * 1024,
+            videoSha256: evidence.videoSha256,
+            templateName: evidence.template?.name,
+            templateSource: evidence.template?.source,
+            templateSha256: evidence.template?.payloadSha256,
+            articleBodySha256Before: evidence.articleBodySha256Before,
+            articleBodySha256After: evidence.articleBodySha256After,
+            articleBodyImmutable: evidence.articleBodyImmutable,
+            approvalEligible: evidence.approvalEligible,
+            publishEligible: evidence.publishEligible,
+          };
+          console.log(JSON.stringify(report, null, 2));
+          console.log(`::notice title=Ephemeral FFmpeg render evidence::${JSON.stringify(report)}`);
+          NODE
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          printf 'Workflow run: %s\n' "$run_url"
+          printf 'The generated MP4 remains in ephemeral runner temp and is not uploaded from this public repository.\n'
+          printf '\nWorkflow run: %s\n' "$run_url" >> "$GITHUB_STEP_SUMMARY"
+          printf '\nMP4 generated and validated in runner temp only; no public artifact upload, publish or queue operation.\n' >> "$GITHUB_STEP_SUMMARY"

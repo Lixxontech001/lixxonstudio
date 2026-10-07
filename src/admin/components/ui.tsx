@@ -28,18 +28,23 @@ type BtnProps = {
   busy?: boolean;
   icon?: ReactNode;
   title?: string;
+  ariaLabel?: string;
   type?: 'button' | 'submit';
   className?: string;
+  /** Disclosure wiring for buttons that show or hide a panel. */
+  ariaExpanded?: boolean;
+  ariaControls?: string;
 };
 
-export function Btn({ children, onClick, variant = 'primary', disabled, busy, icon, title, type = 'button', className = '' }: BtnProps) {
+export function Btn({ children, onClick, variant = 'primary', disabled, busy, icon, title, ariaLabel, type = 'button', className = '', ariaExpanded, ariaControls }: BtnProps) {
   const styles = variant === 'primary'
     ? 'bg-charcoal text-white hover:bg-bronze'
     : variant === 'danger'
       ? 'border border-red-300 text-red-700 hover:bg-red-50'
       : 'border border-taupe/50 bg-white text-charcoal hover:border-bronze';
   return (
-    <button type={type} onClick={onClick} disabled={disabled || busy} title={title}
+    <button type={type} onClick={onClick} disabled={disabled || busy} title={title} aria-label={ariaLabel}
+      aria-expanded={ariaExpanded} aria-controls={ariaControls}
       className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs rounded-sm disabled:opacity-60 ${styles} ${className}`}>
       {busy ? <Loader2 size={13} className="animate-spin" /> : icon}{children}
     </button>

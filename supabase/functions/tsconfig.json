@@ -11,7 +11,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "baseUrl": "../..",
-    "paths": { "@supabase/supabase-js": ["node_modules/@supabase/supabase-js/dist/module/index.d.ts"] },
+    "paths": { "@supabase/supabase-js": ["node_modules/@supabase/supabase-js/dist/index.d.mts"] },
     "types": []
   },
   "include": ["./**/*.ts"]
