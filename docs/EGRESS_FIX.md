@@ -52,7 +52,8 @@ small PostgREST JSON row — zero Supabase image bytes.
 > (403, re-verified 2026-10-07), so runs 0–5 need one click each in the
 > GitHub UI (Actions → Optimize Storage media in place → Run workflow,
 > branch `main`). Paste the tables here from the run logs before any LIVE
-> write. Toolchain fix PR #38 is merged; re-run `selftest` first.
+> write. Toolchain fixes PR #38 (ImageMagick) and PR #39 (Node 22) are merged
+> on main@051a481; re-run `selftest` first, then `audit`.
 
 - Stored total: … in … object(s) across bucket(s) …
 - Top 20 by size: (paste table)
@@ -105,9 +106,11 @@ Run history (UTC):
   secret not configured. Script behaved as designed (clean error, nothing
   written). Cause confirmed by owner answers (task=optimize, secret unsure).
 - 2026-10-07 13:12, run 37626646553 (`audit`, `dry_run=true`, main@cf32c0f):
-  FAILED in <1 s at the media step even after the owner added a secret —
-  the value still isn't reaching the job (wrong tab/scope/name?) or the run
-  pre-dates it. Pending: owner confirms placement + pastes the FAILED: line.
+  FAILED in <1 s: `Node.js detected but native WebSocket not found` — the
+  workflow pinned Node 20 while supabase-js 2.117+ requires Node 22+, so
+  `createClient` crashed (the secret was fine all along). Fixed by PR #39
+  (`node-version: 22`), merged 13:24 UTC as 051a481. Lesson: the sandbox
+  runs Node 22, the workflow ran Node 20 — engine drift hides crashes.
 
 Expect up to ~1 h of stale CDN copies after the live run; browsers refresh
 on their own. **Re-check the Supabase usage page in 48 hours** and compare
