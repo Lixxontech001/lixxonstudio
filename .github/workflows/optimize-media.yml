@@ -1,0 +1,75 @@
+name: Optimize Storage media in place (manual)
+
+# Phase 1 of the cached-egress fix: same URLs, same formats, fewer bytes.
+# Manual only, dry-run by default. Reads SUPABASE_SECRET_KEY (service role) from
+# repository secrets — the key never leaves the runner and is never printed.
+# Replaces the older recompress-storage.yml (which changed formats to WebP and
+# therefore risked breaking frontend expectations); that file is kept for history.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'audit = read-only inventory + page-cost estimates · optimize = resize+recompress in place · dedupe = delete byte-identical spares'
+        type: choice
+        required: true
+        default: optimize
+        options: [optimize, audit, dedupe]
+      bucket:
+        description: 'Storage bucket(s), comma-separated'
+        type: string
+        required: true
+        default: media
+      dry_run:
+        description: 'true = report only, write nothing · false = upsert/delete for real'
+        type: boolean
+        required: true
+        default: true
+      max_width:
+        description: 'Shrink images wider/taller than this (px); never upscales'
+        type: number
+        required: true
+        default: 1600
+      quality:
+        description: 'JPEG/WebP quality (PNG uses lossless first, quantize fallback)'
+        type: number
+        required: true
+        default: 82
+      confirm:
+        description: 'Live dedupe only: type DELETE to confirm deletion (dry_run=false alone is refused)'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Check preinstalled image tools (no new services, no new packages)
+        run: |
+          set -euo pipefail
+          if command -v magick >/dev/null 2>&1; then magick -version | head -n 1
+          elif command -v convert >/dev/null 2>&1; then convert -version | head -n 1; identify -version | head -n 1
+          else echo "::error::No ImageMagick CLI (magick/convert) on this runner."; exit 1; fi
+      - name: Run media task (dry_run=${{ inputs.dry_run }})
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jaatgiqigsmjodqgaocl.supabase.co' }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          STORAGE_BUCKETS: ${{ inputs.bucket }}
+          TASK: ${{ inputs.task }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          MAX_WIDTH: ${{ inputs.max_width }}
+          QUALITY: ${{ inputs.quality }}
+          DEDUPE_CONFIRM: ${{ inputs.confirm }}
+        run: node scripts/optimize-media.mjs
