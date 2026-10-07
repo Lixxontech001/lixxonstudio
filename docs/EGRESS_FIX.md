@@ -99,6 +99,12 @@ the optional logs peek):
 5. `task=dedupe`, `dry_run=false` + `confirm=DELETE` (only if every group has a
    referenced keeper): deleted …
 
+Run history (UTC):
+- 2026-10-07 13:03, run 37625488292 (`optimize`, `dry_run=true`, main@cf32c0f):
+  FAILED in <1 s at startup validation — `SUPABASE_SECRET_KEY` repository
+  secret not configured. Script behaved as designed (clean error, nothing
+  written). Pending: owner adds the secret, then runs selftest → audit.
+
 Expect up to ~1 h of stale CDN copies after the live run; browsers refresh
 on their own. **Re-check the Supabase usage page in 48 hours** and compare
 daily cached egress before/after.
