@@ -109,6 +109,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes('/src/admin/pages/AutomationDistribution.tsx') || id.includes('/src/lib/automationDistribution.ts')) return 'automation-distribution';
             if (id.includes('/src/admin/pages/AutomationCheck.tsx')) return 'automation-check';
             if (id.includes('/src/admin/pages/ArticleQueueCalendar.tsx')) return 'article-intake';
+            if (id.includes('/src/admin/components/VapidGenerator.tsx')) return 'vapid-generator';
             if (id.includes('/src/admin/')) return 'admin-pages';
             if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'react-vendor';
             if (id.includes('node_modules/react-helmet-async')) return 'helmet';

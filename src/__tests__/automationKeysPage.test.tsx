@@ -167,11 +167,11 @@ describe('Automation Keys page', () => {
       }
       return { data: true, error: null };
     });
-    mocks.invoke.mockImplementation(async (_name: string, args?: { body?: { action?: string; subject?: string; replace?: boolean } }) => {
-      expect(args?.body).toEqual({ action: 'generate_vapid', subject: 'mailto:owner@lixxonstudio.com', replace: true });
+    mocks.invoke.mockImplementation(async (_name: string, args?: { body?: { action?: string; subject?: string } }) => {
+      expect(args?.body).toEqual({ action: 'generate_vapid', subject: 'mailto:owner@lixxonstudio.com' });
       generated = true;
       return {
-        data: { action: 'generate_vapid', public_key: 'PUBLIC-KEY-ONLY', subject: 'mailto:owner@lixxonstudio.com' },
+        data: { action: 'generate_vapid', public_key: 'PUBLIC-KEY-ONLY' },
         error: null,
       };
     });
@@ -186,10 +186,10 @@ describe('Automation Keys page', () => {
     await settle();
 
     expect(mocks.invoke).toHaveBeenCalledWith('automation-keys', {
-      body: { action: 'generate_vapid', subject: 'mailto:owner@lixxonstudio.com', replace: true },
+      body: { action: 'generate_vapid', subject: 'mailto:owner@lixxonstudio.com' },
     });
     expect(el.querySelector<HTMLInputElement>('#generated-vapid-public-key')?.value).toBe('PUBLIC-KEY-ONLY');
-    expect(el.textContent).toContain('The private key went straight to Vault and was never returned to this page.');
+    expect(el.textContent).toContain('private key in Vault, not returned.');
     expect(el.textContent).not.toContain('private_key');
   });
 });
