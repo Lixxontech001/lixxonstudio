@@ -4,6 +4,7 @@ import {
   LockKeyhole, RefreshCw, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import VapidGenerator from '../components/VapidGenerator';
 import {
   AUTOMATION_KEY_CATEGORIES,
   automationStatusClass,
@@ -13,6 +14,8 @@ import {
   type AutomationKeyCategory,
   type AutomationKeyEntry,
 } from '../../lib/automationKeys';
+
+const DEFAULT_VAPID_SUBJECT = 'mailto:owner@lixxonstudio.com';
 
 const CATEGORY_LABELS: Record<AutomationKeyCategory, string> = {
   ai: 'AI providers',
@@ -61,6 +64,8 @@ export default function AutomationKeys() {
   const [busyName, setBusyName] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'warning' | 'error' | 'info'; message: string } | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [vapidSubject, setVapidSubject] = useState(DEFAULT_VAPID_SUBJECT);
+  const [generatedVapidPublicKey, setGeneratedVapidPublicKey] = useState('');
 
   const refresh = useCallback(async (showSpinner = false): Promise<boolean> => {
     if (showSpinner) setRefreshing(true);
@@ -178,6 +183,35 @@ export default function AutomationKeys() {
     }
   };
 
+  const generateVapid = async () => {
+    const subject = vapidSubject.trim() || DEFAULT_VAPID_SUBJECT;
+    if (!/^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subject) && !(subject.startsWith('https://') && !/\s/.test(subject))) {
+      setNotice({ tone: 'warning', message: 'Use a contact subject in mailto:owner@example.com or https://example.com form.' });
+      return;
+    }
+    if (items.some(item => item.name.startsWith('vapid_') && item.configured)
+      && !window.confirm('Replace the stored VAPID keypair and contact subject? The current private key will be permanently replaced.')) return;
+
+    setBusyName('__vapid__');
+    try {
+      const { data, error } = await supabase.functions.invoke('automation-keys', {
+        body: { action: 'generate_vapid', subject },
+      });
+      const publicKey = (data as { public_key?: unknown } | null)?.public_key;
+      if (error || typeof publicKey !== 'string') {
+        setNotice({ tone: 'error', message: 'VAPID generation failed; private key not returned.' });
+        return;
+      }
+      setGeneratedVapidPublicKey(publicKey);
+      setNotice({ tone: 'success', message: 'Generated VAPID pair; private key in Vault, not returned.' });
+      await refresh();
+    } catch {
+      setNotice({ tone: 'error', message: 'VAPID generation failed; private key not returned.' });
+    } finally {
+      setBusyName(null);
+    }
+  };
+
   const configuredCount = items.filter(item => item.configured).length;
 
   return (
@@ -249,6 +283,15 @@ export default function AutomationKeys() {
             <span><strong className="text-charcoal">{configuredCount}</strong> of {items.length} credentials stored</span>
             <span>Feature switches remain off until an owner enables them separately.</span>
           </div>
+
+          <VapidGenerator
+            subject={vapidSubject}
+            publicKey={generatedVapidPublicKey}
+            busy={busyName !== null}
+            onSubjectChange={setVapidSubject}
+            onGenerate={() => void generateVapid()}
+            onCopy={() => void navigator.clipboard.writeText(generatedVapidPublicKey)}
+          />
 
           <div className="space-y-4">
             {AUTOMATION_KEY_CATEGORIES.map(category => {

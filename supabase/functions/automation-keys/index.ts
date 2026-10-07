@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
 import {
   callerUser,
   env,
@@ -18,9 +18,75 @@ import {
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const MAX_BODY_BYTES = 1024;
 const PROVIDER_TIMEOUT_MS = 8_000;
+const VAPID_DEFAULT_SUBJECT = "mailto:owner@lixxonstudio.com";
 const YOUTUBE_CREDENTIALS = ["youtube_client_id", "youtube_client_secret", "youtube_refresh_token"] as const;
 
 type SecretName = string;
+
+type VapidMaterial = {
+  privateKey: string;
+  publicKey: string;
+  subject: string;
+};
+
+function decodeBase64Url(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(normalized);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function validVapidSubject(value: string): boolean {
+  if (/^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function generateVapidMaterial(subject: string): Promise<VapidMaterial> {
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  );
+  const [privateJwk, publicJwk] = await Promise.all([
+    crypto.subtle.exportKey("jwk", pair.privateKey),
+    crypto.subtle.exportKey("jwk", pair.publicKey),
+  ]);
+  const x = typeof publicJwk.x === "string" ? decodeBase64Url(publicJwk.x) : new Uint8Array();
+  const y = typeof publicJwk.y === "string" ? decodeBase64Url(publicJwk.y) : new Uint8Array();
+  const privateKey = typeof privateJwk.d === "string" ? privateJwk.d : "";
+  if (x.length !== 32 || y.length !== 32 || !/^[A-Za-z0-9_-]{43}$/.test(privateKey)) {
+    throw new Error("Generated VAPID key material was invalid");
+  }
+  const publicKey = encodeBase64Url(new Uint8Array([4, ...x, ...y]));
+  if (!/^[A-Za-z0-9_-]{87}$/.test(publicKey)) throw new Error("Generated VAPID public key was invalid");
+  return { privateKey, publicKey, subject };
+}
+
+async function storeVapidMaterial(
+  client: SupabaseClient,
+  material: VapidMaterial,
+): Promise<boolean> {
+  try {
+    const { data, error } = await client.rpc("automation_vapid_store", {
+      p_private_key: material.privateKey,
+      p_public_key: material.publicKey,
+      p_subject: material.subject,
+    });
+    return !error && Boolean(data && typeof data === "object" && (data as { ok?: unknown }).ok === true);
+  } catch {
+    return false;
+  }
+}
 type SafeCatalogRow = { name: string; configured: boolean };
 
 function corsFor(req: Request): Record<string, string> | null {
@@ -279,20 +345,46 @@ Deno.serve(async (req: Request) => {
   }
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return reply(req, { error: "Invalid request body." }, 400);
   const body = payload as Record<string, unknown>;
-  if (Object.keys(body).some((key) => !["action", "name"].includes(key))) {
-    return reply(req, { error: "Only an action and catalogue name are accepted." }, 400);
+  if (Object.keys(body).some((key) => !["action", "name", "subject", "replace"].includes(key))) {
+    return reply(req, { error: "Only an action, catalogue name, subject and replace choice are accepted." }, 400);
   }
-  if (body.action !== "test" || typeof body.name !== "string" || !/^[a-z][a-z0-9_]{1,63}$/.test(body.name)) {
-    return reply(req, { error: "A valid key test action is required." }, 400);
-  }
-  const name = body.name;
 
   const user = await callerUser(req);
   if (!user) return reply(req, { error: "Owner authentication required." }, 401);
 
   const supabaseUrl = env("SUPABASE_URL", "SUPABASE_PROJECT_URL");
   const anonKey = env("SUPABASE_ANON_KEY", "SUPABASE_KEY");
-  if (!supabaseUrl || !anonKey) return reply(req, { error: "Key test service is not configured." }, 503);
+  if (!supabaseUrl || !anonKey) return reply(req, { error: "Key service is not configured." }, 503);
+
+  if (body.action === "generate_vapid") {
+    if (body.name !== undefined || (body.replace !== undefined && typeof body.replace !== "boolean")) {
+      return reply(req, { error: "A VAPID generation request is invalid." }, 400);
+    }
+    const subject = typeof body.subject === "string" && body.subject.trim().length > 0
+      ? body.subject.trim()
+      : VAPID_DEFAULT_SUBJECT;
+    if (subject.length > 320 || !validVapidSubject(subject)) {
+      return reply(req, { error: "Use a valid mailto: or HTTPS VAPID subject." }, 400);
+    }
+    try {
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const material = await generateVapidMaterial(subject);
+      if (!await storeVapidMaterial(userClient, material)) {
+        return reply(req, { error: "The VAPID pair could not be stored. Existing values were left unchanged." }, 503);
+      }
+      return reply(req, { action: "generate_vapid", public_key: material.publicKey, subject: material.subject });
+    } catch {
+      return reply(req, { error: "The VAPID pair could not be generated. No private key was returned." }, 503);
+    }
+  }
+
+  if (body.action !== "test" || typeof body.name !== "string" || !/^[a-z][a-z0-9_]{1,63}$/.test(body.name)) {
+    return reply(req, { error: "A valid key test action is required." }, 400);
+  }
+  const name = body.name;
 
   let catalog: SafeCatalogRow[];
   try {

@@ -151,4 +151,45 @@ describe('Automation Keys page', () => {
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
   });
+
+  it('generates a VAPID pair without returning the private key', async () => {
+    let generated = false;
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === 'automation_list_secrets') {
+        return {
+          data: [
+            { name: 'vapid_private_key', label: 'Web Push VAPID private key', category: 'push', credential_type: 'secret', purpose: 'Private', required: false, configured: generated, last_test_status: 'not_tested', last_tested_at: null },
+            { name: 'vapid_public_key', label: 'Web Push VAPID public key', category: 'push', credential_type: 'public_key', purpose: 'Public', required: false, configured: generated, last_test_status: 'not_tested', last_tested_at: null },
+            { name: 'vapid_subject', label: 'Web Push contact subject', category: 'push', credential_type: 'identifier', purpose: 'Contact', required: false, configured: generated, last_test_status: 'not_tested', last_tested_at: null },
+          ],
+          error: null,
+        };
+      }
+      return { data: true, error: null };
+    });
+    mocks.invoke.mockImplementation(async (_name: string, args?: { body?: { action?: string; subject?: string } }) => {
+      expect(args?.body).toEqual({ action: 'generate_vapid', subject: 'mailto:owner@lixxonstudio.com' });
+      generated = true;
+      return {
+        data: { action: 'generate_vapid', public_key: 'PUBLIC-KEY-ONLY' },
+        error: null,
+      };
+    });
+
+    const el = mount();
+    await act(async () => { root.render(<AutomationKeys />); await Promise.resolve(); });
+    await settle();
+
+    const generateButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.includes('Generate VAPID keypair'));
+    expect(generateButton).toBeDefined();
+    await act(async () => { generateButton!.click(); await Promise.resolve(); });
+    await settle();
+
+    expect(mocks.invoke).toHaveBeenCalledWith('automation-keys', {
+      body: { action: 'generate_vapid', subject: 'mailto:owner@lixxonstudio.com' },
+    });
+    expect(el.querySelector<HTMLInputElement>('#generated-vapid-public-key')?.value).toBe('PUBLIC-KEY-ONLY');
+    expect(el.textContent).toContain('private key in Vault, not returned.');
+    expect(el.textContent).not.toContain('private_key');
+  });
 });
