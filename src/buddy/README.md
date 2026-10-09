@@ -114,3 +114,13 @@ Server side:
 - The owner can read his own packs. No signed-in user can write one directly.
 - Tests: `mindsPacks.test.ts` (rules, and the migration text), `mindsPacksDb.test.ts` (PGlite: Takeover and Kill, the four channels, replace, the 3-product cap, slots, Auditor and copy, posted packs, who may read and write).
 - Not built yet: the copy itself, the time picker, images and video, and "I posted this". Those are later slices.
+
+## Phase 4 slice 3: copy and the time picker
+
+- `supabase/functions/_shared/packCopy.ts` writes the four texts for one pack: a caption for Instagram, TikTok and Facebook, and a title and description for Pinterest. It uses one thinking call (`planPackCopy`). With no Google key the answer is "Cannot think: no Google key." and nothing is saved.
+- The Auditor (`auditCopy`) blocks any channel whose text is empty, too long (captions 280 characters, Pinterest title 100, description 300), has a dash, a country name, non-US money, a health promise, a claim of a personal test, markup or a link, or names a product that is not in the shop. It also blocks any text that matches another text after case and punctuation are removed. Instagram equal to TikTok fails, and TikTok is the channel named.
+- Products: digital products come first, and at most three are offered to the writer (`chooseProductsForCopy`).
+- Article choice for a new pack (`choosePackArticle`): while any article has a live digital product, only those articles are considered. Physical-only articles wait until no digital article fits.
+- Time picker: each channel offers a short list of top-country windows (`CHANNEL_WINDOWS`, `TIME_WINDOWS`). The first is the suggestion. Times are stored as UTC with a plain label, such as "Morning, US Eastern". The owner's clock is never used, and no label names Lagos, Nigeria or WAT.
+- Nothing is saved yet. The save door (`minds_save_pack`) is used in a later slice. Nothing posts anything.
+- Tests: `packCopy.test.ts` (no key, the four texts, the Auditor cases, products, article choice, time windows).
