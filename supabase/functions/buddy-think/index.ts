@@ -1,16 +1,20 @@
-import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
 import { callerUser, env, serviceClient, sha256 } from "../_shared/http.ts";
 import { isAllowedAutomationOrigin } from "../_shared/automationKeyChecks.ts";
 import {
   callGemini,
+  HISTORY_TURNS,
   handleBuddyThink,
   type BuddyThinkDeps,
+  type ChatKind,
+  type ChatRole,
+  type GeminiTurn,
 } from "../_shared/buddyThink.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const MAX_BODY_BYTES = 4096;
 const KEY_NAME = "gemini_api_key";
-const LIMITS = { probe: { limit: 5, window: 600 }, ask: { limit: 20, window: 600 } } as const;
+const LIMITS = { probe: { limit: 5, window: 600 }, ask: { limit: 30, window: 600 } } as const;
 
 function corsFor(req: Request): Record<string, string> | null {
   const origin = req.headers.get("Origin");
@@ -60,6 +64,41 @@ async function readBoundedBody(req: Request, limit: number): Promise<string | nu
   return new TextDecoder().decode(body);
 }
 
+/** Chat storage uses the owner's own session, so row-level security decides what is visible. */
+function chatStore(userClient: SupabaseClient) {
+  return {
+    loadChat: async (chatId: string) => {
+      const { data, error } = await userClient.from("buddy_chats").select("id,title").eq("id", chatId).maybeSingle();
+      if (error || !data) return null;
+      return { id: String(data.id), title: typeof data.title === "string" ? data.title : null };
+    },
+    loadHistory: async (chatId: string): Promise<GeminiTurn[] | null> => {
+      const { data, error } = await userClient
+        .from("buddy_messages")
+        .select("role,content")
+        .eq("chat_id", chatId)
+        .eq("kind", "reply")
+        .order("created_at", { ascending: false })
+        .limit(HISTORY_TURNS);
+      if (error || !Array.isArray(data)) return null;
+      return data
+        .reverse()
+        .map((row: { role: string; content: string }) => ({
+          role: row.role === "owner" ? "user" : "model",
+          text: row.content,
+        }) as GeminiTurn);
+    },
+    saveMessage: async (chatId: string, role: ChatRole, kind: ChatKind, content: string) => {
+      const { error } = await userClient.from("buddy_messages").insert({ chat_id: chatId, role, kind, content });
+      return !error;
+    },
+    touchChat: async (chatId: string, title: string) => {
+      await userClient.from("buddy_chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
+      await userClient.from("buddy_chats").update({ title }).eq("id", chatId).is("title", null);
+    },
+  };
+}
+
 Deno.serve(async (req: Request) => {
   const cors = corsFor(req);
   if (!cors) return new Response(null, { status: 403 });
@@ -90,8 +129,9 @@ Deno.serve(async (req: Request) => {
   // Owner check: the same owner-only catalogue read the Automation keys page uses. Its
   // answer also tells us whether the Google key is saved, without reading the key itself.
   let keyConfigured = false;
+  let userClient: SupabaseClient;
   try {
-    const userClient = createClient(supabaseUrl, anonKey, {
+    userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -110,6 +150,7 @@ Deno.serve(async (req: Request) => {
     return reply(req, { error: "Buddy is not configured." }, 503);
   }
 
+  const store = chatStore(userClient);
   const deps: BuddyThinkDeps = {
     keyConfigured: async () => keyConfigured,
     readKey: async () => {
@@ -144,6 +185,7 @@ Deno.serve(async (req: Request) => {
         // The probe answer is still returned to the owner; only the stored status is lost.
       }
     },
+    ...store,
   };
 
   const result = await handleBuddyThink(payload, deps);

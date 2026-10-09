@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn() }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn(), from: vi.fn() }));
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
@@ -15,7 +15,7 @@ vi.mock('../context/AuthContext', () => ({
   }),
 }));
 vi.mock('../admin/MfaGate', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
-vi.mock('../lib/supabaseClient', () => ({ supabase: { rpc: mocks.rpc, functions: { invoke: mocks.invoke } } }));
+vi.mock('../lib/supabaseClient', () => ({ supabase: { rpc: mocks.rpc, from: mocks.from, functions: { invoke: mocks.invoke } } }));
 
 import BuddyEntry from '../buddy/BuddyEntry';
 import { isBuddyControlsPath } from '../buddy/buddyPaths';
@@ -38,6 +38,13 @@ beforeEach(() => {
   mocks.rpc.mockReset();
   mocks.invoke.mockReset();
   mocks.invoke.mockResolvedValue({ data: { ok: true, action: 'status', configured: false }, error: null });
+  mocks.from.mockReset();
+  mocks.from.mockImplementation(() => {
+    const result = { data: [], error: null };
+    const chain: Record<string, unknown> = { then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve) };
+    for (const method of ['select', 'order', 'limit', 'eq']) chain[method] = () => chain;
+    return chain;
+  });
 });
 
 afterEach(() => {
@@ -55,11 +62,10 @@ describe('Buddy entry routing', () => {
     expect(isBuddyControlsPath('/buddy/chat')).toBe(false);
   });
 
-  it('shows the placeholder at /buddy, asks only whether a key is saved, and makes no database calls', async () => {
+  it('shows Buddy’s chat at /buddy, asks only for key status before the owner types, and makes no direct table or RPC calls', async () => {
     const el = await renderAt('/buddy');
-    expect(el.textContent).toContain('Buddy is being rebuilt as a private chat');
-    expect(el.querySelector('a[href="/buddy/controls"]')).not.toBeNull();
-    expect(el.textContent).toContain('no Google key is saved');
+    expect(el.textContent).toContain('Ask Buddy anything.');
+    expect(el.textContent).toContain('New chat');
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.invoke).toHaveBeenCalledWith('buddy-think', { body: { action: 'status' } });
     expect(mocks.invoke).not.toHaveBeenCalledWith('buddy-think', { body: { action: 'probe' } });
