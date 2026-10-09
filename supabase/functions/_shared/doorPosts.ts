@@ -6,7 +6,7 @@ import { copyProblem } from "./packRules.ts";
 import type { DoorId } from "./doorRegistry.ts";
 
 /** Doors that can post in this build. The others are listed honestly as "not built yet". */
-export const OPEN_DOORS: readonly DoorId[] = ["telegram", "discord", "bluesky", "mastodon"];
+export const OPEN_DOORS: readonly DoorId[] = ["telegram", "discord", "bluesky", "mastodon", "tumblr", "blogger"];
 
 /**
  * The most text each open door takes. Bluesky: 300 graphemes (counted here by code points, which is never fewer, so it is safe).

@@ -23,12 +23,21 @@ const ALL_SECRETS: Record<string, string> = {
   discord_webhook_url: HOOK,
 };
 
-const FOUR_DOOR_SECRETS: Record<string, string> = {
+const SIX_DOOR_SECRETS: Record<string, string> = {
   ...ALL_SECRETS,
   bluesky_handle: 'lixxon.bsky.social',
   bluesky_app_password: 'APP-PASS-SECRET',
   mastodon_instance_url: 'https://mastodon.example',
   mastodon_access_token: 'MASTO-TOKEN-SECRET',
+  tumblr_consumer_key: 'TUMBLR-KEY',
+  tumblr_consumer_secret: 'TUMBLR-CONSUMER-SECRET',
+  tumblr_access_token: 'TUMBLR-ACCESS',
+  tumblr_token_secret: 'TUMBLR-TOKEN-SECRET',
+  tumblr_blog_name: 'lixxon',
+  blogger_client_id: 'BLOGGER-CLIENT',
+  blogger_client_secret: 'BLOGGER-CLIENT-SECRET',
+  blogger_refresh_token: 'BLOGGER-REFRESH',
+  blogger_blog_id: '1234567890',
 };
 
 interface Harness {
@@ -133,7 +142,7 @@ describe('a door posts only when it is fully connected', () => {
     expect(h.sent).toEqual([{ door: 'discord', text: `New on the blog: Easy routine for dry skin\n${SITE}/blog/easy-routine-dry-skin` }]);
     expect(h.finished).toEqual([{ id: 'row-discord', status: 'posted', externalRef: 'ref-discord', errorNote: null }]);
     expect(h.logs).toEqual([{ door: 'discord', outcome: 'done', detail: 'Posted to Discord: "Easy routine for dry skin".' }]);
-    expect(result.detail).toBe('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon.');
+    expect(result.detail).toBe('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon, Tumblr, Blogger.');
   });
 
   it('both connected doors can post on the same day, one article each', async () => {
@@ -141,20 +150,22 @@ describe('a door posts only when it is fully connected', () => {
     const result = await runDoors(DAY_INPUT, h.ports);
     expect(result.posted).toBe(2);
     expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord']);
-    expect(result.detail).toContain('Not connected yet: Bluesky, Mastodon.');
+    expect(result.detail).toContain('Not connected yet: Bluesky, Mastodon, Tumblr, Blogger.');
   });
 
-  it('all four open doors can post, in order, each with its own reserved row as the key', async () => {
-    const h = harness({ secrets: FOUR_DOOR_SECRETS });
+  it('all six open doors can post, in order, each with its own reserved row as the key', async () => {
+    const h = harness({ secrets: SIX_DOOR_SECRETS });
     const result = await runDoors(DAY_INPUT, h.ports);
     expect(result.status).toBe('done');
-    expect(result.posted).toBe(4);
-    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord', 'bluesky', 'mastodon']);
+    expect(result.posted).toBe(6);
+    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger']);
     expect(h.keys).toEqual([
       { door: 'telegram', key: 'row-telegram' },
       { door: 'discord', key: 'row-discord' },
       { door: 'bluesky', key: 'row-bluesky' },
       { door: 'mastodon', key: 'row-mastodon' },
+      { door: 'tumblr', key: 'row-tumblr' },
+      { door: 'blogger', key: 'row-blogger' },
     ]);
     expect(result.detail).not.toContain('Not connected yet');
   });

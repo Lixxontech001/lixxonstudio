@@ -15,7 +15,7 @@ import { checkArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
 import { runDoors, type DoorRunResult } from "../_shared/runDoors.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
-import { sendBluesky, sendDiscord, sendMastodon, sendTelegram } from "../_shared/doorAdapters.ts";
+import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendTelegram, sendTumblr } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
   type ApplyEdit,
@@ -297,7 +297,35 @@ async function runDoorsForDay(
         if (door === "bluesky") {
           return sendBluesky({ handle: values.bluesky_handle ?? "", appPassword: values.bluesky_app_password ?? "" }, text, fetch);
         }
-        return sendMastodon({ instanceUrl: values.mastodon_instance_url ?? "", accessToken: values.mastodon_access_token ?? "" }, text, key, fetch);
+        if (door === "mastodon") {
+          return sendMastodon({ instanceUrl: values.mastodon_instance_url ?? "", accessToken: values.mastodon_access_token ?? "" }, text, key, fetch);
+        }
+        if (door === "tumblr") {
+          return sendTumblr(
+            {
+              consumerKey: values.tumblr_consumer_key ?? "",
+              consumerSecret: values.tumblr_consumer_secret ?? "",
+              accessToken: values.tumblr_access_token ?? "",
+              tokenSecret: values.tumblr_token_secret ?? "",
+              blogName: values.tumblr_blog_name ?? "",
+            },
+            text,
+            fetch,
+          );
+        }
+        if (door === "blogger") {
+          return sendBlogger(
+            {
+              clientId: values.blogger_client_id ?? "",
+              clientSecret: values.blogger_client_secret ?? "",
+              refreshToken: values.blogger_refresh_token ?? "",
+              blogId: values.blogger_blog_id ?? "",
+            },
+            text,
+            fetch,
+          );
+        }
+        return { ok: false, reason: "This door is not open." };
       },
       finish: async (id, status, externalRef, errorNote) => {
         const { error } = await sb.rpc("minds_finish_door_post", {

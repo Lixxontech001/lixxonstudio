@@ -32,11 +32,13 @@ describe('the free doors step is part of the day run, behind the same gates', ()
     expect(DOORS_STEP).not.toContain('content');
   });
 
-  it('the door step sends only through the four open adapters, and only to open doors', () => {
+  it('the door step sends only through the six open adapters, and only to open doors', () => {
     expect(DOORS_STEP).toContain('sendTelegram(');
     expect(DOORS_STEP).toContain('sendDiscord(');
     expect(DOORS_STEP).toContain('sendBluesky(');
     expect(DOORS_STEP).toContain('sendMastodon(');
+    expect(DOORS_STEP).toContain('sendTumblr(');
+    expect(DOORS_STEP).toContain('sendBlogger(');
     expect(DOORS_STEP).not.toMatch(/instagram|tiktok|pinterest|facebook|whatsapp/i);
   });
 

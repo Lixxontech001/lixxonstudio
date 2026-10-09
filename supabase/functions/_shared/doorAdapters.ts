@@ -1,5 +1,5 @@
-// The HTTP senders for the free doors that are open in this build: Telegram (bot API), Discord (webhook),
-// Bluesky (AT Protocol, app password) and Mastodon (REST, access token).
+// The HTTP senders for the six free doors: Telegram (bot API), Discord (webhook), Bluesky (AT Protocol, app password),
+// Mastodon (REST, access token), Tumblr (OAuth 1.0a, signed) and Blogger (Google OAuth refresh token).
 // Each returns a plain result. Reasons never include a token, a password, a webhook address, or the provider's raw text.
 // $0: all four are free to use through their official routes.
 
@@ -191,6 +191,177 @@ export async function sendMastodon(values: MastodonValues, text: string, idempot
   const body = (await readJson(response)) as { id?: unknown } | null;
   if (!response.ok || (typeof body?.id !== "string" && typeof body?.id !== "number")) {
     return { ok: false, reason: "Mastodon did not take the post." };
+  }
+  return { ok: true, externalRef: String(body.id).slice(0, 120) };
+}
+
+export interface TumblrValues {
+  consumerKey: string;
+  consumerSecret: string;
+  accessToken: string;
+  tokenSecret: string;
+  blogName: string;
+}
+
+export interface BloggerValues {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  blogId: string;
+}
+
+const TUMBLR_HOST = "https://api.tumblr.com";
+const TUMBLR_BLOG_NAME = /^[a-z0-9-]{1,32}$/;
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const BLOGGER_HOST = "https://www.googleapis.com/blogger/v3";
+const BLOGGER_BLOG_ID = /^\d{1,30}$/;
+
+/** Percent-encoding as OAuth 1.0a requires (RFC 3986: also encodes ! ' ( ) *). */
+export function oauthEncode(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function randomHex(bytes: number): string {
+  const buffer = new Uint8Array(bytes);
+  crypto.getRandomValues(buffer);
+  return Array.from(buffer, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export interface OAuthSigningInput {
+  method: string;
+  /** The address without the query string. */
+  url: string;
+  consumerKey: string;
+  consumerSecret: string;
+  token: string;
+  tokenSecret: string;
+  /** Query or form parameters that take part in the signature. A JSON body does not. */
+  params?: Record<string, string>;
+  nonce?: string;
+  timestamp?: number;
+}
+
+/** The OAuth 1.0a Authorization header (HMAC-SHA1). Used by Tumblr. Exported so the signature can be checked against a known example. */
+export async function oauthAuthorization(input: OAuthSigningInput): Promise<string> {
+  const oauth: Record<string, string> = {
+    oauth_consumer_key: input.consumerKey,
+    oauth_nonce: input.nonce ?? randomHex(16),
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: String(input.timestamp ?? Math.floor(Date.now() / 1000)),
+    oauth_token: input.token,
+    oauth_version: "1.0",
+  };
+  const all: Record<string, string> = { ...(input.params ?? {}), ...oauth };
+  const paramString = Object.keys(all)
+    .sort()
+    .map((key) => `${oauthEncode(key)}=${oauthEncode(all[key])}`)
+    .join("&");
+  const base = [input.method.toUpperCase(), oauthEncode(input.url), oauthEncode(paramString)].join("&");
+  const key = `${oauthEncode(input.consumerSecret)}&${oauthEncode(input.tokenSecret)}`;
+  const cryptoKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(base));
+  oauth.oauth_signature = btoa(String.fromCharCode(...new Uint8Array(signature)));
+  return `OAuth ${Object.keys(oauth).map((key) => `${key}="${oauthEncode(oauth[key])}"`).join(", ")}`;
+}
+
+/** Splits the door text into its first line and its last line, which is the article link. Null when the link is not https. */
+export function splitLinkText(text: string): { head: string; url: string } | null {
+  const cut = text.lastIndexOf("\n");
+  if (cut < 0) return null;
+  const head = text.slice(0, cut).trim();
+  const url = text.slice(cut + 1).trim();
+  if (!head || !url.startsWith("https://") || /\s/.test(url)) return null;
+  return { head, url };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/** Tumblr: one published text post with the article link, through the signed API request. Returns the post id when it can be read. */
+export async function sendTumblr(values: TumblrValues, text: string, fetchImpl: FetchLike): Promise<DoorSendResult> {
+  if (!values.consumerKey || !values.consumerSecret || !values.accessToken || !values.tokenSecret || !values.blogName) {
+    return { ok: false, reason: "Tumblr is not connected yet." };
+  }
+  const blog = values.blogName.trim().toLowerCase().replace(/\.tumblr\.com$/, "");
+  if (!TUMBLR_BLOG_NAME.test(blog)) return { ok: false, reason: "The Tumblr blog name is not in the right form." };
+  const parts = splitLinkText(text);
+  if (!parts) return { ok: false, reason: "The article link is not in the right form." };
+
+  const url = `${TUMBLR_HOST}/v2/blog/${blog}.tumblr.com/posts`;
+  const authorization = await oauthAuthorization({
+    method: "POST",
+    url,
+    consumerKey: values.consumerKey,
+    consumerSecret: values.consumerSecret,
+    token: values.accessToken,
+    tokenSecret: values.tokenSecret,
+  });
+  const response = await withTimeout(fetchImpl, url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: authorization },
+    body: JSON.stringify({
+      state: "published",
+      content: [
+        { type: "text", text: parts.head },
+        { type: "link", url: parts.url },
+      ],
+    }),
+  });
+  if ("failed" in response) return { ok: false, reason: response.failed };
+  if (response.status === 401 || response.status === 403) return { ok: false, reason: "Tumblr did not accept the keys or the access token." };
+  if (response.status === 404) return { ok: false, reason: "Tumblr did not find that blog." };
+  if (response.status === 429) return { ok: false, reason: "Tumblr is limiting posts. Try later." };
+  if (!response.ok) return { ok: false, reason: "Tumblr did not take the post." };
+  // Tumblr post ids are larger than JavaScript can hold exactly, so the id is read as text.
+  const raw = await response.text().catch(() => "");
+  const match = /"id"\s*:\s*"?(\d+)"?/.exec(raw);
+  return { ok: true, externalRef: match ? match[1].slice(0, 120) : null };
+}
+
+/** Blogger: an access token from the refresh token, then one published post with the article link. */
+export async function sendBlogger(values: BloggerValues, text: string, fetchImpl: FetchLike): Promise<DoorSendResult> {
+  if (!values.clientId || !values.clientSecret || !values.refreshToken || !values.blogId) {
+    return { ok: false, reason: "Blogger is not connected yet." };
+  }
+  const blogId = values.blogId.trim();
+  if (!BLOGGER_BLOG_ID.test(blogId)) return { ok: false, reason: "The Blogger blog ID is not in the right form." };
+  const parts = splitLinkText(text);
+  if (!parts) return { ok: false, reason: "The article link is not in the right form." };
+
+  const token = await withTimeout(fetchImpl, GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: values.clientId,
+      client_secret: values.clientSecret,
+      refresh_token: values.refreshToken,
+      grant_type: "refresh_token",
+    }).toString(),
+  });
+  if ("failed" in token) return { ok: false, reason: token.failed };
+  const signedIn = (await readJson(token)) as { access_token?: unknown } | null;
+  if (!token.ok || typeof signedIn?.access_token !== "string") {
+    return { ok: false, reason: "Google did not accept the Blogger sign-in details." };
+  }
+
+  const url = `${BLOGGER_HOST}/blogs/${blogId}/posts/`;
+  const response = await withTimeout(fetchImpl, url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${signedIn.access_token}` },
+    body: JSON.stringify({
+      kind: "blogger#post",
+      title: parts.head.slice(0, 200),
+      content: `<p>${escapeHtml(parts.head)}</p><p><a href="${escapeHtml(parts.url)}">${escapeHtml(parts.url)}</a></p>`,
+    }),
+  });
+  if ("failed" in response) return { ok: false, reason: response.failed };
+  if (response.status === 401 || response.status === 403) return { ok: false, reason: "Blogger did not accept the access." };
+  if (response.status === 404) return { ok: false, reason: "Blogger did not find that blog." };
+  if (response.status === 429) return { ok: false, reason: "Blogger is limiting posts. Try later." };
+  const body = (await readJson(response)) as { id?: unknown } | null;
+  if (!response.ok || (typeof body?.id !== "string" && typeof body?.id !== "number")) {
+    return { ok: false, reason: "Blogger did not take the post." };
   }
   return { ok: true, externalRef: String(body.id).slice(0, 120) };
 }

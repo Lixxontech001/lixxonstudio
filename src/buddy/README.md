@@ -174,7 +174,7 @@ Server side:
 - The page is `/admin/ai/connections` (`src/admin/pages/AdminConnections.tsx`). It is reached by a plain "Connections" link on the Minds page. It is not a tab. Only the owner can see it (`automation.keys`).
 - The four gated channels are not doors. The page says they stay manual.
 - Tests: `doorRegistry.test.ts` (six doors, no gated channel, every field is a real catalogue name, status rules, inherited names rejected), `doorConnectionsCatalogDb.test.ts` (migration in PGlite: rows present, once each, kinds match, safe to repeat, no table, no function, no Vault call), `adminConnections.test.tsx` (the page in jsdom: states, no value shown back, trimmed save, empty and failed saves, remove asks first, only the three owner functions), `connectionsRoute.test.ts` (route, permission, no tab, Minds link).
-- Not yet: the posting steps for Tumblr and Blogger, and the connection test buttons. Telegram and Discord post from slice 3, Bluesky and Mastodon from slice 4 (below).
+- Not yet: the connection test buttons. Telegram and Discord post from slice 3, Bluesky and Mastodon from slice 4, and Tumblr and Blogger from slice 5 (below).
 
 ## Phase 5 slice 3: the day run posts to Telegram and Discord
 
@@ -202,3 +202,14 @@ Server side:
 - Tests: `doorAdaptersBlueskyMastodon.test.ts` (sign-in and post steps, facets counted in bytes, handle and server checks, refusals with no password or token in any reason), and updates to `doorPosts.test.ts`, `runDoors.test.ts` (all four doors in order, each with its row id as the key, Bluesky length limit, Bluesky link-too-long skip), `doorPostsDb.test.ts` (the four doors accepted, the refused doors, SQL list equals `OPEN_DOORS`), and `doorWiring.test.ts` (four senders, Mastodon key).
 - Not tested live: no Bluesky or Mastodon post was sent. This sandbox cannot reach those services, and no account or token was used. The Edge function is parse-checked only (no Deno here). Nothing is deployed.
 - Known risk: a `finish` error can leave a row "queued", which blocks that door for the rest of that day. This is not fixed in this slice.
+
+## Phase 5 slice 5: the day run posts to Tumblr and Blogger (all six free doors open)
+
+- Open doors are now all six free doors: Telegram, Discord, Bluesky, Mastodon, Tumblr and Blogger (`OPEN_DOORS` in `supabase/functions/_shared/doorPosts.ts`). The four gated apps (Instagram, TikTok, Facebook, Pinterest) are still manual and are never posted to.
+- Tumblr (`sendTumblr`): one published post on the blog, with a text block (the heading line) and a link block (the article address). The request is signed with OAuth 1.0a (HMAC-SHA1). The signing is checked against the published OAuth example. The four Tumblr keys are only used to sign; none is put in a reason or a log. A blog name may be written with or without `.tumblr.com`. The post id is read as text, because Tumblr ids are larger than JavaScript numbers can hold exactly.
+- Blogger (`sendBlogger`): the refresh token is exchanged at Google's token address for an access token, then one post is made on the blog with the heading as the title and a link paragraph as the content. The title and link are escaped, so nothing in the post can add markup. The blog ID must be digits only.
+- Both posts are public as soon as they are sent. Tumblr posts are published (not drafts). Blogger posts are published by default.
+- Migration `20261011120000_door_posts_open_all.sql` (not applied) replaces `minds_reserve_door_post` so that it accepts all six doors. The table's own check already listed all six. A test checks that the SQL list matches `OPEN_DOORS` in the code.
+- Tests: `doorAdaptersTumblrBlogger.test.ts` (the OAuth encoding and the published signature example, Tumblr request shape and refusals, the text split, Blogger token exchange, escaping, refusals, no secret in any reason). Updated: `doorPosts.test.ts`, `runDoors.test.ts` (all six doors in order, each with its row id as the key), `doorPostsDb.test.ts` (six doors accepted, other doors refused, SQL list equals `OPEN_DOORS`), `doorWiring.test.ts` (six senders).
+- Not tested live: no Tumblr or Blogger post was sent, and no keys or tokens were used. This sandbox cannot reach those services. The Edge function is parse-checked only (no Deno here). Nothing is deployed.
+- Known risk, as before: a `finish` error can leave a row "queued", which blocks that door for the rest of that day.
