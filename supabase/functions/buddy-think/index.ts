@@ -10,7 +10,7 @@ import {
   type ChatRole,
   type GeminiTurn,
 } from "../_shared/buddyThink.ts";
-import { briefingApplied, briefingGaps, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
+import { briefingApplied, briefingGaps, briefingPacks, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
 import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import {
   SITE_ARTICLE_LIMIT,
@@ -120,7 +120,9 @@ function chatStore(userClient: SupabaseClient) {
       return !error;
     },
     readBriefingFacts: async (sinceIso: string): Promise<BriefingFacts> => {
-      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps] = await Promise.all([
+      // Packs from the last three days that still need the owner (ready to post by hand, or blocked).
+      const packsSinceIso = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps, packRead] = await Promise.all([
         userClient
           .from("posts")
           .select("title", { count: "exact" })
@@ -169,10 +171,19 @@ function chatStore(userClient: SupabaseClient) {
           .is("seen_at", null)
           .order("created_at", { ascending: false })
           .limit(5),
+        // The owner's packs that need him. Owner session, so row-level security applies.
+        userClient
+          .from("minds_packs")
+          .select("channel,status,blocked_reason,post_id,created_at")
+          .in("status", ["ready", "blocked"])
+          .gt("created_at", packsSinceIso)
+          .order("created_at", { ascending: false })
+          .limit(10),
       ]);
       // Titles and product names for the applied changes. A failed read leaves the names out, never guessed.
       const editRows = (Array.isArray(appliedEdits.data) ? appliedEdits.data : []) as Array<{ post_id?: unknown; product_ids?: unknown }>;
-      const postIds = [...new Set(editRows.map((row) => String(row.post_id || "")).filter(Boolean))];
+      const packRows = (Array.isArray(packRead.data) ? packRead.data : []) as Array<{ channel?: unknown; status?: unknown; blocked_reason?: unknown; post_id?: unknown }>;
+      const postIds = [...new Set([...editRows, ...packRows].map((row) => String(row.post_id || "")).filter(Boolean))];
       const productIds = [...new Set(editRows.flatMap((row) => (Array.isArray(row.product_ids) ? row.product_ids.map(String) : [])))];
       const [titleRead, nameRead] = await Promise.all([
         postIds.length ? userClient.from("posts").select("id,title").in("id", postIds) : Promise.resolve({ data: [], error: null }),
@@ -209,6 +220,7 @@ function chatStore(userClient: SupabaseClient) {
         waiting: { ok: !waitingOrders.error, count: waitingOrders.count ?? 0 },
         applied: { ok: appliedOk, rows: briefingApplied(editRows as Array<{ post_id: unknown; product_ids: unknown }>, postTitles, productNames) },
         gaps: { ok: !openGaps.error, rows: briefingGaps((Array.isArray(openGaps.data) ? openGaps.data : []) as Array<{ angle: unknown }>) },
+        packs: { ok: !packRead.error, rows: briefingPacks(packRows, postTitles) },
       };
     },
     // The "which mind?" order waiting on the last message of this chat. Owner session, so row-level security applies.

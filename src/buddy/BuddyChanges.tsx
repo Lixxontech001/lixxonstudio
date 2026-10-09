@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { describeChange, listAppliedChanges, listGapNotes, markGapSeen, type AppliedChange, type GapNote } from './buddyChanges';
+import { describePackJob, listPackJobs, markPackPosted, type PackJob } from './buddyJobs';
 import { formatDayLabel } from './buddyChatStore';
 import type { BuddyVibeId } from './buddyVibes';
 
@@ -10,6 +11,8 @@ interface BuddyChangesProps {
 
 export const CHANGES_READ_FAILED = 'Changes could not be read just now. Try again shortly.';
 export const GAP_SAVE_FAILED = 'That could not be saved just now. Try again shortly.';
+export const JOBS_READ_FAILED = 'Your jobs could not be read just now. Try again shortly.';
+export const JOBS_NOTE = 'Buddy never posts. "I posted this" only writes your own record.';
 
 /**
  * Buddy's report of what the minds changed, and the product gaps still open.
@@ -18,6 +21,8 @@ export const GAP_SAVE_FAILED = 'That could not be saved just now. Try again shor
 export default function BuddyChanges({ vibe, onBack }: BuddyChangesProps) {
   const [changes, setChanges] = useState<AppliedChange[] | null>(null);
   const [gaps, setGaps] = useState<GapNote[] | null>(null);
+  const [packs, setPacks] = useState<PackJob[] | null>(null);
+  const [packsFailed, setPacksFailed] = useState(false);
   const [failed, setFailed] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
@@ -25,11 +30,13 @@ export default function BuddyChanges({ vibe, onBack }: BuddyChangesProps) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [changeList, gapList] = await Promise.all([listAppliedChanges(), listGapNotes()]);
+      const [changeList, gapList, packList] = await Promise.all([listAppliedChanges(), listGapNotes(), listPackJobs()]);
       if (cancelled) return;
       if (changeList === null || gapList === null) setFailed(true);
+      if (packList === null) setPacksFailed(true);
       setChanges(changeList ?? []);
       setGaps(gapList ?? []);
+      setPacks(packList ?? []);
     })();
     return () => {
       cancelled = true;
@@ -44,6 +51,19 @@ export default function BuddyChanges({ vibe, onBack }: BuddyChangesProps) {
     }
     setNotice('');
     setGaps((current) => (current ? current.filter((gap) => gap.id !== id) : current));
+  }
+
+  async function posted(id: string) {
+    const ok = await markPackPosted(id);
+    if (!ok) {
+      setNotice(GAP_SAVE_FAILED);
+      return;
+    }
+    setNotice('');
+    const when = new Date().toISOString();
+    setPacks((current) =>
+      current ? current.map((job) => (job.id === id ? { ...job, status: 'posted_by_owner', postedAt: when } : job)) : current,
+    );
   }
 
   return (
@@ -66,6 +86,47 @@ export default function BuddyChanges({ vibe, onBack }: BuddyChangesProps) {
               {notice}
             </p>
           )}
+
+          <section className="buddy-briefing-section" aria-label="Your jobs">
+            <h2 className="buddy-briefing-title">Your jobs</h2>
+            <p className="buddy-empty">{JOBS_NOTE}</p>
+            {packsFailed && (
+              <p className="buddy-banner buddy-error" role="alert">
+                {JOBS_READ_FAILED}
+              </p>
+            )}
+            {packs === null && !packsFailed && <p className="buddy-empty">Loading jobs…</p>}
+            {packs !== null && packs.length === 0 && <p className="buddy-empty">No packs in the last three days.</p>}
+            {packs !== null && packs.length > 0 && (
+              <ul className="buddy-chat-list">
+                {packs.map((job) => {
+                  const view = describePackJob(job);
+                  return (
+                    <li key={job.id} className="buddy-report-item buddy-change-item" data-testid="pack-job">
+                      <p className="buddy-change-text">
+                        <strong>{view.headline}</strong>
+                      </p>
+                      {view.lines.map((line, index) => (
+                        <p key={index} className="buddy-chat-time">
+                          {line}
+                        </p>
+                      ))}
+                      {view.copy.map((line, index) => (
+                        <p key={index} className="buddy-paragraph">
+                          {line}
+                        </p>
+                      ))}
+                      {view.canMarkPosted && (
+                        <button type="button" className="buddy-button" onClick={() => posted(job.id)}>
+                          I posted this
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
 
           <section className="buddy-briefing-section" aria-label="Changes I made">
             <h2 className="buddy-briefing-title">Changes I made</h2>

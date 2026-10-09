@@ -28,6 +28,16 @@ export interface BriefingFacts {
   applied?: { ok: boolean; rows: BriefingApplied[] };
   /** Product gaps not yet marked seen. Each one asks the owner to create a product. */
   gaps?: { ok: boolean; rows: BriefingGap[] };
+  /** The owner's recent packs that still need him (ready to post by hand, or blocked). Owner session. */
+  packs?: { ok: boolean; rows: BriefingPack[] };
+}
+
+/** One pack the owner can act on. Only plain fields: the channel, the article title and why it is blocked. */
+export interface BriefingPack {
+  channel: string;
+  status: string;
+  articleTitle: string;
+  blockedReason: string | null;
 }
 
 export interface BriefingApplied {
@@ -41,6 +51,14 @@ export interface BriefingGap {
 
 export const APPLIED_LINE_LIMIT = 5;
 export const GAP_LINE_LIMIT = 3;
+export const PACK_LINE_LIMIT = 3;
+
+const PACK_CHANNEL_NAMES: Record<string, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  facebook: "Facebook",
+  pinterest: "Pinterest",
+};
 
 export interface BriefingSection {
   id: string;
@@ -118,17 +136,43 @@ function mindLines(minds: BriefingFacts["minds"]): string[] {
   return lines.slice(0, 5);
 }
 
-function jobLines(waiting: BriefingFacts["waiting"], gaps: BriefingFacts["gaps"]): string[] {
+/** One line per pack that needs the owner: ready to post by hand, or blocked with its plain reason. */
+export function packLines(packs: BriefingFacts["packs"]): string[] {
+  if (!packs) return [];
+  if (!packs.ok) return ["I cannot read your packs yet."];
+  return packs.rows.slice(0, PACK_LINE_LIMIT).map((row) => {
+    const name = PACK_CHANNEL_NAMES[row.channel] || "A channel";
+    const title = clipTitle(row.articleTitle);
+    if (row.status === "ready") return `${name} pack for "${title}" is ready to post by hand.`;
+    const reason = (row.blockedReason || "it is blocked").replace(/[.!?]+$/, "");
+    return `${name} pack for "${title}" is blocked: ${reason}.`;
+  });
+}
+
+function jobLines(waiting: BriefingFacts["waiting"], gaps: BriefingFacts["gaps"], packs: BriefingFacts["packs"]): string[] {
   const lines: string[] = [];
   if (!waiting || !waiting.ok) lines.push("I cannot read your orders yet.");
   else if (waiting.count === 0) lines.push("No orders waiting.");
   else lines.push(`${waiting.count} ${plural(waiting.count, "order", "orders")} waiting for you.`);
+  lines.push(...packLines(packs));
   if (!gaps) return lines;
   if (!gaps.ok) return [...lines, "I cannot read the product gaps yet."];
   for (const gap of gaps.rows.slice(0, GAP_LINE_LIMIT)) {
     lines.push(`No product fits "${clipTitle(gap.angle)}" yet. Create one in the shop, then ask me again.`);
   }
   return lines;
+}
+
+/** Maps the pack rows the server read into the briefing's shape. A missing title is a plain fallback, never guessed. */
+export function briefingPacks(rows: Array<{ channel?: unknown; status?: unknown; blocked_reason?: unknown; post_id?: unknown }>, postTitles: Record<string, string>): BriefingPack[] {
+  return rows
+    .filter((row) => typeof row.channel === "string" && (row.status === "ready" || row.status === "blocked"))
+    .map((row) => ({
+      channel: String(row.channel),
+      status: String(row.status),
+      articleTitle: postTitles[String(row.post_id || "")] || "an article",
+      blockedReason: typeof row.blocked_reason === "string" ? row.blocked_reason : null,
+    }));
 }
 
 function clipTitle(text: string): string {
@@ -183,14 +227,17 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const waitingRead = facts.waiting ? facts.waiting.ok : true;
   const appliedRead = facts.applied ? facts.applied.ok : true;
   const gapsRead = facts.gaps ? facts.gaps.ok : true;
-  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead;
+  const packsRead = facts.packs ? facts.packs.ok : true;
+  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead;
   const mindsReal = (facts.minds?.rows ?? []).some((row) => REAL_OUTCOMES.includes(row.outcome));
   // An order still waiting for the owner is not quiet, even when nothing else happened.
   const ordersWaiting = (facts.waiting?.count ?? 0) > 0;
   // An article change or an open product gap is real news too, so the day is not quiet.
   const changesReal = (facts.applied?.rows.length ?? 0) > 0 || (facts.gaps?.rows.length ?? 0) > 0;
+  // A pack ready to post by hand, or blocked, is something the owner needs to see, so the day is not quiet.
+  const packsReal = (facts.packs?.rows.length ?? 0) > 0;
   const nothingReal =
-    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal;
+    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal;
   if (allRead && nothingReal) return { quiet: true, sections: [], text: QUIET_LINE };
 
   const awayMs = now.getTime() - Date.parse(sinceIso);
@@ -210,7 +257,7 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
     { id: "money", title: "Money & readers", lines: moneyLines(facts) },
     { id: "minds", title: "The five minds", lines: mindLines(facts.minds) },
     { id: "problems", title: "Problems", lines: problemLines(facts.failures) },
-    { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting, facts.gaps) },
+    { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting, facts.gaps, facts.packs) },
     { id: "next", title: "Your next move", lines: [nextMove(facts)] },
   ];
 
