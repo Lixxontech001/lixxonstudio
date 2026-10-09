@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.buddy_orders (
   updated_at timestamptz NOT NULL DEFAULT now(),
   done_at timestamptz,
   -- A blocked order must say why. Only a blocked order has a reason.
-  CONSTRAINT buddy_orders_blocked_reason_check CHECK ((status = 'blocked') = (blocked_reason IS NOT NULL)),
+  CONSTRAINT buddy_orders_blocked_reason_rule CHECK ((status = 'blocked') = (blocked_reason IS NOT NULL)),
   -- A done order has a done time. Only a done order has one.
   CONSTRAINT buddy_orders_done_at_check CHECK ((status = 'done') = (done_at IS NOT NULL))
 );

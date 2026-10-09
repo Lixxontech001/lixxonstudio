@@ -40,7 +40,7 @@ describe('Minds phase 2 migrations (additive, owner only)', () => {
 
   it('an order has exactly three states, and blocked orders must say why', () => {
     expect(ordersSql).toContain("CHECK (status IN ('waiting', 'done', 'blocked'))");
-    expect(ordersSql).toContain("CONSTRAINT buddy_orders_blocked_reason_check CHECK ((status = 'blocked') = (blocked_reason IS NOT NULL))");
+    expect(ordersSql).toContain("CONSTRAINT buddy_orders_blocked_reason_rule CHECK ((status = 'blocked') = (blocked_reason IS NOT NULL))");
   });
 
   it('the owner may only mark a notable event seen', () => {
