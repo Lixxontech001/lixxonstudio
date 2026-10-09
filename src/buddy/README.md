@@ -41,6 +41,6 @@ Server side:
 ## What is not here
 
 - The old typed-command screen (typed commands, draft list) was removed in Phase 2, slice 1. Its sign-in gate now lives in `BuddyAccessGate.tsx`.
-- The Admin AI control tower lives in `src/admin/pages/AdminAI.tsx` (22 tabs). It is not Buddy. Phase 2 replaces what the owner sees there.
+- The old Admin AI screen lives in `src/admin/pages/AdminAI.tsx` (22 tabs). It is not Buddy. Phase 2 replaces what the owner sees there.
 - Buddy cannot change the site. It only reads published article titles and active shop products, and never article bodies (see `supabase/functions/_shared/buddySiteFacts.ts`).
 - Night reports are not written by anything yet. The Reports door only lists them.
