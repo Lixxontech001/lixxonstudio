@@ -7,7 +7,7 @@ This folder is Buddy. Buddy is the only one who talks to the owner.
 - Buddy sits at `/buddy`. It is behind the same owner sign-in, Admin role and MFA as the Admin area. Installing Buddy as an app grants no access.
 - Buddy never posts, never edits articles, never sends email or push, and never turns on takeover.
 
-## What is here now (phase 1, slices 1 to 4)
+## What is here now (phase 1, slices 1 to 5)
 
 | File | What it does |
 | --- | --- |
@@ -18,6 +18,10 @@ This folder is Buddy. Buddy is the only one who talks to the owner.
 | `BuddyReports.tsx` | The Reports door: a list of night reports, or "No night reports yet." No composer. |
 | `buddyChatStore.ts` | Browser side of chats, briefings and reports. Only this owner's rows are readable (row-level security). |
 | `buddyDate.ts`, `buddyMotion.ts` | Today's date on this device, the time-of-day word, and the greeting timing. |
+| `BuddySettings.tsx` | Buddy settings: pick one of four looks (previews at once, kept only on Save) and the optional read-aloud switch (off by default). |
+| `buddyVibes.ts` | The four looks: Noir Gold (default), Ivory Silk, Velvet Opera, Porcelain. Unknown values fall back to Noir Gold. |
+| `buddySettingsStore.ts` | Saves and reloads the look and the read-aloud switch on the owner's row. |
+| `buddySpeech.ts` | Read-aloud through the browser's own voice. Only Buddy's replies and the briefing are read, and only when switched on. |
 | `buddy.css` | Buddy's look. Scoped to `.buddy-app`. Noir Gold is the only vibe for now. |
 | `buddyThinkResult.ts` | Reads the answers from the think function. Anything malformed is dropped. |
 | `BuddyPwaApp.tsx` | The old Buddy: a typed command box with a draft list. Kept at `/buddy/controls` until it is retired. It also holds the shared sign-in and MFA gate (`BuddyAccessGate`). |
@@ -32,10 +36,11 @@ Server side:
 - `supabase/functions/_shared/buddyBriefing.ts`: the briefing rules. A day is "quiet" only when every source was read and none had anything real (paid orders, new articles, failed automation steps). Article views are shown but do not make a day busy.
 - `supabase/migrations/20261009110000_buddy_chats.sql`: the `buddy_chats` and `buddy_messages` tables. Each owner sees only their own rows.
 - `supabase/migrations/20261009120000_buddy_briefing_reports.sql`: briefing threads (one per owner per day), the "last seen" time, and the `buddy_reports` table (read only).
+- `supabase/migrations/20261009130000_buddy_settings.sql`: the look and read-aloud columns on the owner's row. "Last seen" now starts empty, so saving settings does not count as having looked.
 - The Google key is the existing `gemini_api_key` entry in Admin, under Automation keys (labelled "Google key"). It is written once and never sent back to the browser.
 
 ## What is not here
 
 - The Admin AI control tower lives in `src/admin/pages/AdminAI.tsx` (22 tabs). It is not Buddy and is not touched in phase 1.
-- Vibes and optional voice are slice 5 of phase 1. Nothing writes to `buddy_reports` yet.
+- Nothing writes to `buddy_reports` yet.
 - Buddy cannot see the website's articles or shop in chat yet. That is slice 6.

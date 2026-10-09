@@ -15,6 +15,9 @@ import { localDateString } from './buddyDate';
 import BuddyBriefingCard from './BuddyBriefingCard';
 import BuddyGreeting from './BuddyGreeting';
 import BuddyReports from './BuddyReports';
+import BuddySettingsPanel from './BuddySettings';
+import { DEFAULT_SETTINGS, loadSettings, type BuddySettings } from './buddySettingsStore';
+import { speak, stopSpeaking } from './buddySpeech';
 import './buddy.css';
 
 export const BUDDY_MAX_MESSAGE_CHARS = 1000;
@@ -30,8 +33,8 @@ function formatTime(iso: string): string {
 }
 
 type KeyState = 'checking' | 'missing' | 'saved' | 'unknown';
-/** Greeting first, then the chat. Reports is its own door and has no composer. */
-type Phase = 'greeting' | 'chat' | 'reports';
+/** Greeting first, then the chat. Reports and settings are their own doors and have no composer. */
+type Phase = 'greeting' | 'chat' | 'reports' | 'settings';
 
 /**
  * Buddy's private chat. One conversation at a time, past chats in a drawer, and the
@@ -40,6 +43,7 @@ type Phase = 'greeting' | 'chat' | 'reports';
 export default function BuddyChat() {
   const [phase, setPhase] = useState<Phase>('greeting');
   const [briefingBusy, setBriefingBusy] = useState(false);
+  const [settings, setSettings] = useState<BuddySettings>(DEFAULT_SETTINGS);
   const [keyState, setKeyState] = useState<KeyState>('checking');
   const [chats, setChats] = useState<BuddyChatSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -65,10 +69,17 @@ export default function BuddyChat() {
       const list = await listChats();
       if (!cancelled && list) setChats(list);
     })();
+    (async () => {
+      const saved = await loadSettings();
+      if (!cancelled && saved) setSettings(saved);
+    })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Stop any read-aloud when the owner leaves Buddy.
+  useEffect(() => () => stopSpeaking(), []);
 
   useEffect(() => {
     logEnd.current?.scrollIntoView?.({ block: 'end' });
@@ -91,6 +102,7 @@ export default function BuddyChat() {
       if (rows) setMessages(rows);
       else setNotice('Today\u2019s briefing could not be opened just now. Try again shortly.');
       await refreshChats();
+      if (settings.speakReplies) speak(result.text);
     } else {
       setNotice(result && !result.ok ? result.message : BRIEFING_NOT_REACHED);
     }
@@ -143,6 +155,7 @@ export default function BuddyChat() {
     if (rows) setMessages(rows);
     if (!result) setNotice(CHAT_NOT_REACHED);
     else if (!result.ok && result.reason !== 'no_key') setNotice(result.message);
+    if (result?.ok && settings.speakReplies) speak(result.reply);
     setPendingText(null);
     setSending(false);
     await refreshChats();
@@ -161,12 +174,22 @@ export default function BuddyChat() {
   };
 
   if (phase === 'reports') {
-    return <BuddyReports onBack={() => setPhase('chat')} />;
+    return <BuddyReports vibe={settings.vibe} onBack={() => setPhase('chat')} />;
+  }
+
+  if (phase === 'settings') {
+    return (
+      <BuddySettingsPanel
+        saved={settings}
+        onBack={() => setPhase('chat')}
+        onSaved={(next) => setSettings(next)}
+      />
+    );
   }
 
   if (phase === 'greeting') {
     return (
-      <div className="buddy-app buddy-app--single" data-vibe="noir-gold" data-testid="buddy-chat">
+      <div className="buddy-app buddy-app--single" data-vibe={settings.vibe} data-testid="buddy-chat">
         <BuddyGreeting onContinue={() => void continueFromGreeting()} />
       </div>
     );
@@ -175,7 +198,7 @@ export default function BuddyChat() {
   const empty = messages.length === 0 && !pendingText && !briefingBusy;
 
   return (
-    <div className="buddy-app" data-vibe="noir-gold" data-testid="buddy-chat">
+    <div className="buddy-app" data-vibe={settings.vibe} data-testid="buddy-chat">
       <header className="buddy-top">
         <h1 className="buddy-name">Buddy</h1>
         <div className="buddy-top-actions">
@@ -193,6 +216,9 @@ export default function BuddyChat() {
           </button>
           <button type="button" className="buddy-button" onClick={() => setPhase('reports')}>
             Reports
+          </button>
+          <button type="button" className="buddy-button" onClick={() => setPhase('settings')}>
+            Settings
           </button>
         </div>
       </header>

@@ -258,3 +258,81 @@ describe('Buddy chat screen', () => {
     expect(el.querySelector('textarea[aria-label="Message Buddy"]')).not.toBeNull();
   });
 });
+
+describe('Buddy chat: look and read-aloud', () => {
+  const speakFn = vi.fn();
+  const cancelFn = vi.fn();
+
+  class FakeUtterance {
+    text: string;
+    lang = '';
+    constructor(text: string) {
+      this.text = text;
+    }
+  }
+
+  beforeEach(() => {
+    speakFn.mockReset();
+    cancelFn.mockReset();
+    (window as unknown as Record<string, unknown>).speechSynthesis = { speak: speakFn, cancel: cancelFn };
+    (window as unknown as Record<string, unknown>).SpeechSynthesisUtterance = FakeUtterance;
+  });
+
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).speechSynthesis;
+    delete (window as unknown as Record<string, unknown>).SpeechSynthesisUtterance;
+  });
+
+  it('opens in the look the owner saved', async () => {
+    reads.buddy_owner_state = () => ({ data: { vibe: 'porcelain', speak_replies: false }, error: null });
+    const el = await render();
+    expect(el.querySelector('[data-testid="buddy-chat"]')?.getAttribute('data-vibe')).toBe('porcelain');
+  });
+
+  it('falls back to Noir Gold when the look cannot be read', async () => {
+    const el = await render();
+    expect(el.querySelector('[data-testid="buddy-chat"]')?.getAttribute('data-vibe')).toBe('noir-gold');
+  });
+
+  it('reads nothing aloud by default', async () => {
+    await render();
+    await continueFromGreeting();
+    expect(speakFn).not.toHaveBeenCalled();
+  });
+
+  it('reads the briefing aloud once the owner has switched read-aloud on', async () => {
+    reads.buddy_owner_state = () => ({ data: { vibe: 'noir-gold', speak_replies: true }, error: null });
+    await render();
+    await continueFromGreeting();
+    expect(speakFn).toHaveBeenCalledTimes(1);
+    expect((speakFn.mock.calls[0][0] as FakeUtterance).text).toBe('Quiet since you left.');
+  });
+
+  it('reads Buddy’s replies aloud, but never the owner’s own message', async () => {
+    reads.buddy_owner_state = () => ({ data: { vibe: 'noir-gold', speak_replies: true }, error: null });
+    const stored: Array<Record<string, unknown>> = [];
+    reads.buddy_messages = () => ({ data: stored, error: null });
+    inserts.buddy_chats = () => ({ data: CHAT, error: null });
+    actions.ask = (body) => {
+      stored.push(
+        { id: 'm1', role: 'owner', kind: 'reply', content: String(body.message), payload: null, created_at: CHAT.updated_at },
+        { id: 'm2', role: 'buddy', kind: 'reply', content: 'Hello. How can I help?', payload: null, created_at: CHAT.updated_at },
+      );
+      return { data: { ok: true, action: 'ask', model: 'gemini-3.8-flash', reply: 'Hello. How can I help?', saved: true }, error: null };
+    };
+    await render();
+    await continueFromGreeting();
+    speakFn.mockReset();
+    await act(async () => {
+      buttonByText('New chat')?.click();
+    });
+    await typeMessage('Hi Buddy');
+    await act(async () => {
+      buttonByText('Send')?.click();
+    });
+    await settle();
+    expect(speakFn).toHaveBeenCalledTimes(1);
+    expect((speakFn.mock.calls[0][0] as FakeUtterance).text).toBe('Hello. How can I help?');
+  });
+});
+

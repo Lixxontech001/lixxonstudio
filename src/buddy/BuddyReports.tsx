@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { formatDayLabel, listReports, type BuddyReport } from './buddyChatStore';
+import type { BuddyVibeId } from './buddyVibes';
 
 interface BuddyReportsProps {
+  vibe: BuddyVibeId;
   onBack: () => void;
 }
 
 /** Night reports are a separate door from chat. This view only lists them. Nothing here writes or sends. */
-export default function BuddyReports({ onBack }: BuddyReportsProps) {
+export default function BuddyReports({ vibe, onBack }: BuddyReportsProps) {
   const [reports, setReports] = useState<BuddyReport[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -24,7 +26,7 @@ export default function BuddyReports({ onBack }: BuddyReportsProps) {
   }, []);
 
   return (
-    <div className="buddy-app" data-vibe="noir-gold" data-testid="buddy-reports">
+    <div className="buddy-app" data-vibe={vibe} data-testid="buddy-reports">
       <header className="buddy-top">
         <button type="button" className="buddy-button" onClick={onBack}>
           Back to Buddy
