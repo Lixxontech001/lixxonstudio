@@ -13,6 +13,9 @@ import { makeMindThink } from "../_shared/mindThink.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import { checkArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
+import { runDoors, type DoorRunResult } from "../_shared/runDoors.ts";
+import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
+import { sendDiscord, sendTelegram } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
   type ApplyEdit,
@@ -35,7 +38,7 @@ const EDIT_LIMIT = 500;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KILL_SCOPES = ["none", "all", "analyst", "strategist", "ceo", "executioner", "auditor"] as const;
 /** Database rule messages, mapped to the plain reason the run understands. Anything else is a plain failure. */
-const KNOWN_REASONS = ["takeover_off", "killed", "order_not_waiting", "paragraph_changed", "checksum_mismatch", "slot_missing", "article_missing"] as const;
+const KNOWN_REASONS = ["takeover_off", "killed", "order_not_waiting", "paragraph_changed", "checksum_mismatch", "slot_missing", "article_missing", "already_posted", "door_day_cap", "door_not_open"] as const;
 
 function corsFor(req: Request): Record<string, string> | null {
   const origin = req.headers.get("Origin");
@@ -191,19 +194,127 @@ export async function handleRun(req: Request): Promise<Response> {
     },
   );
 
-  // Gated packs follow the placement step. Takeover is on and Kill is off here (checked above). When Gemini has no key,
-  // placement has already said so, so the packs step is skipped rather than saying it twice.
+  // Gated packs follow the placement step, then the free doors. Takeover is on and Kill is off here (checked above).
+  // The doors need no Gemini, so they run even when placement could not think. The packs step is skipped then,
+  // because placement has already said so.
+  const doors = await runDoorsSafely(sb, owner, localDay, takeover, killScope);
+  const doorsReply = { status: doors.status, posted: doors.posted };
   if (outcome.status === "cannot_think") {
-    return reply(req, { status: outcome.status, detail: outcome.detail, order_id: outcome.orderId });
+    return reply(req, { status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
   }
   const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think);
-  const detail = clip(`${outcome.detail} ${packs.detail}`, 800);
+  const detail = clip(`${outcome.detail} ${packs.detail} ${doors.detail}`, 800);
   return reply(req, {
     status: outcome.status,
     detail,
     order_id: outcome.orderId,
     packs: { status: packs.status, saved: packs.saved },
+    doors: doorsReply,
   });
+}
+
+/** The door step never throws into the run. A read or write failure is a plain held step, and nothing more is sent. */
+async function runDoorsSafely(
+  sb: SupabaseClient,
+  owner: string,
+  localDay: string,
+  takeover: boolean,
+  killScope: KillScope,
+): Promise<DoorRunResult> {
+  try {
+    return await runDoorsForDay(sb, owner, localDay, takeover, killScope);
+  } catch {
+    return { status: "held", detail: "The free doors could not be read or written. Nothing was posted.", posted: 0, outcomes: [] };
+  }
+}
+
+async function runDoorsForDay(
+  sb: SupabaseClient,
+  owner: string,
+  localDay: string,
+  takeover: boolean,
+  killScope: KillScope,
+): Promise<DoorRunResult> {
+  const siteOrigin = env("SITE_URL") || null;
+  const nowMs = Date.now();
+  const since = new Date(nowMs - DOOR_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  return runDoors(
+    { localDay, takeover, killScope, nowMs, siteOrigin },
+    {
+      readArticles: async () => {
+        const { data, error } = await sb
+          .from("posts")
+          .select("id,title,slug,published_at")
+          .eq("status", "published")
+          .gte("published_at", since)
+          .order("published_at", { ascending: false })
+          .limit(20);
+        if (error || !Array.isArray(data)) throw new Error("articles");
+        return data.map((row: Record<string, unknown>): DoorArticle => ({
+          id: String(row.id),
+          title: String(row.title ?? ""),
+          slug: typeof row.slug === "string" ? row.slug : null,
+          publishedAt: typeof row.published_at === "string" ? row.published_at : null,
+        }));
+      },
+      readPostedIds: async (door) => {
+        const { data, error } = await sb.from("minds_door_posts").select("post_id").eq("owner_id", owner).eq("door", door);
+        if (error || !Array.isArray(data)) throw new Error("posted");
+        return new Set(data.map((row: Record<string, unknown>) => String(row.post_id)));
+      },
+      countToday: async (door, day) => {
+        const { count, error } = await sb
+          .from("minds_door_posts")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_id", owner)
+          .eq("door", door)
+          .eq("local_day", day)
+          .in("status", ["queued", "posted"]);
+        if (error) throw new Error("count");
+        return count ?? 0;
+      },
+      readSecret: async (name) => {
+        const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: name });
+        if (error) throw new Error("secret");
+        return typeof data === "string" && data.length > 0 ? data : null;
+      },
+      reserve: async (door, articleId, day, articleUrl) => {
+        const { data, error } = await sb.rpc("minds_reserve_door_post", {
+          p_owner_id: owner,
+          p_door: door,
+          p_post_id: articleId,
+          p_local_day: day,
+          p_article_url: articleUrl,
+        });
+        if (error) return { ok: false, reason: reasonFrom(error.message) };
+        return typeof data === "string" ? { ok: true, id: data } : { ok: false, reason: "failed" };
+      },
+      send: async (door, values, text) =>
+        door === "telegram"
+          ? sendTelegram({ token: values.telegram_bot_token ?? "", chatId: values.telegram_chat_id ?? "" }, text, fetch)
+          : sendDiscord(values.discord_webhook_url ?? "", text, fetch),
+      finish: async (id, status, externalRef, errorNote) => {
+        const { error } = await sb.rpc("minds_finish_door_post", {
+          p_id: id,
+          p_status: status,
+          p_external_ref: externalRef,
+          p_error_note: errorNote,
+        });
+        if (error) throw new Error("finish");
+      },
+      log: async (entry) => {
+        await sb.from("minds_daily_log").insert({
+          owner_id: owner,
+          day: localDay,
+          mind: "executioner",
+          action: `Posted to ${entry.door}`,
+          outcome: entry.outcome,
+          detail: clip(entry.detail, 500),
+          order_id: null,
+        });
+      },
+    },
+  );
 }
 
 /** Makes today's gated packs for one article, through the pack door. Reads the site first; nothing is read when Takeover is off. */
