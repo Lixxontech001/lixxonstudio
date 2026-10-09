@@ -18,6 +18,7 @@ const MIGRATIONS = [
   '20261009230000_minds_apply_placement.sql',
   '20261010100000_minds_packs.sql',
   '20261011200000_pack_media_saved.sql',
+  '20261011210000_notable_push.sql',
 ];
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -461,5 +462,35 @@ describe('attaching a saved picture and video to a pack (Phase 7 slice 2)', () =
     }
     await db.exec('reset role');
     expect(error).not.toBeNull();
+  });
+});
+
+describe('notable kinds that buzz, and the push note (Phase 7 slice 4)', () => {
+  async function insertEvent(kind: string, title = 'A test event'): Promise<string | null> {
+    try {
+      await asServer('insert into public.minds_notable_events (owner_id, mind, kind, title) values ($1, $2, $3, $4)', [OWNER, 'executioner', kind, title]);
+      return null;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  }
+
+  it('the new buzz kinds are accepted, and the old kinds still are', async () => {
+    for (const kind of ['door_posted', 'pack_ready', 'sale', 'product_click', 'traffic_new_kind', 'job_finished', 'mind_failed', 'auditor_blocked', 'article_changed']) {
+      expect(await insertEvent(kind)).toBeNull();
+    }
+  });
+
+  it('a heartbeat is not a notable kind, so it cannot be written as one', async () => {
+    expect(await insertEvent('heartbeat')).toMatch(/check|violat/i);
+  });
+
+  it('the push note takes only the fixed values, and a null note is allowed', async () => {
+    await insertEvent('door_posted', 'Push note test');
+    const [row] = await asServer<{ id: string }>("select id from public.minds_notable_events where title = 'Push note test' order by happened_at desc limit 1");
+    await asServer("update public.minds_notable_events set push_note = 'no_device' where id = $1", [row.id]);
+    const [stored] = await asServer<{ push_note: string }>('select push_note from public.minds_notable_events where id = $1', [row.id]);
+    expect(stored.push_note).toBe('no_device');
+    await expect(asServer("update public.minds_notable_events set push_note = 'shouted' where id = $1", [row.id])).rejects.toThrow(/check|violat/i);
   });
 });

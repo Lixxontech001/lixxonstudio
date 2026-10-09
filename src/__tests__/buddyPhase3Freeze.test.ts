@@ -338,9 +338,10 @@ describe('Buddy, not the minds, is the voice; the owner cannot chat with a mind'
     expect(changesSource).not.toMatch(/<textarea|<input/);
   });
 
-  it('the Strategist, Executioner and Auditor send no text to the owner directly', () => {
-    expect(runSource).not.toMatch(/sendEmail|webPush|sendMessage/);
-    expect(functionSource).not.toMatch(/sendEmail|webPush|distributionAdapters/);
+  it('the Strategist, Executioner and Auditor send no email and no text of their own; a buzz goes out only through the shared notification helper, titled Buddy', () => {
+    expect(runSource).not.toMatch(/sendEmail|sendMessage|sendPushNotification/);
+    expect(functionSource).not.toMatch(/sendEmail|distributionAdapters|sendPushNotification/);
+    expect(functionSource).toContain('notifyOwnerDevices(');
   });
 });
 

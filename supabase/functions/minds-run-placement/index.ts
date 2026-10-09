@@ -14,6 +14,8 @@ import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
 import { runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
+import { NO_DEVICE_COPY, PUSH_HELP_COPY, notifyOwnerDevices, shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
+import type { PushTarget, VapidCredentials } from "../_shared/webPush.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
 import {
@@ -198,6 +200,17 @@ export async function handleRun(req: Request): Promise<Response> {
   // The doors need no Gemini, so they run even when placement could not think. The packs step is skipped then,
   // because placement has already said so.
   const doors = await runDoorsSafely(sb, owner, localDay, takeover, killScope);
+  if (doors.posted > 0) {
+    await recordNotable(
+      sb,
+      owner,
+      localDay,
+      "executioner",
+      "door_posted",
+      `${doors.posted} ${doors.posted === 1 ? "free door posted" : "free doors posted"} today`,
+      "The Executioner sent these. Each one is in the log.",
+    );
+  }
   const doorsReply = { status: doors.status, posted: doors.posted };
   if (outcome.status === "cannot_think") {
     return reply(req, { status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
@@ -213,6 +226,79 @@ export async function handleRun(req: Request): Promise<Response> {
   });
 }
 
+/** The three VAPID values from Vault (the same reads the push handler makes), or null when any one is missing. */
+async function loadPushCredentials(sb: SupabaseClient): Promise<VapidCredentials | null> {
+  const read = async (name: string): Promise<string | null> => {
+    try {
+      const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: name });
+      return !error && typeof data === "string" && data.trim().length > 0 ? data.trim() : null;
+    } catch {
+      return null;
+    }
+  };
+  const publicKey = await read("vapid_public_key");
+  const subject = await read("vapid_subject");
+  const privateKey = await read("vapid_private_key");
+  return publicKey && subject && privateKey ? { publicKey, subject, privateKey } : null;
+}
+
+/**
+ * Writes one notable event, then buzzes the owner's devices when the kind buzzes. Never throws into the run.
+ * A kind that buzzes and has no device, or no keys, is written once to the daily log, with the plain words for the owner.
+ */
+async function recordNotable(
+  sb: SupabaseClient,
+  owner: string,
+  localDay: string,
+  mind: string,
+  kind: string,
+  title: string,
+  detail: string,
+): Promise<PushStatus | null> {
+  try {
+    const { data, error } = await sb
+      .from("minds_notable_events")
+      .insert({ owner_id: owner, mind, kind, title: clip(title, 160), detail: clip(detail, 500) })
+      .select("id")
+      .single();
+    if (error || !data) return null;
+    if (!shouldBuzz(kind)) return null;
+    const outcome = await notifyOwnerDevices(kind, title, {
+      loadCredentials: () => loadPushCredentials(sb),
+      loadTargets: async (): Promise<PushTarget[]> => {
+        const { data: rows, error: rowsError } = await sb.rpc("push_test_targets", { p_owner_user_id: owner, p_limit: 10 });
+        if (rowsError || !Array.isArray(rows)) throw new Error("targets");
+        return rows.map((row: Record<string, unknown>) => ({
+          id: String(row.id ?? ""),
+          device_id: typeof row.device_id === "string" ? row.device_id : undefined,
+          endpoint: String(row.endpoint ?? ""),
+          p256dh: String(row.p256dh ?? ""),
+          auth_key: String(row.auth_key ?? ""),
+        }));
+      },
+      markGone: async (target: PushTarget) => {
+        if (!target.id) return;
+        await sb.from("push_device_subscriptions").update({ enabled: false, revoked_at: new Date().toISOString() }).eq("id", target.id);
+      },
+    });
+    await sb.from("minds_notable_events").update({ push_note: outcome.status }).eq("id", data.id);
+    if (outcome.status === "no_device" || outcome.status === "not_configured") {
+      await sb.from("minds_daily_log").insert({
+        owner_id: owner,
+        day: localDay,
+        mind,
+        action: "Owner phone push",
+        outcome: "skipped",
+        detail: clip(outcome.status === "no_device" ? NO_DEVICE_COPY : PUSH_HELP_COPY, 500),
+        order_id: null,
+      });
+    }
+    return outcome.status;
+  } catch {
+    return null;
+  }
+}
+
 /** The door step never throws into the run. A read or write failure is a plain held step, and nothing more is sent. */
 async function runDoorsSafely(
   sb: SupabaseClient,
@@ -224,6 +310,7 @@ async function runDoorsSafely(
   try {
     return await runDoorsForDay(sb, owner, localDay, takeover, killScope);
   } catch {
+    await recordNotable(sb, owner, localDay, "executioner", "mind_failed", "The free doors could not run", "Nothing was posted. Check the log.");
     return { status: "held", detail: "The free doors could not be read or written. Nothing was posted.", posted: 0, outcomes: [] };
   }
 }
@@ -502,7 +589,8 @@ async function runPacksForDay(
     isDigital: row.is_digital === true,
     priceUsd: typeof row.price_cents === "number" ? row.price_cents / 100 : null,
   }));
-  return runDayPacks(
+  let readyPacks = 0;
+  const result = await runDayPacks(
     { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0 },
     {
       think,
@@ -527,6 +615,7 @@ async function runPacksForDay(
           p_auditor_verdict: row.auditorVerdict,
           p_auditor_note: row.auditorNote,
         });
+        if (!error && row.status === "ready") readyPacks += 1;
         return error ? { ok: false, reason: reasonFrom(error.message) } : { ok: true };
       },
       log: async (entry) => {
@@ -542,6 +631,18 @@ async function runPacksForDay(
       },
     },
   );
+  if (readyPacks > 0) {
+    await recordNotable(
+      sb,
+      owner,
+      localDay,
+      "executioner",
+      "pack_ready",
+      `${readyPacks} gated ${readyPacks === 1 ? "pack is" : "packs are"} ready`,
+      "Instagram, TikTok, Facebook and Pinterest packs are ready for you to post by hand. Nothing was posted for you.",
+    );
+  }
+  return result;
 }
 
 /** Reads the site for one order, runs the placement, and writes through the database doors. */
@@ -641,7 +742,7 @@ async function runAgainstSite(
     },
     log: (entry: RunLog) => logRow(orderId, entry),
     notable: async (kind, title, detail) => {
-      await sb.from("minds_notable_events").insert({ owner_id: owner, mind: "auditor", kind, title: clip(title, 160), detail: clip(detail, 500) });
+      await recordNotable(sb, owner, localDay, "auditor", kind, title, detail);
     },
   });
 
