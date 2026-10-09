@@ -199,6 +199,17 @@ function chatStore(userClient: SupabaseClient) {
       const { error } = await userClient.from("buddy_orders").insert({ instruction, mind, status: "waiting" });
       return !error;
     },
+    // The owner's orders that are still waiting, oldest first. Null when the read fails. Read by buddyOrders.ts.
+    readWaitingOrderRows: async (): Promise<unknown[] | null> => {
+      const { data, error } = await userClient
+        .from("buddy_orders")
+        .select("id,instruction,mind,status,created_at")
+        .eq("status", "waiting")
+        .order("created_at", { ascending: true })
+        .limit(50);
+      if (error || !Array.isArray(data)) return null;
+      return data;
+    },
     // Read-only log rows, newest first. Owner-only rows (row-level security).
     readMindLog: async (mind: MindName | null): Promise<MindLogLine[] | null> => {
       let query = userClient

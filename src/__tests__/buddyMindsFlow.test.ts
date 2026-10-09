@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BUDDY_SYSTEM_INSTRUCTION,
+  ORDER_JUDGE_SYSTEM,
   handleBuddyThink,
   type BuddyThinkDeps,
   type GeminiResult,
@@ -83,7 +84,8 @@ describe('orders from ordinary language', () => {
   });
 
   it('asks which mind once when the order names none, and keeps the words for the next message', async () => {
-    const t = setup();
+    // Rules only, so no key is saved here. The Gemini judgement has its own tests in buddyThink.test.ts.
+    const t = setup({ key: null });
     const result = await handleBuddyThink(ask('Check the new article'), t.deps);
     expect(result.body).toMatchObject({ route: 'ask_which_mind', reply: ASK_WHICH_MIND_LINE });
     expect(t.saveOrder).not.toHaveBeenCalled();
@@ -106,8 +108,10 @@ describe('orders from ordinary language', () => {
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', null);
     expect(t.saved.some((row) => row.kind === 'notice' && row.content === PENDING_FLUSH_LINE)).toBe(true);
     expect(result.body).toMatchObject({ ok: true, model: 'gemini-3.8-flash' });
-    expect(t.askGemini).toHaveBeenCalledTimes(1);
-    expect(t.askGemini.mock.calls[0][1].system.startsWith(BUDDY_SYSTEM_INSTRUCTION)).toBe(true);
+    // One judgement call, then the ordinary chat reply. The chat reply is the last call.
+    expect(t.askGemini.mock.calls[0][1].system).toBe(ORDER_JUDGE_SYSTEM);
+    expect(t.askGemini.mock.calls.at(-1)?.[1].system.startsWith(BUDDY_SYSTEM_INSTRUCTION)).toBe(true);
+    expect(t.askGemini).toHaveBeenCalledTimes(2);
   });
 
   it('never loses a waiting order when a question about a mind comes next', async () => {
@@ -135,6 +139,35 @@ describe('orders from ordinary language', () => {
     expect(result.body).toMatchObject({ reason: 'history_unavailable' });
     expect(t.saved).toHaveLength(0);
     expect(t.saveOrder).not.toHaveBeenCalled();
+  });
+});
+
+describe('ordinary words are orders, not questions', () => {
+  it('"Do the new article" is an order that needs a mind, so Buddy asks which one', async () => {
+    const t = setup({ key: null });
+    const result = await handleBuddyThink(ask('Do the new article'), t.deps);
+    expect(result.body).toMatchObject({ route: 'ask_which_mind' });
+    expect(t.saveOrder).not.toHaveBeenCalled();
+    expect(lastSaved(t.saved)?.payload).toEqual({ pending_order: 'Do the new article' });
+  });
+
+  it('the answer to that question files the order once a mind is named', async () => {
+    const t = setup({ key: null, pending: 'Do the new article' });
+    await handleBuddyThink(ask('the strategist'), t.deps);
+    expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Do the new article', 'strategist');
+  });
+
+  it('a polite order that names a mind is filed, with no key', async () => {
+    const t = setup({ key: null });
+    await handleBuddyThink(ask('Could you tell the Analyst to check the spring guide'), t.deps);
+    expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Could you tell the Analyst to check the spring guide', 'analyst');
+  });
+
+  it('a real question about a mind is still answered from the log, and not filed', async () => {
+    const t = setup({ key: null, logRows: [] });
+    await handleBuddyThink(ask('Do you know what the Analyst did?'), t.deps);
+    expect(t.saveOrder).not.toHaveBeenCalled();
+    expect(lastSaved(t.saved)?.content).toBe('The Analyst has not logged any action yet.');
   });
 });
 

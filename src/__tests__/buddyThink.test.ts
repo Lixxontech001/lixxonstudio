@@ -3,6 +3,8 @@ import {
   BUDDY_GEMINI_MODEL,
   BUDDY_SYSTEM_INSTRUCTION,
   BUDDY_TEST_PROMPT,
+  ORDER_JUDGE_SYSTEM,
+  parseOrderJudgement,
   callGemini,
   cleanMessage,
   extractReplyText,
@@ -19,6 +21,11 @@ const FAKE_KEY = 'FAKE-GEMINI-KEY-NOT-REAL-0001';
 const CHAT_ID = '6f1c2b7e-3d4a-4b8c-9e1f-0a2b3c4d5e6f';
 
 type Saved = { chatId: string; role: string; kind: string; content: string };
+
+/** Gemini calls that answer the owner in chat. The one-line order judgement is not a chat reply. */
+function chatCalls(askGemini: { mock: { calls: unknown[][] } }) {
+  return askGemini.mock.calls.filter((call) => (call[1] as { system: string }).system !== ORDER_JUDGE_SYSTEM);
+}
 
 function deps(overrides: Partial<BuddyThinkDeps> = {}) {
   const saved: Saved[] = [];
@@ -115,7 +122,7 @@ describe('Buddy think: chat replies', () => {
     const long: GeminiTurn[] = Array.from({ length: HISTORY_TURNS + 5 }, (_, i) => ({ role: 'user' as const, text: `turn ${i}` }));
     const { deps: d, askGemini } = deps({ loadHistory: async () => long });
     await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'latest' }, d);
-    const turns = (askGemini.mock.calls[0] as unknown as [string, { turns: GeminiTurn[] }])[1].turns;
+    const turns = (chatCalls(askGemini).at(-1) as unknown as [string, { turns: GeminiTurn[] }])[1].turns;
     expect(turns).toHaveLength(HISTORY_TURNS + 1);
     expect(turns[turns.length - 1]).toEqual({ role: 'user', text: 'latest' });
   });
@@ -154,7 +161,7 @@ describe('Buddy think: chat replies', () => {
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Hi' }, d);
     expect(result.status).toBe(503);
     expect(result.body).toMatchObject({ ok: false, reason: 'history_unavailable' });
-    expect(askGemini).not.toHaveBeenCalled();
+    expect(chatCalls(askGemini)).toHaveLength(0);
     expect(saved).toHaveLength(0);
   });
 
@@ -163,7 +170,7 @@ describe('Buddy think: chat replies', () => {
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Hi' }, d);
     expect(result.status).toBe(503);
     expect(result.body).toMatchObject({ ok: false, reason: 'not_saved' });
-    expect(askGemini).not.toHaveBeenCalled();
+    expect(chatCalls(askGemini)).toHaveLength(0);
   });
 
   it('refuses to answer when the rate limit cannot be checked or is used up, and saves nothing', async () => {
@@ -249,5 +256,55 @@ describe('Gemini call and reply parsing', () => {
     expect(await callGemini(FAKE_KEY, { system: 's', turns: [] }, make(503) as unknown as typeof fetch)).toEqual({ ok: false, outcome: 'unavailable' });
     const network = vi.fn(async () => { throw new Error('offline'); });
     expect(await callGemini(FAKE_KEY, { system: 's', turns: [] }, network as unknown as typeof fetch)).toEqual({ ok: false, outcome: 'unavailable' });
+  });
+});
+
+describe('Buddy think: judging a statement with one Gemini call', () => {
+  it('parses only a clear JSON answer, and anything else is left to the rules', () => {
+    expect(parseOrderJudgement('{"kind":"order","mind":"analyst"}')).toEqual({ kind: 'order', mind: 'analyst' });
+    expect(parseOrderJudgement('Sure: {"kind":"order","mind":"ceo"} done')).toEqual({ kind: 'order', mind: 'ceo' });
+    expect(parseOrderJudgement('{"kind":"order","mind":null}')).toEqual({ kind: 'ask_mind' });
+    expect(parseOrderJudgement('{"kind":"order","mind":"bossman"}')).toEqual({ kind: 'ask_mind' });
+    expect(parseOrderJudgement('{"kind":"chat","mind":null}')).toEqual({ kind: 'chat' });
+    expect(parseOrderJudgement('Yes, Buddy can think.')).toBeNull();
+    expect(parseOrderJudgement('{"kind":"delete_everything"}')).toBeNull();
+    expect(parseOrderJudgement('{not json}')).toBeNull();
+  });
+
+  it('a statement the rules cannot place becomes a waiting order when Gemini says it is one', async () => {
+    const askGemini = vi.fn(async (_key: string, input: { system: string }): Promise<GeminiResult> =>
+      input.system === ORDER_JUDGE_SYSTEM ? { ok: true, text: '{"kind":"order","mind":"strategist"}' } : { ok: true, text: 'unused' },
+    );
+    const { deps: d, saved } = deps({ askGemini, saveOrder: async () => true });
+    const saveOrder = vi.fn(async () => true);
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Plan the spring push for the kit' }, { ...d, saveOrder });
+    expect(result.body).toMatchObject({ ok: true, route: 'order' });
+    expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Plan the spring push for the kit', 'strategist');
+    expect(chatCalls(askGemini)).toHaveLength(0);
+    expect(saved.at(-1)?.content).toBe('Saved for the Strategist. It is waiting.');
+  });
+
+  it('when Gemini says chat, the message gets an ordinary chat reply', async () => {
+    const askGemini = vi.fn(async (_key: string, input: { system: string }): Promise<GeminiResult> =>
+      input.system === ORDER_JUDGE_SYSTEM ? { ok: true, text: '{"kind":"chat","mind":null}' } : { ok: true, text: 'Hello.' },
+    );
+    const { deps: d } = deps({ askGemini });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Thanks for that' }, d);
+    expect(result.body).toMatchObject({ ok: true, reply: 'Hello.' });
+    expect(chatCalls(askGemini)).toHaveLength(1);
+  });
+
+  it('when the judgement is unclear, the rules decide and the chat still answers', async () => {
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: 'not json at all' }));
+    const { deps: d } = deps({ askGemini });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Check the new article' }, d);
+    expect(result.body).toMatchObject({ route: 'ask_which_mind' });
+  });
+
+  it('with no key, nothing is judged and no model call is made', async () => {
+    const { deps: d, askGemini } = deps({ readKey: async () => null });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Do the new article' }, d);
+    expect(result.body).toMatchObject({ route: 'ask_which_mind' });
+    expect(askGemini).not.toHaveBeenCalled();
   });
 });

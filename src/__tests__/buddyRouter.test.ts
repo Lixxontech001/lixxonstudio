@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ASK_WHICH_MIND_LINE,
   answerFromLog,
+  isOrderCandidate,
+  isQuestionLike,
   isRestricted,
   namedMind,
   routeMessage,
@@ -130,5 +132,77 @@ describe('answers come from real log rows', () => {
     const text = answerFromLog('analyst', [row({ outcome: 'blocked', detail: 'Needs a fix first.' })]);
     expect(text).toContain('Blocked. Needs a fix first.');
     expect(text).not.toMatch(/nigeria|naira|lagos/i);
+  });
+});
+
+describe('ordinary action words become orders, with no magic phrase', () => {
+  it('"Do the new article" is an order, not a question: Buddy asks which mind', () => {
+    expect(routeMessage('Do the new article', null)).toEqual({ kind: 'ask_which_mind', instruction: 'Do the new article' });
+  });
+
+  it('a polite opener does not hide the action word', () => {
+    expect(routeMessage('Please do the new article', null)).toEqual({ kind: 'ask_which_mind', instruction: 'Please do the new article' });
+    expect(routeMessage('Could you tell the Analyst to check the spring guide', null)).toEqual({
+      kind: 'order',
+      mind: 'analyst',
+      instruction: 'Could you tell the Analyst to check the spring guide',
+      resolvesPending: false,
+    });
+  });
+
+  it('"Have the Strategist plan the summer list" is an order for the Strategist', () => {
+    expect(routeMessage('Have the Strategist plan the summer list', null)).toMatchObject({ kind: 'order', mind: 'strategist' });
+  });
+
+  it('"Do you know what the Analyst did?" is still a question about the Analyst', () => {
+    expect(routeMessage('Do you know what the Analyst did?', null)).toEqual({ kind: 'mind_log', mind: 'analyst' });
+  });
+
+  it('"Tell me what the Analyst did" is a question, not an order', () => {
+    expect(routeMessage('Tell me what the Analyst did', null)).toEqual({ kind: 'mind_log', mind: 'analyst' });
+  });
+
+  it('"Check what the Auditor did?" is a question, even with an action word', () => {
+    expect(routeMessage('Check what the Auditor did?', null)).toEqual({ kind: 'mind_log', mind: 'auditor' });
+  });
+
+  it('a question with no mind is ordinary chat, even with an action word inside it', () => {
+    expect(routeMessage('Can you check the article for me?', null)).toEqual({ kind: 'chat' });
+    expect(routeMessage('Do you know the weather?', null)).toEqual({ kind: 'chat' });
+    expect(routeMessage('How do I add a product?', null)).toEqual({ kind: 'chat' });
+  });
+
+  it('"Do the new article" completes a pending order when the owner names a mind', () => {
+    expect(routeMessage('the ceo', { instruction: 'Do the new article' })).toEqual({
+      kind: 'order',
+      mind: 'ceo',
+      instruction: 'Do the new article',
+      resolvesPending: true,
+    });
+  });
+
+  it('a named mind still files a waiting order', () => {
+    expect(routeMessage('Tell the Executioner to add the kit to the spring guide', null)).toMatchObject({
+      kind: 'order',
+      mind: 'executioner',
+      resolvesPending: false,
+    });
+  });
+});
+
+describe('which messages are sent to Gemini for a judgement', () => {
+  it('questions are never judged', () => {
+    expect(isQuestionLike('What did the Analyst do?')).toBe(true);
+    expect(isOrderCandidate('What did the Analyst do?', null)).toBe(false);
+    expect(isOrderCandidate('Can you check the article for me?', null)).toBe(false);
+  });
+
+  it('a statement the rules do not place is a candidate', () => {
+    expect(isOrderCandidate('Plan the spring push for the kit', null)).toBe(true);
+    expect(isOrderCandidate('Thanks for that', null)).toBe(true);
+  });
+
+  it('a short mind name that answers a pending order is not a candidate', () => {
+    expect(isOrderCandidate('the analyst', { instruction: 'Check the article' })).toBe(false);
   });
 });

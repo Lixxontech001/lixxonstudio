@@ -58,7 +58,10 @@ Server side:
   - A question about a mind ("What did the Analyst do?") is answered from the newest rows of `minds_daily_log`. An empty log says so. A failed read says so and changes nothing.
   - An order that mentions publishing, sending, spending, prices, refunds or deleting is still saved as waiting, and Buddy says those parts wait for the owner.
   - The briefing section "The five minds" reads the same log. A day with a waiting order is not called quiet.
-  - Nothing reads `buddy_orders` yet, and no mind acts on an order. The owner still cannot open a chat with any mind.
+  - Phase 3 slice 1: "Do the new article" is now an order, not a question. Polite openers such as "please" and "could you" are read past. Questions ("?", "what", "do you") are never filed as orders.
+  - With a Google key saved, a statement the rules cannot place gets one Gemini judgement (order, ask which mind, or chat). Clear orders (a named mind plus an action word) are decided by the rules with no call. Without a key, the rules decide.
+  - `supabase/functions/_shared/buddyOrders.ts` reads the waiting orders, oldest first, and sorts each into a lane. Product lines on articles are the only lane this phase runs. Channels and video, prices and spending, and creating a product each wait with a plain reason.
+  - No mind acts on an order yet. The owner still cannot open a chat with any mind.
 - Phase 2 freeze checks live in `src/__tests__/buddyPhase2Freeze.test.ts`: Takeover off by default, Kill round-trips, `/admin/ai` is the Minds watch, `/buddy/controls` redirects, and the magazine addresses are unchanged. The briefing no longer says "Takeover is off", because the switch can be turned on; it now says no mind has sent anything out.
 - The old Admin AI screen (22 tabs) is still in `src/admin/pages/AdminAI.tsx`, but nothing routes to it any more. The owner's screen at `/admin/ai` is the Minds watch in `src/admin/pages/AdminMinds.tsx`.
 - `minds/mindRoster.ts` lists the five minds and the Kill options. `minds/mindsControlsStore.ts` saves the Takeover and Kill settings to the one-row `minds_controls` table (migration `20261009140000_minds_controls.sql`, not applied). Takeover is off by default, and nothing reads these settings yet.

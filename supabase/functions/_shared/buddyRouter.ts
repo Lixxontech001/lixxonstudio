@@ -3,6 +3,7 @@
 // Rules:
 // - A question about a mind is answered from the real daily log, never from a guess.
 // - An order names a mind, or Buddy asks which mind once. An order is stored as waiting, never as done.
+// - Ordinary action words are orders. "Do the new article" is an order. Only question forms are questions.
 // - Minds cannot publish, send, spend or change prices. Buddy says so when an order touches those.
 
 import { ownerClock } from "./mindsNightReport.ts";
@@ -27,10 +28,15 @@ export const LOG_ANSWER_ROWS = 10;
 
 /** Words that mean the owner wants something a mind is never allowed to do by itself. */
 const RESTRICTED_WORDS = /\b(publish|send|email|e-mail|spend|pay|refund|price|prices|pricing|discount|delete|post)\b/i;
-/** A message that starts with an action word is an order. */
-const IMPERATIVE = /^(please\s+)?(tell|ask|have|get|make|set|check|review|look|plan|prepare|sort|draft|find|fix|update|write|schedule|follow|watch|research|compare|list|build|run|keep|put|send|publish|pause|resume|start|stop|pull)\b/i;
-/** A question: a question mark, or a question word at the start. */
-const QUESTION = /\?\s*$|^(what|which|how|why|who|when|where|has|have|did|does|do|is|are|was|were|can|could|would)\b/i;
+/** Action words that start an order. "do" is one of them, so "Do the new article" is an order. */
+const IMPERATIVE =
+  /^(tell|ask|have|get|make|set|check|review|look|plan|prepare|sort|draft|find|fix|update|write|schedule|follow|watch|research|compare|list|build|run|keep|put|send|publish|pause|resume|start|stop|pull|do|add|move|swap|place|read|open|close|remove|change|create|edit|share|reply|answer)\b/i;
+/** Polite openers that do not change what the owner asked for. Removed before the action word is read. */
+const POLITE_OPENER = /^(please|kindly|could you|can you|would you|will you|could we|can we|would you please)\s+/i;
+/** A question form at the start: "what", "did", "do you", and so on. */
+const QUESTION_START =
+  /^(what|which|how|why|who|when|where|did|does|is|are|was|were|do you|do we|do i|have you|have we|has it|has the|is there|are there|can i|should we|should i|tell me|show me)\b/i;
+const QUESTION_MARK = /\?\s*$/;
 
 export type Route =
   | { kind: "mind_log"; mind: MindName }
@@ -60,21 +66,52 @@ export function cleanInstruction(message: string): string {
   return message.replace(/\s+/g, " ").trim().slice(0, MAX_ORDER_CHARS);
 }
 
+/** The message with polite openers removed, so the action word can be read. */
+export function coreOf(message: string): string {
+  let text = message.trim();
+  let before = "";
+  while (before !== text) {
+    before = text;
+    text = text.replace(POLITE_OPENER, "");
+  }
+  return text;
+}
+
+/** True when the message reads as a question to Buddy, so it is never filed as an order. */
+export function isQuestionLike(message: string): boolean {
+  const text = message.trim();
+  return QUESTION_MARK.test(text) || QUESTION_START.test(coreOf(text));
+}
+
 /**
- * Decides what one owner message is. `pending` is an order Buddy is waiting to file once a mind is named.
+ * True when the message is an order-like statement that a closer read (one Gemini call, when a key is saved) may judge.
+ * Questions, and a short mind name that answers a pending order, are not candidates.
+ */
+export function isOrderCandidate(message: string, pending: PendingOrder | null): boolean {
+  const text = message.trim();
+  if (!text || isQuestionLike(text)) return false;
+  const words = text.split(/\s+/).filter(Boolean).length;
+  if (pending && namedMind(text) && words <= 5) return false;
+  return true;
+}
+
+/**
+ * Decides what one owner message is, with simple rules only (no key needed).
+ * `pending` is an order Buddy is waiting to file once a mind is named.
  * Only one route is returned. When the answer to a pending order arrives, `resolvesPending` is true.
  */
 export function routeMessage(message: string, pending: PendingOrder | null): Route {
   const text = message.trim();
   const mind = namedMind(text);
-  const question = QUESTION.test(text);
-  const imperative = IMPERATIVE.test(text);
+  const question = isQuestionLike(text);
+  // A question is never an action, even when it starts with an action word ("Do you know ...?").
+  const imperative = !question && IMPERATIVE.test(coreOf(text));
   const words = text.split(/\s+/).filter(Boolean).length;
 
   if (pending && mind && words <= 5 && !imperative && !question) {
     return { kind: "order", mind, instruction: pending.instruction, resolvesPending: true };
   }
-  if (mind && question) return { kind: "mind_log", mind };
+  if (mind && question && !imperative) return { kind: "mind_log", mind };
   if (mind && imperative) return { kind: "order", mind, instruction: cleanInstruction(text), resolvesPending: false };
   if (!mind && imperative && !question) return { kind: "ask_which_mind", instruction: cleanInstruction(text) };
   return { kind: "chat" };

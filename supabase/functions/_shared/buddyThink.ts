@@ -6,10 +6,12 @@ import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type Brief
 import { siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import {
   ASK_WHICH_MIND_LINE,
+  MIND_KEYS,
   MIND_LABELS,
   RESTRICTED_LINE,
   answerFromLog,
   cleanInstruction,
+  isOrderCandidate,
   isRestricted,
   routeMessage,
   type MindLogLine,
@@ -96,6 +98,37 @@ export interface BuddyThinkDeps {
   saveOrder(chatId: string, instruction: string, mind: MindName | null): Promise<boolean>;
   /** The newest log rows, optionally for one mind. Null when they cannot be read. */
   readMindLog(mind: MindName | null): Promise<MindLogLine[] | null>;
+}
+
+/** The one question Gemini answers when the rules cannot tell whether a statement is an order. JSON only. */
+export const ORDER_JUDGE_SYSTEM = [
+  "You sort one message from the owner of Lixxon Studio. Reply with JSON only, nothing else.",
+  'Use exactly one of: {"kind":"order","mind":"analyst"}, {"kind":"ask_mind","mind":null}, {"kind":"chat","mind":null}.',
+  "The minds are: analyst, strategist, ceo, executioner, auditor.",
+  "order: the owner asks for work to be done AND names one of those minds.",
+  "ask_mind: the owner asks for work to be done but names no mind.",
+  "chat: anything else, including thanks, small talk, and questions.",
+  "Do not invent work. If unsure, answer chat.",
+].join("\n");
+
+export type OrderJudgement = { kind: "order"; mind: MindName } | { kind: "ask_mind" } | { kind: "chat" };
+
+/** Reads the model's JSON answer. Anything unclear returns null, so the rules decide instead. */
+export function parseOrderJudgement(text: string): OrderJudgement | null {
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed)) return null;
+  const mind = typeof parsed.mind === "string" && (MIND_KEYS as readonly string[]).includes(parsed.mind) ? (parsed.mind as MindName) : null;
+  if (parsed.kind === "order" && mind) return { kind: "order", mind };
+  if (parsed.kind === "order" || parsed.kind === "ask_mind") return { kind: "ask_mind" };
+  if (parsed.kind === "chat") return { kind: "chat" };
+  return null;
 }
 
 const ORDER_SAVE_FAILED = "Buddy could not save that order, so nothing was filed. Try again in a moment.";
@@ -236,6 +269,16 @@ function probeStatusFor(outcome: ThinkOutcome): "invalid" | "rate_limited" | "un
  * answer is saved. A missing key still saves the question and an honest notice in the chat.
  */
 /** Answers a routed message: a log answer, a question about which mind, or an order filed as waiting. */
+/** One Gemini call that judges a statement. Returns null when there is no key, the limit is hit, or the reply is unclear. */
+async function judgeWithGemini(message: string, deps: BuddyThinkDeps): Promise<OrderJudgement | null> {
+  const key = await deps.readKey();
+  if (!key) return null;
+  if ((await deps.allowCall("ask")) !== true) return null;
+  const result = await deps.askGemini(key, { system: ORDER_JUDGE_SYSTEM, turns: [{ role: "user", text: message }] });
+  if (!result.ok) return null;
+  return parseOrderJudgement(result.text);
+}
+
 async function answerRouted(
   chatId: string,
   title: string,
@@ -356,7 +399,15 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   const pendingRead = await deps.loadPendingOrder(chatId);
   if (!pendingRead.ok) return fail(503, "history_unavailable", "Buddy could not read this chat just now. Nothing was sent. Try again shortly.");
   const pending = pendingRead.instruction ? { instruction: pendingRead.instruction } : null;
-  const route = routeMessage(message, pending);
+  // Clear orders (a named mind plus an action word) are decided by the rules. Only statements the rules
+  // cannot place are sent to Gemini once, to say whether they are an order, and for which mind.
+  let route = routeMessage(message, pending);
+  if ((route.kind === "chat" || route.kind === "ask_which_mind") && isOrderCandidate(message, pending)) {
+    const judged = await judgeWithGemini(message, deps);
+    if (judged?.kind === "order") route = { kind: "order", mind: judged.mind, instruction: cleanInstruction(message), resolvesPending: false };
+    if (judged?.kind === "ask_mind") route = { kind: "ask_which_mind", instruction: cleanInstruction(message) };
+    if (judged?.kind === "chat") route = { kind: "chat" };
+  }
   const completesPending = route.kind === "order" && route.resolvesPending;
   if (pending && !completesPending) {
     // The owner moved on without naming a mind. The order is filed as waiting, and Buddy does not ask again.
