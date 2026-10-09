@@ -42,6 +42,10 @@ function fakeStore(options: { seenAt?: string | null; facts?: BriefingFacts; sav
       options.stateOk === false ? { ok: false } : { ok: true, seenAt: options.seenAt === undefined ? SEEN : options.seenAt },
     markSeen,
     readBriefingFacts,
+    readSiteFacts: async () => ({
+      articles: { ok: true, total: 0, items: [] },
+      products: { ok: true, total: 0, items: [] },
+    }),
     findOrCreateBriefing: async (localDate) => {
       const existing = threads.get(localDate);
       if (existing) return { id: existing, created: false };

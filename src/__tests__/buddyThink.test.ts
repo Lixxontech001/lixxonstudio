@@ -48,6 +48,10 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
       failures: { ok: true, count: 0, codes: [] },
     }),
     findOrCreateBriefing: async () => ({ id: CHAT_ID, created: true }),
+    readSiteFacts: async () => ({
+      articles: { ok: true, total: 0, items: [] },
+      products: { ok: true, total: 0, items: [] },
+    }),
     ...overrides,
   };
   return { deps: base, askGemini, recordProbe, saved, touchChat };
@@ -92,7 +96,7 @@ describe('Buddy think: chat replies', () => {
     const { deps: d, askGemini, saved, touchChat } = deps({ loadHistory: async () => history });
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: '  What is on the shop?\u0007 ' }, d);
     expect(askGemini).toHaveBeenCalledWith(FAKE_KEY, {
-      system: BUDDY_SYSTEM_INSTRUCTION,
+      system: expect.stringContaining(BUDDY_SYSTEM_INSTRUCTION),
       turns: [...history, { role: 'user', text: 'What is on the shop?' }],
     });
     expect(saved).toEqual([

@@ -3,6 +3,7 @@
 // storage, site reads and fetch.
 
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
+import { siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 
 /** Current stable Flash model on the Gemini API (Google's model list, Oct 2026). Change here only. */
 export const BUDDY_GEMINI_MODEL = "gemini-3.8-flash";
@@ -17,8 +18,9 @@ export const BUDDY_SYSTEM_INSTRUCTION = [
   "You are Buddy, the chief of staff for Lixxon Studio.",
   "You talk only to the owner. Be short, clear and human. Plain English, no jargon, no hype.",
   "You do not write marketing copy. You do not post, send, publish, edit or change anything.",
-  "Right now you cannot see the website's articles, the shop or any numbers beyond the briefings in this chat. If the owner asks about them, say you cannot see them yet. Never guess or invent article titles, product names, prices or numbers.",
-  "You only know what the owner tells you in this conversation, and the briefings Buddy has written in it.",
+  "You can read the website's published article titles and the active shop products. Their current list comes with each question, under THE SITE RIGHT NOW. Use only that list. Never guess or invent article titles, product names, prices or numbers. Money is always in USD.",
+  "You can read the site but you cannot change it. You cannot publish, edit articles, change products or prices, or spend money.",
+  "You only know what the owner tells you in this conversation, the briefings Buddy has written in it, and the site list.",
 ].join("\n");
 
 export const BUDDY_TEST_PROMPT = "Reply with one short sentence confirming that Buddy can think. Add nothing else.";
@@ -72,6 +74,8 @@ export interface BuddyThinkDeps {
   markSeen(atIso: string): Promise<boolean>;
   /** Reads what happened since the given time. Each source reports its own ok flag. */
   readBriefingFacts(sinceIso: string): Promise<BriefingFacts>;
+  /** Read-only list of published articles (titles only) and active shop products (names and USD prices). Never reads article bodies. */
+  readSiteFacts(nowIso: string): Promise<SiteFacts>;
   /** Today's briefing thread for this owner, created on first use. Null when it cannot be read or made. */
   findOrCreateBriefing(localDate: string): Promise<{ id: string; created: boolean } | null>;
 }
@@ -320,7 +324,10 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   await deps.touchChat(chatId, title);
 
   const turns: GeminiTurn[] = [...history.slice(-HISTORY_TURNS), { role: "user", text: message }];
-  const result = await deps.askGemini(key, { system: BUDDY_SYSTEM_INSTRUCTION, turns });
+  // Read-only: the site list is read fresh for each question, so Buddy quotes what is live now.
+  const facts = await deps.readSiteFacts(deps.now().toISOString());
+  const system = `${BUDDY_SYSTEM_INSTRUCTION}\n\n${siteFactsBlock(facts)}`;
+  const result = await deps.askGemini(key, { system, turns });
 
   if (result.ok) {
     const saved = await deps.saveMessage(chatId, "buddy", "reply", result.text);

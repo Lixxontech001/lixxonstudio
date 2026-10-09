@@ -229,7 +229,7 @@ export default function BuddyChat() {
           {empty && (
             <div className="buddy-empty">
               <strong>Ask Buddy anything.</strong>
-              For now Buddy can only talk about what you tell it. It cannot see the articles or the shop yet.
+              Buddy can read your published article titles and shop products, and what you tell it. It cannot change any of them.
             </div>
           )}
           {messages.map((message) =>

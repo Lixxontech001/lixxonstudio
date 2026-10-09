@@ -11,6 +11,12 @@ import {
   type GeminiTurn,
 } from "../_shared/buddyThink.ts";
 import type { BriefingFacts } from "../_shared/buddyBriefing.ts";
+import {
+  SITE_ARTICLE_LIMIT,
+  SITE_PRODUCT_LIMIT,
+  siteFactsFromReads,
+  type SiteFacts,
+} from "../_shared/buddySiteFacts.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const MAX_BODY_BYTES = 4096;
@@ -157,6 +163,33 @@ function chatStore(userClient: SupabaseClient) {
         views: { ok: !views.error, count: views.count ?? 0 },
         failures: { ok: !failures.error, count: failures.count ?? 0, codes },
       };
+    },
+    // Read-only. Articles: titles and dates only, never the body. Products: names and USD prices only.
+    readSiteFacts: async (nowIso: string): Promise<SiteFacts> => {
+      try {
+        const [articles, products] = await Promise.all([
+          userClient
+            .from("posts")
+            .select("title,slug,published_at", { count: "exact" })
+            .eq("status", "published")
+            .lte("published_at", nowIso)
+            .order("published_at", { ascending: false })
+            .limit(SITE_ARTICLE_LIMIT),
+          userClient
+            .from("products")
+            .select("name,price_cents", { count: "exact" })
+            .eq("is_active", true)
+            .or("currency.eq.USD,currency.is.null")
+            .order("name", { ascending: true })
+            .limit(SITE_PRODUCT_LIMIT),
+        ]);
+        return siteFactsFromReads(
+          { data: articles.data, error: articles.error, count: articles.count },
+          { data: products.data, error: products.error, count: products.count },
+        );
+      } catch {
+        return siteFactsFromReads({ data: null, error: true }, { data: null, error: true });
+      }
     },
     findOrCreateBriefing: async (localDate: string) => {
       const existing = await userClient

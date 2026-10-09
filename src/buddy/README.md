@@ -36,11 +36,12 @@ Server side:
 - `supabase/functions/_shared/buddyBriefing.ts`: the briefing rules. A day is "quiet" only when every source was read and none had anything real (paid orders, new articles, failed automation steps). Article views are shown but do not make a day busy.
 - `supabase/migrations/20261009110000_buddy_chats.sql`: the `buddy_chats` and `buddy_messages` tables. Each owner sees only their own rows.
 - `supabase/migrations/20261009120000_buddy_briefing_reports.sql`: briefing threads (one per owner per day), the "last seen" time, and the `buddy_reports` table (read only).
+- `supabase/functions/_shared/buddySiteFacts.ts`: the read-only site list Buddy sees with each question (published article titles, active shop products with USD prices). Article bodies are never read.
 - `supabase/migrations/20261009130000_buddy_settings.sql`: the look and read-aloud columns on the owner's row. "Last seen" now starts empty, so saving settings does not count as having looked.
 - The Google key is the existing `gemini_api_key` entry in Admin, under Automation keys (labelled "Google key"). It is written once and never sent back to the browser.
 
 ## What is not here
 
 - The Admin AI control tower lives in `src/admin/pages/AdminAI.tsx` (22 tabs). It is not Buddy and is not touched in phase 1.
-- Nothing writes to `buddy_reports` yet.
-- Buddy cannot see the website's articles or shop in chat yet. That is slice 6.
+- Buddy cannot change the site. It only reads published article titles and active shop products, and never article bodies (see `supabase/functions/_shared/buddySiteFacts.ts`).
+- Night reports are not written by anything yet. The Reports door only lists them.
