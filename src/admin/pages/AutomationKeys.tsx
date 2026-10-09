@@ -9,6 +9,7 @@ import {
   AUTOMATION_KEY_CATEGORIES,
   automationStatusClass,
   automationTestStatusLabel,
+  keysWithoutDoorDetails,
   parseAutomationKeyList,
   safeAutomationKeyTestResult,
   type AutomationKeyCategory,
@@ -82,7 +83,7 @@ export default function AutomationKeys() {
         setItems([]);
         return false;
       }
-      setItems(safeItems);
+      setItems(keysWithoutDoorDetails(safeItems));
       setLoadFailed(false);
       return true;
     } catch {

@@ -242,3 +242,14 @@ What is still not done, or not verified:
 - Known gap: the Keys page also lists the twelve door fields. A tidy-up can come later.
 - The four gated channels (Instagram, TikTok, Facebook, Pinterest) stay manual. No posting API is used for them.
 - Takeover is still off by default. Nothing is turned on by this phase.
+
+## Phase 6 slice 1: the save-failure fix, the Executioner kill path, and the Keys page
+
+- **A failed save no longer stops the day's door step.** Before, a failed save after a successful post threw out of the whole step. The step then reported "Nothing was posted" (wrong), and the doors after it did not run that day. Now the save is tried three times (`FINISH_ATTEMPTS`, with short waits). If it still fails, that door is logged as failed ("posted, but the record could not be saved. Check the log.") and the other doors keep going. The post is counted as posted, because it went out.
+- **The same door does not post again that day after a failed save.** The row stays queued, and the day cap counts it. This is deliberate: Telegram, Discord, Bluesky, Tumblr and Blogger cannot tell a repeat from a new post, so a second send could publish the article twice. The door posts again on the next local day, with the next article. This is a decision for the owner: a same-day retry of the save is not possible without also storing the post's reference on the row, which needs a database change.
+- **Any error while sending or reserving is contained per door.** A send that throws is recorded as failed. A reservation that throws is skipped with "Nothing was posted", because nothing was sent. A failed log write is ignored, so it cannot hide a post that went out. A failed read of the saved values skips that door, and nothing is sent for it.
+- **Kill on the Executioner stops the door step before any saved value is read.** This was already true (the gate in the runner); a test now proves it: no secret is read, nothing is reserved, nothing is sent.
+- **The Keys page no longer lists the door details.** Those are typed once on Connections. The page filters out the door names (`keysWithoutDoorDetails` in `src/lib/automationKeys.ts`). The filter uses the same list as Connections, so the two cannot drift apart.
+- **Not done in this slice:** a custom Bluesky server address. It needs a new field, a catalogue row and a database change, so it is left for later. Bluesky accounts still have to be on bsky.social.
+- Tests: `runDoors.test.ts` now has 25 cases (new: save fails once then works; save fails every time; no same-day second send; next-day next article; send throws; reserve throws; read throws; Kill on the Executioner reads nothing). `automationKeys.test.ts` covers the Keys filter.
+- Not tested live: no door was contacted. Nothing is deployed.

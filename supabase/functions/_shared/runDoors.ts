@@ -2,6 +2,10 @@
 // Order per door: check connected, check today's cap, pick the article, reserve the post (the database refuses when
 // Takeover is off or Kill stops the minds), send, then record the result. Pure logic. Doors come in through `ports`.
 // Secret values are read only to send. They are never put in a detail, a log line, or a reply.
+//
+// A failure while recording the result never stops the step. The save is retried, and if it still fails the door is
+// logged as a failed record and the other doors still run. A door that posted is never sent again the same day,
+// because some doors (Telegram, Discord, Bluesky, Tumblr, Blogger) cannot tell a repeat from a new post.
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
 import { DOOR_DAILY_LIMIT, DOOR_TEXT_LIMIT, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
@@ -10,6 +14,8 @@ import { blockedDetail, KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from "./runDay.
 import type { KillScope } from "./placementRun.ts";
 
 export const DOORS_NOTHING_CONNECTED_DETAIL = "No free door is connected yet. Connect one on Connections.";
+export const FINISH_ATTEMPTS = 3;
+const FINISH_PAUSE_MS = [1000, 3000];
 
 export interface DoorRunInput {
   localDay: string;
@@ -31,6 +37,8 @@ export interface DoorRunPorts {
   send: (door: DoorId, values: Record<string, string>, text: string, key: string) => Promise<DoorSendResult>;
   finish: (id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null) => Promise<void>;
   log: (entry: { door: DoorId; outcome: "done" | "failed"; detail: string }) => Promise<void>;
+  /** Waits between save retries. Tests pass a no-op. */
+  pause?: (ms: number) => Promise<void>;
 }
 
 export type DoorOutcomeKind = "posted" | "failed" | "skipped" | "not_connected";
@@ -60,73 +68,148 @@ function clip(text: string): string {
   return flat.length > CLIP ? `${flat.slice(0, CLIP - 1)}…` : flat;
 }
 
-export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promise<DoorRunResult> {
-  const gate = blockedDetail(input.takeover, input.killScope);
-  if (gate) return { status: "held", detail: gate, posted: 0, outcomes: [] };
+/** Tries to record a result again, a few times. Returns false when every try failed. Never throws. */
+async function finishWithRetry(
+  ports: DoorRunPorts,
+  id: string,
+  status: "posted" | "failed",
+  externalRef: string | null,
+  errorNote: string | null,
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= FINISH_ATTEMPTS; attempt++) {
+    try {
+      await ports.finish(id, status, externalRef, errorNote);
+      return true;
+    } catch {
+      if (attempt < FINISH_ATTEMPTS) {
+        const wait = FINISH_PAUSE_MS[attempt - 1] ?? 0;
+        if (ports.pause) await ports.pause(wait);
+        else await new Promise((resolve) => setTimeout(resolve, wait));
+      }
+    }
+  }
+  return false;
+}
 
-  const outcomes: DoorOutcome[] = [];
-  let articles: DoorArticle[] | null = null;
+/** Writes a log line. A failed log write is ignored, so it can never stop the step. */
+async function logSafely(ports: DoorRunPorts, entry: { door: DoorId; outcome: "done" | "failed"; detail: string }): Promise<void> {
+  try {
+    await ports.log(entry);
+  } catch {
+    // The log is a record for the owner. A failed write must not undo or hide the post that already happened.
+  }
+}
 
-  for (const door of OPEN_DOORS) {
-    const label = DOORS[door].label;
-    const values: Record<string, string> = {};
+type DoorStep = { held: string; posted: number } | DoorOutcome;
+
+/** One door, start to finish. Only a held gate (Takeover off, Kill) stops the whole step. */
+async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId, readArticles: () => Promise<DoorArticle[]>, postedSoFar: number): Promise<DoorStep> {
+  const label = DOORS[door].label;
+
+  // Reading the saved values is the first step. A failure here means nothing was sent.
+  const values: Record<string, string> = {};
+  try {
     for (const field of DOORS[door].fields) {
       const value = await ports.readSecret(field.secretName);
       if (value) values[field.secretName] = value;
     }
-    const status = doorStatus(door, new Set(Object.keys(values)));
-    if (status.state !== "connected") {
-      outcomes.push({ door, outcome: "not_connected", detail: label });
-      continue;
-    }
+  } catch {
+    return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
+  }
+  const status = doorStatus(door, new Set(Object.keys(values)));
+  if (status.state !== "connected") return { door, outcome: "not_connected", detail: label };
 
+  try {
     if ((await ports.countToday(door, input.localDay)) >= DOOR_DAILY_LIMIT) {
-      outcomes.push({ door, outcome: "skipped", detail: `${label}: already posted today.` });
-      continue;
+      return { door, outcome: "skipped", detail: `${label}: already posted today.` };
     }
+  } catch {
+    return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
+  }
 
-    articles ??= await ports.readArticles();
-    const pick = pickDoorArticle({
+  // A read of the articles that fails propagates. It happens before any door has sent, so nothing was posted.
+  const articles = await readArticles();
+
+  let pick: ReturnType<typeof pickDoorArticle>;
+  try {
+    pick = pickDoorArticle({
       articles,
       postedIds: await ports.readPostedIds(door),
       nowMs: input.nowMs,
       siteOrigin: input.siteOrigin,
       limit: DOOR_TEXT_LIMIT[door],
     });
-    if (!pick.ok) {
-      const detail = pick.reason === "copy_not_clean"
-        ? `${label}: the newest article title has text that cannot be posted.`
-        : pick.reason === "too_long"
-          ? `${label}: the article link is too long for this door.`
-          : `${label}: no new article to post yet.`;
-      outcomes.push({ door, outcome: "skipped", detail });
-      continue;
-    }
+  } catch {
+    return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
+  }
+  if (!pick.ok) {
+    const detail = pick.reason === "copy_not_clean"
+      ? `${label}: the newest article title has text that cannot be posted.`
+      : pick.reason === "too_long"
+        ? `${label}: the article link is too long for this door.`
+        : `${label}: no new article to post yet.`;
+    return { door, outcome: "skipped", detail };
+  }
 
-    const reserved = await ports.reserve(door, pick.article.id, input.localDay, pick.articleUrl);
-    if (!reserved.ok) {
-      if (HELD_REASONS[reserved.reason]) {
-        return { status: "held", detail: HELD_REASONS[reserved.reason], posted: outcomes.filter((item) => item.outcome === "posted").length, outcomes };
-      }
-      const detail = reserved.reason === "already_posted" || reserved.reason === "door_day_cap"
-        ? `${label}: nothing new was posted.`
-        : `${label}: could not start the post. Nothing was posted.`;
-      outcomes.push({ door, outcome: "skipped", detail });
-      continue;
-    }
+  let reserved: ReserveResult;
+  try {
+    reserved = await ports.reserve(door, pick.article.id, input.localDay, pick.articleUrl);
+  } catch {
+    return { door, outcome: "skipped", detail: `${label}: could not start the post. Nothing was posted.` };
+  }
+  if (!reserved.ok) {
+    if (HELD_REASONS[reserved.reason]) return { held: HELD_REASONS[reserved.reason], posted: postedSoFar };
+    const detail = reserved.reason === "already_posted" || reserved.reason === "door_day_cap"
+      ? `${label}: nothing new was posted.`
+      : `${label}: could not start the post. Nothing was posted.`;
+    return { door, outcome: "skipped", detail };
+  }
 
-    const sent = await ports.send(door, values, pick.text, reserved.id);
-    if (sent.ok) {
-      await ports.finish(reserved.id, "posted", sent.externalRef, null);
+  // From here on the door may have posted. Nothing below may report "nothing was posted" unless it is sure.
+  let sent: DoorSendResult;
+  try {
+    sent = await ports.send(door, values, pick.text, reserved.id);
+  } catch {
+    sent = { ok: false, reason: "Could not reach the door." };
+  }
+
+  if (sent.ok) {
+    const saved = await finishWithRetry(ports, reserved.id, "posted", sent.externalRef, null);
+    if (saved) {
       const detail = `Posted to ${label}: "${pick.article.title}".`;
-      outcomes.push({ door, outcome: "posted", detail });
-      await ports.log({ door, outcome: "done", detail });
-    } else {
-      await ports.finish(reserved.id, "failed", null, sent.reason);
-      const detail = `${label} did not take it: ${sent.reason}`;
-      outcomes.push({ door, outcome: "failed", detail });
-      await ports.log({ door, outcome: "failed", detail });
+      await logSafely(ports, { door, outcome: "done", detail });
+      return { door, outcome: "posted", detail };
     }
+    // The post went out, but its record could not be saved. The row stays queued, so this door does not post again today.
+    const detail = `${label}: posted, but the record could not be saved. Check the log.`;
+    await logSafely(ports, { door, outcome: "failed", detail });
+    return { door, outcome: "posted", detail };
+  }
+
+  await finishWithRetry(ports, reserved.id, "failed", null, sent.reason);
+  const detail = `${label} did not take it: ${sent.reason}`;
+  await logSafely(ports, { door, outcome: "failed", detail });
+  return { door, outcome: "failed", detail };
+}
+
+export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promise<DoorRunResult> {
+  const gate = blockedDetail(input.takeover, input.killScope);
+  if (gate) return { status: "held", detail: gate, posted: 0, outcomes: [] };
+
+  const outcomes: DoorOutcome[] = [];
+  let articles: DoorArticle[] | null = null;
+  const readArticles = async (): Promise<DoorArticle[]> => {
+    articles ??= await ports.readArticles();
+    return articles;
+  };
+
+  for (const door of OPEN_DOORS) {
+    const posted = outcomes.filter((item) => item.outcome === "posted").length;
+    const step = await postToDoor(input, ports, door, readArticles, posted);
+    if ("held" in step) {
+      return { status: "held", detail: step.held, posted, outcomes };
+    }
+    outcomes.push(step);
   }
 
   const posted = outcomes.filter((item) => item.outcome === "posted").length;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { AUTOMATION_FLAGS_DEFAULT_OFF, parseAutomationKeyList, safeAutomationKeyTestResult } from '../lib/automationKeys';
+import { AUTOMATION_FLAGS_DEFAULT_OFF, keysWithoutDoorDetails, parseAutomationKeyList, safeAutomationKeyTestResult } from '../lib/automationKeys';
+import { doorSecretNames } from '../../supabase/functions/_shared/doorRegistry';
 import { ROUTE_PERMISSIONS, canAccess } from '../admin/permissions';
 import type { AdminAccess } from '../context/AuthContext';
 
@@ -19,6 +20,19 @@ function access(overrides: Partial<AdminAccess> = {}): AdminAccess {
     ...overrides,
   };
 }
+
+describe('the Keys page does not repeat the free-door details', () => {
+  it('removes every door detail and keeps every other key', () => {
+    const doorRows = doorSecretNames().map((name) => ({ name }));
+    const others = [{ name: 'gemini_api_key' }, { name: 'youtube_client_id' }, { name: 'whatsapp_access_token' }];
+    const kept = keysWithoutDoorDetails([...others, ...doorRows]);
+    expect(kept.map((row) => row.name)).toEqual(others.map((row) => row.name));
+  });
+
+  it('the door list comes from the same registry as Connections, so nothing is missed', () => {
+    expect(doorSecretNames()).toEqual(expect.arrayContaining(['telegram_bot_token', 'mastodon_access_token', 'tumblr_blog_name', 'blogger_blog_id']));
+  });
+});
 
 describe('automation Keys security boundary', () => {
   it('whitelists safe key metadata and drops all secret/Vault properties', () => {

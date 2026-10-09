@@ -47,6 +47,7 @@ interface Harness {
   reserved: string[];
   finished: Array<{ id: string; status: string; externalRef: string | null; errorNote: string | null }>;
   logs: Array<{ door: string; outcome: string; detail: string }>;
+  finishAttempts: Record<string, number>;
 }
 
 function harness(options: {
@@ -56,7 +57,13 @@ function harness(options: {
   todayCount?: Record<string, number>;
   reserve?: (door: string) => ReserveResult;
   send?: (door: string) => DoorSendResult;
+  /** Return true to make a save attempt fail. `attempt` counts from 1 for each row. */
+  finishFail?: (id: string, attempt: number) => boolean;
+  readSecretThrows?: boolean;
+  reserveThrows?: boolean;
+  sendThrows?: boolean;
 } = {}): Harness {
+  const finishAttempts: Record<string, number> = {};
   const secrets = options.secrets ?? ALL_SECRETS;
   const sent: Harness['sent'] = [];
   const keys: Harness['keys'] = [];
@@ -67,24 +74,32 @@ function harness(options: {
     readArticles: async () => options.articles ?? [ARTICLE],
     readPostedIds: async (door) => new Set(options.postedIds?.[door] ?? []),
     countToday: async (door) => options.todayCount?.[door] ?? 0,
-    readSecret: async (name) => secrets[name] ?? null,
+    readSecret: async (name) => {
+      if (options.readSecretThrows) throw new Error('vault');
+      return secrets[name] ?? null;
+    },
     reserve: async (door, articleId) => {
+      if (options.reserveThrows) throw new Error('database');
       reserved.push(`${door}:${articleId}`);
       return options.reserve ? options.reserve(door) : { ok: true, id: `row-${door}` };
     },
     send: async (door, _values, text, key) => {
+      if (options.sendThrows) throw new Error('send');
       sent.push({ door, text });
       keys.push({ door, key });
       return options.send ? options.send(door) : { ok: true, externalRef: `ref-${door}` };
     },
     finish: async (id, status, externalRef, errorNote) => {
+      finishAttempts[id] = (finishAttempts[id] ?? 0) + 1;
+      if (options.finishFail?.(id, finishAttempts[id])) throw new Error('finish');
       finished.push({ id, status, externalRef, errorNote });
     },
     log: async (entry) => {
       logs.push(entry);
     },
+    pause: async () => {},
   };
-  return { ports, sent, keys, reserved, finished, logs };
+  return { ports, sent, keys, reserved, finished, logs, finishAttempts };
 }
 
 const DAY_INPUT = { localDay: '2026-10-10', takeover: true, killScope: 'none' as const, nowMs: NOW, siteOrigin: SITE };
@@ -244,6 +259,89 @@ describe('the caps, the history, and the failures', () => {
     };
     await expect(runDoors(DAY_INPUT, h.ports)).rejects.toThrow('articles');
     expect(h.sent).toHaveLength(0);
+  });
+});
+
+describe('a failed save never stops the other doors, and never sends a door twice in one day', () => {
+  const SECOND_ARTICLE: DoorArticle = { ...ARTICLE, id: 'post-2', title: 'Second article', slug: 'second-article' };
+
+  it('a save that fails once and then works: the door is recorded as posted, and the others still post', async () => {
+    const h = harness({ secrets: ALL_SECRETS, finishFail: (id, attempt) => id === 'row-telegram' && attempt === 1 });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(h.finishAttempts['row-telegram']).toBe(2);
+    expect(h.finished).toContainEqual({ id: 'row-telegram', status: 'posted', externalRef: 'ref-telegram', errorNote: null });
+    expect(result.posted).toBe(2);
+    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord']);
+    expect(result.detail).not.toContain('could not be saved');
+  });
+
+  it('a save that fails every time: the post is reported as posted with a plain note, the log says so, and Discord still posts', async () => {
+    const h = harness({ secrets: ALL_SECRETS, finishFail: (id) => id === 'row-telegram' });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(h.finishAttempts['row-telegram']).toBe(3);
+    expect(result.status).toBe('done');
+    expect(result.outcomes.find((item) => item.door === 'telegram')?.detail).toBe('Telegram: posted, but the record could not be saved. Check the log.');
+    expect(h.logs).toContainEqual({ door: 'telegram', outcome: 'failed', detail: 'Telegram: posted, but the record could not be saved. Check the log.' });
+    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord']);
+    expect(result.posted).toBe(2);
+    expect(result.detail).not.toContain('Nothing was posted');
+  });
+
+  it('after a save that failed, the same door does not send again the same day', async () => {
+    const h = harness({
+      secrets: { telegram_bot_token: TOKEN, telegram_chat_id: '-100123' },
+      articles: [ARTICLE, SECOND_ARTICLE],
+      finishFail: () => true,
+    });
+    await runDoors(DAY_INPUT, h.ports);
+    // The row stays queued, so the day cap counts it. A second run the same day must not send.
+    h.ports.countToday = async () => 1;
+    const again = await runDoors(DAY_INPUT, h.ports);
+    expect(h.sent.filter((item) => item.door === 'telegram')).toHaveLength(1);
+    expect(again.outcomes.find((item) => item.door === 'telegram')?.detail).toBe('Telegram: already posted today.');
+  });
+
+  it('the next local day, the door posts again: the next article, not the one already sent', async () => {
+    const h = harness({
+      secrets: { telegram_bot_token: TOKEN, telegram_chat_id: '-100123' },
+      articles: [ARTICLE, SECOND_ARTICLE],
+      postedIds: { telegram: ['post-1'] },
+    });
+    const result = await runDoors({ ...DAY_INPUT, localDay: '2026-10-11' }, h.ports);
+    expect(result.posted).toBe(1);
+    expect(h.sent[0].text).toContain('Second article');
+    expect(h.reserved).toEqual(['telegram:post-2']);
+  });
+
+  it('a send that throws is recorded as failed, and the other doors still run', async () => {
+    const h = harness({ secrets: ALL_SECRETS, sendThrows: true });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(h.finished.every((item) => item.status === 'failed')).toBe(true);
+    expect(result.outcomes.filter((item) => item.outcome !== 'not_connected').map((item) => item.outcome)).toEqual(['failed', 'failed']);
+    expect(result.outcomes[0].detail).toBe('Telegram did not take it: Could not reach the door.');
+  });
+
+  it('a reservation that throws (the database is down): that door is skipped with "nothing was posted", the others run', async () => {
+    const h = harness({ secrets: ALL_SECRETS, reserveThrows: true });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'telegram')?.detail).toBe('Telegram: could not start the post. Nothing was posted.');
+    expect(h.sent).toHaveLength(0);
+    expect(result.status).toBe('done');
+  });
+
+  it('a read of the saved values that throws: that door is skipped, and nothing is sent for it', async () => {
+    const h = harness({ secrets: ALL_SECRETS, readSecretThrows: true });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(h.sent).toHaveLength(0);
+    expect(result.outcomes.every((item) => item.outcome === 'skipped')).toBe(true);
+  });
+
+  it('Kill on the Executioner: no saved value is read, nothing is reserved or sent', async () => {
+    const h = harness({ secrets: ALL_SECRETS, readSecretThrows: true });
+    const result = await runDoors({ ...DAY_INPUT, killScope: 'executioner' }, h.ports);
+    expect(result.status).toBe('held');
+    expect(h.sent).toHaveLength(0);
+    expect(h.reserved).toHaveLength(0);
   });
 });
 

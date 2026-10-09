@@ -1,3 +1,5 @@
+import { doorSecretNames } from '../../supabase/functions/_shared/doorRegistry';
+
 export const AUTOMATION_KEY_CATEGORIES = [
   'ai',
   'actions',
@@ -134,3 +136,12 @@ export const AUTOMATION_FLAGS_DEFAULT_OFF = [
   'automation.agents',
   'automation.push',
 ] as const;
+
+/**
+ * The Keys page does not list the free-door details. Those are typed once on Connections.
+ * Removes every row whose name is a door detail, so the two pages never show the same field twice.
+ */
+export function keysWithoutDoorDetails<T extends { name: string }>(items: readonly T[]): T[] {
+  const doorNames = new Set(doorSecretNames());
+  return items.filter((item) => !doorNames.has(item.name));
+}
