@@ -124,3 +124,13 @@ Server side:
 - Time picker: each channel offers a short list of top-country windows (`CHANNEL_WINDOWS`, `TIME_WINDOWS`). The first is the suggestion. Times are stored as UTC with a plain label, such as "Morning, US Eastern". The owner's clock is never used, and no label names Lagos, Nigeria or WAT.
 - Nothing is saved yet. The save door (`minds_save_pack`) is used in a later slice. Nothing posts anything.
 - Tests: `packCopy.test.ts` (no key, the four texts, the Auditor cases, products, article choice, time windows).
+
+## Phase 4 slice 4: images and video
+
+- Still pictures: only the article's own cover image (`articleImageFor` in `supabase/functions/_shared/packMedia.ts`). An https address or a site path is accepted. Plain http, `data:`, `javascript:`, protocol-relative, spaced or over-long values are refused. Nothing is looked up or invented in its place. No paid stock.
+- Captions: `captionChunks` cuts the caption into up to three chunks. Each chunk is at most 60 characters, wrapped at 26 per line, so it reads as a short burned-in caption.
+- Video plan: `planPackMedia` blocks a pack on the first missing thing, in this order: no article image ("No article image yet."), copy that cannot be used, then no MP4 ("video not made yet"). A pack is ready only when all three are present.
+- Renderer: `scripts/pack-video.mjs` uses FFmpeg (libx264, ASS captions, no audio, no watermark). It makes a 1080 x 1920, 10 second, 30 fps MP4. It takes local files only, refuses a remote picture, a non-MP4 output, an output inside the repository, an existing output, more than three chunks, or a chunk over 60 characters. A failed render leaves no file.
+- Proof: `src/__tests__/packVideo.test.ts` checks the refusals, the caption file and the FFmpeg arguments. Where FFmpeg is present, it also renders a real MP4 from a generated picture and probes it (1080 x 1920, about 10 seconds, no audio). It skips when FFmpeg is missing. `packMedia.test.ts` covers the picture rules, caption limits, and the blocked reasons.
+- Not yet wired: no step fetches a remote cover image, so the renderer cannot run on a real article yet. A real pack stays blocked with "video not made yet". No public video address is made, and nothing is saved to `minds_packs` by this slice.
+- Tests: `packMedia.test.ts`, `packVideo.test.ts`.
