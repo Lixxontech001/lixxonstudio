@@ -11,11 +11,11 @@ import { isAllowedAutomationOrigin } from "../_shared/automationKeyChecks.ts";
 import { readWaitingOrders } from "../_shared/buddyOrders.ts";
 import { makeMindThink } from "../_shared/mindThink.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
-import { checkArticleImage } from "../_shared/articleImage.ts";
+import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
 import { runDoors, type DoorRunResult } from "../_shared/runDoors.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
-import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendTelegram, sendTumblr } from "../_shared/doorAdapters.ts";
+import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendWordPressCom } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
   type ApplyEdit,
@@ -244,7 +244,7 @@ async function runDoorsForDay(
       readArticles: async () => {
         const { data, error } = await sb
           .from("posts")
-          .select("id,title,slug,published_at")
+          .select("id,title,slug,published_at,cover_image")
           .eq("status", "published")
           .gte("published_at", since)
           .order("published_at", { ascending: false })
@@ -255,6 +255,7 @@ async function runDoorsForDay(
           title: String(row.title ?? ""),
           slug: typeof row.slug === "string" ? row.slug : null,
           publishedAt: typeof row.published_at === "string" ? row.published_at : null,
+          coverImage: typeof row.cover_image === "string" ? row.cover_image : null,
         }));
       },
       readPostedIds: async (door) => {
@@ -289,7 +290,8 @@ async function runDoorsForDay(
         if (error) return { ok: false, reason: reasonFrom(error.message) };
         return typeof data === "string" ? { ok: true, id: data } : { ok: false, reason: "failed" };
       },
-      send: async (door, values, text, key) => {
+      loadImage: (cover, origin) => fetchArticleImage(cover, origin),
+      send: async (door, values, text, key, image) => {
         if (door === "telegram") {
           return sendTelegram({ token: values.telegram_bot_token ?? "", chatId: values.telegram_chat_id ?? "" }, text, fetch);
         }
@@ -322,6 +324,25 @@ async function runDoorsForDay(
               blogId: values.blogger_blog_id ?? "",
             },
             text,
+            fetch,
+          );
+        }
+        if (door === "medium") {
+          return sendMedium({ accessToken: values.medium_integration_token ?? "" }, text, fetch);
+        }
+        if (door === "wordpress_com") {
+          return sendWordPressCom(
+            { site: values.wordpress_com_site ?? "", accessToken: values.wordpress_com_access_token ?? "" },
+            text,
+            fetch,
+          );
+        }
+        if (door === "pixelfed") {
+          return sendPixelfed(
+            { instanceUrl: values.pixelfed_instance_url ?? "", accessToken: values.pixelfed_access_token ?? "" },
+            text,
+            image,
+            key,
             fetch,
           );
         }

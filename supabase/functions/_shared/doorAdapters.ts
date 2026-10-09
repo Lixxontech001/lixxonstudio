@@ -1,5 +1,6 @@
-// The HTTP senders for the six free doors: Telegram (bot API), Discord (webhook), Bluesky (AT Protocol, app password),
-// Mastodon (REST, access token), Tumblr (OAuth 1.0a, signed) and Blogger (Google OAuth refresh token).
+// The HTTP senders for the free doors: Telegram (bot API), Discord (webhook), Bluesky (AT Protocol, app password),
+// Mastodon (REST, access token), Tumblr (OAuth 1.0a, signed), Blogger (Google OAuth refresh token), and from Phase 6
+// Medium (integration token), WordPress.com (REST, access token) and Pixelfed (REST, picture upload first).
 // Each returns a plain result. Reasons never include a token, a password, a webhook address, or the provider's raw text.
 // $0: all four are free to use through their official routes.
 
@@ -374,6 +375,170 @@ export async function sendBlogger(values: BloggerValues, text: string, fetchImpl
   const body = (await readJson(response)) as { id?: unknown } | null;
   if (!response.ok || (typeof body?.id !== "string" && typeof body?.id !== "number")) {
     return { ok: false, reason: "Blogger did not take the post." };
+  }
+  return { ok: true, externalRef: String(body.id).slice(0, 120) };
+}
+
+// ---- Phase 6 slice 3: Medium, WordPress.com and Pixelfed ----
+
+export interface MediumValues {
+  accessToken: string;
+}
+
+export interface WordPressComValues {
+  site: string;
+  accessToken: string;
+}
+
+export interface PixelfedValues {
+  instanceUrl: string;
+  accessToken: string;
+}
+
+/** The picture a Pixelfed post uploads. Its bytes come from the article's own cover image. */
+export interface DoorImage {
+  data: ArrayBuffer;
+  contentType: string;
+}
+
+const MEDIUM_API = "https://api.medium.com/v1";
+const WORDPRESS_API = "https://public-api.wordpress.com";
+const WORDPRESS_SITE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+const PIXELFED_IMAGE_EXTENSION: Readonly<Record<string, string>> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+/** A WordPress.com site as a host name (for example lixxon.wordpress.com). A pasted https:// and trailing slash are dropped. */
+export function wordpressComSite(value: string): string | null {
+  const site = value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  return site.length <= 253 && WORDPRESS_SITE.test(site) ? site : null;
+}
+
+/** The body of a short link post: the link only. The title already says what it is. */
+function linkBody(url: string): string {
+  return `<p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>`;
+}
+
+/**
+ * Medium: one published story with the article link (canonical link set to the article). The door works only with an
+ * integration token the owner already has, because Medium no longer issues new ones. Returns the story id.
+ */
+export async function sendMedium(values: MediumValues, text: string, fetchImpl: FetchLike): Promise<DoorSendResult> {
+  if (!values.accessToken) return { ok: false, reason: "Medium is not connected yet." };
+  const parts = splitLinkText(text);
+  if (!parts) return { ok: false, reason: "The article link is not in the right form." };
+  const auth = { Authorization: `Bearer ${values.accessToken}`, Accept: "application/json" };
+
+  // The account id is needed for the post address. Reading the account posts nothing.
+  const me = await withTimeout(fetchImpl, `${MEDIUM_API}/me`, { method: "GET", headers: auth });
+  if ("failed" in me) return { ok: false, reason: me.failed };
+  if (me.status === 401 || me.status === 403) return { ok: false, reason: "Medium did not accept the integration token." };
+  if (me.status === 429) return { ok: false, reason: "Medium is limiting posts. Try later." };
+  const account = (await readJson(me)) as { data?: { id?: unknown } } | null;
+  const accountId = account?.data?.id;
+  if (!me.ok || typeof accountId !== "string" || !/^[A-Za-z0-9]{1,64}$/.test(accountId)) {
+    return { ok: false, reason: "Medium did not return the account." };
+  }
+
+  const response = await withTimeout(fetchImpl, `${MEDIUM_API}/users/${accountId}/posts`, {
+    method: "POST",
+    headers: { ...auth, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: parts.head.slice(0, 200),
+      contentFormat: "html",
+      content: linkBody(parts.url),
+      canonicalUrl: parts.url,
+      publishStatus: "public",
+    }),
+  });
+  if ("failed" in response) return { ok: false, reason: response.failed };
+  if (response.status === 401 || response.status === 403) return { ok: false, reason: "Medium did not accept the integration token." };
+  if (response.status === 429) return { ok: false, reason: "Medium is limiting posts. Try later." };
+  const body = (await readJson(response)) as { data?: { id?: unknown } } | null;
+  const id = body?.data?.id;
+  if (!response.ok || typeof id !== "string") return { ok: false, reason: "Medium did not take the story." };
+  return { ok: true, externalRef: id.slice(0, 120) };
+}
+
+/**
+ * WordPress.com: one published post, a title and a link back to the article. Not the full article.
+ * Returns the post id.
+ */
+export async function sendWordPressCom(values: WordPressComValues, text: string, fetchImpl: FetchLike): Promise<DoorSendResult> {
+  if (!values.site || !values.accessToken) return { ok: false, reason: "WordPress.com is not connected yet." };
+  const site = wordpressComSite(values.site);
+  if (!site) return { ok: false, reason: "The WordPress.com site address is not in the right form." };
+  const parts = splitLinkText(text);
+  if (!parts) return { ok: false, reason: "The article link is not in the right form." };
+
+  const response = await withTimeout(fetchImpl, `${WORDPRESS_API}/wp/v2/sites/${encodeURIComponent(site)}/posts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${values.accessToken}`, Accept: "application/json" },
+    body: JSON.stringify({ title: parts.head.slice(0, 200), content: linkBody(parts.url), status: "publish" }),
+  });
+  if ("failed" in response) return { ok: false, reason: response.failed };
+  if (response.status === 401 || response.status === 403) return { ok: false, reason: "WordPress.com did not accept the access token." };
+  if (response.status === 404) return { ok: false, reason: "WordPress.com did not find that site." };
+  if (response.status === 429) return { ok: false, reason: "WordPress.com is limiting posts. Try later." };
+  const body = (await readJson(response)) as { id?: unknown } | null;
+  if (!response.ok || (typeof body?.id !== "string" && typeof body?.id !== "number")) {
+    return { ok: false, reason: "WordPress.com did not take the post." };
+  }
+  return { ok: true, externalRef: String(body.id).slice(0, 120) };
+}
+
+/**
+ * Pixelfed is photo-first, so a post needs a picture. The article's own cover image is uploaded, then one status
+ * with that picture and the link text is published. Without a picture the send is refused before any request.
+ * Returns the status id. The Idempotency-Key is the reserved row id.
+ */
+export async function sendPixelfed(
+  values: PixelfedValues,
+  text: string,
+  image: DoorImage | null,
+  idempotencyKey: string,
+  fetchImpl: FetchLike,
+): Promise<DoorSendResult> {
+  if (!values.instanceUrl || !values.accessToken) return { ok: false, reason: "Pixelfed is not connected yet." };
+  const origin = mastodonOrigin(values.instanceUrl);
+  if (!origin) return { ok: false, reason: "The Pixelfed server address must start with https:// and have no path." };
+  if (!image) return { ok: false, reason: "This article has no picture for Pixelfed." };
+  const extension = PIXELFED_IMAGE_EXTENSION[image.contentType];
+  if (!extension) return { ok: false, reason: "The article picture is not a type Pixelfed takes." };
+  const parts = splitLinkText(text);
+  if (!parts) return { ok: false, reason: "The article link is not in the right form." };
+
+  // Upload the picture. The description is the alt text: the title line.
+  const form = new FormData();
+  form.append("file", new Blob([image.data], { type: image.contentType }), `article.${extension}`);
+  form.append("description", parts.head.slice(0, 500));
+  const upload = await withTimeout(fetchImpl, `${origin}/api/v1/media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${values.accessToken}`, Accept: "application/json" },
+    body: form,
+  });
+  if ("failed" in upload) return { ok: false, reason: upload.failed };
+  if (upload.status === 401 || upload.status === 403) return { ok: false, reason: "Pixelfed did not accept the access token." };
+  if (upload.status === 429) return { ok: false, reason: "Pixelfed is limiting posts. Try later." };
+  const uploaded = (await readJson(upload)) as { id?: unknown } | null;
+  if (!upload.ok || (typeof uploaded?.id !== "string" && typeof uploaded?.id !== "number")) {
+    return { ok: false, reason: "Pixelfed did not take the picture." };
+  }
+
+  const response = await withTimeout(fetchImpl, `${origin}/api/v1/statuses`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${values.accessToken}`,
+      Accept: "application/json",
+      "Idempotency-Key": idempotencyKey.slice(0, 120),
+    },
+    body: JSON.stringify({ status: text, caption: text, media_ids: [String(uploaded.id)], visibility: "public" }),
+  });
+  if ("failed" in response) return { ok: false, reason: response.failed };
+  if (response.status === 401 || response.status === 403) return { ok: false, reason: "Pixelfed did not accept the access token." };
+  if (response.status === 429) return { ok: false, reason: "Pixelfed is limiting posts. Try later." };
+  const body = (await readJson(response)) as { id?: unknown } | null;
+  if (!response.ok || (typeof body?.id !== "string" && typeof body?.id !== "number")) {
+    return { ok: false, reason: "Pixelfed did not take the post." };
   }
   return { ok: true, externalRef: String(body.id).slice(0, 120) };
 }

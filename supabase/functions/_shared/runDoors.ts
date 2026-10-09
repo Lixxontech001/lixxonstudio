@@ -8,8 +8,9 @@
 // because some doors (Telegram, Discord, Bluesky, Tumblr, Blogger) cannot tell a repeat from a new post.
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
-import { DOOR_DAILY_LIMIT, DOOR_TEXT_LIMIT, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
-import type { DoorSendResult } from "./doorAdapters.ts";
+import { DOOR_DAILY_LIMIT, DOOR_TEXT_LIMIT, DOORS_NEED_PICTURE, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
+import type { DoorImage, DoorSendResult } from "./doorAdapters.ts";
+import { imageProblemNote, type ArticleImageLoad } from "./articleImage.ts";
 import { blockedDetail, KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from "./runDay.ts";
 import type { KillScope } from "./placementRun.ts";
 
@@ -33,8 +34,10 @@ export interface DoorRunPorts {
   countToday: (door: DoorId, localDay: string) => Promise<number>;
   readSecret: (name: string) => Promise<string | null>;
   reserve: (door: DoorId, articleId: string, localDay: string, articleUrl: string) => Promise<ReserveResult>;
-  /** `key` is the reserved row's id. It is sent as the door's idempotency key where the door supports one. */
-  send: (door: DoorId, values: Record<string, string>, text: string, key: string) => Promise<DoorSendResult>;
+  /** `key` is the reserved row's id. It is sent as the door's idempotency key where the door supports one. `image` is set only for doors that need a picture. */
+  send: (door: DoorId, values: Record<string, string>, text: string, key: string, image: DoorImage | null) => Promise<DoorSendResult>;
+  /** Fetches and checks the article's own cover picture. Used only by doors that need a picture, before anything is reserved. */
+  loadImage?: (cover: string, siteOrigin: string | null) => Promise<ArticleImageLoad>;
   finish: (id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null) => Promise<void>;
   log: (entry: { door: DoorId; outcome: "done" | "failed"; detail: string }) => Promise<void>;
   /** Waits between save retries. Tests pass a no-op. */
@@ -138,6 +141,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       nowMs: input.nowMs,
       siteOrigin: input.siteOrigin,
       limit: DOOR_TEXT_LIMIT[door],
+      needPicture: DOORS_NEED_PICTURE.includes(door),
     });
   } catch {
     return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
@@ -147,8 +151,25 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       ? `${label}: the newest article title has text that cannot be posted.`
       : pick.reason === "too_long"
         ? `${label}: the article link is too long for this door.`
-        : `${label}: no new article to post yet.`;
+        : DOORS_NEED_PICTURE.includes(door)
+          ? `${label}: no new article with a picture to post yet.`
+          : `${label}: no new article to post yet.`;
     return { door, outcome: "skipped", detail };
+  }
+
+  // A door that uploads a picture checks it first. A bad picture skips the door before any post is reserved.
+  let image: DoorImage | null = null;
+  if (DOORS_NEED_PICTURE.includes(door)) {
+    let loaded: ArticleImageLoad;
+    try {
+      loaded = ports.loadImage
+        ? await ports.loadImage(pick.article.coverImage ?? "", input.siteOrigin)
+        : { ok: false, reason: "not_fetchable" };
+    } catch {
+      loaded = { ok: false, reason: "not_fetchable" };
+    }
+    if (!loaded.ok) return { door, outcome: "skipped", detail: `${label}: ${imageProblemNote(loaded.reason)} Nothing was posted.` };
+    image = { data: loaded.data, contentType: loaded.contentType };
   }
 
   let reserved: ReserveResult;
@@ -168,7 +189,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   // From here on the door may have posted. Nothing below may report "nothing was posted" unless it is sure.
   let sent: DoorSendResult;
   try {
-    sent = await ports.send(door, values, pick.text, reserved.id);
+    sent = await ports.send(door, values, pick.text, reserved.id, image);
   } catch {
     sent = { ok: false, reason: "Could not reach the door." };
   }

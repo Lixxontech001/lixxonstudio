@@ -33,12 +33,19 @@ export function absoluteImageUrl(cover: string | null | undefined, siteOrigin: s
   return choice.path;
 }
 
-/** Fetches the cover image once and checks it: a success status, an image type, and a size under the limit. */
-export async function checkArticleImage(
+export type ArticleImageLoad =
+  | { ok: true; url: string; contentType: string; bytes: number; data: ArrayBuffer }
+  | { ok: false; reason: ArticleImageReason };
+
+/**
+ * Fetches the cover image once and checks it: a success status, an image type, and a size under the limit.
+ * Returns the picture's bytes too, for a door that uploads the picture itself (Pixelfed).
+ */
+export async function fetchArticleImage(
   cover: string | null | undefined,
   siteOrigin: string | null,
   fetchImpl: ImageFetch = (url, init) => fetch(url, init),
-): Promise<ArticleImageCheck> {
+): Promise<ArticleImageLoad> {
   if (cover === null || cover === undefined || !cover.trim()) return { ok: false, reason: "no_image" };
   const url = absoluteImageUrl(cover, siteOrigin);
   if (!url) return { ok: false, reason: "not_usable" };
@@ -55,13 +62,24 @@ export async function checkArticleImage(
     const body = await response.arrayBuffer();
     if (body.byteLength === 0) return { ok: false, reason: "not_fetchable" };
     if (body.byteLength > IMAGE_MAX_BYTES) return { ok: false, reason: "too_large" };
-    return { ok: true, url, contentType, bytes: body.byteLength };
+    return { ok: true, url, contentType, bytes: body.byteLength, data: body };
   } catch (error) {
     const aborted = (error as { name?: string })?.name === "AbortError";
     return { ok: false, reason: aborted ? "timeout" : "not_fetchable" };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The same check as fetchArticleImage, without the bytes. Used by the packs. */
+export async function checkArticleImage(
+  cover: string | null | undefined,
+  siteOrigin: string | null,
+  fetchImpl: ImageFetch = (url, init) => fetch(url, init),
+): Promise<ArticleImageCheck> {
+  const loaded = await fetchArticleImage(cover, siteOrigin, fetchImpl);
+  if (!loaded.ok) return { ok: false, reason: loaded.reason };
+  return { ok: true, url: loaded.url, contentType: loaded.contentType, bytes: loaded.bytes };
 }
 
 /** Plain words for the owner, used in the pack's note. Never a raw address. */

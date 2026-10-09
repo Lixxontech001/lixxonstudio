@@ -7,6 +7,7 @@ import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
 import {
   mastodonOrigin,
   normalizeBlueskyHandle,
+  wordpressComSite,
   oauthAuthorization,
   tumblrBlogName,
   validDiscordWebhook,
@@ -127,7 +128,46 @@ async function bloggerTest(values: Values, fetchImpl: FetchLike): Promise<DoorTe
 }
 
 // Doors without a check yet are simply absent from this list. They are reported as "not_built", never guessed at.
+/** Medium: reads the token's own account. Nothing is posted. */
+async function mediumTest(values: Values, fetchImpl: FetchLike): Promise<DoorTestStatus> {
+  const response = await withTimeout(fetchImpl, "https://api.medium.com/v1/me", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${values.medium_integration_token}`, Accept: "application/json" },
+  });
+  if ("failed" in response) return "unavailable";
+  if (!response.ok) return refusedStatus(response.status);
+  const body = (await readJson(response)) as { data?: { id?: unknown } } | null;
+  return typeof body?.data?.id === "string" ? "connected" : "invalid";
+}
+
+/** WordPress.com: reads the site's own record with the token. Nothing is posted. */
+async function wordpressComTest(values: Values, fetchImpl: FetchLike): Promise<DoorTestStatus> {
+  const site = wordpressComSite(values.wordpress_com_site);
+  if (!site) return "invalid";
+  const response = await withTimeout(fetchImpl, `https://public-api.wordpress.com/rest/v1.1/sites/${encodeURIComponent(site)}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${values.wordpress_com_access_token}` },
+  });
+  if ("failed" in response) return "unavailable";
+  return response.ok ? "connected" : refusedStatus(response.status);
+}
+
+/** Pixelfed: checks the account with the token, the same read Mastodon uses. Nothing is posted. */
+async function pixelfedTest(values: Values, fetchImpl: FetchLike): Promise<DoorTestStatus> {
+  const origin = mastodonOrigin(values.pixelfed_instance_url);
+  if (!origin) return "invalid";
+  const response = await withTimeout(fetchImpl, `${origin}/api/v1/accounts/verify_credentials`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${values.pixelfed_access_token}` },
+  });
+  if ("failed" in response) return "unavailable";
+  return response.ok ? "connected" : refusedStatus(response.status);
+}
+
 const CHECKS: Partial<Record<DoorId, (values: Values, fetchImpl: FetchLike) => Promise<DoorTestStatus>>> = {
+  medium: mediumTest,
+  wordpress_com: wordpressComTest,
+  pixelfed: pixelfedTest,
   telegram: telegramTest,
   discord: discordTest,
   bluesky: blueskyTest,

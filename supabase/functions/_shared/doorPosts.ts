@@ -6,7 +6,10 @@ import { copyProblem } from "./packRules.ts";
 import type { DoorId } from "./doorRegistry.ts";
 
 /** Doors that can post in this build. The others are listed honestly as "not built yet". */
-export const OPEN_DOORS: readonly DoorId[] = ["telegram", "discord", "bluesky", "mastodon", "tumblr", "blogger"];
+export const OPEN_DOORS: readonly DoorId[] = ["telegram", "discord", "bluesky", "mastodon", "tumblr", "blogger", "medium", "pixelfed", "wordpress_com"];
+
+/** Doors that need the article's own cover picture. Their article is picked only from articles that have one. */
+export const DOORS_NEED_PICTURE: readonly DoorId[] = ["pixelfed"];
 
 /**
  * The most text each open door takes. Bluesky: 300 graphemes (counted here by code points, which is never fewer, so it is safe).
@@ -40,6 +43,8 @@ export interface DoorArticle {
   title: string;
   slug: string | null;
   publishedAt: string | null;
+  /** The article's own cover picture, as stored (a site path or an https address). Null when there is none. */
+  coverImage?: string | null;
 }
 
 export type DoorPick =
@@ -83,10 +88,13 @@ export function pickDoorArticle(input: {
   nowMs: number;
   siteOrigin: string | null;
   limit: number;
+  /** When true, only an article with its own cover picture is picked (Pixelfed). */
+  needPicture?: boolean;
 }): DoorPick {
   const since = input.nowMs - DOOR_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   const fresh = input.articles
     .filter((article) => article.slug && SAFE_SLUG.test(article.slug))
+    .filter((article) => !input.needPicture || (typeof article.coverImage === "string" && article.coverImage.trim() !== ""))
     .filter((article) => article.publishedAt !== null && Date.parse(article.publishedAt) >= since && Date.parse(article.publishedAt) <= input.nowMs)
     .filter((article) => !input.postedIds.has(article.id))
     .sort((a, b) => Date.parse(b.publishedAt as string) - Date.parse(a.publishedAt as string));

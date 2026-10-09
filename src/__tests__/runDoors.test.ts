@@ -3,6 +3,7 @@ import { runDoors, DOORS_NOTHING_CONNECTED_DETAIL, type DoorRunPorts, type Reser
 import { KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from '../../supabase/functions/_shared/runDay';
 import type { DoorArticle } from '../../supabase/functions/_shared/doorPosts';
 import type { DoorSendResult } from '../../supabase/functions/_shared/doorAdapters';
+import type { ArticleImageLoad } from '../../supabase/functions/_shared/articleImage';
 
 const NOW = Date.parse('2026-10-10T12:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
@@ -15,7 +16,10 @@ const ARTICLE: DoorArticle = {
   title: 'Easy routine for dry skin',
   slug: 'easy-routine-dry-skin',
   publishedAt: new Date(NOW - DAY).toISOString(),
+  coverImage: '/assets/covers/dry-skin.jpg',
 };
+
+const PICTURE: ArticleImageLoad = { ok: true, url: `${SITE}/assets/covers/dry-skin.jpg`, contentType: 'image/jpeg', bytes: 4, data: new Uint8Array([1, 2, 3, 4]).buffer };
 
 const ALL_SECRETS: Record<string, string> = {
   telegram_bot_token: TOKEN,
@@ -23,7 +27,7 @@ const ALL_SECRETS: Record<string, string> = {
   discord_webhook_url: HOOK,
 };
 
-const SIX_DOOR_SECRETS: Record<string, string> = {
+const NINE_DOOR_SECRETS: Record<string, string> = {
   ...ALL_SECRETS,
   bluesky_handle: 'lixxon.bsky.social',
   bluesky_app_password: 'APP-PASS-SECRET',
@@ -38,6 +42,11 @@ const SIX_DOOR_SECRETS: Record<string, string> = {
   blogger_client_secret: 'BLOGGER-CLIENT-SECRET',
   blogger_refresh_token: 'BLOGGER-REFRESH',
   blogger_blog_id: '1234567890',
+  medium_integration_token: 'MEDIUM-TOKEN-SECRET',
+  pixelfed_instance_url: 'https://pixelfed.example',
+  pixelfed_access_token: 'PIXELFED-TOKEN-SECRET',
+  wordpress_com_site: 'lixxon.wordpress.com',
+  wordpress_com_access_token: 'WORDPRESS-TOKEN-SECRET',
 };
 
 interface Harness {
@@ -48,6 +57,10 @@ interface Harness {
   finished: Array<{ id: string; status: string; externalRef: string | null; errorNote: string | null }>;
   logs: Array<{ door: string; outcome: string; detail: string }>;
   finishAttempts: Record<string, number>;
+  /** Which doors were sent, and whether each send got a picture. Kept apart from `sent`. */
+  images: Array<{ door: string; hasImage: boolean }>;
+  /** The cover addresses the picture loader was asked for. */
+  loadedCovers: string[];
 }
 
 function harness(options: {
@@ -62,6 +75,8 @@ function harness(options: {
   readSecretThrows?: boolean;
   reserveThrows?: boolean;
   sendThrows?: boolean;
+  /** The picture loader. Default: a good JPEG. */
+  loadImage?: (cover: string) => ArticleImageLoad;
 } = {}): Harness {
   const finishAttempts: Record<string, number> = {};
   const secrets = options.secrets ?? ALL_SECRETS;
@@ -70,6 +85,8 @@ function harness(options: {
   const reserved: string[] = [];
   const finished: Harness['finished'] = [];
   const logs: Harness['logs'] = [];
+  const images: Harness['images'] = [];
+  const loadedCovers: string[] = [];
   const ports: DoorRunPorts = {
     readArticles: async () => options.articles ?? [ARTICLE],
     readPostedIds: async (door) => new Set(options.postedIds?.[door] ?? []),
@@ -83,9 +100,14 @@ function harness(options: {
       reserved.push(`${door}:${articleId}`);
       return options.reserve ? options.reserve(door) : { ok: true, id: `row-${door}` };
     },
-    send: async (door, _values, text, key) => {
+    loadImage: async (cover) => {
+      loadedCovers.push(cover);
+      return options.loadImage ? options.loadImage(cover) : PICTURE;
+    },
+    send: async (door, _values, text, key, image) => {
       if (options.sendThrows) throw new Error('send');
       sent.push({ door, text });
+      images.push({ door, hasImage: image !== null });
       keys.push({ door, key });
       return options.send ? options.send(door) : { ok: true, externalRef: `ref-${door}` };
     },
@@ -99,7 +121,7 @@ function harness(options: {
     },
     pause: async () => {},
   };
-  return { ports, sent, keys, reserved, finished, logs, finishAttempts };
+  return { ports, sent, keys, reserved, finished, logs, finishAttempts, images, loadedCovers };
 }
 
 const DAY_INPUT = { localDay: '2026-10-10', takeover: true, killScope: 'none' as const, nowMs: NOW, siteOrigin: SITE };
@@ -157,7 +179,7 @@ describe('a door posts only when it is fully connected', () => {
     expect(h.sent).toEqual([{ door: 'discord', text: `New on the blog: Easy routine for dry skin\n${SITE}/blog/easy-routine-dry-skin` }]);
     expect(h.finished).toEqual([{ id: 'row-discord', status: 'posted', externalRef: 'ref-discord', errorNote: null }]);
     expect(h.logs).toEqual([{ door: 'discord', outcome: 'done', detail: 'Posted to Discord: "Easy routine for dry skin".' }]);
-    expect(result.detail).toBe('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon, Tumblr, Blogger.');
+    expect(result.detail).toBe('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon, Tumblr, Blogger, Medium, Pixelfed, WordPress.com.');
   });
 
   it('both connected doors can post on the same day, one article each', async () => {
@@ -165,24 +187,79 @@ describe('a door posts only when it is fully connected', () => {
     const result = await runDoors(DAY_INPUT, h.ports);
     expect(result.posted).toBe(2);
     expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord']);
-    expect(result.detail).toContain('Not connected yet: Bluesky, Mastodon, Tumblr, Blogger.');
+    expect(result.detail).toContain('Not connected yet: Bluesky, Mastodon, Tumblr, Blogger, Medium, Pixelfed, WordPress.com.');
   });
 
-  it('all six open doors can post, in order, each with its own reserved row as the key', async () => {
-    const h = harness({ secrets: SIX_DOOR_SECRETS });
+  it('all nine open doors can post, in order, each with its own reserved row as the key', async () => {
+    const h = harness({ secrets: NINE_DOOR_SECRETS });
     const result = await runDoors(DAY_INPUT, h.ports);
     expect(result.status).toBe('done');
-    expect(result.posted).toBe(6);
-    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger']);
-    expect(h.keys).toEqual([
-      { door: 'telegram', key: 'row-telegram' },
-      { door: 'discord', key: 'row-discord' },
-      { door: 'bluesky', key: 'row-bluesky' },
-      { door: 'mastodon', key: 'row-mastodon' },
-      { door: 'tumblr', key: 'row-tumblr' },
-      { door: 'blogger', key: 'row-blogger' },
-    ]);
+    expect(result.posted).toBe(9);
+    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com']);
+    expect(h.keys.map((item) => item.key)).toEqual(h.sent.map((item) => `row-${item.door}`));
     expect(result.detail).not.toContain('Not connected yet');
+  });
+
+  it('only Pixelfed takes a picture: the other doors are sent with none', async () => {
+    const h = harness({ secrets: NINE_DOOR_SECRETS });
+    await runDoors(DAY_INPUT, h.ports);
+    expect(h.images.filter((item) => item.hasImage).map((item) => item.door)).toEqual(['pixelfed']);
+  });
+
+  it('Medium and WordPress.com get the same short line and link as the other link doors', async () => {
+    const h = harness({ secrets: NINE_DOOR_SECRETS });
+    await runDoors(DAY_INPUT, h.ports);
+    const link = `${SITE}/blog/easy-routine-dry-skin`;
+    expect(h.sent.find((item) => item.door === 'medium')?.text).toBe(`New on the blog: Easy routine for dry skin\n${link}`);
+    expect(h.sent.find((item) => item.door === 'wordpress_com')?.text).toBe(`New on the blog: Easy routine for dry skin\n${link}`);
+  });
+
+  it('Pixelfed is picked from an article that has a picture, even when a newer article has none', async () => {
+    const newer = { ...ARTICLE, id: 'post-2', slug: 'no-picture-yet', title: 'No picture yet', coverImage: null, publishedAt: new Date(NOW - DAY / 2).toISOString() };
+    const h = harness({ secrets: { pixelfed_instance_url: 'https://pixelfed.example', pixelfed_access_token: 'PIXELFED-TOKEN-SECRET' }, articles: [newer, ARTICLE] });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'pixelfed')?.outcome).toBe('posted');
+    expect(h.sent[0].text).toContain('Easy routine for dry skin');
+    expect(h.loadedCovers).toEqual(['/assets/covers/dry-skin.jpg']);
+  });
+
+  it('Pixelfed with no article picture is skipped before anything is reserved, and says why', async () => {
+    const h = harness({
+      secrets: { pixelfed_instance_url: 'https://pixelfed.example', pixelfed_access_token: 'PIXELFED-TOKEN-SECRET' },
+      articles: [{ ...ARTICLE, coverImage: null }],
+    });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    const outcome = result.outcomes.find((item) => item.door === 'pixelfed');
+    expect(outcome?.outcome).toBe('skipped');
+    expect(outcome?.detail).toBe('Pixelfed: no new article with a picture to post yet.');
+    expect(h.reserved).toHaveLength(0);
+    expect(h.sent).toHaveLength(0);
+  });
+
+  it('Pixelfed with a picture that cannot be used is skipped before anything is reserved, and nothing is sent', async () => {
+    const h = harness({
+      secrets: { pixelfed_instance_url: 'https://pixelfed.example', pixelfed_access_token: 'PIXELFED-TOKEN-SECRET' },
+      loadImage: () => ({ ok: false, reason: 'not_an_image' }),
+    });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    const outcome = result.outcomes.find((item) => item.door === 'pixelfed');
+    expect(outcome?.outcome).toBe('skipped');
+    expect(outcome?.detail).toContain('did not point to a picture');
+    expect(h.reserved).toHaveLength(0);
+    expect(h.sent).toHaveLength(0);
+  });
+
+  it('a picture loader that throws skips Pixelfed the same way, and the other doors still run', async () => {
+    const h = harness({
+      secrets: { ...ALL_SECRETS, pixelfed_instance_url: 'https://pixelfed.example', pixelfed_access_token: 'PIXELFED-TOKEN-SECRET' },
+      loadImage: () => {
+        throw new Error('network');
+      },
+    });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'pixelfed')?.outcome).toBe('skipped');
+    expect(result.outcomes.find((item) => item.door === 'telegram')?.outcome).toBe('posted');
+    expect(h.reserved.some((item) => item.startsWith('pixelfed:'))).toBe(false);
   });
 
   it('a Bluesky post stays within its 300-character limit, even with a long title', async () => {

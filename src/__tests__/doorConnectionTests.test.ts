@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DOOR_IDS, DOORS, type DoorId } from '../../supabase/functions/_shared/doorRegistry';
 
-// The six doors whose check is built. The other six answer "not_built" and make no request, until their slices add a check.
-const BUILT: DoorId[] = ['telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger'];
+// The nine doors whose check is built. The other three (YouTube, Podcast, Vimeo) answer "not_built" and make no request,
+// until their slices add a check.
+const BUILT: DoorId[] = ['telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger', 'medium', 'pixelfed', 'wordpress_com'];
 const NOT_BUILT: DoorId[] = DOOR_IDS.filter((id) => !BUILT.includes(id));
 import {
   DOOR_TEST_MESSAGE,
@@ -77,6 +78,8 @@ function healthy(url: string): Response {
   if (url.startsWith('https://api.tumblr.com/')) return json({ response: { blog: { name: 'lixxon' } } });
   if (url.startsWith('https://oauth2.googleapis.com/token')) return json({ access_token: 'ACCESS' });
   if (url.startsWith('https://www.googleapis.com/blogger/v3/blogs/')) return json({ id: '8070105920543249955' });
+  if (url === 'https://api.medium.com/v1/me') return json({ data: { id: 'MEDIUM-ACCOUNT' } });
+  if (url.startsWith('https://public-api.wordpress.com/rest/v1.1/sites/')) return json({ ID: 1, name: 'Lixxon' });
   return new Response('unexpected', { status: 500 });
 }
 

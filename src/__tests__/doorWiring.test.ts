@@ -42,6 +42,14 @@ describe('the free doors step is part of the day run, behind the same gates', ()
     expect(DOORS_STEP).not.toMatch(/instagram|tiktok|pinterest|facebook|whatsapp/i);
   });
 
+  it('the door step also sends to Medium, WordPress.com and Pixelfed, and loads the picture only for Pixelfed', () => {
+    expect(DOORS_STEP).toContain('sendMedium(');
+    expect(DOORS_STEP).toContain('sendWordPressCom(');
+    expect(DOORS_STEP).toContain('sendPixelfed(');
+    expect(DOORS_STEP).toContain('fetchArticleImage(');
+    expect(DOORS_STEP).toContain('cover_image');
+  });
+
   it('Mastodon is sent with the reserved row id as its idempotency key', () => {
     expect(DOORS_STEP).toMatch(/sendMastodon\(\{[\s\S]*?\}, text, key, fetch\)/);
   });

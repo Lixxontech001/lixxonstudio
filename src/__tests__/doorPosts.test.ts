@@ -40,7 +40,7 @@ function pick(articles: DoorArticle[], overrides: Partial<{ postedIds: Set<strin
 
 describe('the open doors', () => {
   it('are the six free doors: Telegram, Discord, Bluesky, Mastodon, Tumblr and Blogger, and only those', () => {
-    expect([...OPEN_DOORS]).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger']);
+    expect([...OPEN_DOORS]).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com']);
     for (const door of OPEN_DOORS) expect(isOpenDoor(door)).toBe(true);
     expect(isOpenDoor('instagram')).toBe(false);
     expect(isOpenDoor('whatsapp')).toBe(false);
