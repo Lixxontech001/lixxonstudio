@@ -24,7 +24,23 @@ export interface BriefingFacts {
   minds?: { ok: boolean; rows: BriefingMindRow[] };
   /** The owner's orders still waiting (not since last seen: waiting orders stay waiting). */
   waiting?: { ok: boolean; count: number };
+  /** Article changes the minds made since the owner last looked, newest first. */
+  applied?: { ok: boolean; rows: BriefingApplied[] };
+  /** Product gaps not yet marked seen. Each one asks the owner to create a product. */
+  gaps?: { ok: boolean; rows: BriefingGap[] };
 }
+
+export interface BriefingApplied {
+  postTitle: string;
+  productNames: string[];
+}
+
+export interface BriefingGap {
+  angle: string;
+}
+
+export const APPLIED_LINE_LIMIT = 5;
+export const GAP_LINE_LIMIT = 3;
 
 export interface BriefingSection {
   id: string;
@@ -102,11 +118,54 @@ function mindLines(minds: BriefingFacts["minds"]): string[] {
   return lines.slice(0, 5);
 }
 
-function jobLines(waiting: BriefingFacts["waiting"]): string[] {
-  if (!waiting) return ["I cannot read your orders yet."];
-  if (!waiting.ok) return ["I cannot read your orders yet."];
-  if (waiting.count === 0) return ["No orders waiting."];
-  return [`${waiting.count} ${plural(waiting.count, "order", "orders")} waiting for you.`];
+function jobLines(waiting: BriefingFacts["waiting"], gaps: BriefingFacts["gaps"]): string[] {
+  const lines: string[] = [];
+  if (!waiting || !waiting.ok) lines.push("I cannot read your orders yet.");
+  else if (waiting.count === 0) lines.push("No orders waiting.");
+  else lines.push(`${waiting.count} ${plural(waiting.count, "order", "orders")} waiting for you.`);
+  if (!gaps) return lines;
+  if (!gaps.ok) return [...lines, "I cannot read the product gaps yet."];
+  for (const gap of gaps.rows.slice(0, GAP_LINE_LIMIT)) {
+    lines.push(`No product fits "${clipTitle(gap.angle)}" yet. Create one in the shop, then ask me again.`);
+  }
+  return lines;
+}
+
+function clipTitle(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 120 ? `${flat.slice(0, 119)}…` : flat;
+}
+
+/** One chief-of-staff line per article change. Only what the database recorded: the title and the product names. */
+export function appliedLines(applied: BriefingFacts["applied"]): string[] {
+  if (!applied) return [];
+  if (!applied.ok) return ["I cannot read the article changes yet."];
+  return applied.rows.slice(0, APPLIED_LINE_LIMIT).map((row) => {
+    const names = row.productNames.length ? row.productNames.join(", ") : "a product";
+    return `I added ${names} to "${clipTitle(row.postTitle)}". One paragraph changed.`;
+  });
+}
+
+/** Maps the rows the server read into the briefing's shape. A missing title or name is shown as a plain fallback, never guessed. */
+export function briefingApplied(
+  edits: Array<{ post_id: unknown; product_ids: unknown }>,
+  postTitles: Record<string, string>,
+  productNames: Record<string, string>,
+): BriefingApplied[] {
+  return edits
+    .filter((edit) => typeof edit.post_id === "string")
+    .map((edit) => {
+      const ids = Array.isArray(edit.product_ids) ? edit.product_ids.filter((id): id is string => typeof id === "string") : [];
+      return {
+        postTitle: postTitles[String(edit.post_id)] || "an article",
+        productNames: ids.map((id) => productNames[id]).filter((name): name is string => Boolean(name)),
+      };
+    });
+}
+
+/** Keeps the angle of each open gap note. Rows without a text angle are dropped. */
+export function briefingGaps(rows: Array<{ angle: unknown }>): BriefingGap[] {
+  return rows.filter((row) => typeof row.angle === "string" && row.angle.trim().length > 0).map((row) => ({ angle: String(row.angle) }));
 }
 
 function nextMove(facts: BriefingFacts): string {
@@ -122,11 +181,16 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   // The minds' log is part of "all read" once it is supplied. The database read always supplies it.
   const mindsRead = facts.minds ? facts.minds.ok : true;
   const waitingRead = facts.waiting ? facts.waiting.ok : true;
-  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead;
+  const appliedRead = facts.applied ? facts.applied.ok : true;
+  const gapsRead = facts.gaps ? facts.gaps.ok : true;
+  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead;
   const mindsReal = (facts.minds?.rows ?? []).some((row) => REAL_OUTCOMES.includes(row.outcome));
   // An order still waiting for the owner is not quiet, even when nothing else happened.
   const ordersWaiting = (facts.waiting?.count ?? 0) > 0;
-  const nothingReal = facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting;
+  // An article change or an open product gap is real news too, so the day is not quiet.
+  const changesReal = (facts.applied?.rows.length ?? 0) > 0 || (facts.gaps?.rows.length ?? 0) > 0;
+  const nothingReal =
+    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal;
   if (allRead && nothingReal) return { quiet: true, sections: [], text: QUIET_LINE };
 
   const awayMs = now.getTime() - Date.parse(sinceIso);
@@ -134,6 +198,7 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const went = ["No mind has sent anything out."];
   const article = articleLine(facts.articles);
   if (article) went.push(article);
+  went.push(...appliedLines(facts.applied));
 
   const sections: BriefingSection[] = [
     {
@@ -145,7 +210,7 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
     { id: "money", title: "Money & readers", lines: moneyLines(facts) },
     { id: "minds", title: "The five minds", lines: mindLines(facts.minds) },
     { id: "problems", title: "Problems", lines: problemLines(facts.failures) },
-    { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting) },
+    { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting, facts.gaps) },
     { id: "next", title: "Your next move", lines: [nextMove(facts)] },
   ];
 

@@ -10,7 +10,7 @@ import {
   type ChatRole,
   type GeminiTurn,
 } from "../_shared/buddyThink.ts";
-import type { BriefingFacts, BriefingMindRow } from "../_shared/buddyBriefing.ts";
+import { briefingApplied, briefingGaps, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
 import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import {
   SITE_ARTICLE_LIMIT,
@@ -120,7 +120,7 @@ function chatStore(userClient: SupabaseClient) {
       return !error;
     },
     readBriefingFacts: async (sinceIso: string): Promise<BriefingFacts> => {
-      const [articles, orders, views, failures, mindRows, waitingOrders] = await Promise.all([
+      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps] = await Promise.all([
         userClient
           .from("posts")
           .select("title", { count: "exact" })
@@ -155,7 +155,38 @@ function chatStore(userClient: SupabaseClient) {
           .from("buddy_orders")
           .select("id", { count: "exact", head: true })
           .eq("status", "waiting"),
+        // The minds' applied article changes since the owner last looked. Owner session, so row-level security applies.
+        userClient
+          .from("post_product_edits")
+          .select("post_id,product_ids,applied_at")
+          .gt("applied_at", sinceIso)
+          .order("applied_at", { ascending: false })
+          .limit(5),
+        // Product gaps not yet marked seen.
+        userClient
+          .from("minds_gap_notes")
+          .select("angle,created_at")
+          .is("seen_at", null)
+          .order("created_at", { ascending: false })
+          .limit(5),
       ]);
+      // Titles and product names for the applied changes. A failed read leaves the names out, never guessed.
+      const editRows = (Array.isArray(appliedEdits.data) ? appliedEdits.data : []) as Array<{ post_id?: unknown; product_ids?: unknown }>;
+      const postIds = [...new Set(editRows.map((row) => String(row.post_id || "")).filter(Boolean))];
+      const productIds = [...new Set(editRows.flatMap((row) => (Array.isArray(row.product_ids) ? row.product_ids.map(String) : [])))];
+      const [titleRead, nameRead] = await Promise.all([
+        postIds.length ? userClient.from("posts").select("id,title").in("id", postIds) : Promise.resolve({ data: [], error: null }),
+        productIds.length ? userClient.from("products").select("id,name").in("id", productIds) : Promise.resolve({ data: [], error: null }),
+      ]);
+      const postTitles: Record<string, string> = {};
+      for (const row of (Array.isArray(titleRead.data) ? titleRead.data : []) as Array<{ id?: unknown; title?: unknown }>) {
+        if (typeof row.id === "string" && typeof row.title === "string") postTitles[row.id] = row.title;
+      }
+      const productNames: Record<string, string> = {};
+      for (const row of (Array.isArray(nameRead.data) ? nameRead.data : []) as Array<{ id?: unknown; name?: unknown }>) {
+        if (typeof row.id === "string" && typeof row.name === "string") productNames[row.id] = row.name;
+      }
+      const appliedOk = !appliedEdits.error && !titleRead.error && !nameRead.error;
       const mindLogRows = Array.isArray(mindRows.data) ? mindRows.data : null;
       const titleRows = (Array.isArray(articles.data) ? articles.data : []) as Array<{ title?: unknown }>;
       const orderRows = (Array.isArray(orders.data) ? orders.data : []) as Array<{ amount?: unknown; currency?: unknown }>;
@@ -176,6 +207,8 @@ function chatStore(userClient: SupabaseClient) {
         failures: { ok: !failures.error, count: failures.count ?? 0, codes },
         minds: { ok: !mindRows.error && mindLogRows !== null, rows: (mindLogRows ?? []) as BriefingMindRow[] },
         waiting: { ok: !waitingOrders.error, count: waitingOrders.count ?? 0 },
+        applied: { ok: appliedOk, rows: briefingApplied(editRows as Array<{ post_id: unknown; product_ids: unknown }>, postTitles, productNames) },
+        gaps: { ok: !openGaps.error, rows: briefingGaps((Array.isArray(openGaps.data) ? openGaps.data : []) as Array<{ angle: unknown }>) },
       };
     },
     // The "which mind?" order waiting on the last message of this chat. Owner session, so row-level security applies.

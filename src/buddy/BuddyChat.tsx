@@ -14,6 +14,7 @@ import { parseKeyStatus } from './buddyThinkResult';
 import { localDateString } from './buddyDate';
 import BuddyBriefingCard from './BuddyBriefingCard';
 import BuddyGreeting from './BuddyGreeting';
+import BuddyChanges from './BuddyChanges';
 import BuddyReports from './BuddyReports';
 import BuddySettingsPanel from './BuddySettings';
 import { DEFAULT_SETTINGS, loadSettings, type BuddySettings } from './buddySettingsStore';
@@ -34,7 +35,7 @@ function formatTime(iso: string): string {
 
 type KeyState = 'checking' | 'missing' | 'saved' | 'unknown';
 /** Greeting first, then the chat. Reports and settings are their own doors and have no composer. */
-type Phase = 'greeting' | 'chat' | 'reports' | 'settings';
+type Phase = 'greeting' | 'chat' | 'reports' | 'changes' | 'settings';
 
 /**
  * Buddy's private chat. One conversation at a time, past chats in a drawer, and the
@@ -176,6 +177,9 @@ export default function BuddyChat() {
   if (phase === 'reports') {
     return <BuddyReports vibe={settings.vibe} onBack={() => setPhase('chat')} />;
   }
+  if (phase === 'changes') {
+    return <BuddyChanges vibe={settings.vibe} onBack={() => setPhase('chat')} />;
+  }
 
   if (phase === 'settings') {
     return (
@@ -216,6 +220,9 @@ export default function BuddyChat() {
           </button>
           <button type="button" className="buddy-button" onClick={() => setPhase('reports')}>
             Reports
+          </button>
+          <button type="button" className="buddy-button" onClick={() => setPhase('changes')}>
+            Changes
           </button>
           <button type="button" className="buddy-button" onClick={() => setPhase('settings')}>
             Settings

@@ -80,6 +80,10 @@ Server side:
   - `supabase/migrations/20261009230000_minds_apply_placement.sql` holds the two atomic functions: one applies a paragraph edit (text, slots, drip, applied-edit record, log, notable event, order done), and one records a gap. Both refuse when Takeover is off or Kill stops the run, and both refuse a changed paragraph by checksum. Not applied.
   - Tests: `src/__tests__/placementRun.test.ts` (fake doors, including the hash test that only the sentences changed) and `src/__tests__/mindsApplyPlacementDb.test.ts` (the real migrations in an in-process Postgres).
   - Fixed in the Phase 2 orders migration: a duplicate constraint name that Postgres would have refused (`buddy_orders_blocked_reason_rule`).
+- Phase 3 slice 5 is Buddy's report of the applies, and the gap notes.
+  - The morning briefing's "What went out" section now lists each article change in chief-of-staff words ("I added X to \"Title\". One paragraph changed."). Product gaps appear under "Your jobs". A day with a change or an open gap is not quiet. The "Money & readers" section still uses only paid orders and article views that were read.
+  - The Changes screen (`src/buddy/BuddyChanges.tsx`, opened from the Buddy page) lists the recent changes. "Show the paragraph" shows only that one paragraph, before and after. "Got it" marks a gap seen, the only field the owner can change. There is no text box for any mind.
+  - Tests: `buddyChanges.test.ts`, `buddyBriefingChanges.test.ts`, `buddyChangesScreen.test.tsx`.
   - Tests run the real migrations in an in-process Postgres (`@electric-sql/pglite`, a free test-only dependency) in `src/__tests__/postEditsDb.test.ts`.
   - `src/__tests__/setup.ts` now skips its browser polyfills in plain Node tests. Browser tests are unchanged.
 - Phase 2 freeze checks live in `src/__tests__/buddyPhase2Freeze.test.ts`: Takeover off by default, Kill round-trips, `/admin/ai` is the Minds watch, `/buddy/controls` redirects, and the magazine addresses are unchanged. The briefing no longer says "Takeover is off", because the switch can be turned on; it now says no mind has sent anything out.
