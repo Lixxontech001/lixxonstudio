@@ -62,6 +62,15 @@ Server side:
   - With a Google key saved, a statement the rules cannot place gets one Gemini judgement (order, ask which mind, or chat). Clear orders (a named mind plus an action word) are decided by the rules with no call. Without a key, the rules decide.
   - `supabase/functions/_shared/buddyOrders.ts` reads the waiting orders, oldest first, and sorts each into a lane. Product lines on articles are the only lane this phase runs. Channels and video, prices and spending, and creating a product each wait with a plain reason.
   - No mind acts on an order yet. The owner still cannot open a chat with any mind.
+- Phase 3 slice 2 adds the records for placing products on articles. All four migrations are additive and not applied.
+  - `20261009190000_post_product_slots.sql`: which shop products sit on which article. A database rule keeps it to 3 live products per article. A swap removes one row and adds another.
+  - `20261009200000_post_product_edits.sql`: one row per applied edit, with the exact paragraph before and after, the paragraph checksum, the products on the article, and the Auditor's allow. The owner can read his own rows for "Show the paragraph".
+  - `20261009210000_post_drip_days.sql`: one row per article touched on an owner day. A database rule allows at most 3 different articles a day. Touching the same article again the same day is fine.
+  - `20261009220000_minds_gap_notes.sql`: notes that say the shop needs a product for an angle. A note never creates a product. The owner can only mark it seen.
+  - All four are owner-only to read and closed to the browser for writing. Nothing public or anonymous can read them.
+  - `supabase/functions/_shared/postEdits.ts` holds the same numbers in code (cap 3, 3 articles a day, 2 sentences), plus the SHA-256 paragraph checksum. An edit whose paragraph has changed since the plan is refused.
+  - Tests run the real migrations in an in-process Postgres (`@electric-sql/pglite`, a free test-only dependency) in `src/__tests__/postEditsDb.test.ts`.
+  - `src/__tests__/setup.ts` now skips its browser polyfills in plain Node tests. Browser tests are unchanged.
 - Phase 2 freeze checks live in `src/__tests__/buddyPhase2Freeze.test.ts`: Takeover off by default, Kill round-trips, `/admin/ai` is the Minds watch, `/buddy/controls` redirects, and the magazine addresses are unchanged. The briefing no longer says "Takeover is off", because the switch can be turned on; it now says no mind has sent anything out.
 - The old Admin AI screen (22 tabs) is still in `src/admin/pages/AdminAI.tsx`, but nothing routes to it any more. The owner's screen at `/admin/ai` is the Minds watch in `src/admin/pages/AdminMinds.tsx`.
 - `minds/mindRoster.ts` lists the five minds and the Kill options. `minds/mindsControlsStore.ts` saves the Takeover and Kill settings to the one-row `minds_controls` table (migration `20261009140000_minds_controls.sql`, not applied). Takeover is off by default, and nothing reads these settings yet.
