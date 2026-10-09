@@ -17,6 +17,7 @@ const MIGRATIONS = [
   '20261009220000_minds_gap_notes.sql',
   '20261009230000_minds_apply_placement.sql',
   '20261010100000_minds_packs.sql',
+  '20261011200000_pack_media_saved.sql',
 ];
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -371,5 +372,94 @@ describe('minds_save_pack and minds_packs: who may touch them', () => {
     } finally {
       await db.exec('reset role');
     }
+  });
+});
+
+describe('attaching a saved picture and video to a pack (Phase 7 slice 2)', () => {
+  const ATTACH_SQL = 'select public.minds_attach_pack_media($1::uuid, $2::date, $3::uuid, $4, $5) as n';
+  const DAY_A = '2026-10-12';
+  const POST_M1 = 'bbbbbbbb-0000-4000-8000-0000000000a1';
+  const POST_M2 = 'bbbbbbbb-0000-4000-8000-0000000000a2';
+  const POST_M3 = 'bbbbbbbb-0000-4000-8000-0000000000a3';
+
+  // The outer beforeEach clears the articles, so these are added before each test in this block.
+  beforeEach(async () => {
+    for (const post of [POST_M1, POST_M2, POST_M3]) {
+      await asServer("insert into public.posts (id, title, content, status) values ($1, 'Attach test', 'Body', 'published') on conflict do nothing", [post]);
+    }
+  });
+
+  async function attach(post: string, still: string | null, video: string | null, day = DAY_A): Promise<string | null> {
+    try {
+      await asServer(ATTACH_SQL, [OWNER, day, post, still, video]);
+      return null;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  }
+
+  async function row(post: string, channel = 'instagram') {
+    const rows = await asServer<{ status: string; blocked_reason: string | null; still_path: string | null; video_path: string | null }>(
+      'select status, blocked_reason, still_path, video_path from public.minds_packs where owner_id = $1 and channel = $2 and local_day = $3 and post_id = $4',
+      [OWNER, channel, DAY_A, post],
+    );
+    return rows[0];
+  }
+
+  it('a saved video attaches to a pack that waited for a video, and the pack becomes ready', async () => {
+    await save({ day: DAY_A, post: POST_M1, status: 'blocked', blockedReason: 'video not made yet', caption: 'Start with one calm step tonight.', productIds: [] });
+    expect(await attach(POST_M1, null, `${OWNER}/${DAY_A}/${POST_M1}.mp4`)).toBeNull();
+    expect(await row(POST_M1)).toEqual({
+      status: 'ready',
+      blocked_reason: null,
+      still_path: null,
+      video_path: `${OWNER}/${DAY_A}/${POST_M1}.mp4`,
+    });
+  });
+
+  it('a saved still attaches without changing a pack that is blocked for another reason', async () => {
+    await save({ day: DAY_A, post: POST_M2, status: 'blocked', blockedReason: 'No article image yet.', caption: 'Start with one calm step tonight.', productIds: [] });
+    expect(await attach(POST_M2, `${OWNER}/${DAY_A}/${POST_M2}.png`, null)).toBeNull();
+    expect(await row(POST_M2)).toEqual({
+      status: 'blocked',
+      blocked_reason: 'No article image yet.',
+      still_path: `${OWNER}/${DAY_A}/${POST_M2}.png`,
+      video_path: null,
+    });
+  });
+
+  it('a path outside the owner folder, or with the wrong extension, is refused', async () => {
+    await save({ day: DAY_A, post: POST_M3, status: 'blocked', blockedReason: 'video not made yet', caption: 'Start with one calm step tonight.', productIds: [] });
+    expect(await attach(POST_M3, null, `${STRANGER}/${DAY_A}/${POST_M3}.mp4`)).toMatch(/bad_video_path/);
+    expect(await attach(POST_M3, null, `${OWNER}/../${POST_M3}.mp4`)).toMatch(/bad_video_path/);
+    expect(await attach(POST_M3, null, `${OWNER}/${DAY_A}/${POST_M3}.gif`)).toMatch(/bad_video_path/);
+    expect(await attach(POST_M3, `${OWNER}/${DAY_A}/${POST_M3}.mp4`, null)).toMatch(/bad_still_path/);
+    expect(await attach(POST_M3, null, null)).toMatch(/nothing_to_attach/);
+    expect(await row(POST_M3)).toEqual({ status: 'blocked', blocked_reason: 'video not made yet', still_path: null, video_path: null });
+  });
+
+  it('a pack the owner marked posted is never changed by an attach', async () => {
+    await save({ day: DAY_A, post: POST_M1, channel: 'facebook', status: 'ready', caption: 'Start with one calm step tonight.', productIds: [] });
+    await asServer("update public.minds_packs set status = 'posted_by_owner', posted_at = now() where owner_id = $1 and channel = 'facebook' and post_id = $2", [OWNER, POST_M1]);
+    expect(await attach(POST_M1, null, `${OWNER}/${DAY_A}/${POST_M1}.mp4`)).toBeNull();
+    const [posted] = await asServer<{ status: string; video_path: string | null }>(
+      "select status, video_path from public.minds_packs where owner_id = $1 and channel = 'facebook' and post_id = $2",
+      [OWNER, POST_M1],
+    );
+    expect(posted).toEqual({ status: 'posted_by_owner', video_path: null });
+  });
+
+  it('only the server can attach media', async () => {
+    await db.exec('reset role');
+    await db.exec('set role authenticated');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [OWNER]);
+    let error: string | null = null;
+    try {
+      await db.query(ATTACH_SQL, [OWNER, DAY_A, POST_M1, `${OWNER}/${DAY_A}/${POST_M1}.png`, null]);
+    } catch (caught) {
+      error = (caught as Error).message;
+    }
+    await db.exec('reset role');
+    expect(error).not.toBeNull();
   });
 });
