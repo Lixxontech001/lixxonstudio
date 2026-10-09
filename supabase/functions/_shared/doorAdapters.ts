@@ -7,7 +7,7 @@
 export const DOOR_TIMEOUT_MS = 8000;
 
 /** `note` is a plain line the owner should see, for example a YouTube upload that was kept private. */
-export type DoorSendResult = { ok: true; externalRef: string | null; note?: string } | { ok: false; reason: string };
+export type DoorSendResult = { ok: true; externalRef: string | null; note?: string } | { ok: false; reason: string; closed?: true };
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -403,6 +403,8 @@ export interface DoorImage {
 }
 
 const MEDIUM_API = "https://api.medium.com/v1";
+/** Medium answers "gone" once it closes a route. The owner sees this in plain words. The door is not scraped. */
+export const MEDIUM_CLOSED_REASON = "Medium: this door is closed.";
 const WORDPRESS_API = "https://public-api.wordpress.com";
 const WORDPRESS_SITE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 const PIXELFED_IMAGE_EXTENSION: Readonly<Record<string, string>> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
@@ -431,6 +433,7 @@ export async function sendMedium(values: MediumValues, text: string, fetchImpl: 
   // The account id is needed for the post address. Reading the account posts nothing.
   const me = await withTimeout(fetchImpl, `${MEDIUM_API}/me`, { method: "GET", headers: auth });
   if ("failed" in me) return { ok: false, reason: me.failed };
+  if (me.status === 410) return { ok: false, reason: MEDIUM_CLOSED_REASON, closed: true };
   if (me.status === 401 || me.status === 403) return { ok: false, reason: "Medium did not accept the integration token." };
   if (me.status === 429) return { ok: false, reason: "Medium is limiting posts. Try later." };
   const account = (await readJson(me)) as { data?: { id?: unknown } } | null;
@@ -451,6 +454,7 @@ export async function sendMedium(values: MediumValues, text: string, fetchImpl: 
     }),
   });
   if ("failed" in response) return { ok: false, reason: response.failed };
+  if (response.status === 410) return { ok: false, reason: MEDIUM_CLOSED_REASON, closed: true };
   if (response.status === 401 || response.status === 403) return { ok: false, reason: "Medium did not accept the integration token." };
   if (response.status === 429) return { ok: false, reason: "Medium is limiting posts. Try later." };
   const body = (await readJson(response)) as { data?: { id?: unknown } } | null;

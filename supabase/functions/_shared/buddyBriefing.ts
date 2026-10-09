@@ -3,6 +3,7 @@
 
 import { MIND_KEYS, MIND_LABELS } from "./buddyRouter.ts";
 import { DOORS, isDoorId } from "./doorRegistry.ts";
+import { HONEST_SKIP_LINE_LIMIT, isHonestSkip } from "./honestSkips.ts";
 
 export const QUIET_LINE = "Quiet since you left.";
 /** A first visit has no earlier "left" time, so Buddy looks back this far. */
@@ -126,11 +127,27 @@ function moneyLines(facts: BriefingFacts): string[] {
   return lines;
 }
 
-function problemLines(failures: BriefingFacts["failures"]): string[] {
-  if (!failures.ok) return ["I cannot read the error log yet."];
-  if (failures.count === 0) return ["No errors since you left."];
+/** The honest skips and closed doors since the owner last looked, plus blocked packs. Plain words, never a guess. */
+function honestProblemLines(minds: BriefingMindRow[], packs: BriefingPack[]): string[] {
+  const lines: string[] = [];
+  for (const row of minds) {
+    const text = row.detail.trim();
+    if (text && isHonestSkip(text) && !lines.includes(text)) lines.push(text);
+  }
+  for (const pack of packs) {
+    if (pack.status !== "blocked" || !pack.blockedReason) continue;
+    const line = `${pack.channel} for "${pack.articleTitle}": ${pack.blockedReason}`;
+    if (!lines.includes(line)) lines.push(line);
+  }
+  return lines.slice(0, HONEST_SKIP_LINE_LIMIT);
+}
+
+function problemLines(failures: BriefingFacts["failures"], minds: BriefingMindRow[], packs: BriefingPack[]): string[] {
+  const honest = honestProblemLines(minds, packs);
+  if (!failures.ok) return ["I cannot read the error log yet.", ...honest];
+  if (failures.count === 0) return honest.length > 0 ? honest : ["No errors since you left."];
   const codes = failures.codes.length ? ` (${failures.codes.join(", ")})` : "";
-  return [`${failures.count} failed automation ${plural(failures.count, "step", "steps")} since you left${codes}.`];
+  return [`${failures.count} failed automation ${plural(failures.count, "step", "steps")} since you left${codes}.`, ...honest];
 }
 
 const REAL_OUTCOMES = ["done", "blocked", "failed"];
@@ -292,7 +309,8 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead;
   // A door post that went out, failed or is still saving is news, so the day is not quiet.
   const doorsReal = (facts.doors?.rows.length ?? 0) > 0;
-  const mindsReal = (facts.minds?.rows ?? []).some((row) => REAL_OUTCOMES.includes(row.outcome));
+  // An honest skip or a closed door is a problem the owner should see, so it also keeps the day from being quiet.
+  const mindsReal = (facts.minds?.rows ?? []).some((row) => REAL_OUTCOMES.includes(row.outcome) || isHonestSkip(row.detail));
   // An order still waiting for the owner is not quiet, even when nothing else happened.
   const ordersWaiting = (facts.waiting?.count ?? 0) > 0;
   // An article change or an open product gap is real news too, so the day is not quiet.
@@ -319,7 +337,7 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
     { id: "went_out", title: "What went out", lines: went },
     { id: "money", title: "Money & readers", lines: moneyLines(facts) },
     { id: "minds", title: "The five minds", lines: mindLines(facts.minds) },
-    { id: "problems", title: "Problems", lines: problemLines(facts.failures) },
+    { id: "problems", title: "Problems", lines: problemLines(facts.failures, facts.minds?.rows ?? [], facts.packs?.rows ?? []) },
     { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting, facts.gaps, facts.packs) },
     { id: "next", title: "Your next move", lines: [nextMove(facts)] },
   ];

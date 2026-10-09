@@ -9,6 +9,7 @@
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
 import { DOOR_DAILY_LIMIT, DOOR_MEDIA, DOOR_TEXT_LIMIT, DOORS_NEED_PICTURE, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
+import { isHonestSkip } from "./honestSkips.ts";
 import type { DoorSendResult } from "./doorAdapters.ts";
 import { imageProblemNote, type ArticleImageLoad } from "./articleImage.ts";
 import { blockedDetail, KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from "./runDay.ts";
@@ -76,7 +77,7 @@ export interface DoorRunPorts {
   readPendingPosts: (door: DoorId, localDay: string) => Promise<PendingPost[]>;
   /** Keeps what a queued row needs to be saved later: whether it posted (or failed), its reference and its note. Never sends. */
   markPending: (id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null) => Promise<void>;
-  log: (entry: { door: DoorId; outcome: "done" | "failed"; detail: string }) => Promise<void>;
+  log: (entry: { door: DoorId; outcome: "done" | "failed" | "skipped"; detail: string }) => Promise<void>;
   /** Waits between save retries. Tests pass a no-op. */
   pause?: (ms: number) => Promise<void>;
 }
@@ -141,7 +142,7 @@ async function keepPendingSafely(ports: DoorRunPorts, id: string, status: "poste
 }
 
 /** Writes a log line. A failed log write is ignored, so it can never stop the step. */
-async function logSafely(ports: DoorRunPorts, entry: { door: DoorId; outcome: "done" | "failed"; detail: string }): Promise<void> {
+async function logSafely(ports: DoorRunPorts, entry: { door: DoorId; outcome: "done" | "failed" | "skipped"; detail: string }): Promise<void> {
   try {
     await ports.log(entry);
   } catch {
@@ -243,8 +244,9 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       : pick.reason === "too_long"
         ? `${label}: the article link is too long for this door.`
         : DOORS_NEED_PICTURE.includes(door)
-          ? `${label}: no new article with a picture to post yet.`
+          ? `${label}: no picture yet. Nothing was posted.`
           : `${label}: no new article to post yet.`;
+    if (isHonestSkip(detail)) await logSafely(ports, { door, outcome: "skipped", detail });
     return { door, outcome: "skipped", detail };
   }
 
@@ -260,7 +262,11 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
     } catch {
       loaded = { ok: false, reason: "not_fetchable" };
     }
-    if (!loaded.ok) return { door, outcome: "skipped", detail: `${label}: ${imageProblemNote(loaded.reason)} Nothing was posted.` };
+    if (!loaded.ok) {
+      const detail = `${label}: ${imageProblemNote(loaded.reason)} Nothing was posted.`;
+      await logSafely(ports, { door, outcome: "skipped", detail });
+      return { door, outcome: "skipped", detail };
+    }
     media = { kind: "image", data: loaded.data, contentType: loaded.contentType };
   } else if (need === "video") {
     let loaded: VideoLoad;
@@ -271,6 +277,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
     }
     if (!loaded.ok) {
       const detail = loaded.reason === "no_video" ? `${label}: no video yet. Nothing was posted.` : `${label}: the video could not be read. Nothing was posted.`;
+      if (loaded.reason === "no_video") await logSafely(ports, { door, outcome: "skipped", detail });
       return { door, outcome: "skipped", detail };
     }
     media = { kind: "video", data: loaded.data, contentType: loaded.contentType, bytes: loaded.bytes };
@@ -283,6 +290,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
     }
     if (!loaded.ok) {
       const detail = loaded.reason === "no_audio" ? `${label}: audio not made yet. Nothing was posted.` : `${label}: the audio could not be read. Nothing was posted.`;
+      if (loaded.reason === "no_audio") await logSafely(ports, { door, outcome: "skipped", detail });
       return { door, outcome: "skipped", detail };
     }
     media = { kind: "audio", path: loaded.path, bytes: loaded.bytes, contentType: loaded.contentType };
@@ -332,7 +340,8 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
 
   const recorded = await finishWithRetry(ports, reserved.id, "failed", null, sent.reason);
   if (!recorded) await keepPendingSafely(ports, reserved.id, "failed", null, sent.reason);
-  const detail = `${label} did not take it: ${sent.reason}`;
+  // A door the service has closed is said in plain words, once a day. Nothing is posted, and nothing is scraped.
+  const detail = sent.closed ? `${label}: this door is closed. Nothing was posted.` : `${label} did not take it: ${sent.reason}`;
   await logSafely(ports, { door, outcome: "failed", detail });
   return { door, outcome: "failed", detail };
 }

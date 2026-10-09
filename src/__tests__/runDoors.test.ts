@@ -315,7 +315,7 @@ describe('a door posts only when it is fully connected', () => {
     const result = await runDoors(DAY_INPUT, h.ports);
     const outcome = result.outcomes.find((item) => item.door === 'pixelfed');
     expect(outcome?.outcome).toBe('skipped');
-    expect(outcome?.detail).toBe('Pixelfed: no new article with a picture to post yet.');
+    expect(outcome?.detail).toBe('Pixelfed: no picture yet. Nothing was posted.');
     expect(h.reserved).toHaveLength(0);
     expect(h.sent).toHaveLength(0);
   });
@@ -714,5 +714,55 @@ describe('a save that failed is tried again later the same day, and the post is 
     expect(nextDay.outcomes.find(isTelegram)?.outcome).toBe('posted');
     expect(h.sent.filter(isTelegram)).toHaveLength(2);
     expect(h.rows.get('row-telegram-1')?.status).toBe('queued');
+  });
+});
+
+describe('Phase 7 slice 5: honest skips are logged, and a closed door is said plainly', () => {
+  it('a YouTube skip with no video is logged as skipped, in plain words, and nothing is posted', async () => {
+    const h = harness({
+      secrets: { youtube_client_id: 'YT-CLIENT', youtube_client_secret: 'YT-CLIENT-SECRET', youtube_refresh_token: 'YT-REFRESH-SECRET' },
+      loadVideo: () => ({ ok: false, reason: 'no_video' }),
+    });
+    await runDoors(DAY_INPUT, h.ports);
+    expect(h.logs.find((entry) => entry.door === 'youtube')).toEqual({
+      door: 'youtube',
+      outcome: 'skipped',
+      detail: 'YouTube: no video yet. Nothing was posted.',
+    });
+    expect(h.sent.find((item) => item.door === 'youtube')).toBeUndefined();
+  });
+
+  it('a Pixelfed skip with no picture is logged as skipped', async () => {
+    const h = harness({
+      secrets: { pixelfed_instance_url: 'https://pixelfed.example', pixelfed_access_token: 'PIXELFED-TOKEN-SECRET' },
+      articles: [{ ...ARTICLE, coverImage: null }],
+    });
+    await runDoors(DAY_INPUT, h.ports);
+    expect(h.logs.find((entry) => entry.door === 'pixelfed')).toEqual({
+      door: 'pixelfed',
+      outcome: 'skipped',
+      detail: 'Pixelfed: no picture yet. Nothing was posted.',
+    });
+  });
+
+  it('a Medium door the service has closed is said as "this door is closed", logged as failed, and sent to only once in the run', async () => {
+    const h = harness({
+      secrets: { ...ALL_SECRETS, medium_integration_token: 'MEDIUM-TOKEN-SECRET' },
+      send: (door) => (door === 'medium' ? { ok: false, reason: 'Medium: this door is closed.', closed: true } : { ok: true, externalRef: `${door}-1` }),
+    });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    const outcome = result.outcomes.find((item) => item.door === 'medium');
+    expect(outcome).toEqual({ door: 'medium', outcome: 'failed', detail: 'Medium: this door is closed. Nothing was posted.' });
+    expect(h.logs.find((entry) => entry.door === 'medium')?.detail).toBe('Medium: this door is closed. Nothing was posted.');
+    expect(h.sent.filter((item) => item.door === 'medium')).toHaveLength(1);
+  });
+
+  it('an ordinary refusal is still shown as "did not take it", not as closed', async () => {
+    const h = harness({
+      secrets: { ...ALL_SECRETS, medium_integration_token: 'MEDIUM-TOKEN-SECRET' },
+      send: (door) => (door === 'medium' ? { ok: false, reason: 'Medium did not take the story.' } : { ok: true, externalRef: `${door}-1` }),
+    });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'medium')?.detail).toBe('Medium did not take it: Medium did not take the story.');
   });
 });

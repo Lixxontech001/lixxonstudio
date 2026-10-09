@@ -222,7 +222,7 @@ export async function askBriefing(localDate: string): Promise<BuddyBriefingResul
   return data === null ? null : parseBriefingResult(data);
 }
 
-/** The night reports list. Empty until a report is written, which this phase does not do yet. */
+/** The night reports list. Empty until the night report is written for a day (the writer runs when the owner asks; no timer is set). */
 export async function listReports(): Promise<BuddyReport[] | null> {
   try {
     const { data, error } = await supabase
