@@ -153,3 +153,15 @@ Server side:
 - Real render: `src/__tests__/packVideo.test.ts` renders a real 1080 x 1920 MP4 whenever `LIXXON_FFMPEG` points at an FFmpeg binary. It skips when none is set.
 - Known and not changed in Phase 4: the old "Daily Distribution Kit" screen (`/admin/automation/distribution`), its sidebar link in `AdminLayout.tsx`, and the old `automation-distribution` Edge function were already on `main`. The Phase 4 minds and packs code does not import them, and the freeze checks that. The owner should decide whether to remove the sidebar link.
 - Not in production: all Phase 4 migrations are unapplied. The Edge functions are not deployed. No live Gemini call has been made, and no real pack has been saved.
+
+## Phase 5 slice 1: packs from a day run, article picture check, Distribution retired
+
+- The day run (`minds-run-placement`) now makes packs after the placement step, only when Takeover is on and Kill is off. With Takeover off, nothing is read, fetched, written or logged. If the Google key is missing, the packs step is skipped, because placement has already said so.
+- `runDayPacks` (`supabase/functions/_shared/dayPacks.ts`) makes one pack row per gated channel for the first article that can take one. It stops at one article per run. A day that already has packs does nothing, so a repeated run is safe.
+- Picture check (`supabase/functions/_shared/articleImage.ts`): only the article's own cover picture is fetched, with an 8 second limit and a 5 MB cap. It must be a picture type. A missing or broken picture leaves the pack with no picture and a plain note. Nothing is invented in its place.
+- Saving: each row goes through `minds_save_pack`, the same database door as before. The database still refuses it when Takeover is off or Kill stops the minds. A refused row stops the run and says how many were saved.
+- Video stays blocked with "video not made yet" in this slice. Nothing renders a video on the live site yet, and no public video address is made.
+- Local day: the owner's browser sends the local day, the same as the placement run. Public copy uses only the UTC windows and never names a country.
+- Distribution retired: the sidebar link is gone, and `/admin/automation/distribution` opens Minds once (`RetiredDistributionRedirect` in `AdminApp.tsx`). The old page file stays in the repository, unused.
+- Tests: `articleImage.test.ts` (picture rules, timeouts, sizes, types), `dayPacks.test.ts` (Takeover off, Kill, one article, no key, four rows, Auditor block on one channel, pairwise captions, clean copy), `dayPacksDb.test.ts` (real saves in PGlite, the database refusing with Takeover off or Kill on, a repeat run adds nothing), `adminRbac.test.ts` (no Distribution link, redirect in place).
+- Not yet run in a live Edge function: Deno is not available here, so the function is parse-checked only. No migration was added in this slice.

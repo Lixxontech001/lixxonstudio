@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 import AdminLayout from './AdminLayout';
@@ -54,11 +54,24 @@ const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
 const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
 const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));
 const AutomationRuns = lazy(() => import('./pages/AutomationRuns'));
-const AutomationDistribution = lazy(() => import('./pages/AutomationDistribution'));
+// The old Distribution screen is retired as a product. Its address now opens Minds (Buddy is the door).
+// The page file stays in the repository, but nothing in the app opens it.
 
 const LazyPage = ({ children }: { children: ReactNode }) => (
   <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading editor...</div>}>{children}</Suspense>
 );
+
+/** The retired Distribution address goes to Minds once. It never shows the old screen. */
+function RetiredDistributionRedirect() {
+  const { navigate } = useNavigation();
+  const sent = useRef(false);
+  useEffect(() => {
+    if (sent.current) return;
+    sent.current = true;
+    navigate({ name: 'admin-ai' });
+  }, [navigate]);
+  return <div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Opening Minds…</div>;
+}
 
 export default function AdminApp() {
   const { route, navigate } = useNavigation();
@@ -143,7 +156,7 @@ export default function AdminApp() {
       case 'admin-automation-runs':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation runs…</div>}><AutomationRuns /></Suspense>;
       case 'admin-automation-distribution':
-        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading the Distribution Kit…</div>}><AutomationDistribution /></Suspense>;
+        return <RetiredDistributionRedirect />;
       case 'admin-dashboard': return <AdminDashboard />;
       case 'admin-articles': return <AdminArticles />;
       case 'admin-article-new': return <LazyPage><AdminArticleEditor isNew /></LazyPage>;

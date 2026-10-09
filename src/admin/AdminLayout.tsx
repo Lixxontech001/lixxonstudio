@@ -41,7 +41,6 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Automation keys', route: { name: 'admin-automation-keys' }, href: '/admin/automation/keys', icon: KeyRound },
       { label: 'System Check', route: { name: 'admin-automation-check' }, href: '/admin/automation/check', icon: HeartPulse },
       { label: 'Run monitor', route: { name: 'admin-automation-runs' }, href: '/admin/automation/runs', icon: Activity },
-      { label: 'Daily Distribution Kit', route: { name: 'admin-automation-distribution' }, href: '/admin/automation/distribution', icon: Share2 },
     ],
   },
   {

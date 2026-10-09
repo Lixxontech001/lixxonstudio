@@ -11,6 +11,8 @@ import { isAllowedAutomationOrigin } from "../_shared/automationKeyChecks.ts";
 import { readWaitingOrders } from "../_shared/buddyOrders.ts";
 import { makeMindThink } from "../_shared/mindThink.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
+import { checkArticleImage } from "../_shared/articleImage.ts";
+import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
 import {
   runPlacementOrder,
   type ApplyEdit,
@@ -189,7 +191,98 @@ export async function handleRun(req: Request): Promise<Response> {
     },
   );
 
-  return reply(req, { status: outcome.status, detail: outcome.detail, order_id: outcome.orderId });
+  // Gated packs follow the placement step. Takeover is on and Kill is off here (checked above). When Gemini has no key,
+  // placement has already said so, so the packs step is skipped rather than saying it twice.
+  if (outcome.status === "cannot_think") {
+    return reply(req, { status: outcome.status, detail: outcome.detail, order_id: outcome.orderId });
+  }
+  const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think);
+  const detail = clip(`${outcome.detail} ${packs.detail}`, 800);
+  return reply(req, {
+    status: outcome.status,
+    detail,
+    order_id: outcome.orderId,
+    packs: { status: packs.status, saved: packs.saved },
+  });
+}
+
+/** Makes today's gated packs for one article, through the pack door. Reads the site first; nothing is read when Takeover is off. */
+async function runPacksForDay(
+  sb: SupabaseClient,
+  owner: string,
+  localDay: string,
+  takeover: boolean,
+  killScope: KillScope,
+  think: ReturnType<typeof makeMindThink>,
+): Promise<DayPacksResult> {
+  const siteOrigin = env("SITE_URL") || null;
+  const [existing, articleRows, slotRows, productRows] = await Promise.all([
+    sb.from("minds_packs").select("id", { count: "exact", head: true }).eq("owner_id", owner).eq("local_day", localDay),
+    sb.from("posts").select("id,title,slug,cover_image").eq("status", "published").order("published_at", { ascending: false }).limit(ARTICLE_LIMIT),
+    sb.from("post_product_slots").select("post_id,product_id").eq("owner_id", owner).is("removed_at", null),
+    sb.from("products").select("id,name,is_digital,price_cents").eq("is_active", true).or("currency.eq.USD,currency.is.null").order("name", { ascending: true }).limit(SHOP_LIMIT),
+  ]);
+  if (existing.error || articleRows.error || slotRows.error || productRows.error) {
+    return { status: "held", detail: "Site reads for the packs failed. Nothing changed.", saved: 0, postId: null };
+  }
+  const liveByPost = new Map<string, string[]>();
+  for (const slot of slotRows.data ?? []) {
+    const key = String(slot.post_id);
+    liveByPost.set(key, [...(liveByPost.get(key) ?? []), String(slot.product_id)]);
+  }
+  const articles: PackSource[] = (articleRows.data ?? []).map((row: Record<string, unknown>) => ({
+    id: String(row.id),
+    title: String(row.title ?? "Untitled"),
+    slug: typeof row.slug === "string" ? row.slug : null,
+    coverImage: typeof row.cover_image === "string" ? row.cover_image : null,
+    liveProductIds: liveByPost.get(String(row.id)) ?? [],
+  }));
+  const shop = (productRows.data ?? []).map((row: Record<string, unknown>) => ({
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    isDigital: row.is_digital === true,
+    priceUsd: typeof row.price_cents === "number" ? row.price_cents / 100 : null,
+  }));
+  return runDayPacks(
+    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0 },
+    {
+      think,
+      checkImage: (cover, origin) => checkArticleImage(cover, origin),
+      savePack: async (row: PackRow) => {
+        const { error } = await sb.rpc("minds_save_pack", {
+          p_owner_id: owner,
+          p_channel: row.channel,
+          p_local_day: row.localDay,
+          p_post_id: row.postId,
+          p_suggested_at_utc: row.suggestedAtUtc,
+          p_suggested_label: row.suggestedLabel,
+          p_caption: row.caption,
+          p_pin_title: row.pinTitle,
+          p_pin_description: row.pinDescription,
+          p_article_url: row.articleUrl,
+          p_image_path: row.imagePath,
+          p_video_path: row.videoPath,
+          p_product_ids: row.productIds,
+          p_status: row.status,
+          p_blocked_reason: row.blockedReason,
+          p_auditor_verdict: row.auditorVerdict,
+          p_auditor_note: row.auditorNote,
+        });
+        return error ? { ok: false, reason: reasonFrom(error.message) } : { ok: true };
+      },
+      log: async (entry) => {
+        await sb.from("minds_daily_log").insert({
+          owner_id: owner,
+          day: localDay,
+          mind: entry.mind,
+          action: clip(entry.action, 120),
+          outcome: entry.outcome,
+          detail: clip(entry.detail, 500),
+          order_id: null,
+        });
+      },
+    },
+  );
 }
 
 /** Reads the site for one order, runs the placement, and writes through the database doors. */
