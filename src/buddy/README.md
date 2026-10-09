@@ -72,7 +72,7 @@ Server side:
 - Phase 3 slice 3 adds the Strategist's placement plan and the Auditor's check on it. Nothing here writes to an article.
   - `supabase/functions/_shared/productPlacement.ts` makes one plan for one article: one plain paragraph (one line of the article body), one to three active shop products, and one or two sentences. One Gemini call through the existing door (`makeMindThink`). With no key, the plan says "Cannot think: no Google key." and nothing is planned.
   - The Auditor allows the plan only when every check passes. It blocks: more than three products, a product not in the shop, a place that is not a plain paragraph, more than two sentences or more than 60 words, dashes, Nigeria or Naira or Lagos, non-US money, a price that is not the shop price, a cure or medical promise, an invented personal test, a sentence already in the article, text that does not name the product, and markup. Each block carries a plain-English fix.
-  - Digital products are preferred in the brief to Gemini, but a single affiliate product is allowed.
+  - Gemini is asked to prefer digital products when they fit equally well. Digital is a preference, not a rule, so a single affiliate product is allowed.
   - Tests: `src/__tests__/productPlacement.test.ts`, with a skincare article and four shop products.
   - Tests run the real migrations in an in-process Postgres (`@electric-sql/pglite`, a free test-only dependency) in `src/__tests__/postEditsDb.test.ts`.
   - `src/__tests__/setup.ts` now skips its browser polyfills in plain Node tests. Browser tests are unchanged.
