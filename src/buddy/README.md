@@ -7,13 +7,17 @@ This folder is Buddy. Buddy is the only one who talks to the owner.
 - Buddy sits at `/buddy`. It is behind the same owner sign-in, Admin role and MFA as the Admin area. Installing Buddy as an app grants no access.
 - Buddy never posts, never edits articles, never sends email or push, and never turns on takeover.
 
-## What is here now (phase 1, slices 1 to 3)
+## What is here now (phase 1, slices 1 to 4)
 
 | File | What it does |
 | --- | --- |
-| `BuddyEntry.tsx` | Decides what `/buddy` shows: the chat. `/buddy/controls` shows the old screen. |
-| `BuddyChat.tsx` | The chat: message list, composer, New chat, and a Chats drawer for past chats. |
-| `buddyChatStore.ts` | Browser side of chats: list, create, open, and send. Only this owner's rows are readable (row-level security). |
+| `BuddyEntry.tsx` | Decides what `/buddy` shows: the greeting, then the chat. `/buddy/controls` shows the old screen. |
+| `BuddyGreeting.tsx` | The greeting: a short gold line, a time-of-day word, and a Continue button that appears after about 9.5 seconds (at once with reduced motion). |
+| `BuddyChat.tsx` | The chat: today's briefing first, then the message list, composer, New chat, a Chats drawer for past chats, and a Reports button. |
+| `BuddyBriefingCard.tsx` | One morning briefing as titled sections. A quiet day shows "Quiet since you left." |
+| `BuddyReports.tsx` | The Reports door: a list of night reports, or "No night reports yet." No composer. |
+| `buddyChatStore.ts` | Browser side of chats, briefings and reports. Only this owner's rows are readable (row-level security). |
+| `buddyDate.ts`, `buddyMotion.ts` | Today's date on this device, the time-of-day word, and the greeting timing. |
 | `buddy.css` | Buddy's look. Scoped to `.buddy-app`. Noir Gold is the only vibe for now. |
 | `buddyThinkResult.ts` | Reads the answers from the think function. Anything malformed is dropped. |
 | `BuddyPwaApp.tsx` | The old Buddy: a typed command box with a draft list. Kept at `/buddy/controls` until it is retired. It also holds the shared sign-in and MFA gate (`BuddyAccessGate`). |
@@ -24,12 +28,14 @@ This folder is Buddy. Buddy is the only one who talks to the owner.
 Server side:
 
 - `supabase/functions/buddy-think/index.ts`: the owner check, the Google key read from Vault, the rate limit, and the chat storage through the owner's own session.
-- `supabase/functions/_shared/buddyThink.ts`: the rules for `status`, `probe` and `ask`, and the one Gemini call. Buddy thinks with `gemini-3.8-flash`.
+- `supabase/functions/_shared/buddyThink.ts`: the rules for `status`, `probe`, `ask` and `briefing`, and the one Gemini call. Buddy thinks with `gemini-3.8-flash`.
+- `supabase/functions/_shared/buddyBriefing.ts`: the briefing rules. A day is "quiet" only when every source was read and none had anything real (paid orders, new articles, failed automation steps). Article views are shown but do not make a day busy.
 - `supabase/migrations/20261009110000_buddy_chats.sql`: the `buddy_chats` and `buddy_messages` tables. Each owner sees only their own rows.
+- `supabase/migrations/20261009120000_buddy_briefing_reports.sql`: briefing threads (one per owner per day), the "last seen" time, and the `buddy_reports` table (read only).
 - The Google key is the existing `gemini_api_key` entry in Admin, under Automation keys (labelled "Google key"). It is written once and never sent back to the browser.
 
 ## What is not here
 
 - The Admin AI control tower lives in `src/admin/pages/AdminAI.tsx` (22 tabs). It is not Buddy and is not touched in phase 1.
-- The morning briefing, the Reports list, the greeting animation, vibes and voice are later slices of phase 1.
-- Buddy cannot see the website's articles or shop yet. That is slice 6.
+- Vibes and optional voice are slice 5 of phase 1. Nothing writes to `buddy_reports` yet.
+- Buddy cannot see the website's articles or shop in chat yet. That is slice 6.

@@ -10,6 +10,7 @@ import {
   type ChatRole,
   type GeminiTurn,
 } from "../_shared/buddyThink.ts";
+import type { BriefingFacts } from "../_shared/buddyBriefing.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const MAX_BODY_BYTES = 4096;
@@ -77,7 +78,7 @@ function chatStore(userClient: SupabaseClient) {
         .from("buddy_messages")
         .select("role,content")
         .eq("chat_id", chatId)
-        .eq("kind", "reply")
+        .in("kind", ["reply", "briefing"])
         .order("created_at", { ascending: false })
         .limit(HISTORY_TURNS);
       if (error || !Array.isArray(data)) return null;
@@ -88,13 +89,98 @@ function chatStore(userClient: SupabaseClient) {
           text: row.content,
         }) as GeminiTurn);
     },
-    saveMessage: async (chatId: string, role: ChatRole, kind: ChatKind, content: string) => {
-      const { error } = await userClient.from("buddy_messages").insert({ chat_id: chatId, role, kind, content });
+    saveMessage: async (chatId: string, role: ChatRole, kind: ChatKind, content: string, payload: Record<string, unknown> | null = null) => {
+      const row: Record<string, unknown> = { chat_id: chatId, role, kind, content };
+      if (payload) row.payload = payload;
+      const { error } = await userClient.from("buddy_messages").insert(row);
       return !error;
     },
     touchChat: async (chatId: string, title: string) => {
       await userClient.from("buddy_chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
       await userClient.from("buddy_chats").update({ title }).eq("id", chatId).is("title", null);
+    },
+    now: () => new Date(),
+    getSeenAt: async () => {
+      const { data, error } = await userClient.from("buddy_owner_state").select("last_seen_at").maybeSingle();
+      if (error) return { ok: false as const };
+      const seen = data?.last_seen_at;
+      return { ok: true as const, seenAt: typeof seen === "string" ? seen : null };
+    },
+    markSeen: async (atIso: string) => {
+      const { error } = await userClient
+        .from("buddy_owner_state")
+        .upsert({ last_seen_at: atIso, updated_at: atIso }, { onConflict: "owner_id" });
+      return !error;
+    },
+    readBriefingFacts: async (sinceIso: string): Promise<BriefingFacts> => {
+      const [articles, orders, views, failures] = await Promise.all([
+        userClient
+          .from("posts")
+          .select("title", { count: "exact" })
+          .eq("status", "published")
+          .gt("published_at", sinceIso)
+          .order("published_at", { ascending: false })
+          .limit(5),
+        userClient
+          .from("orders")
+          .select("amount,currency", { count: "exact" })
+          .eq("payment_status", "paid")
+          .gt("created_at", sinceIso)
+          .limit(1000),
+        userClient
+          .from("article_views")
+          .select("id", { count: "exact", head: true })
+          .gt("created_at", sinceIso),
+        userClient
+          .from("automation_logs")
+          .select("event_code", { count: "exact" })
+          .eq("status", "failed")
+          .gt("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .limit(5),
+      ]);
+      const titleRows = (Array.isArray(articles.data) ? articles.data : []) as Array<{ title?: unknown }>;
+      const orderRows = (Array.isArray(orders.data) ? orders.data : []) as Array<{ amount?: unknown; currency?: unknown }>;
+      const failureRows = (Array.isArray(failures.data) ? failures.data : []) as Array<{ event_code?: unknown }>;
+      const usdTotal = orderRows
+        .filter((row) => row.currency === "USD")
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const codeList: string[] = failureRows.map((row) => String(row.event_code || "")).filter((code) => code.length > 0);
+      const codes: string[] = [...new Set(codeList)].slice(0, 3);
+      return {
+        articles: {
+          ok: !articles.error,
+          count: articles.count ?? 0,
+          titles: titleRows.map((row) => String(row.title || "Untitled").slice(0, 120)),
+        },
+        orders: { ok: !orders.error, paidCount: orders.count ?? orderRows.length, usdTotal: Math.round(usdTotal * 100) / 100 },
+        views: { ok: !views.error, count: views.count ?? 0 },
+        failures: { ok: !failures.error, count: failures.count ?? 0, codes },
+      };
+    },
+    findOrCreateBriefing: async (localDate: string) => {
+      const existing = await userClient
+        .from("buddy_chats")
+        .select("id")
+        .eq("kind", "briefing")
+        .eq("briefing_date", localDate)
+        .maybeSingle();
+      if (existing.error) return null;
+      if (existing.data) return { id: String(existing.data.id), created: false };
+      const inserted = await userClient
+        .from("buddy_chats")
+        .insert({ kind: "briefing", briefing_date: localDate })
+        .select("id")
+        .single();
+      if (!inserted.error && inserted.data) return { id: String(inserted.data.id), created: true };
+      // Another open of the app may have made today's thread a moment earlier. The unique rule keeps it to one.
+      const again = await userClient
+        .from("buddy_chats")
+        .select("id")
+        .eq("kind", "briefing")
+        .eq("briefing_date", localDate)
+        .maybeSingle();
+      return again.data ? { id: String(again.data.id), created: false } : null;
     },
   };
 }

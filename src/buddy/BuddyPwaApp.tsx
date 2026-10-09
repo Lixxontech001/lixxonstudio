@@ -174,7 +174,7 @@ function BuddyWorkspace() {
             setBusyId(null);
             return;
           }
-          setNotice(`The 08:00 Lagos daily schedule is now ${item.args.enabled === true ? 'on' : 'off'}, recorded in the audit log. This switch never publishes: distribution still needs your approval in the Daily Kit.`);
+          setNotice(`The 08:00 daily schedule is now ${item.args.enabled === true ? 'on' : 'off'}, recorded in the audit log. This switch never publishes: distribution still needs your approval in the Daily Kit.`);
           setQueue(removeBuddyQueueItem(item.id));
         } catch {
           setNotice('The change failed safely. Nothing was altered; the draft is still queued.');

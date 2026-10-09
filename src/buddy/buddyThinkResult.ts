@@ -29,3 +29,25 @@ export function parseThinkReply(value: unknown): BuddyThinkReply | null {
   if (typeof value.reason !== 'string' || typeof value.message !== 'string') return null;
   return { ok: false, reason: value.reason.slice(0, 40), message: value.message.slice(0, 300), canThink };
 }
+
+export type BuddyBriefingResult =
+  | { ok: true; chatId: string; created: boolean; firstVisit: boolean; quiet: boolean; text: string }
+  | { ok: false; reason: string; message: string };
+
+/** Reads the briefing answer. The briefing itself is read back from the saved messages, so only the summary is kept here. */
+export function parseBriefingResult(value: unknown): BuddyBriefingResult | null {
+  if (!isRecord(value) || typeof value.ok !== 'boolean') return null;
+  if (value.ok) {
+    if (typeof value.chat_id !== 'string' || typeof value.text !== 'string') return null;
+    return {
+      ok: true,
+      chatId: value.chat_id,
+      created: value.created === true,
+      firstVisit: value.first_visit === true,
+      quiet: value.quiet === true,
+      text: value.text.slice(0, 4000),
+    };
+  }
+  if (typeof value.reason !== 'string' || typeof value.message !== 'string') return null;
+  return { ok: false, reason: value.reason.slice(0, 40), message: value.message.slice(0, 300) };
+}

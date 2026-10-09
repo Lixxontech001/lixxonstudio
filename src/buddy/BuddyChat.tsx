@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import {
+  askBriefing,
   askBuddy,
   chatLabel,
   createChat,
@@ -10,12 +11,17 @@ import {
   type BuddyChatSummary,
 } from './buddyChatStore';
 import { parseKeyStatus } from './buddyThinkResult';
+import { localDateString } from './buddyDate';
+import BuddyBriefingCard from './BuddyBriefingCard';
+import BuddyGreeting from './BuddyGreeting';
+import BuddyReports from './BuddyReports';
 import './buddy.css';
 
 export const BUDDY_MAX_MESSAGE_CHARS = 1000;
 const COUNT_FROM_CHARS = 800;
 const NO_KEY_LINE = 'Buddy cannot think yet because no Google key is saved. Add it in Admin under Automation keys, in the box called Google key.';
 const CHAT_NOT_REACHED = 'Buddy could not be reached just now. Check the messages below and try again shortly.';
+const BRIEFING_NOT_REACHED = 'Buddy could not get your briefing just now. You can still type below.';
 
 function formatTime(iso: string): string {
   const date = new Date(iso);
@@ -24,12 +30,16 @@ function formatTime(iso: string): string {
 }
 
 type KeyState = 'checking' | 'missing' | 'saved' | 'unknown';
+/** Greeting first, then the chat. Reports is its own door and has no composer. */
+type Phase = 'greeting' | 'chat' | 'reports';
 
 /**
  * Buddy's private chat. One conversation at a time, past chats in a drawer, and the
  * owner's own messages and Buddy's replies stored only for this owner.
  */
 export default function BuddyChat() {
+  const [phase, setPhase] = useState<Phase>('greeting');
+  const [briefingBusy, setBriefingBusy] = useState(false);
   const [keyState, setKeyState] = useState<KeyState>('checking');
   const [chats, setChats] = useState<BuddyChatSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -67,6 +77,24 @@ export default function BuddyChat() {
   const refreshChats = async () => {
     const list = await listChats();
     if (list) setChats(list);
+  };
+
+  /** Continue after the greeting: open today's briefing thread, then show the chat with it. */
+  const continueFromGreeting = async () => {
+    setPhase('chat');
+    setBriefingBusy(true);
+    setNotice('');
+    const result = await askBriefing(localDateString());
+    if (result?.ok) {
+      setActiveId(result.chatId);
+      const rows = await loadMessages(result.chatId);
+      if (rows) setMessages(rows);
+      else setNotice('Today\u2019s briefing could not be opened just now. Try again shortly.');
+      await refreshChats();
+    } else {
+      setNotice(result && !result.ok ? result.message : BRIEFING_NOT_REACHED);
+    }
+    setBriefingBusy(false);
   };
 
   const startNewChat = () => {
@@ -132,7 +160,19 @@ export default function BuddyChat() {
     }
   };
 
-  const empty = messages.length === 0 && !pendingText;
+  if (phase === 'reports') {
+    return <BuddyReports onBack={() => setPhase('chat')} />;
+  }
+
+  if (phase === 'greeting') {
+    return (
+      <div className="buddy-app buddy-app--single" data-vibe="noir-gold" data-testid="buddy-chat">
+        <BuddyGreeting onContinue={() => void continueFromGreeting()} />
+      </div>
+    );
+  }
+
+  const empty = messages.length === 0 && !pendingText && !briefingBusy;
 
   return (
     <div className="buddy-app" data-vibe="noir-gold" data-testid="buddy-chat">
@@ -151,6 +191,9 @@ export default function BuddyChat() {
           >
             Chats
           </button>
+          <button type="button" className="buddy-button" onClick={() => setPhase('reports')}>
+            Reports
+          </button>
         </div>
       </header>
 
@@ -163,17 +206,21 @@ export default function BuddyChat() {
               For now Buddy can only talk about what you tell it. It cannot see the articles or the shop yet.
             </div>
           )}
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`buddy-msg buddy-msg--${message.role === 'owner' ? 'owner' : message.kind === 'notice' ? 'notice' : 'buddy'}`}
-            >
-              {message.content}
-            </div>
-          ))}
+          {messages.map((message) =>
+            message.kind === 'briefing' && message.role === 'buddy' ? (
+              <BuddyBriefingCard key={message.id} content={message.content} sections={message.sections} />
+            ) : (
+              <div
+                key={message.id}
+                className={`buddy-msg buddy-msg--${message.role === 'owner' ? 'owner' : message.kind === 'notice' ? 'notice' : 'buddy'}`}
+              >
+                {message.content}
+              </div>
+            ),
+          )}
           {pendingText && <div className="buddy-msg buddy-msg--owner buddy-msg--pending">{pendingText}</div>}
-          {sending && (
-            <div className="buddy-thinking" role="status" aria-label="Buddy is thinking">
+          {(sending || briefingBusy) && (
+            <div className="buddy-thinking" role="status" aria-label={briefingBusy ? 'Buddy is getting your briefing' : 'Buddy is thinking'}>
               <span className="buddy-dot" />
               <span className="buddy-dot" />
               <span className="buddy-dot" />
@@ -196,10 +243,10 @@ export default function BuddyChat() {
               maxLength={BUDDY_MAX_MESSAGE_CHARS}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={onKeyDown}
-              disabled={sending}
+              disabled={sending || briefingBusy}
             />
           </div>
-          <button type="submit" className="buddy-button buddy-button--solid buddy-send" disabled={sending || !draft.trim()}>
+          <button type="submit" className="buddy-button buddy-button--solid buddy-send" disabled={sending || briefingBusy || !draft.trim()}>
             Send
           </button>
         </div>

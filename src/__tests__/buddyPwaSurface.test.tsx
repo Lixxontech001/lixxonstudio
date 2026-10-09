@@ -94,7 +94,7 @@ describe('Buddy safe PWA surface', () => {
   it('previews live state and only changes it after an explicit confirmation', async () => {
     const page = await render();
     await typeAndSubmit('pause automation');
-    expect(page.textContent).toContain('Pause or resume the 08:00 Lagos daily schedule');
+    expect(page.textContent).toContain('Pause or resume the 08:00 daily schedule');
     expect(page.textContent).toContain('never auto-runs');
 
     // Reconnecting must not execute the draft.
@@ -106,7 +106,7 @@ describe('Buddy safe PWA surface', () => {
     await settle();
     expect(mocks.rpc).toHaveBeenCalledWith('automation_feature_flags');
     expect(page.textContent).toContain('currently on');
-    expect(page.textContent).toContain('08:00 Lagos daily schedule: on → off');
+    expect(page.textContent).toContain('08:00 daily schedule: on → off');
     expect(page.textContent).toContain('publishes nothing');
     // Preview alone changes nothing.
     expect(mocks.rpc).not.toHaveBeenCalledWith('automation_set_feature_flag', expect.anything());

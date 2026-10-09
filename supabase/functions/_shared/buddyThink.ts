@@ -1,6 +1,8 @@
 // Buddy's think path. Pure logic: no Deno globals, so it can be tested under Vitest.
 // The edge function (buddy-think/index.ts) supplies the real Vault read, rate limit, chat
-// storage and fetch.
+// storage, site reads and fetch.
+
+import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
 
 /** Current stable Flash model on the Gemini API (Google's model list, Oct 2026). Change here only. */
 export const BUDDY_GEMINI_MODEL = "gemini-3.8-flash";
@@ -15,8 +17,8 @@ export const BUDDY_SYSTEM_INSTRUCTION = [
   "You are Buddy, the chief of staff for Lixxon Studio.",
   "You talk only to the owner. Be short, clear and human. Plain English, no jargon, no hype.",
   "You do not write marketing copy. You do not post, send, publish, edit or change anything.",
-  "Right now you cannot see the website's articles, the shop or any numbers. If the owner asks about them, say you cannot see them yet. Never guess or invent article titles, product names, prices or numbers.",
-  "You only know what the owner tells you in this conversation.",
+  "Right now you cannot see the website's articles, the shop or any numbers beyond the briefings in this chat. If the owner asks about them, say you cannot see them yet. Never guess or invent article titles, product names, prices or numbers.",
+  "You only know what the owner tells you in this conversation, and the briefings Buddy has written in it.",
 ].join("\n");
 
 export const BUDDY_TEST_PROMPT = "Reply with one short sentence confirming that Buddy can think. Add nothing else.";
@@ -26,10 +28,10 @@ export const NO_KEY_MESSAGE =
 
 export const SAVE_FAILED_MESSAGE = "Buddy could not save your message, so nothing was sent. Try again in a moment.";
 
-export type BuddyThinkAction = "status" | "probe" | "ask";
+export type BuddyThinkAction = "status" | "probe" | "ask" | "briefing";
 export type ThinkOutcome = "rejected" | "rate_limited" | "unavailable" | "empty";
 export type ChatRole = "owner" | "buddy";
-export type ChatKind = "reply" | "notice";
+export type ChatKind = "reply" | "notice" | "briefing";
 
 /** One earlier turn, in the shape Gemini expects. */
 export interface GeminiTurn {
@@ -59,12 +61,29 @@ export interface BuddyThinkDeps {
   /** Earlier replies and questions in this chat, oldest first. Notices are not included. Null when unreadable. */
   loadHistory(chatId: string): Promise<GeminiTurn[] | null>;
   /** Stores one message in the chat. Returns false when it could not be saved. */
-  saveMessage(chatId: string, role: ChatRole, kind: ChatKind, content: string): Promise<boolean>;
+  saveMessage(chatId: string, role: ChatRole, kind: ChatKind, content: string, payload?: Record<string, unknown> | null): Promise<boolean>;
   /** Sets the title if the chat has none yet, and marks the chat as recently active. */
   touchChat(chatId: string, title: string): Promise<void>;
+  /** The server clock. Injected so tests can fix the time. */
+  now(): Date;
+  /** When the owner last clicked Continue. Null means a first visit. `ok:false` means it could not be read. */
+  getSeenAt(): Promise<{ ok: true; seenAt: string | null } | { ok: false }>;
+  /** Records the Continue time. Returns false when it could not be saved. */
+  markSeen(atIso: string): Promise<boolean>;
+  /** Reads what happened since the given time. Each source reports its own ok flag. */
+  readBriefingFacts(sinceIso: string): Promise<BriefingFacts>;
+  /** Today's briefing thread for this owner, created on first use. Null when it cannot be read or made. */
+  findOrCreateBriefing(localDate: string): Promise<{ id: string; created: boolean } | null>;
 }
 
-const ALLOWED_KEYS = ["action", "message", "chat_id"];
+function isRealDate(value: string): boolean {
+  if (!DATE_RE.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+const ALLOWED_KEYS = ["action", "message", "chat_id", "local_date"];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const OUTCOME_MESSAGES: Record<ThinkOutcome, string> = {
@@ -196,8 +215,8 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
     return fail(400, "invalid_request", "Only an action, a message and a chat id are accepted.");
   }
   const action = payload.action;
-  if (action !== "status" && action !== "probe" && action !== "ask") {
-    return fail(400, "invalid_action", "Buddy only accepts the status, probe or ask actions.");
+  if (action !== "status" && action !== "probe" && action !== "ask" && action !== "briefing") {
+    return fail(400, "invalid_action", "Buddy only accepts the status, probe, ask or briefing actions.");
   }
 
   if (action === "status") {
@@ -223,6 +242,48 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
       return { status: 200, body: { ok: true, action, model: BUDDY_GEMINI_MODEL, reply: result.text, can_think: true } };
     }
     return { status: 200, body: { ok: false, action, reason: result.outcome, message: OUTCOME_MESSAGES[result.outcome], can_think: false } };
+  }
+
+  if (action === "briefing") {
+    const localDate = payload.local_date;
+    if (typeof localDate !== "string" || !isRealDate(localDate)) {
+      return fail(400, "invalid_date", "Buddy needs today's date from your device.");
+    }
+    const seen = await deps.getSeenAt();
+    if (!seen.ok) return fail(503, "state_unavailable", "Buddy could not check when you last looked. Try again shortly.");
+    const now = deps.now();
+    const firstVisit = seen.seenAt === null;
+    const sinceIso = firstVisit
+      ? new Date(now.getTime() - FIRST_VISIT_WINDOW_HOURS * 3_600_000).toISOString()
+      : seen.seenAt!;
+    const thread = await deps.findOrCreateBriefing(localDate);
+    if (!thread) return fail(503, "thread_unavailable", "Buddy could not open today's chat. Try again shortly.");
+
+    const facts = await deps.readBriefingFacts(sinceIso);
+    const built = buildBriefing(facts, now, sinceIso, firstVisit);
+    const saved = await deps.saveMessage(
+      thread.id,
+      "buddy",
+      "briefing",
+      built.text,
+      built.quiet ? null : { sections: built.sections as BriefingSection[] },
+    );
+    if (!saved) return fail(503, "not_saved", "Buddy could not save today's briefing. Try again shortly.");
+    // Only a briefing that was saved counts as "seen", so nothing is lost if the save fails.
+    await deps.markSeen(now.toISOString());
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        action,
+        chat_id: thread.id,
+        created: thread.created,
+        first_visit: firstVisit,
+        quiet: built.quiet,
+        sections: built.sections,
+        text: built.text,
+      },
+    };
   }
 
   // ask

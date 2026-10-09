@@ -20,7 +20,7 @@ describe('Buddy live preview', () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.preview.changes).toEqual(['08:00 Lagos daily schedule: on → off']);
+    expect(result.preview.changes).toEqual(['08:00 daily schedule: on → off']);
     expect(result.preview.currentSummary).toContain('currently on');
     expect(result.preview.nextSummary).toContain('turn it off');
     expect(result.preview.publishesNothing).toBe(true);

@@ -363,6 +363,115 @@
   align-items: center;
 }
 
+/* Greeting: one full-height column, a gold line that draws itself over about 9.5 seconds, then Continue. */
+.buddy-app--single {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.buddy-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.buddy-greeting-mark {
+  width: min(320px, 80vw);
+  height: 24px;
+  overflow: visible;
+}
+
+.buddy-greeting-line {
+  stroke: var(--buddy-gold);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: buddy-draw 9.5s ease-in-out forwards;
+}
+
+@keyframes buddy-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.buddy-greeting-line-text {
+  margin: 0;
+  font-size: clamp(24px, 6vw, 34px);
+  color: var(--buddy-gold-strong);
+  animation: buddy-rise 0.9s ease-out 0.4s both;
+}
+
+.buddy-greeting-sub {
+  margin: 0;
+  color: var(--buddy-muted);
+  font-size: 15px;
+  animation: buddy-rise 0.9s ease-out 1.2s both;
+}
+
+.buddy-greeting-continue {
+  margin-top: 12px;
+  animation: buddy-rise 0.6s ease-out both;
+}
+
+.buddy-greeting-wait {
+  margin: 12px 0 0;
+  min-height: 44px;
+}
+
+/* Briefing card: a titled block per section, in the chat log. */
+.buddy-msg--briefing {
+  align-self: stretch;
+  max-width: 100%;
+  background: var(--buddy-surface);
+  border: 1px solid var(--buddy-line);
+  white-space: normal;
+  display: grid;
+  gap: 14px;
+}
+
+.buddy-briefing-section {
+  display: grid;
+  gap: 4px;
+}
+
+.buddy-briefing-title {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--buddy-gold);
+  font-weight: 600;
+}
+
+.buddy-briefing-lines {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--buddy-text);
+}
+
+.buddy-briefing-quiet {
+  margin: 0;
+  font-style: italic;
+  color: var(--buddy-muted);
+}
+
+.buddy-report-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--buddy-line);
+}
+
 @keyframes buddy-rise {
   from {
     opacity: 0;

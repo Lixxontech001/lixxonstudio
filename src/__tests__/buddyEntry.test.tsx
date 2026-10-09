@@ -35,6 +35,12 @@ async function renderAt(pathname: string) {
 }
 
 beforeEach(() => {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: query.includes('reduce'),
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  })) as unknown as typeof window.matchMedia;
   mocks.rpc.mockReset();
   mocks.invoke.mockReset();
   mocks.invoke.mockResolvedValue({ data: { ok: true, action: 'status', configured: false }, error: null });
@@ -62,13 +68,20 @@ describe('Buddy entry routing', () => {
     expect(isBuddyControlsPath('/buddy/chat')).toBe(false);
   });
 
-  it('shows Buddy’s chat at /buddy, asks only for key status before the owner types, and makes no direct table or RPC calls', async () => {
+  it('shows Buddy’s greeting at /buddy, then the chat after Continue, asking only for key status and today’s briefing, with no direct table or RPC calls', async () => {
     const el = await renderAt('/buddy');
+    expect(el.querySelector('[data-testid="buddy-greeting"]')).not.toBeNull();
+    const continueButton = Array.from(el.querySelectorAll('button')).find((button) => button.textContent === 'Continue');
+    await act(async () => {
+      continueButton?.click();
+    });
+    await act(async () => { for (let i = 0; i < 12; i += 1) await Promise.resolve(); });
     expect(el.textContent).toContain('Ask Buddy anything.');
     expect(el.textContent).toContain('New chat');
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.invoke).toHaveBeenCalledWith('buddy-think', { body: { action: 'status' } });
     expect(mocks.invoke).not.toHaveBeenCalledWith('buddy-think', { body: { action: 'probe' } });
+    expect(mocks.invoke).toHaveBeenCalledWith('buddy-think', { body: expect.objectContaining({ action: 'briefing' }) });
   });
 
   it('keeps the old typed-command screen reachable at /buddy/controls', async () => {

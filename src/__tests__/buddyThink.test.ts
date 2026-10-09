@@ -38,6 +38,16 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
       return true;
     },
     touchChat,
+    now: () => new Date('2026-10-09T12:00:00Z'),
+    getSeenAt: async () => ({ ok: true, seenAt: null }),
+    markSeen: async () => true,
+    readBriefingFacts: async () => ({
+      articles: { ok: true, count: 0, titles: [] },
+      orders: { ok: true, paidCount: 0, usdTotal: 0 },
+      views: { ok: true, count: 0 },
+      failures: { ok: true, count: 0, codes: [] },
+    }),
+    findOrCreateBriefing: async () => ({ id: CHAT_ID, created: true }),
     ...overrides,
   };
   return { deps: base, askGemini, recordProbe, saved, touchChat };
