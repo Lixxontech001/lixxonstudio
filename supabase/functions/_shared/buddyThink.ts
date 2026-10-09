@@ -3,6 +3,7 @@
 // storage, site reads and fetch.
 
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
+import { howToReply } from "./buddyHowTo.ts";
 import { siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import {
   ASK_WHICH_MIND_LINE,
@@ -318,6 +319,8 @@ async function answerRouted(
       reply = RUN_DAY_ON_LINE;
       runStart = true;
     } else reply = RUN_DAY_OFF_LINE;
+  } else if (route.kind === "how_to") {
+    reply = howToReply(route.door);
   } else if (route.kind === "ask_which_mind") {
     reply = ASK_WHICH_MIND_LINE;
     payload = { pending_order: cleanInstruction(route.instruction) };

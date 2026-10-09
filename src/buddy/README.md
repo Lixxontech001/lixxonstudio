@@ -297,3 +297,18 @@ What is still not done, or not verified:
 - **Not verified live.** No upload, sign-in, or feed fetch reached Google, Vimeo, or a podcast app (the sandbox cannot reach them). The feed was not read by Apple or Spotify. Nothing is deployed.
 - Tests: `doorAdaptersSlice4.test.ts` (YouTube and Vimeo refusals, the host check, the sign-in never sent to the upload address, the private note, the read-only checks, the podcast cover rules), `podcastFeed.test.ts` (show readiness, the audio address, only episodes with audio, escaping, no em dash, no country names), `podcastEpisodesDb.test.ts` (PGlite: constraints; public read; no public or signed-in write), `runDoors.test.ts` (all twelve, the skip messages, the file kinds, the private note), `doorPosts.test.ts`, `doorPostsDb.test.ts`, `doorConnectionTests.test.ts` (all twelve checks built).
 - Not done in this slice: the day run's "What went out" view and the Buddy how-to for the new six (slice 5), and the freeze (slice 6).
+
+## Phase 6 slice 5: the day run, "What went out", and the how-to
+
+- **The day run covers all twelve doors.** The door step reads `OPEN_DOORS` (twelve), and the send step has a branch for each. The four gated channels have no branch. `dayRunTwelve.test.ts` checks all three points.
+- **"What went out" reads the real send log.** `buddy-think` now reads `minds_door_posts` (the owner's own rows, through the owner session) since the owner last looked, and passes it to the briefing as `doors`.
+  - A posted row is one line: `Posted to {Door}: "{Article}".` The door's own label is used.
+  - A failed row says the door did not post the article, with the send log's plain note. A queued row says the door is still saving.
+  - "No mind has sent anything out." appears only when no door post went out in that window.
+  - A failed read is shown as "I cannot read the send log just now." It is never shown as nothing sent.
+  - The day is not "quiet" when a door post exists or the log could not be read, so a failure is never hidden.
+  - At most 8 door lines are shown.
+- **The how-to for the six new doors.** Asking how to connect or set up Medium, YouTube, Pixelfed, WordPress.com, Podcast or Vimeo gets fixed steps from `buddyHowTo.ts`. The answer names the Connections page, the fields, and what each door needs (a real video, a real audio file, a picture for Pixelfed). It never asks for a secret in chat and never calls the model. A message that names two doors, or an order with no how-to word, is not treated as a question.
+- **Tests:** `buddyWentOut.test.ts` (the send log lines, the caps, failed and queued rows, the quiet rule, the unknown-door filter), `buddyHowTo.test.ts` (detection, routing, the replies), `dayRunTwelve.test.ts` (the twelve doors in the day run, no gated channel), and the existing Buddy suite (382 tests across the Buddy and day-run files pass).
+- **Still open:** the send log shows only what the day run wrote. Nothing live has been sent to any door in this sandbox. The how-to replies are plain text. They do not check the owner's saved settings.
+- Not done in this slice: the freeze and the PHASE 6 report (slice 6).

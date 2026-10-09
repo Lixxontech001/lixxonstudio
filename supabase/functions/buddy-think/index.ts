@@ -10,7 +10,7 @@ import {
   type ChatRole,
   type GeminiTurn,
 } from "../_shared/buddyThink.ts";
-import { briefingApplied, briefingGaps, briefingPacks, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
+import { briefingApplied, briefingDoors, briefingGaps, briefingPacks, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
 import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import {
   SITE_ARTICLE_LIMIT,
@@ -122,7 +122,7 @@ function chatStore(userClient: SupabaseClient) {
     readBriefingFacts: async (sinceIso: string): Promise<BriefingFacts> => {
       // Packs from the last three days that still need the owner (ready to post by hand, or blocked).
       const packsSinceIso = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps, packRead] = await Promise.all([
+      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps, packRead, doorRead] = await Promise.all([
         userClient
           .from("posts")
           .select("title", { count: "exact" })
@@ -179,11 +179,20 @@ function chatStore(userClient: SupabaseClient) {
           .gt("created_at", packsSinceIso)
           .order("created_at", { ascending: false })
           .limit(10),
+        // The free-door send log since the owner last looked: what went out, failed, or is still saving.
+        // Owner session, so row-level security applies.
+        userClient
+          .from("minds_door_posts")
+          .select("door,status,post_id,error_note,created_at")
+          .gt("created_at", sinceIso)
+          .order("created_at", { ascending: false })
+          .limit(20),
       ]);
+      const doorRows = (Array.isArray(doorRead.data) ? doorRead.data : []) as Array<{ door?: unknown; status?: unknown; post_id?: unknown; error_note?: unknown }>;
       // Titles and product names for the applied changes. A failed read leaves the names out, never guessed.
       const editRows = (Array.isArray(appliedEdits.data) ? appliedEdits.data : []) as Array<{ post_id?: unknown; product_ids?: unknown }>;
       const packRows = (Array.isArray(packRead.data) ? packRead.data : []) as Array<{ channel?: unknown; status?: unknown; blocked_reason?: unknown; post_id?: unknown }>;
-      const postIds = [...new Set([...editRows, ...packRows].map((row) => String(row.post_id || "")).filter(Boolean))];
+      const postIds = [...new Set([...editRows, ...packRows, ...doorRows].map((row) => String(row.post_id || "")).filter(Boolean))];
       const productIds = [...new Set(editRows.flatMap((row) => (Array.isArray(row.product_ids) ? row.product_ids.map(String) : [])))];
       const [titleRead, nameRead] = await Promise.all([
         postIds.length ? userClient.from("posts").select("id,title").in("id", postIds) : Promise.resolve({ data: [], error: null }),
@@ -221,6 +230,7 @@ function chatStore(userClient: SupabaseClient) {
         applied: { ok: appliedOk, rows: briefingApplied(editRows as Array<{ post_id: unknown; product_ids: unknown }>, postTitles, productNames) },
         gaps: { ok: !openGaps.error, rows: briefingGaps((Array.isArray(openGaps.data) ? openGaps.data : []) as Array<{ angle: unknown }>) },
         packs: { ok: !packRead.error, rows: briefingPacks(packRows, postTitles) },
+        doors: { ok: !doorRead.error, rows: briefingDoors(doorRows, postTitles) },
       };
     },
     // The "which mind?" order waiting on the last message of this chat. Owner session, so row-level security applies.

@@ -2,6 +2,7 @@
 // Rule: say "quiet" only when every source was read and none had anything real to report.
 
 import { MIND_KEYS, MIND_LABELS } from "./buddyRouter.ts";
+import { DOORS, isDoorId } from "./doorRegistry.ts";
 
 export const QUIET_LINE = "Quiet since you left.";
 /** A first visit has no earlier "left" time, so Buddy looks back this far. */
@@ -30,7 +31,21 @@ export interface BriefingFacts {
   gaps?: { ok: boolean; rows: BriefingGap[] };
   /** The owner's recent packs that still need him (ready to post by hand, or blocked). Owner session. */
   packs?: { ok: boolean; rows: BriefingPack[] };
+  /** The free-door send log since the owner last looked, newest first (the real record of what went out). */
+  doors?: { ok: boolean; rows: BriefingDoorPost[] };
 }
+
+/** One door post the owner can see. `status` is the send log's own word: queued, posted or failed. */
+export interface BriefingDoorPost {
+  door: string;
+  status: "queued" | "posted" | "failed";
+  postTitle: string;
+  errorNote: string | null;
+}
+
+export const NOTHING_SENT_LINE = "No mind has sent anything out.";
+export const DOOR_LINE_LIMIT = 8;
+const DOOR_NOTE_LIMIT = 200;
 
 /** One pack the owner can act on. Only plain fields: the channel, the article title and why it is blocked. */
 export interface BriefingPack {
@@ -212,6 +227,51 @@ export function briefingGaps(rows: Array<{ angle: unknown }>): BriefingGap[] {
   return rows.filter((row) => typeof row.angle === "string" && row.angle.trim().length > 0).map((row) => ({ angle: String(row.angle) }));
 }
 
+/** One plain line for one door post. Only the door's label, the article title and the send log's note are used. */
+function doorPostLine(row: BriefingDoorPost): string {
+  const label = isDoorId(row.door) ? DOORS[row.door].label : "A free door";
+  const title = `"${clipTitle(row.postTitle)}"`;
+  if (row.status === "posted") return `Posted to ${label}: ${title}.`;
+  if (row.status === "failed") {
+    const note = row.errorNote ? row.errorNote.slice(0, DOOR_NOTE_LIMIT) : "Nothing was posted.";
+    return `${label} did not post ${title}. ${note}`;
+  }
+  return `${label} is still saving a post for ${title}.`;
+}
+
+/**
+ * The first lines of "What went out", from the door send log. A failed read says so. No read asked for, or no post
+ * in the log, shows the nothing-sent line. The line is never shown above a real posted row.
+ */
+export function doorSentLines(doors: BriefingFacts["doors"]): string[] {
+  if (!doors) return [NOTHING_SENT_LINE];
+  if (!doors.ok) return ["I cannot read the send log just now."];
+  const rows = doors.rows.slice(0, DOOR_LINE_LIMIT);
+  const lines = rows.map(doorPostLine);
+  if (!rows.some((row) => row.status === "posted")) lines.unshift(NOTHING_SENT_LINE);
+  return lines;
+}
+
+/** Maps the send log rows the server read into the briefing's shape. A missing title is a plain fallback, never guessed. */
+export function briefingDoors(
+  rows: Array<{ door?: unknown; status?: unknown; post_id?: unknown; error_note?: unknown }>,
+  postTitles: Record<string, string>,
+): BriefingDoorPost[] {
+  const out: BriefingDoorPost[] = [];
+  for (const row of rows) {
+    const status = row.status;
+    if (!isDoorId(row.door)) continue;
+    if (status !== "queued" && status !== "posted" && status !== "failed") continue;
+    out.push({
+      door: row.door,
+      status,
+      postTitle: postTitles[String(row.post_id)] || "an article",
+      errorNote: typeof row.error_note === "string" && row.error_note.trim() ? row.error_note : null,
+    });
+  }
+  return out;
+}
+
 function nextMove(facts: BriefingFacts): string {
   const anyUnread = !facts.articles.ok || !facts.orders.ok || !facts.views.ok || !facts.failures.ok;
   if (anyUnread) return "Some numbers could not be read. Ask me again in a little while.";
@@ -228,7 +288,10 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const appliedRead = facts.applied ? facts.applied.ok : true;
   const gapsRead = facts.gaps ? facts.gaps.ok : true;
   const packsRead = facts.packs ? facts.packs.ok : true;
-  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead;
+  const doorsRead = facts.doors ? facts.doors.ok : true;
+  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead;
+  // A door post that went out, failed or is still saving is news, so the day is not quiet.
+  const doorsReal = (facts.doors?.rows.length ?? 0) > 0;
   const mindsReal = (facts.minds?.rows ?? []).some((row) => REAL_OUTCOMES.includes(row.outcome));
   // An order still waiting for the owner is not quiet, even when nothing else happened.
   const ordersWaiting = (facts.waiting?.count ?? 0) > 0;
@@ -237,12 +300,12 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   // A pack ready to post by hand, or blocked, is something the owner needs to see, so the day is not quiet.
   const packsReal = (facts.packs?.rows.length ?? 0) > 0;
   const nothingReal =
-    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal;
+    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal && !doorsReal;
   if (allRead && nothingReal) return { quiet: true, sections: [], text: QUIET_LINE };
 
   const awayMs = now.getTime() - Date.parse(sinceIso);
-  // No mind can change the site yet, so this line is true whatever the Takeover switch says.
-  const went = ["No mind has sent anything out."];
+  // The door send log decides the first lines. "No mind has sent anything out" is shown only when no door post went out.
+  const went = doorSentLines(facts.doors);
   const article = articleLine(facts.articles);
   if (article) went.push(article);
   went.push(...appliedLines(facts.applied));

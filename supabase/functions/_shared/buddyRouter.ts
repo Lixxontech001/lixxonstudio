@@ -7,6 +7,7 @@
 // - Minds cannot publish, send, spend or change prices. Buddy says so when an order touches those.
 
 import { ownerClock } from "./mindsNightReport.ts";
+import { howToDoor, type HowToDoor } from "./buddyHowTo.ts";
 
 export const MIND_KEYS = ["analyst", "strategist", "ceo", "executioner", "auditor"] as const;
 export type MindName = (typeof MIND_KEYS)[number];
@@ -55,6 +56,7 @@ export type Route =
   | { kind: "order"; mind: MindName; instruction: string; resolvesPending: boolean }
   | { kind: "run_day"; instruction: string }
   | { kind: "ask_which_mind"; instruction: string }
+  | { kind: "how_to"; door: HowToDoor }
   | { kind: "chat" };
 
 export interface PendingOrder {
@@ -125,6 +127,11 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
     return { kind: "order", mind, instruction: pending.instruction, resolvesPending: true };
   }
   if (mind && question && !imperative) return { kind: "mind_log", mind };
+  // "How do I connect YouTube?" is answered with fixed steps. A mind named in the same message is left to the rules above.
+  if (!mind) {
+    const door = howToDoor(text);
+    if (door) return { kind: "how_to", door };
+  }
   // Asking for today's run is an order with no mind to name. It must not fall through to "which mind?".
   if (!mind && !question && isRunDayRequest(text)) return { kind: "run_day", instruction: cleanInstruction(text) };
   if (mind && imperative) return { kind: "order", mind, instruction: cleanInstruction(text), resolvesPending: false };
