@@ -69,6 +69,11 @@ Server side:
   - `20261009220000_minds_gap_notes.sql`: notes that say the shop needs a product for an angle. A note never creates a product. The owner can only mark it seen.
   - All four are owner-only to read and closed to the browser for writing. Nothing public or anonymous can read them.
   - `supabase/functions/_shared/postEdits.ts` holds the same numbers in code (cap 3, 3 articles a day, 2 sentences), plus the SHA-256 paragraph checksum. An edit whose paragraph has changed since the plan is refused.
+- Phase 3 slice 3 adds the Strategist's placement plan and the Auditor's check on it. Nothing here writes to an article.
+  - `supabase/functions/_shared/productPlacement.ts` makes one plan for one article: one plain paragraph (one line of the article body), one to three active shop products, and one or two sentences. One Gemini call through the existing door (`makeMindThink`). With no key, the plan says "Cannot think: no Google key." and nothing is planned.
+  - The Auditor allows the plan only when every check passes. It blocks: more than three products, a product not in the shop, a place that is not a plain paragraph, more than two sentences or more than 60 words, dashes, Nigeria or Naira or Lagos, non-US money, a price that is not the shop price, a cure or medical promise, an invented personal test, a sentence already in the article, text that does not name the product, and markup. Each block carries a plain-English fix.
+  - Digital products are preferred in the brief to Gemini, but a single affiliate product is allowed.
+  - Tests: `src/__tests__/productPlacement.test.ts`, with a skincare article and four shop products.
   - Tests run the real migrations in an in-process Postgres (`@electric-sql/pglite`, a free test-only dependency) in `src/__tests__/postEditsDb.test.ts`.
   - `src/__tests__/setup.ts` now skips its browser polyfills in plain Node tests. Browser tests are unchanged.
 - Phase 2 freeze checks live in `src/__tests__/buddyPhase2Freeze.test.ts`: Takeover off by default, Kill round-trips, `/admin/ai` is the Minds watch, `/buddy/controls` redirects, and the magazine addresses are unchanged. The briefing no longer says "Takeover is off", because the switch can be turned on; it now says no mind has sent anything out.
