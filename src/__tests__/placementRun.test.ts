@@ -198,7 +198,7 @@ describe('the Auditor and the no-key path', () => {
   it('no Google key: "Cannot think: no Google key" is logged and nothing is applied', async () => {
     const { ports, logs } = fakePorts({ ok: false, reason: 'no_key' });
     const out = await runPlacementOrder(input(), ports);
-    expect(out).toEqual({ status: 'cannot_think', detail: 'Add the Google key in Admin under Automation keys.' });
+    expect(out).toEqual({ status: 'cannot_think', detail: 'Cannot think: no Google key.' });
     expect(logs.some((entry) => entry.action === NO_KEY_ACTION)).toBe(true);
     expect(ports.applyEdit).not.toHaveBeenCalled();
   });

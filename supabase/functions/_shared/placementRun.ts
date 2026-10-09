@@ -308,7 +308,8 @@ export async function runPlacementOrder(input: RunInput, ports: RunPorts): Promi
 
     if (plan.status === "cannot_think") {
       await ports.log({ mind: "strategist", action: NO_KEY_ACTION, outcome: "skipped", detail: NO_KEY_DETAIL });
-      return { status: "cannot_think", detail: NO_KEY_DETAIL };
+      // The owner reads the same words the planner gives: "Cannot think: no Google key."
+      return { status: "cannot_think", detail: plan.detail };
     }
     if (plan.status === "failed") {
       await ports.log({ mind: "strategist", action: "Could not think", outcome: "failed", detail: plan.detail });
