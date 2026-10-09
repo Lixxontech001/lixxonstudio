@@ -34,7 +34,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Team & access', route: { name: 'admin-access' }, icon: KeyRound },
       { label: 'Health & issues', route: { name: 'admin-health' }, icon: HeartPulse },
       { label: 'Advisor', route: { name: 'admin-advisor' }, icon: Lightbulb },
-      { label: 'Admin AI', route: { name: 'admin-ai' }, icon: Sparkles },
+      { label: 'Minds', route: { name: 'admin-ai' }, icon: Sparkles },
       { label: 'Growth & SEO', route: { name: 'admin-growth' }, icon: TrendingUp },
       { label: 'Data explorer', route: { name: 'admin-data' }, icon: Database },
       { label: 'Front end', route: { name: 'admin-frontend' }, icon: Palette },
