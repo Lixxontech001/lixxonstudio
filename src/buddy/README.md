@@ -312,3 +312,11 @@ What is still not done, or not verified:
 - **Tests:** `buddyWentOut.test.ts` (the send log lines, the caps, failed and queued rows, the quiet rule, the unknown-door filter), `buddyHowTo.test.ts` (detection, routing, the replies), `dayRunTwelve.test.ts` (the twelve doors in the day run, no gated channel), and the existing Buddy suite (382 tests across the Buddy and day-run files pass).
 - **Still open:** the send log shows only what the day run wrote. Nothing live has been sent to any door in this sandbox. The how-to replies are plain text. They do not check the owner's saved settings.
 - Not done in this slice: the freeze and the PHASE 6 report (slice 6).
+
+## Phase 6 slice 6: freeze
+
+- **Frozen by `phase6Freeze.test.ts` (20 checks, source only):** exactly twelve auto doors, and the day run sends to those twelve and nothing else; the four gated channels and WhatsApp are not doors and have no posting path; takeover is off by default and no migration or seed turns it on; only an owner or founder admin can change Takeover or Kill; a Takeover or Kill refusal stops the door step before any read; a failed save is tried three times and then logged; one article goes to one door once; a missing video or audio skips with a plain reason before anything is reserved; Medium uses an existing token only; Pixelfed has no default server address; the podcast is a show feed at `/podcast.xml`; every Phase 6 migration says it is not applied to production and drops nothing; the door, podcast and briefing modules have no em dash and name no country, city or currency.
+- **Not frozen by a test, and not verified live:** no live door, feed reader, or database was reached from the sandbox. Nothing is deployed. No migration is applied to production.
+- **Open decisions for the owner:** Medium (existing token only, and Medium's docs say the API is no longer supported); the same-day rule after a failed save (a door that already sent is not sent again the same day); the podcast category (Health & Fitness, suggested); whether the owner's email appears in the feed (not included).
+- **Known gap:** the crawler title in `supabase/functions/feeds/index.ts` (the prerender page title) contains an em dash. It was there before Phase 6 and was left unchanged, since it is site brand copy.
+- **Phase 7 has not started.**
