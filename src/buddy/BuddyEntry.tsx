@@ -1,5 +1,6 @@
 import BuddyPwaApp, { BuddyAccessGate } from './BuddyPwaApp';
 import { BUDDY_CONTROLS_PATH, isBuddyControlsPath } from './buddyPaths';
+import BuddyThinkCheck from './BuddyThinkCheck';
 
 /** Placeholder while Buddy's chat is being built. It holds no data and offers no actions. */
 export function BuddyPlaceholder() {
@@ -14,9 +15,10 @@ export function BuddyPlaceholder() {
         <p className="mt-3 text-sm leading-relaxed text-[#6E6456]">
           Nothing here sends, posts or changes anything. Your articles, shop and Admin are not affected.
         </p>
+        <BuddyThinkCheck />
         <a
           href={BUDDY_CONTROLS_PATH}
-          className="mt-8 inline-flex min-h-11 items-center justify-center rounded-sm border border-[#2B2620] px-4 py-2 text-sm text-[#2B2620] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2620]"
+          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-sm border border-[#2B2620] px-4 py-2 text-sm text-[#2B2620] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2620]"
         >
           Open the old Buddy controls
         </a>
