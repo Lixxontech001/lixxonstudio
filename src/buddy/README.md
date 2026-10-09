@@ -103,3 +103,14 @@ Server side:
 - Migration `20261010090000_minds_daily_run.sql` (not applied): `minds_queue_daily_run`, service role only. It queues one daily order per owner per day, and returns null when Takeover is off, Kill blocks, or the caller is not the owner. The `cron.schedule` line stays commented. It applies at Phase 6 merge.
 - Tests: `runDay.test.ts`, `buddyRunDayRouting.test.ts`, `buddyThink.test.ts` (run requests), `mindsDailyRunDb.test.ts` (PGlite), `buddyStartDayRun.test.ts`.
 - Not built yet: packs, captions, time picker, video, and "I posted this". Those are later Phase 4 slices.
+
+## Phase 4 slice 2: pack tables
+
+- Migration `supabase/migrations/20261010100000_minds_packs.sql` (not applied): table `minds_packs`, one row per channel, local day and article. The four gated channels only: instagram, tiktok, facebook, pinterest.
+- Writes go only through `minds_save_pack` (service role). It is refused when Takeover is off or when Kill stops the minds (the same check the placement door uses, `minds_assert_can_act`). A second save for the same channel, day and article replaces the row. A pack the owner marked posted is never replaced.
+- Products on a pack: at most 3, no repeats, each one a live product slot on that article. The table also refuses a fourth product.
+- Copy: no em or en dash, no Nigeria, Lagos, Naira, Abuja or WAT, and US dollars only. The database and `supabase/functions/_shared/packRules.ts` use the same rule.
+- A ready pack needs an Auditor allow, a suggested time in UTC, and copy for its channel. A blocked pack needs a reason. A Pinterest pack uses a pin title and description.
+- The owner can read his own packs. No signed-in user can write one directly.
+- Tests: `mindsPacks.test.ts` (rules, and the migration text), `mindsPacksDb.test.ts` (PGlite: Takeover and Kill, the four channels, replace, the 3-product cap, slots, Auditor and copy, posted packs, who may read and write).
+- Not built yet: the copy itself, the time picker, images and video, and "I posted this". Those are later slices.
