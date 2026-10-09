@@ -53,6 +53,9 @@ function fakeStore(options: { seenAt?: string | null; facts?: BriefingFacts; sav
       threads.set(localDate, id);
       return { id, created: true };
     },
+    loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
+    saveOrder: async () => true,
+    readMindLog: async () => [],
   };
   return { deps, threads, saved, markSeen, readBriefingFacts };
 }

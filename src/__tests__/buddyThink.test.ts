@@ -48,6 +48,9 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
       failures: { ok: true, count: 0, codes: [] },
     }),
     findOrCreateBriefing: async () => ({ id: CHAT_ID, created: true }),
+    loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
+    saveOrder: async () => true,
+    readMindLog: async () => [],
     readSiteFacts: async () => ({
       articles: { ok: true, total: 0, items: [] },
       products: { ok: true, total: 0, items: [] },

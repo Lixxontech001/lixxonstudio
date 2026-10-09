@@ -1,15 +1,29 @@
 // Buddy's morning briefing rules. Pure logic: the facts come in already read from the database.
 // Rule: say "quiet" only when every source was read and none had anything real to report.
 
+import { MIND_KEYS, MIND_LABELS } from "./buddyRouter.ts";
+
 export const QUIET_LINE = "Quiet since you left.";
 /** A first visit has no earlier "left" time, so Buddy looks back this far. */
 export const FIRST_VISIT_WINDOW_HOURS = 24;
+
+export interface BriefingMindRow {
+  happened_at: string;
+  mind: string;
+  action: string;
+  outcome: string;
+  detail: string;
+}
 
 export interface BriefingFacts {
   articles: { ok: boolean; count: number; titles: string[] };
   orders: { ok: boolean; paidCount: number; usdTotal: number };
   views: { ok: boolean; count: number };
   failures: { ok: boolean; count: number; codes: string[] };
+  /** The minds' daily log since the owner last looked, newest first. */
+  minds?: { ok: boolean; rows: BriefingMindRow[] };
+  /** The owner's orders still waiting (not since last seen: waiting orders stay waiting). */
+  waiting?: { ok: boolean; count: number };
 }
 
 export interface BriefingSection {
@@ -70,6 +84,31 @@ function problemLines(failures: BriefingFacts["failures"]): string[] {
   return [`${failures.count} failed automation ${plural(failures.count, "step", "steps")} since you left${codes}.`];
 }
 
+const REAL_OUTCOMES = ["done", "blocked", "failed"];
+
+/** One line per mind: its newest action since you left. Honest about a missing log and an empty one. */
+function mindLines(minds: BriefingFacts["minds"]): string[] {
+  if (!minds || !minds.ok) return ["I cannot read the minds' log yet."];
+  if (minds.rows.length === 0) return ["No mind has logged anything since you left."];
+  const lines: string[] = [];
+  for (const key of MIND_KEYS) {
+    const row = minds.rows.find((item) => item.mind === key);
+    if (!row) continue;
+    const outcome = row.outcome.charAt(0).toUpperCase() + row.outcome.slice(1);
+    const detail = row.detail.trim() ? ` ${row.detail.trim()}` : "";
+    lines.push(`${MIND_LABELS[key]}: ${row.action}. ${outcome}.${detail}`);
+  }
+  if (lines.length === 0) return ["No mind has logged anything since you left."];
+  return lines.slice(0, 5);
+}
+
+function jobLines(waiting: BriefingFacts["waiting"]): string[] {
+  if (!waiting) return ["I cannot read your orders yet."];
+  if (!waiting.ok) return ["I cannot read your orders yet."];
+  if (waiting.count === 0) return ["No orders waiting."];
+  return [`${waiting.count} ${plural(waiting.count, "order", "orders")} waiting for you.`];
+}
+
 function nextMove(facts: BriefingFacts): string {
   const anyUnread = !facts.articles.ok || !facts.orders.ok || !facts.views.ok || !facts.failures.ok;
   if (anyUnread) return "Some numbers could not be read. Ask me again in a little while.";
@@ -80,8 +119,14 @@ function nextMove(facts: BriefingFacts): string {
 }
 
 export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string, firstVisit: boolean): BriefingResult {
-  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok;
-  const nothingReal = facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0;
+  // The minds' log is part of "all read" once it is supplied. The database read always supplies it.
+  const mindsRead = facts.minds ? facts.minds.ok : true;
+  const waitingRead = facts.waiting ? facts.waiting.ok : true;
+  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead;
+  const mindsReal = (facts.minds?.rows ?? []).some((row) => REAL_OUTCOMES.includes(row.outcome));
+  // An order still waiting for the owner is not quiet, even when nothing else happened.
+  const ordersWaiting = (facts.waiting?.count ?? 0) > 0;
+  const nothingReal = facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting;
   if (allRead && nothingReal) return { quiet: true, sections: [], text: QUIET_LINE };
 
   const awayMs = now.getTime() - Date.parse(sinceIso);
@@ -97,9 +142,9 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
     },
     { id: "went_out", title: "What went out", lines: went },
     { id: "money", title: "Money & readers", lines: moneyLines(facts) },
-    { id: "minds", title: "Five minds", lines: ["Not working this phase."] },
+    { id: "minds", title: "The five minds", lines: mindLines(facts.minds) },
     { id: "problems", title: "Problems", lines: problemLines(facts.failures) },
-    { id: "jobs", title: "Your jobs", lines: ["None yet."] },
+    { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting) },
     { id: "next", title: "Your next move", lines: [nextMove(facts)] },
   ];
 

@@ -10,7 +10,8 @@ import {
   type ChatRole,
   type GeminiTurn,
 } from "../_shared/buddyThink.ts";
-import type { BriefingFacts } from "../_shared/buddyBriefing.ts";
+import type { BriefingFacts, BriefingMindRow } from "../_shared/buddyBriefing.ts";
+import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import {
   SITE_ARTICLE_LIMIT,
   SITE_PRODUCT_LIMIT,
@@ -119,7 +120,7 @@ function chatStore(userClient: SupabaseClient) {
       return !error;
     },
     readBriefingFacts: async (sinceIso: string): Promise<BriefingFacts> => {
-      const [articles, orders, views, failures] = await Promise.all([
+      const [articles, orders, views, failures, mindRows, waitingOrders] = await Promise.all([
         userClient
           .from("posts")
           .select("title", { count: "exact" })
@@ -144,7 +145,18 @@ function chatStore(userClient: SupabaseClient) {
           .gt("created_at", sinceIso)
           .order("created_at", { ascending: false })
           .limit(5),
+        userClient
+          .from("minds_daily_log")
+          .select("happened_at,mind,action,outcome,detail")
+          .gt("happened_at", sinceIso)
+          .order("happened_at", { ascending: false })
+          .limit(200),
+        userClient
+          .from("buddy_orders")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "waiting"),
       ]);
+      const mindLogRows = Array.isArray(mindRows.data) ? mindRows.data : null;
       const titleRows = (Array.isArray(articles.data) ? articles.data : []) as Array<{ title?: unknown }>;
       const orderRows = (Array.isArray(orders.data) ? orders.data : []) as Array<{ amount?: unknown; currency?: unknown }>;
       const failureRows = (Array.isArray(failures.data) ? failures.data : []) as Array<{ event_code?: unknown }>;
@@ -162,7 +174,42 @@ function chatStore(userClient: SupabaseClient) {
         orders: { ok: !orders.error, paidCount: orders.count ?? orderRows.length, usdTotal: Math.round(usdTotal * 100) / 100 },
         views: { ok: !views.error, count: views.count ?? 0 },
         failures: { ok: !failures.error, count: failures.count ?? 0, codes },
+        minds: { ok: !mindRows.error && mindLogRows !== null, rows: (mindLogRows ?? []) as BriefingMindRow[] },
+        waiting: { ok: !waitingOrders.error, count: waitingOrders.count ?? 0 },
       };
+    },
+    // The "which mind?" order waiting on the last message of this chat. Owner session, so row-level security applies.
+    loadPendingOrder: async (chatId: string) => {
+      const { data, error } = await userClient
+        .from("buddy_messages")
+        .select("role,payload")
+        .eq("chat_id", chatId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) return { ok: false as const };
+      const last = Array.isArray(data) ? data[0] : null;
+      if (!last || last.role !== "buddy" || !last.payload || typeof last.payload !== "object") {
+        return { ok: true as const, instruction: null };
+      }
+      const pending = (last.payload as Record<string, unknown>).pending_order;
+      return { ok: true as const, instruction: typeof pending === "string" && pending.trim() ? pending.slice(0, 1000) : null };
+    },
+    // Files one order as waiting. The database rule allows only status "waiting" from the owner's session.
+    saveOrder: async (_chatId: string, instruction: string, mind: MindName | null) => {
+      const { error } = await userClient.from("buddy_orders").insert({ instruction, mind, status: "waiting" });
+      return !error;
+    },
+    // Read-only log rows, newest first. Owner-only rows (row-level security).
+    readMindLog: async (mind: MindName | null): Promise<MindLogLine[] | null> => {
+      let query = userClient
+        .from("minds_daily_log")
+        .select("happened_at,day,mind,action,outcome,detail")
+        .order("happened_at", { ascending: false })
+        .limit(50);
+      if (mind) query = query.eq("mind", mind);
+      const { data, error } = await query;
+      if (error || !Array.isArray(data)) return null;
+      return data as MindLogLine[];
     },
     // Read-only. Articles: titles and dates only, never the body. Products: names and USD prices only.
     readSiteFacts: async (nowIso: string): Promise<SiteFacts> => {

@@ -113,6 +113,9 @@ describe('Buddy question flow with the site list', () => {
       }),
       readSiteFacts,
       findOrCreateBriefing: async () => null,
+    loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
+    saveOrder: async () => true,
+    readMindLog: async () => [],
     };
     return { deps, askGemini, readSiteFacts, saved };
   }

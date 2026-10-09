@@ -4,6 +4,18 @@
 
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
 import { siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
+import {
+  ASK_WHICH_MIND_LINE,
+  MIND_LABELS,
+  RESTRICTED_LINE,
+  answerFromLog,
+  cleanInstruction,
+  isRestricted,
+  routeMessage,
+  type MindLogLine,
+  type MindName,
+  type Route,
+} from "./buddyRouter.ts";
 
 /** Current stable Flash model on the Gemini API (Google's model list, Oct 2026). Change here only. */
 export const BUDDY_GEMINI_MODEL = "gemini-3.8-flash";
@@ -78,7 +90,16 @@ export interface BuddyThinkDeps {
   readSiteFacts(nowIso: string): Promise<SiteFacts>;
   /** Today's briefing thread for this owner, created on first use. Null when it cannot be read or made. */
   findOrCreateBriefing(localDate: string): Promise<{ id: string; created: boolean } | null>;
+  /** The "which mind?" order waiting on the last Buddy message of this chat, if there is one. `ok:false` means unreadable. */
+  loadPendingOrder(chatId: string): Promise<{ ok: true; instruction: string | null } | { ok: false }>;
+  /** Files one order as waiting. The mind is null when the owner has not chosen one. Returns false when not saved. */
+  saveOrder(chatId: string, instruction: string, mind: MindName | null): Promise<boolean>;
+  /** The newest log rows, optionally for one mind. Null when they cannot be read. */
+  readMindLog(mind: MindName | null): Promise<MindLogLine[] | null>;
 }
+
+const ORDER_SAVE_FAILED = "Buddy could not save that order, so nothing was filed. Try again in a moment.";
+const PENDING_FLUSH_LINE = "Saved your earlier order as waiting. No mind was picked, so it waits for you.";
 
 function isRealDate(value: string): boolean {
   if (!DATE_RE.test(value)) return false;
@@ -214,6 +235,37 @@ function probeStatusFor(outcome: ThinkOutcome): "invalid" | "rate_limited" | "un
  * checked, then the owner's message is saved, Gemini answers with the chat so far, and the
  * answer is saved. A missing key still saves the question and an honest notice in the chat.
  */
+/** Answers a routed message: a log answer, a question about which mind, or an order filed as waiting. */
+async function answerRouted(
+  chatId: string,
+  title: string,
+  message: string,
+  route: Exclude<Route, { kind: "chat" }>,
+  action: BuddyThinkAction,
+  deps: BuddyThinkDeps,
+): Promise<ThinkResponse> {
+  if (route.kind === "order") {
+    const filed = await deps.saveOrder(chatId, route.instruction, route.mind);
+    if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
+  }
+  const savedQuestion = await deps.saveMessage(chatId, "owner", "reply", message);
+  if (!savedQuestion) return fail(503, "not_saved", SAVE_FAILED_MESSAGE);
+
+  let reply: string;
+  let payload: Record<string, unknown> | null = null;
+  if (route.kind === "mind_log") {
+    reply = answerFromLog(route.mind, await deps.readMindLog(route.mind));
+  } else if (route.kind === "ask_which_mind") {
+    reply = ASK_WHICH_MIND_LINE;
+    payload = { pending_order: cleanInstruction(route.instruction) };
+  } else {
+    reply = `Saved for the ${MIND_LABELS[route.mind]}. It is waiting.${isRestricted(route.instruction) ? ` ${RESTRICTED_LINE}` : ""}`;
+  }
+  const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, payload);
+  await deps.touchChat(chatId, title);
+  return { status: 200, body: { ok: true, action, route: route.kind, reply, saved } };
+}
+
 export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): Promise<ThinkResponse> {
   if (!isRecord(payload) || Object.keys(payload).some((key) => !ALLOWED_KEYS.includes(key))) {
     return fail(400, "invalid_request", "Only an action, a message and a chat id are accepted.");
@@ -299,6 +351,20 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   const chat = await deps.loadChat(chatId);
   if (!chat) return fail(404, "chat_not_found", "That chat could not be found. Start a new chat and try again.");
   const title = chat.title ?? titleFromMessage(message);
+
+  // Orders, and questions about a mind, are routed with simple rules and never need a key.
+  const pendingRead = await deps.loadPendingOrder(chatId);
+  if (!pendingRead.ok) return fail(503, "history_unavailable", "Buddy could not read this chat just now. Nothing was sent. Try again shortly.");
+  const pending = pendingRead.instruction ? { instruction: pendingRead.instruction } : null;
+  const route = routeMessage(message, pending);
+  const completesPending = route.kind === "order" && route.resolvesPending;
+  if (pending && !completesPending) {
+    // The owner moved on without naming a mind. The order is filed as waiting, and Buddy does not ask again.
+    const filed = await deps.saveOrder(chatId, pending.instruction, null);
+    if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
+    await deps.saveMessage(chatId, "buddy", "notice", PENDING_FLUSH_LINE);
+  }
+  if (route.kind !== "chat") return answerRouted(chatId, title, message, route, action, deps);
 
   const key = await deps.readKey();
   if (!key) {

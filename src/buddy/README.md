@@ -52,6 +52,13 @@ Server side:
   - `mindRun.ts`: one pass over the four thinking minds in order. Nothing calls it yet; there is no schedule.
   - `mindsLogStore.ts`: reads the newest log row per mind for the Minds cards.
   - `supabase/functions/_shared/mindThink.ts`: the server's one door to Gemini. It uses the existing `callGemini` and key path, makes no call without a key, and never returns the key.
+- Phase 2 slice 5 teaches Buddy to take orders. `supabase/functions/_shared/buddyRouter.ts` sorts each message with plain rules, so no key is needed.
+  - An order that names a mind (Analyst, Strategist, CEO, Executioner or Auditor) is saved to `buddy_orders` as waiting. It is never saved as done.
+  - An order that names no mind gets one question: which mind. The next short reply that names one mind files the order. If the owner moves on instead, the order is saved as waiting with no mind.
+  - A question about a mind ("What did the Analyst do?") is answered from the newest rows of `minds_daily_log`. An empty log says so. A failed read says so and changes nothing.
+  - An order that mentions publishing, sending, spending, prices, refunds or deleting is still saved as waiting, and Buddy says those parts wait for the owner.
+  - The briefing section "The five minds" reads the same log. A day with a waiting order is not called quiet.
+  - Nothing reads `buddy_orders` yet, and no mind acts on an order. The owner still cannot open a chat with any mind.
 - The old Admin AI screen (22 tabs) is still in `src/admin/pages/AdminAI.tsx`, but nothing routes to it any more. The owner's screen at `/admin/ai` is the Minds watch in `src/admin/pages/AdminMinds.tsx`.
 - `minds/mindRoster.ts` lists the five minds and the Kill options. `minds/mindsControlsStore.ts` saves the Takeover and Kill settings to the one-row `minds_controls` table (migration `20261009140000_minds_controls.sql`, not applied). Takeover is off by default, and nothing reads these settings yet.
 - Buddy cannot change the site. It only reads published article titles and active shop products, and never article bodies (see `supabase/functions/_shared/buddySiteFacts.ts`).
