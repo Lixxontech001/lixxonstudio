@@ -87,7 +87,7 @@ export default function AdminMinds() {
   };
 
   const takeoverText = controls.takeover
-    ? 'On. The minds may act, but nothing has run yet.'
+    ? 'On. Plans can be checked, but no change reaches the site yet.'
     : 'Off. The minds cannot change the site.';
 
   return (

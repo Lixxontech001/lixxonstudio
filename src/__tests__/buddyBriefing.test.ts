@@ -70,7 +70,7 @@ describe('Buddy briefing rules: sections and real numbers', () => {
 
   it('uses the fixed honest lines for what did not go out and what is not running', () => {
     const result = buildBriefing(facts({ articles: { ok: true, count: 1, titles: ['Hello'] } }), NOW, SINCE, false);
-    expect(sectionLines(result, 'went_out')[0]).toBe('Nothing yet. Takeover is off.');
+    expect(sectionLines(result, 'went_out')[0]).toBe('No mind has sent anything out.');
     expect(sectionLines(result, 'minds')).toEqual(["I cannot read the minds' log yet."]);
     expect(sectionLines(result, 'jobs')).toEqual(['I cannot read your orders yet.']);
   });

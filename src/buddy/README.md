@@ -59,6 +59,7 @@ Server side:
   - An order that mentions publishing, sending, spending, prices, refunds or deleting is still saved as waiting, and Buddy says those parts wait for the owner.
   - The briefing section "The five minds" reads the same log. A day with a waiting order is not called quiet.
   - Nothing reads `buddy_orders` yet, and no mind acts on an order. The owner still cannot open a chat with any mind.
+- Phase 2 freeze checks live in `src/__tests__/buddyPhase2Freeze.test.ts`: Takeover off by default, Kill round-trips, `/admin/ai` is the Minds watch, `/buddy/controls` redirects, and the magazine addresses are unchanged. The briefing no longer says "Takeover is off", because the switch can be turned on; it now says no mind has sent anything out.
 - The old Admin AI screen (22 tabs) is still in `src/admin/pages/AdminAI.tsx`, but nothing routes to it any more. The owner's screen at `/admin/ai` is the Minds watch in `src/admin/pages/AdminMinds.tsx`.
 - `minds/mindRoster.ts` lists the five minds and the Kill options. `minds/mindsControlsStore.ts` saves the Takeover and Kill settings to the one-row `minds_controls` table (migration `20261009140000_minds_controls.sql`, not applied). Takeover is off by default, and nothing reads these settings yet.
 - Buddy cannot change the site. It only reads published article titles and active shop products, and never article bodies (see `supabase/functions/_shared/buddySiteFacts.ts`).

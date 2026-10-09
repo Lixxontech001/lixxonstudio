@@ -130,7 +130,8 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   if (allRead && nothingReal) return { quiet: true, sections: [], text: QUIET_LINE };
 
   const awayMs = now.getTime() - Date.parse(sinceIso);
-  const went = ["Nothing yet. Takeover is off."];
+  // No mind can change the site yet, so this line is true whatever the Takeover switch says.
+  const went = ["No mind has sent anything out."];
   const article = articleLine(facts.articles);
   if (article) went.push(article);
 
