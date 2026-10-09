@@ -38,9 +38,22 @@ const QUESTION_START =
   /^(what|which|how|why|who|when|where|did|does|is|are|was|were|do you|do we|do i|have you|have we|has it|has the|is there|are there|can i|should we|should i|tell me|show me)\b/i;
 const QUESTION_MARK = /\?\s*$/;
 
+/**
+ * "Run the products", "make today's posts", "run today", "daily run". No mind is named: this is the owner's
+ * request for the day's run, so it is filed as an order and never asked about. Channel words are not checked
+ * here; the order lane holds anything that asks for a channel.
+ */
+const RUN_DAY =
+  /^(please\s+|could you\s+|can you\s+|would you\s+)?((run|start|kick off)\s+(the\s+|today'?s\s+|todays\s+|my\s+|all\s+)?(products?|posts?|jobs?|orders?|day|run|today)\b|(run|start|kick off|make|do)\s+(today'?s\s+|todays\s+|the\s+)(posts?|jobs?|products?|packs?|run)\b|daily run\b)/i;
+
+export function isRunDayRequest(message: string): boolean {
+  return RUN_DAY.test(coreOf(message.trim()));
+}
+
 export type Route =
   | { kind: "mind_log"; mind: MindName }
   | { kind: "order"; mind: MindName; instruction: string; resolvesPending: boolean }
+  | { kind: "run_day"; instruction: string }
   | { kind: "ask_which_mind"; instruction: string }
   | { kind: "chat" };
 
@@ -112,6 +125,8 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
     return { kind: "order", mind, instruction: pending.instruction, resolvesPending: true };
   }
   if (mind && question && !imperative) return { kind: "mind_log", mind };
+  // Asking for today's run is an order with no mind to name. It must not fall through to "which mind?".
+  if (!mind && !question && isRunDayRequest(text)) return { kind: "run_day", instruction: cleanInstruction(text) };
   if (mind && imperative) return { kind: "order", mind, instruction: cleanInstruction(text), resolvesPending: false };
   if (!mind && imperative && !question) return { kind: "ask_which_mind", instruction: cleanInstruction(text) };
   return { kind: "chat" };

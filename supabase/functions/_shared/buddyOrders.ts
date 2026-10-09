@@ -14,6 +14,7 @@ export interface BuddyOrder {
 
 export type OrderLane =
   | { lane: "product_line" }
+  | { lane: "daily_run" }
   | { lane: "held"; reason: string };
 
 export interface LanedOrder extends BuddyOrder {
@@ -30,6 +31,12 @@ const LATER_PHASE =
   /\b(instagram|tiktok|facebook|pinterest|telegram|bluesky|mastodon|tumblr|discord|blogger|medium|youtube|pixelfed|wordpress|podcast|vimeo|video|videos|reel|reels|email|e-mail|newsletter|push|whatsapp|channel|channels|social|tweet|post\s+(it\s+)?(to|on)|publish\s+(it\s+)?(to|on))\b/i;
 /** Prices, spending and refunds are never run by a mind. */
 const MONEY = /\b(price|prices|pricing|discount|refund|spend|pay|ads?|advert|advertising)\b/i;
+/**
+ * The day's run: "run the products", "make today's posts", "daily run". Only the run words count, so
+ * "post it to instagram" never matches here. A run that also names a channel stays held (LATER_PHASE).
+ */
+const DAILY_RUN =
+  /^(please\s+|could you\s+|can you\s+|would you\s+)?((run|start|kick off|make|do)\s+(the\s+|today'?s\s+|todays\s+|all\s+)?(products?|posts?|jobs?|day|run|today)\b|daily run\b)/i;
 /** Creating a product is the owner's job. "Add a product to the guide" is a product line, not a create. */
 const CREATE_PRODUCT = /\b(create|build|make|set\s+up)\s+((a|an|the|new|another)\s+)*(product|kit|bundle|sku)s?\b/i;
 /** Work this phase can run: a product line on an article, or a swap of which products sit on it. */
@@ -38,6 +45,7 @@ const PRODUCT_LINE = /\b(article|articles|blog|guide|paragraph|sentence|product|
 /** Sorts one order into the lane it belongs to. Order of checks matters: money and channels are held first. */
 export function laneFor(instruction: string): OrderLane {
   if (MONEY.test(instruction)) return { lane: "held", reason: HELD_MONEY };
+  if (DAILY_RUN.test(instruction) && !LATER_PHASE.test(instruction)) return { lane: "daily_run" };
   if (LATER_PHASE.test(instruction)) return { lane: "held", reason: HELD_LATER_PHASE };
   if (CREATE_PRODUCT.test(instruction)) return { lane: "held", reason: HELD_CREATE };
   if (PRODUCT_LINE.test(instruction)) return { lane: "product_line" };

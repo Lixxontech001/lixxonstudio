@@ -1,7 +1,7 @@
 /** Reads the buddy-think answers. Anything unexpected becomes null, so the screen never shows a made-up reply. */
 
 export type BuddyThinkReply =
-  | { ok: true; reply: string; model: string; canThink: boolean }
+  | { ok: true; reply: string; model: string; canThink: boolean; runStart: boolean }
   | { ok: false; reason: string; message: string; canThink: boolean };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -24,6 +24,7 @@ export function parseThinkReply(value: unknown): BuddyThinkReply | null {
       reply: value.reply.slice(0, 4000),
       model: typeof value.model === 'string' ? value.model.slice(0, 80) : '',
       canThink,
+      runStart: value.run_start === true,
     };
   }
   if (typeof value.reason !== 'string' || typeof value.message !== 'string') return null;
@@ -50,4 +51,16 @@ export function parseBriefingResult(value: unknown): BuddyBriefingResult | null 
   }
   if (typeof value.reason !== 'string' || typeof value.message !== 'string') return null;
   return { ok: false, reason: value.reason.slice(0, 40), message: value.message.slice(0, 300) };
+}
+
+export interface DayRunAnswer {
+  status: string;
+  detail: string;
+}
+
+/** Reads the answer of the owner-only run function. Anything without a plain detail becomes null. */
+export function parseRunAnswer(value: unknown): DayRunAnswer | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.status !== 'string' || typeof value.detail !== 'string' || !value.detail.trim()) return null;
+  return { status: value.status.slice(0, 40), detail: value.detail.slice(0, 300) };
 }

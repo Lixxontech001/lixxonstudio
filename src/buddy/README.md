@@ -93,3 +93,13 @@ Server side:
 - `minds/mindRoster.ts` lists the five minds and the Kill options. `minds/mindsControlsStore.ts` saves the Takeover and Kill settings to the one-row `minds_controls` table (migration `20261009140000_minds_controls.sql`, not applied). Takeover is off by default, and nothing reads these settings yet.
 - Buddy cannot change the site. It only reads published article titles and active shop products, and never article bodies (see `supabase/functions/_shared/buddySiteFacts.ts`).
 - Night reports are not written by anything yet. The Reports door only lists them.
+
+## Phase 4 slice 1: starting a run
+
+- "Run the products", "make today's posts", "run today" and "daily run" are filed as orders with no mind named (`buddyRouter.ts`, `run_day` route). They no longer get the "which mind?" question. Questions about a run stay chat.
+- Orders in the `daily_run` lane (`buddyOrders.ts`) are runnable. A run request that also names a channel stays held. "Post it to instagram" stays held.
+- `supabase/functions/_shared/runDay.ts` decides what runs. Takeover off, or a Kill on all, strategist, executioner or auditor: nothing runs, nothing is read, nothing is logged, and orders stay waiting. Otherwise the oldest runnable order runs, or the daily trigger queues today's order first.
+- `minds-run-placement` accepts an optional `order_id`, the owner's choice. The browser starts the run only when Buddy says Takeover is on (`run_start`).
+- Migration `20261010090000_minds_daily_run.sql` (not applied): `minds_queue_daily_run`, service role only. It queues one daily order per owner per day, and returns null when Takeover is off, Kill blocks, or the caller is not the owner. The `cron.schedule` line stays commented. It applies at Phase 6 merge.
+- Tests: `runDay.test.ts`, `buddyRunDayRouting.test.ts`, `buddyThink.test.ts` (run requests), `mindsDailyRunDb.test.ts` (PGlite), `buddyStartDayRun.test.ts`.
+- Not built yet: packs, captions, time picker, video, and "I posted this". Those are later Phase 4 slices.

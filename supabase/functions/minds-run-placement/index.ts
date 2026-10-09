@@ -1,13 +1,16 @@
-// The Executioner's run on the owner's oldest waiting product-line order.
-// Owner only. The browser sends the owner's local day. The run itself lives in _shared/placementRun.ts;
-// this file only reads the state, hands the run its doors (database and Gemini), and reports back in plain words.
-// Nothing runs on a timer. The owner starts a run through Buddy.
+// The Executioner's run on the owner's oldest waiting runnable order (a product line, or today's daily run).
+// Owner only. The browser sends the owner's local day, and optionally one order id the owner chose.
+// The run itself lives in _shared/placementRun.ts; the choice lives in _shared/runDay.ts.
+// This file reads the state, hands the run its doors (database and Gemini), and reports back in plain words.
+// Takeover off, or a Kill that stops the run: this returns before any read or log, and orders stay waiting.
+// Nothing runs on a timer yet. The owner starts a run through Buddy.
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
 import { callerUser, env, serviceClient } from "../_shared/http.ts";
 import { isAllowedAutomationOrigin } from "../_shared/automationKeyChecks.ts";
-import { readWaitingOrders, type BuddyOrder } from "../_shared/buddyOrders.ts";
+import { readWaitingOrders } from "../_shared/buddyOrders.ts";
 import { makeMindThink } from "../_shared/mindThink.ts";
+import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import {
   runPlacementOrder,
   type ApplyEdit,
@@ -27,6 +30,7 @@ const KEY_NAME = "gemini_api_key";
 const ARTICLE_LIMIT = 20;
 const SHOP_LIMIT = 200;
 const EDIT_LIMIT = 500;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KILL_SCOPES = ["none", "all", "analyst", "strategist", "ceo", "executioner", "auditor"] as const;
 /** Database rule messages, mapped to the plain reason the run understands. Anything else is a plain failure. */
 const KNOWN_REASONS = ["takeover_off", "killed", "order_not_waiting", "paragraph_changed", "checksum_mismatch", "slot_missing", "article_missing"] as const;
@@ -86,6 +90,11 @@ export async function handleRun(req: Request): Promise<Response> {
   if (typeof localDay !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(localDay)) {
     return reply(req, { error: "A local day is required." }, 400);
   }
+  const requestedOrder = asRecord(body)?.order_id;
+  if (requestedOrder !== undefined && requestedOrder !== null && (typeof requestedOrder !== "string" || !UUID.test(requestedOrder))) {
+    return reply(req, { error: "The order id is not valid." }, 400);
+  }
+  const orderId = typeof requestedOrder === "string" ? requestedOrder : null;
 
   const user = await callerUser(req);
   if (!user) return reply(req, { error: "Owner authentication required." }, 401);
@@ -120,7 +129,11 @@ export async function handleRun(req: Request): Promise<Response> {
   const takeover = asRecord(controlsRow.data)?.takeover === true;
   const killScope = parseKill(asRecord(controlsRow.data)?.kill_scope ?? "none");
 
-  // The owner's oldest waiting product-line order. Other orders wait.
+  // Takeover off, or Kill on a mind the run needs: nothing else is read, nothing is logged, orders stay waiting.
+  const blocked = blockedDetail(takeover, killScope);
+  if (blocked) return reply(req, { status: "held", detail: blocked, order_id: orderId });
+
+  // The owner's waiting orders, oldest first. Other orders wait.
   const orderRows = await sb
     .from("buddy_orders")
     .select("id,instruction,mind,status,created_at")
@@ -130,9 +143,67 @@ export async function handleRun(req: Request): Promise<Response> {
     .limit(50);
   const waiting = await readWaitingOrders(async () => (orderRows.error || !Array.isArray(orderRows.data) ? null : orderRows.data));
   if (!waiting.ok) return reply(req, { status: "held", detail: "Waiting orders could not be read. Nothing changed." });
-  const order = waiting.orders.find((item) => item.lane.lane === "product_line") as BuddyOrder | undefined;
-  if (!order) return reply(req, { status: "nothing_to_do", detail: "No waiting product-line order." });
+  const think = makeMindThink(async () => {
+    try {
+      const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: KEY_NAME });
+      return !error && typeof data === "string" && data.length > 0 ? data : null;
+    } catch {
+      return null;
+    }
+  });
 
+  const logRow = async (orderIdForLog: string, entry: RunLog) => {
+    await sb.from("minds_daily_log").insert({
+      owner_id: owner,
+      day: localDay,
+      mind: entry.mind,
+      action: clip(entry.action, 120),
+      outcome: entry.outcome,
+      detail: clip(entry.detail, 500),
+      order_id: orderIdForLog,
+    });
+  };
+
+  // The run's doors. The reads happen only when the run has been allowed to start.
+  const runOneOrder = async (chosenId: string): Promise<{ status: string; detail: string }> => {
+    const order = waiting.orders.find((item) => item.id === chosenId);
+    if (!order) return { status: "nothing_to_do", detail: "That order is not waiting, or it cannot run yet." };
+    return runAgainstSite(order.id, order.instruction, localDay, takeover, killScope, think, logRow, owner, sb);
+  };
+
+  const outcome = await runDay(
+    {
+      localDay,
+      trigger: "owner",
+      takeover,
+      killScope,
+      waiting: waiting.orders,
+      orderId,
+    },
+    {
+      createDailyOrder: async (day: string) => {
+        const { data, error } = await sb.rpc("minds_queue_daily_run", { p_owner_id: owner, p_local_day: day });
+        return !error && typeof data === "string" ? data : null;
+      },
+      runOrder: runOneOrder,
+    },
+  );
+
+  return reply(req, { status: outcome.status, detail: outcome.detail, order_id: outcome.orderId });
+}
+
+/** Reads the site for one order, runs the placement, and writes through the database doors. */
+async function runAgainstSite(
+  orderId: string,
+  instruction: string,
+  localDay: string,
+  takeover: boolean,
+  killScope: KillScope,
+  think: ReturnType<typeof makeMindThink>,
+  logRow: (orderIdForLog: string, entry: RunLog) => Promise<void>,
+  owner: string,
+  sb: SupabaseClient,
+): Promise<RunOutcome> {
   // Reads for the run: articles, shop, slots, the minds' past edits, and today's drip.
   const [articleRows, productRows, slotRows, editRows, dripRows] = await Promise.all([
     sb.from("posts").select("id,title,content").eq("status", "published").order("published_at", { ascending: false }).limit(ARTICLE_LIMIT),
@@ -172,35 +243,13 @@ export async function handleRun(req: Request): Promise<Response> {
   }));
 
   const input: RunInput = {
-    order: { id: order.id, instruction: order.instruction },
+    order: { id: orderId, instruction },
     localDay,
     takeover,
     killScope,
     shop,
     articles,
     touchedToday: (dripRows.data ?? []).map((row: Record<string, unknown>) => String(row.post_id)),
-  };
-
-  const think = makeMindThink(async () => {
-    try {
-      const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: KEY_NAME });
-      return !error && typeof data === "string" && data.length > 0 ? data : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const orderId = order.id;
-  const logRow = async (entry: RunLog) => {
-    await sb.from("minds_daily_log").insert({
-      owner_id: owner,
-      day: localDay,
-      mind: entry.mind,
-      action: clip(entry.action, 120),
-      outcome: entry.outcome,
-      detail: clip(entry.detail, 500),
-      order_id: orderId,
-    });
   };
 
   const outcome: RunOutcome = await runPlacementOrder(input, {
@@ -238,13 +287,13 @@ export async function handleRun(req: Request): Promise<Response> {
       });
       return error ? { ok: false, reason: reasonFrom(error.message) } : { ok: true };
     },
-    log: logRow,
+    log: (entry: RunLog) => logRow(orderId, entry),
     notable: async (kind, title, detail) => {
       await sb.from("minds_notable_events").insert({ owner_id: owner, mind: "auditor", kind, title: clip(title, 160), detail: clip(detail, 500) });
     },
   });
 
-  return reply(req, { status: outcome.status, detail: outcome.detail, order_id: order.id });
+  return outcome;
 }
 
 Deno.serve(handleRun);

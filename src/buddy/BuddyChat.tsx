@@ -7,6 +7,7 @@ import {
   createChat,
   listChats,
   loadMessages,
+  startDayRun,
   type BuddyChatMessage,
   type BuddyChatSummary,
 } from './buddyChatStore';
@@ -24,6 +25,7 @@ import './buddy.css';
 export const BUDDY_MAX_MESSAGE_CHARS = 1000;
 const COUNT_FROM_CHARS = 800;
 const NO_KEY_LINE = 'Buddy cannot think yet because no Google key is saved. Add it in Admin under Automation keys, in the box called Google key.';
+const RUN_NOT_STARTED = 'Buddy could not start today\'s run just now. Your order stays waiting.';
 const CHAT_NOT_REACHED = 'Buddy could not be reached just now. Check the messages below and try again shortly.';
 const BRIEFING_NOT_REACHED = 'Buddy could not get your briefing just now. You can still type below.';
 
@@ -152,10 +154,13 @@ export default function BuddyChat() {
     }
 
     const result = await askBuddy(chatId, text);
+    // Takeover is on and the owner asked for today's run: start it now, then say what happened.
+    const run = result?.ok && result.runStart ? await startDayRun(localDateString()) : null;
     const rows = await loadMessages(chatId);
     if (rows) setMessages(rows);
     if (!result) setNotice(CHAT_NOT_REACHED);
     else if (!result.ok && result.reason !== 'no_key') setNotice(result.message);
+    else if (result.ok && result.runStart) setNotice(run ? run.detail : RUN_NOT_STARTED);
     if (result?.ok && settings.speakReplies) speak(result.reply);
     setPendingText(null);
     setSending(false);

@@ -1,5 +1,12 @@
 import { supabase } from '../lib/supabaseClient';
-import { parseBriefingResult, parseThinkReply, type BuddyBriefingResult, type BuddyThinkReply } from './buddyThinkResult';
+import {
+  parseBriefingResult,
+  parseRunAnswer,
+  parseThinkReply,
+  type BuddyBriefingResult,
+  type BuddyThinkReply,
+  type DayRunAnswer,
+} from './buddyThinkResult';
 
 /** Browser side of Buddy's chats. Row-level security on the database limits every read and write to this owner. */
 
@@ -191,6 +198,22 @@ async function callThink(body: Record<string, unknown>): Promise<unknown | null>
 export async function askBuddy(chatId: string, message: string): Promise<BuddyThinkReply | null> {
   const data = await callThink({ action: 'ask', chat_id: chatId, message });
   return data === null ? null : parseThinkReply(data);
+}
+
+/**
+ * Starts today's run through the owner-only run function. Called only after Buddy filed the run and Takeover is on.
+ * Returns null when the function could not be reached or answered without a plain detail.
+ */
+export async function startDayRun(localDay: string): Promise<DayRunAnswer | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke('minds-run-placement', { body: { local_day: localDay } });
+    if (!error) return parseRunAnswer(data);
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) return parseRunAnswer(await context.json().catch(() => null));
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /** Opens today's briefing for this device's date. Each open of Continue adds to the same day's thread. */

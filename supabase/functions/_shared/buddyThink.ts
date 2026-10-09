@@ -19,6 +19,11 @@ import {
   type Route,
 } from "./buddyRouter.ts";
 
+/** Replies for today's run. Plain words, no em dash. The run's own result is shown after it runs. */
+export const RUN_DAY_OFF_LINE = "Filed for today's run. Takeover is off, so it waits. Nothing on the site has changed.";
+export const RUN_DAY_ON_LINE = "Filed for today's run. Takeover is on, so I am starting it now.";
+export const RUN_DAY_UNREADABLE_LINE = "Filed for today's run. I could not read Takeover just now, so it waits until I can.";
+
 /** Current stable Flash model on the Gemini API (Google's model list, Oct 2026). Change here only. */
 export const BUDDY_GEMINI_MODEL = "gemini-3.8-flash";
 export const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -98,6 +103,8 @@ export interface BuddyThinkDeps {
   saveOrder(chatId: string, instruction: string, mind: MindName | null): Promise<boolean>;
   /** The newest log rows, optionally for one mind. Null when they cannot be read. */
   readMindLog(mind: MindName | null): Promise<MindLogLine[] | null>;
+  /** The Takeover switch as saved. Null when it cannot be read. Read only; a run never turns it on. */
+  readTakeover(): Promise<boolean | null>;
 }
 
 /** The one question Gemini answers when the rules cannot tell whether a statement is an order. JSON only. */
@@ -291,13 +298,26 @@ async function answerRouted(
     const filed = await deps.saveOrder(chatId, route.instruction, route.mind);
     if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
   }
+  if (route.kind === "run_day") {
+    // Today's run is filed with no mind. It waits unless Takeover is on, and then Buddy starts it.
+    const filed = await deps.saveOrder(chatId, route.instruction, null);
+    if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
+  }
   const savedQuestion = await deps.saveMessage(chatId, "owner", "reply", message);
   if (!savedQuestion) return fail(503, "not_saved", SAVE_FAILED_MESSAGE);
 
   let reply: string;
   let payload: Record<string, unknown> | null = null;
+  let runStart = false;
   if (route.kind === "mind_log") {
     reply = answerFromLog(route.mind, await deps.readMindLog(route.mind));
+  } else if (route.kind === "run_day") {
+    const takeover = await deps.readTakeover();
+    if (takeover === null) reply = RUN_DAY_UNREADABLE_LINE;
+    else if (takeover) {
+      reply = RUN_DAY_ON_LINE;
+      runStart = true;
+    } else reply = RUN_DAY_OFF_LINE;
   } else if (route.kind === "ask_which_mind") {
     reply = ASK_WHICH_MIND_LINE;
     payload = { pending_order: cleanInstruction(route.instruction) };
@@ -306,7 +326,7 @@ async function answerRouted(
   }
   const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, payload);
   await deps.touchChat(chatId, title);
-  return { status: 200, body: { ok: true, action, route: route.kind, reply, saved } };
+  return { status: 200, body: { ok: true, action, route: route.kind, reply, saved, ...(runStart ? { run_start: true } : {}) } };
 }
 
 export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): Promise<ThinkResponse> {

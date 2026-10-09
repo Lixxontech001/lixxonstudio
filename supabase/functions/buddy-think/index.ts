@@ -244,6 +244,12 @@ function chatStore(userClient: SupabaseClient) {
       return data;
     },
     // Read-only log rows, newest first. Owner-only rows (row-level security).
+    // Read only. The run never turns Takeover on; only the owner does, in Admin.
+    readTakeover: async (): Promise<boolean | null> => {
+      const { data, error } = await userClient.from("minds_controls").select("takeover").eq("id", 1).maybeSingle();
+      if (error) return null;
+      return data?.takeover === true;
+    },
     readMindLog: async (mind: MindName | null): Promise<MindLogLine[] | null> => {
       let query = userClient
         .from("minds_daily_log")

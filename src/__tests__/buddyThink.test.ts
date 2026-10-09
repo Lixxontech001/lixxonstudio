@@ -11,6 +11,9 @@ import {
   handleBuddyThink,
   HISTORY_TURNS,
   NO_KEY_MESSAGE,
+  RUN_DAY_OFF_LINE,
+  RUN_DAY_ON_LINE,
+  RUN_DAY_UNREADABLE_LINE,
   titleFromMessage,
   type BuddyThinkDeps,
   type GeminiResult,
@@ -58,6 +61,7 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
     loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
     saveOrder: async () => true,
     readMindLog: async () => [],
+    readTakeover: async () => false,
     readSiteFacts: async () => ({
       articles: { ok: true, total: 0, items: [] },
       products: { ok: true, total: 0, items: [] },
@@ -306,5 +310,38 @@ describe('Buddy think: judging a statement with one Gemini call', () => {
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Do the new article' }, d);
     expect(result.body).toMatchObject({ route: 'ask_which_mind' });
     expect(askGemini).not.toHaveBeenCalled();
+  });
+});
+
+describe("Buddy think: asking for today's run", () => {
+  it('takeover off: filed with no mind, Buddy says it waits, and nothing is started', async () => {
+    const saveOrder = vi.fn(async () => true);
+    const { deps: d, askGemini } = deps({ saveOrder, readTakeover: async () => false });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Run the products' }, d);
+    expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Run the products', null);
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({ ok: true, route: 'run_day', reply: RUN_DAY_OFF_LINE });
+    expect(result.body).not.toHaveProperty('run_start');
+    expect(askGemini).not.toHaveBeenCalled();
+  });
+
+  it('takeover on: the reply asks the browser to start the run', async () => {
+    const { deps: d } = deps({ readTakeover: async () => true });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: "Make today's posts" }, d);
+    expect(result.body).toMatchObject({ ok: true, route: 'run_day', reply: RUN_DAY_ON_LINE, run_start: true });
+  });
+
+  it('Takeover unreadable: the order waits and nothing is started', async () => {
+    const { deps: d } = deps({ readTakeover: async () => null });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Daily run' }, d);
+    expect(result.body).toMatchObject({ ok: true, reply: RUN_DAY_UNREADABLE_LINE });
+    expect(result.body).not.toHaveProperty('run_start');
+  });
+
+  it('an order that cannot be saved is refused, and nothing is said as if it was filed', async () => {
+    const { deps: d } = deps({ saveOrder: async () => false, readTakeover: async () => true });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Run the products' }, d);
+    expect(result.status).toBe(503);
+    expect(result.body).not.toHaveProperty('run_start');
   });
 });
