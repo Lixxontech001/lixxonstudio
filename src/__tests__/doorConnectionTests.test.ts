@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DOOR_IDS, DOORS, type DoorId } from '../../supabase/functions/_shared/doorRegistry';
+
+// The six doors whose check is built. The other six answer "not_built" and make no request, until their slices add a check.
+const BUILT: DoorId[] = ['telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger'];
+const NOT_BUILT: DoorId[] = DOOR_IDS.filter((id) => !BUILT.includes(id));
 import {
   DOOR_TEST_MESSAGE,
   doorTestMessage,
@@ -20,6 +24,13 @@ const VALUES: Record<DoorId, Record<string, string>> = {
     tumblr_token_secret: 'TK-TOKEN-SECRET',
     tumblr_blog_name: 'lixxon',
   },
+  // The new doors have no check yet. Their values are used only to test "not_built" with no request.
+  medium: { medium_integration_token: 'MEDIUM-SECRET' },
+  youtube: { youtube_client_id: 'YT-CLIENT', youtube_client_secret: 'YT-SECRET', youtube_refresh_token: 'YT-REFRESH' },
+  pixelfed: { pixelfed_instance_url: 'https://pixelfed.example', pixelfed_access_token: 'PIX-SECRET' },
+  wordpress_com: { wordpress_com_site: 'lixxon.wordpress.com', wordpress_com_access_token: 'WP-SECRET' },
+  podcast: { podcast_show_title: 'Lixxon Show', podcast_show_author: 'Lixxon' },
+  vimeo: { vimeo_access_token: 'VIMEO-SECRET' },
   blogger: {
     blogger_client_id: 'BL-CLIENT',
     blogger_client_secret: 'BL-CLIENT-SECRET',
@@ -72,7 +83,7 @@ function healthy(url: string): Response {
 describe('every door check is a read: nothing is posted', () => {
   it('no request for any door reaches a posting address, and only sign-ins and token exchanges are POST', async () => {
     const seen: Call[] = [];
-    for (const door of DOOR_IDS) {
+    for (const door of BUILT) {
       const { fetchImpl, calls } = network(healthy);
       const status = await testDoorConnection(door, VALUES[door], fetchImpl);
       expect(status, door).toBe('connected');
@@ -124,8 +135,16 @@ describe('every door check is a read: nothing is posted', () => {
 });
 
 describe('a door that is not fully saved is not tested at all', () => {
+  it('a door without a check yet is not_built, with no request, even when every field is saved', async () => {
+    for (const door of NOT_BUILT) {
+      const { fetchImpl, calls } = network(healthy);
+      expect(await testDoorConnection(door, VALUES[door], fetchImpl), door).toBe('not_built');
+      expect(calls, door).toHaveLength(0);
+    }
+  });
+
   it('returns not_connected and makes no request', async () => {
-    for (const door of DOOR_IDS) {
+    for (const door of BUILT) {
       if (Object.keys(VALUES[door]).length < 2) continue; // Discord has one field, so there is no partial state.
       const { fetchImpl, calls } = network(healthy);
       const partial = Object.fromEntries(Object.entries(VALUES[door]).slice(0, 1));
@@ -204,7 +223,7 @@ describe('the result never carries a value, a token, or the provider reply', () 
   const SECRETS = Object.values(VALUES).flatMap((values) => Object.values(values));
 
   it('every status is one of the fixed words, and each has a plain line', () => {
-    const statuses: DoorTestStatus[] = ['connected', 'invalid', 'not_connected', 'rate_limited', 'unavailable'];
+    const statuses: DoorTestStatus[] = ['connected', 'invalid', 'not_connected', 'not_built', 'rate_limited', 'unavailable'];
     for (const status of statuses) {
       expect(doorTestMessage(status)).toBe(DOOR_TEST_MESSAGE[status]);
       expect(doorTestMessage(status)).not.toMatch(/—|Nigeria|Lagos|Naira|WAT/);
@@ -212,7 +231,7 @@ describe('the result never carries a value, a token, or the provider reply', () 
   });
 
   it('a refusal whose body echoes a secret does not put that secret in the result', async () => {
-    for (const door of DOOR_IDS) {
+    for (const door of BUILT) {
       const { fetchImpl } = network(() => new Response(`bad ${SECRETS.join(' ')}`, { status: 401 }));
       const status = await testDoorConnection(door, VALUES[door], fetchImpl);
       const shown = doorTestMessage(status);
@@ -221,8 +240,8 @@ describe('the result never carries a value, a token, or the provider reply', () 
     }
   });
 
-  it('a network failure is unavailable for every door, with no secret in the line', async () => {
-    for (const door of DOOR_IDS) {
+  it('a network failure is unavailable for every built door, with no secret in the line', async () => {
+    for (const door of BUILT) {
       const status = await testDoorConnection(door, VALUES[door], network(() => 'throw').fetchImpl);
       expect(status, door).toBe('unavailable');
     }

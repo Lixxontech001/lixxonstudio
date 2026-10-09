@@ -1,7 +1,7 @@
 // The connection test for each free door: does the saved detail work with the door, right now?
 // Every check is a read: a lookup, a sign-in, or a token exchange. None of them sends a message or posts.
 // A result is one plain status from a fixed list. No value, token, or provider reply text leaves this file.
-// $0: all six are official free routes.
+// $0: each check uses an official free route. Doors whose check is not built yet answer "not_built" and make no request.
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
 import {
@@ -15,12 +15,13 @@ import {
   type FetchLike,
 } from "./doorAdapters.ts";
 
-export type DoorTestStatus = "connected" | "invalid" | "not_connected" | "rate_limited" | "unavailable";
+export type DoorTestStatus = "connected" | "invalid" | "not_connected" | "not_built" | "rate_limited" | "unavailable";
 
 export const DOOR_TEST_MESSAGE: Readonly<Record<DoorTestStatus, string>> = {
   connected: "Connected. The door answered. Nothing was posted.",
   invalid: "The door did not accept these details.",
   not_connected: "Save every field for this door first.",
+  not_built: "The test for this door is not built yet.",
   rate_limited: "The door is limiting checks. Try later.",
   unavailable: "The door did not answer. Try later.",
 };
@@ -125,7 +126,8 @@ async function bloggerTest(values: Values, fetchImpl: FetchLike): Promise<DoorTe
   return response.ok ? "connected" : refusedStatus(response.status);
 }
 
-const CHECKS: Readonly<Record<DoorId, (values: Values, fetchImpl: FetchLike) => Promise<DoorTestStatus>>> = {
+// Doors without a check yet are simply absent from this list. They are reported as "not_built", never guessed at.
+const CHECKS: Partial<Record<DoorId, (values: Values, fetchImpl: FetchLike) => Promise<DoorTestStatus>>> = {
   telegram: telegramTest,
   discord: discordTest,
   bluesky: blueskyTest,
@@ -139,6 +141,8 @@ const CHECKS: Readonly<Record<DoorId, (values: Values, fetchImpl: FetchLike) => 
  * and no request is made. Unexpected errors become "unavailable", so nothing about them leaks out.
  */
 export async function testDoorConnection(door: DoorId, values: Values, fetchImpl: FetchLike): Promise<DoorTestStatus> {
+  const check = CHECKS[door];
+  if (!check) return "not_built";
   const saved = new Set(Object.keys(values).filter((name) => Boolean(values[name])));
   if (doorStatus(door, saved).state !== "connected") return "not_connected";
   // Every field the door needs must be in `values`, so the checks can read them directly.
@@ -146,7 +150,7 @@ export async function testDoorConnection(door: DoorId, values: Values, fetchImpl
     if (!values[field.secretName]) return "not_connected";
   }
   try {
-    return await CHECKS[door](values, fetchImpl);
+    return await check(values, fetchImpl);
   } catch {
     return "unavailable";
   }

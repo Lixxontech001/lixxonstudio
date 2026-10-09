@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DOOR_IDS, DOORS, doorSecretNames } from '../../supabase/functions/_shared/doorRegistry';
 
 const MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/20261011090000_door_connections_catalog.sql'), 'utf8');
+const TWELVE_MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/20261011130000_door_catalog_twelve.sql'), 'utf8');
 
 const CATALOG = `
 create table public.automation_secret_catalog (
@@ -27,6 +28,11 @@ insert into public.automation_secret_catalog (secret_name, label, category, purp
   ('tumblr_consumer_secret', 'Tumblr consumer secret', 'social', 'Tumblr'),
   ('tumblr_access_token', 'Tumblr access token', 'social', 'Tumblr'),
   ('tumblr_token_secret', 'Tumblr token secret', 'social', 'Tumblr');
+-- YouTube's three names come from the Phase 1 migrations (20261005090000 and 20261005100000), so they exist before this migration.
+insert into public.automation_secret_catalog (secret_name, label, category, purpose, credential_type) values
+  ('youtube_client_id', 'YouTube OAuth client ID', 'social', 'YouTube', 'identifier'),
+  ('youtube_client_secret', 'YouTube client secret', 'social', 'YouTube', 'secret'),
+  ('youtube_refresh_token', 'YouTube refresh token', 'social', 'YouTube', 'secret');
 `;
 
 let db: PGlite;
@@ -35,6 +41,7 @@ beforeAll(async () => {
   db = new PGlite();
   await db.exec(CATALOG);
   await db.exec(MIGRATION);
+  await db.exec(TWELVE_MIGRATION);
 });
 
 afterAll(async () => {
@@ -74,10 +81,18 @@ describe('the door fields are in the secret catalogue', () => {
     }
   });
 
-  it('running the migration again changes nothing (safe to repeat)', async () => {
+  it('running the migrations again changes nothing (safe to repeat)', async () => {
     const before = await rows();
     await db.exec(MIGRATION);
+    await db.exec(TWELVE_MIGRATION);
     expect(await rows()).toEqual(before);
+  });
+
+  it('the Phase 6 migration adds only the new names, and does not change the YouTube rows', async () => {
+    const result = await db.query<{ label: string }>("select label from public.automation_secret_catalog where secret_name = 'youtube_client_id'");
+    expect(result.rows[0].label).toBe('YouTube OAuth client ID');
+    expect(TWELVE_MIGRATION).not.toMatch(/'youtube_/);
+    expect(TWELVE_MIGRATION).not.toMatch(/'tumblr_|'telegram_|'bluesky_|'mastodon_|'discord_|'blogger_/);
   });
 
   it('the migration adds catalogue rows only: no Vault value is written and no posting table is made', () => {

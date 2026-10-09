@@ -253,3 +253,19 @@ What is still not done, or not verified:
 - **Not done in this slice:** a custom Bluesky server address. It needs a new field, a catalogue row and a database change, so it is left for later. Bluesky accounts still have to be on bsky.social.
 - Tests: `runDoors.test.ts` now has 25 cases (new: save fails once then works; save fails every time; no same-day second send; next-day next article; send throws; reserve throws; read throws; Kill on the Executioner reads nothing). `automationKeys.test.ts` covers the Keys filter.
 - Not tested live: no door was contacted. Nothing is deployed.
+
+## Phase 6 slice 2: the twelve doors in the catalogue and the database
+
+- **The door list is now twelve.** `DOOR_IDS` in `supabase/functions/_shared/doorRegistry.ts` lists the six from Phase 5, then Medium, YouTube, Pixelfed, WordPress.com, Podcast and Vimeo. The four gated channels (Instagram, TikTok, Facebook, Pinterest) are not doors and are not in the list.
+- **Connections shows all twelve**, from the same list. Each door's details are typed once there.
+- **YouTube reuses the three names from Phase 1** (`youtube_client_id`, `youtube_client_secret`, `youtube_refresh_token`). No second copy is made. The Keys page hides them, as it does for every door.
+- **Medium is existing-token only.** Medium no longer issues new integration tokens and no longer allows new integrations. A door with a token already in hand can connect; no new token can be made. The official docs call the Medium API no longer supported. Medium's RSS feed is not the Medium door. Owner decision still needed on whether to keep this door at all.
+- **Podcast has two plain details** (show title and show author), not a secret. They are still saved through the same Vault functions, so one save path serves every door. The feed itself is built in slice 4.
+- **Pixelfed has no default server address.** The owner pastes one. Nothing defaults to any country.
+- **New migrations, not applied:**
+  - `20261011130000_door_catalog_twelve.sql` adds eight catalogue rows (Medium token, Pixelfed address and token, WordPress.com site and token, Vimeo token, Podcast title and author). It changes no existing row.
+  - `20261011140000_door_posts_twelve.sql` widens the door-post table's check to all twelve doors. The reservation function still accepts only the six open doors. A door opens for posting in the slice that builds its send step.
+- **Text limits** for the six new doors are set in `DOOR_TEXT_LIMIT`. They are defaults and each send slice confirms them. Pixelfed is 500.
+- **The six new doors have no connection check yet.** Each answers "The test for this door is not built yet." and makes no request. Their checks come with their send slices.
+- Tests: `doorRegistry.test.ts` (twelve doors, order, names), `doorConnectionTests.test.ts` (the six new doors return `not_built` with no request), `doorConnectionsCatalogDb.test.ts` (new rows on PGlite, safe to repeat), `doorPostsDb.test.ts` (the table accepts the twelve and no gated channel).
+- Not done in this slice: no send step, no day-run change, no live test. Nothing is deployed, and no migration is applied to production.

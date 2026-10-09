@@ -1,9 +1,25 @@
-// The six free posting doors Buddy can post through in Phase 5. Pure data and rules, no network.
-// The four gated channels (Instagram, TikTok, Facebook, Pinterest) are NOT doors. Buddy never posts to them.
-// Each field's secret name must exist in the secret catalogue (migrations 20261005090000 and 20261011090000).
+// The twelve auto posting doors Buddy can post through: the six from Phase 5 and six from Phase 6.
+// Pure data and rules, no network. The four gated channels (Instagram, TikTok, Facebook, Pinterest) are NOT doors.
+// Buddy never posts to them.
+// Each field's secret name must exist in the secret catalogue (migrations 20261005090000, 20261011090000 and 20261011130000).
 // Saved values are never shown again. A door is "connected" only when every field is saved. That is not a live test.
+// A door whose send step is not built yet is listed here and on Connections, but it is not in OPEN_DOORS (doorPosts.ts),
+// so the day run never sends to it.
 
-export const DOOR_IDS = ["telegram", "bluesky", "mastodon", "tumblr", "discord", "blogger"] as const;
+export const DOOR_IDS = [
+  "telegram",
+  "bluesky",
+  "mastodon",
+  "tumblr",
+  "discord",
+  "blogger",
+  "medium",
+  "youtube",
+  "pixelfed",
+  "wordpress_com",
+  "podcast",
+  "vimeo",
+] as const;
 export type DoorId = (typeof DOOR_IDS)[number];
 
 export interface DoorField {
@@ -79,6 +95,55 @@ export const DOORS: Readonly<Record<DoorId, DoorSpec>> = {
       { secretName: "blogger_refresh_token", label: "Refresh token", kind: "secret" },
       { secretName: "blogger_blog_id", label: "Blog ID", kind: "identifier" },
     ],
+  },
+  medium: {
+    id: "medium",
+    label: "Medium",
+    summary: "Posts to your Medium account. Medium no longer issues new tokens, so this works only with a token you already have.",
+    fields: [{ secretName: "medium_integration_token", label: "Integration token", kind: "secret" }],
+  },
+  youtube: {
+    id: "youtube",
+    label: "YouTube",
+    summary: "Uploads your short vertical videos to your YouTube channel. No video, no upload.",
+    fields: [
+      { secretName: "youtube_client_id", label: "Client ID", kind: "identifier" },
+      { secretName: "youtube_client_secret", label: "Client secret", kind: "secret" },
+      { secretName: "youtube_refresh_token", label: "Refresh token", kind: "secret" },
+    ],
+  },
+  pixelfed: {
+    id: "pixelfed",
+    label: "Pixelfed",
+    summary: "Posts photos to your Pixelfed account.",
+    fields: [
+      { secretName: "pixelfed_instance_url", label: "Server address", kind: "identifier" },
+      { secretName: "pixelfed_access_token", label: "Access token", kind: "secret" },
+    ],
+  },
+  wordpress_com: {
+    id: "wordpress_com",
+    label: "WordPress.com",
+    summary: "Posts a short note with a link back to your article on your WordPress.com site.",
+    fields: [
+      { secretName: "wordpress_com_site", label: "Site address", kind: "identifier" },
+      { secretName: "wordpress_com_access_token", label: "Access token", kind: "secret" },
+    ],
+  },
+  podcast: {
+    id: "podcast",
+    label: "Podcast",
+    summary: "Adds each episode to your podcast feed, which Apple Podcasts and Spotify can read once you submit it.",
+    fields: [
+      { secretName: "podcast_show_title", label: "Show title", kind: "identifier" },
+      { secretName: "podcast_show_author", label: "Show author", kind: "identifier" },
+    ],
+  },
+  vimeo: {
+    id: "vimeo",
+    label: "Vimeo",
+    summary: "Uploads your short vertical videos to your Vimeo account. No video, no upload.",
+    fields: [{ secretName: "vimeo_access_token", label: "Access token", kind: "secret" }],
   },
 };
 

@@ -5,7 +5,7 @@ import { Btn, Loading, Notice } from '../components/ui';
 import { DOOR_IDS, DOORS, doorStatus, type DoorField, type DoorId, type DoorState } from '../../../supabase/functions/_shared/doorRegistry';
 import { DOOR_TEST_MESSAGE, type DoorTestStatus } from '../../../supabase/functions/_shared/doorConnectionTests';
 
-// One simple page: the six free doors, each with its details typed once. Values are saved to Vault by the owner-only
+// One simple page: the twelve auto doors, each with its details typed once. Values are saved to Vault by the owner-only
 // functions the Keys page already uses. Nothing here posts. Buddy only posts once a door is connected and the
 // posting step is built and turned on (later Phase 5 slices).
 

@@ -19,6 +19,13 @@ export const DOOR_TEXT_LIMIT: Readonly<Record<DoorId, number>> = {
   mastodon: 500,
   tumblr: 1000,
   blogger: 1000,
+  // Phase 6 doors. Their send steps are built in later slices, which confirm or change these limits.
+  medium: 1000,
+  youtube: 1000,
+  pixelfed: 500,
+  wordpress_com: 1000,
+  podcast: 1000,
+  vimeo: 1000,
 };
 
 /** Only articles published this recently are posted. Old articles are never sent to a door. */

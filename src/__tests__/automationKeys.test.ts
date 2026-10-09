@@ -24,13 +24,15 @@ function access(overrides: Partial<AdminAccess> = {}): AdminAccess {
 describe('the Keys page does not repeat the free-door details', () => {
   it('removes every door detail and keeps every other key', () => {
     const doorRows = doorSecretNames().map((name) => ({ name }));
-    const others = [{ name: 'gemini_api_key' }, { name: 'youtube_client_id' }, { name: 'whatsapp_access_token' }];
+    // YouTube's names are door details now (Phase 6), so they are not in this list of other keys.
+    const others = [{ name: 'gemini_api_key' }, { name: 'openai_api_key' }, { name: 'whatsapp_access_token' }];
     const kept = keysWithoutDoorDetails([...others, ...doorRows]);
     expect(kept.map((row) => row.name)).toEqual(others.map((row) => row.name));
   });
 
   it('the door list comes from the same registry as Connections, so nothing is missed', () => {
     expect(doorSecretNames()).toEqual(expect.arrayContaining(['telegram_bot_token', 'mastodon_access_token', 'tumblr_blog_name', 'blogger_blog_id']));
+    expect(doorSecretNames()).toEqual(expect.arrayContaining(['youtube_client_id', 'pixelfed_access_token', 'podcast_show_title', 'vimeo_access_token']));
   });
 });
 

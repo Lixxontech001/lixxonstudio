@@ -14,12 +14,17 @@ const CATALOG_FILES = [
   'supabase/migrations/20261005090000_automation_foundation.sql',
   'supabase/migrations/20261005100000_automation_keys_owner_and_catalog.sql',
   'supabase/migrations/20261011090000_door_connections_catalog.sql',
+  'supabase/migrations/20261011130000_door_catalog_twelve.sql',
 ];
 const catalogText = CATALOG_FILES.map((file) => readFileSync(join(process.cwd(), file), 'utf8')).join('\n');
 
-describe('the six free doors', () => {
-  it('are exactly Telegram, Bluesky, Mastodon, Tumblr, Discord and Blogger, in that order', () => {
-    expect([...DOOR_IDS]).toEqual(['telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger']);
+describe('the twelve auto doors', () => {
+  it('are the six from Phase 5 then the six from Phase 6, in that order', () => {
+    expect([...DOOR_IDS]).toEqual([
+      'telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger',
+      'medium', 'youtube', 'pixelfed', 'wordpress_com', 'podcast', 'vimeo',
+    ]);
+    expect(DOOR_IDS).toHaveLength(12);
     expect(Object.keys(DOORS).sort()).toEqual([...DOOR_IDS].sort());
   });
 
@@ -31,7 +36,8 @@ describe('the six free doors', () => {
       }
     }
     expect(DOOR_IDS as readonly string[]).not.toContain('whatsapp');
-    expect(DOOR_IDS as readonly string[]).not.toContain('youtube');
+    // YouTube is an auto door in Phase 6, not a gated channel.
+    expect(DOOR_IDS as readonly string[]).toContain('youtube');
   });
 
   it('every door has at least one field, and every field has a plain label and a kind', () => {
@@ -65,7 +71,7 @@ describe('the six free doors', () => {
     expect(DOORS.bluesky.fields.find((field) => field.secretName === 'bluesky_handle')?.kind).toBe('identifier');
   });
 
-  it('isDoorId only accepts the six, and ignores inherited names', () => {
+  it('isDoorId only accepts the twelve, and ignores inherited names', () => {
     for (const id of DOOR_IDS) expect(isDoorId(id)).toBe(true);
     for (const bad of ['toString', '__proto__', 'constructor', 'instagram', '', 'Telegram', null, 3]) {
       expect(isDoorId(bad), String(bad)).toBe(false);

@@ -20,6 +20,7 @@ const MIGRATIONS = [
   '20261011100000_door_posts.sql',
   '20261011110000_door_posts_open_more.sql',
   '20261011120000_door_posts_open_all.sql',
+  '20261011140000_door_posts_twelve.sql',
 ];
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -284,5 +285,24 @@ describe('who can read and write the door posts', () => {
     expect(columns.sort()).toEqual(
       ['article_url', 'created_at', 'door', 'error_note', 'external_ref', 'id', 'local_day', 'owner_id', 'post_id', 'posted_at', 'status'].sort(),
     );
+  });
+});
+
+describe('the door-post table accepts all twelve auto doors, and no gated channel', () => {
+  it('the table check lists exactly the twelve doors, and every one of them is accepted', async () => {
+    const result = await db.query<{ def: string }>(
+      "select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'minds_door_posts_door_check'",
+    );
+    const def = result.rows[0].def;
+    for (const id of ['telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger', 'medium', 'youtube', 'pixelfed', 'wordpress_com', 'podcast', 'vimeo']) {
+      expect(def, id).toContain(`'${id}'`);
+    }
+    for (const channel of ['instagram', 'tiktok', 'facebook', 'pinterest', 'whatsapp']) {
+      expect(def, channel).not.toContain(channel);
+    }
+  });
+
+  it('the reservation function still accepts only the six open doors until their send steps are built', () => {
+    expect(OPEN_DOORS).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger']);
   });
 });
