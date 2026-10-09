@@ -6,15 +6,27 @@ import { copyProblem } from "./packRules.ts";
 import type { DoorId } from "./doorRegistry.ts";
 
 /** Doors that can post in this build. The others are listed honestly as "not built yet". */
-export const OPEN_DOORS: readonly DoorId[] = ["telegram", "discord"];
+export const OPEN_DOORS: readonly DoorId[] = ["telegram", "discord", "bluesky", "mastodon"];
+
+/**
+ * The most text each open door takes. Bluesky: 300 graphemes (counted here by code points, which is never fewer, so it is safe).
+ * Mastodon: 500 characters by default (a link counts as 23 there; we count the whole link, which is never fewer).
+ */
+export const DOOR_TEXT_LIMIT: Readonly<Record<DoorId, number>> = {
+  telegram: 1000,
+  discord: 1000,
+  bluesky: 300,
+  mastodon: 500,
+  tumblr: 1000,
+  blogger: 1000,
+};
 
 /** Only articles published this recently are posted. Old articles are never sent to a door. */
 export const DOOR_WINDOW_DAYS = 7;
 /** One post per open door per local day. */
 export const DOOR_DAILY_LIMIT = 1;
-/** Plain, well under any door's limit. Titles are clipped to fit. */
-export const DOOR_TEXT_MAX = 1000;
 const TITLE_MAX = 200;
+const PREFIX = "New on the blog: ";
 
 export interface DoorArticle {
   id: string;
@@ -25,7 +37,7 @@ export interface DoorArticle {
 
 export type DoorPick =
   | { ok: true; article: DoorArticle; articleUrl: string; text: string }
-  | { ok: false; reason: "nothing_new" | "copy_not_clean" };
+  | { ok: false; reason: "nothing_new" | "copy_not_clean" | "too_long" };
 
 const SAFE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -39,12 +51,19 @@ export function doorArticleUrl(slug: string, siteOrigin: string | null): string 
   return siteOrigin ? `${siteOrigin.replace(/\/+$/, "")}${path}` : path;
 }
 
-/** The post text: one plain line and the link. Clipped so it stays well under any door's limit. */
-export function doorText(title: string, articleUrl: string): string {
+/**
+ * The post text: one plain line, then the link. The title is clipped so the whole text fits the door's limit.
+ * Returns null when even the link does not fit.
+ */
+export function doorText(title: string, articleUrl: string, limit: number): string | null {
+  const suffix = `\n${articleUrl}`;
+  const room = limit - Array.from(PREFIX + suffix).length;
+  if (room < 1) return null;
   const flat = title.replace(/\s+/g, " ").trim();
-  const clipped = flat.length > TITLE_MAX ? `${flat.slice(0, TITLE_MAX - 1)}…` : flat;
-  const text = `New on the blog: ${clipped}\n${articleUrl}`;
-  return text.length > DOOR_TEXT_MAX ? text.slice(0, DOOR_TEXT_MAX) : text;
+  const chars = Array.from(flat);
+  const max = Math.min(TITLE_MAX, room);
+  const clipped = chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : flat;
+  return `${PREFIX}${clipped}${suffix}`;
 }
 
 /**
@@ -56,6 +75,7 @@ export function pickDoorArticle(input: {
   postedIds: ReadonlySet<string>;
   nowMs: number;
   siteOrigin: string | null;
+  limit: number;
 }): DoorPick {
   const since = input.nowMs - DOOR_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   const fresh = input.articles
@@ -67,7 +87,7 @@ export function pickDoorArticle(input: {
   if (!article || !article.slug) return { ok: false, reason: "nothing_new" };
   if (copyProblem(article.title)) return { ok: false, reason: "copy_not_clean" };
   const articleUrl = doorArticleUrl(article.slug, input.siteOrigin);
-  return { ok: true, article, articleUrl, text: doorText(article.title, articleUrl) };
+  const text = doorText(article.title, articleUrl, input.limit);
+  if (text === null) return { ok: false, reason: "too_long" };
+  return { ok: true, article, articleUrl, text };
 }
-
-export { DOOR_IDS };

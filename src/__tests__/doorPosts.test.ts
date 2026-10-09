@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DOOR_DAILY_LIMIT,
-  DOOR_TEXT_MAX,
+  DOOR_TEXT_LIMIT,
   DOOR_WINDOW_DAYS,
   OPEN_DOORS,
   doorArticleUrl,
@@ -16,6 +16,7 @@ import { PACK_CHANNELS } from '../../supabase/functions/_shared/packRules';
 const NOW = Date.parse('2026-10-10T12:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
 const SITE = 'https://lixxonstudio.example';
+const LIMIT = 1000;
 
 function article(id: string, overrides: Partial<DoorArticle> = {}): DoorArticle {
   return {
@@ -27,11 +28,22 @@ function article(id: string, overrides: Partial<DoorArticle> = {}): DoorArticle 
   };
 }
 
+function pick(articles: DoorArticle[], overrides: Partial<{ postedIds: Set<string>; limit: number }> = {}) {
+  return pickDoorArticle({
+    articles,
+    postedIds: overrides.postedIds ?? new Set(),
+    nowMs: NOW,
+    siteOrigin: SITE,
+    limit: overrides.limit ?? LIMIT,
+  });
+}
+
 describe('the open doors', () => {
-  it('are Telegram and Discord in this slice, and only those', () => {
-    expect([...OPEN_DOORS]).toEqual(['telegram', 'discord']);
-    expect(isOpenDoor('telegram')).toBe(true);
-    expect(isOpenDoor('bluesky')).toBe(false);
+  it('are Telegram, Discord, Bluesky and Mastodon in this slice, and only those', () => {
+    expect([...OPEN_DOORS]).toEqual(['telegram', 'discord', 'bluesky', 'mastodon']);
+    for (const door of OPEN_DOORS) expect(isOpenDoor(door)).toBe(true);
+    expect(isOpenDoor('tumblr')).toBe(false);
+    expect(isOpenDoor('blogger')).toBe(false);
     expect(isOpenDoor('toString')).toBe(false);
   });
 
@@ -40,6 +52,11 @@ describe('the open doors', () => {
       expect(OPEN_DOORS as readonly string[]).not.toContain(channel);
     }
     for (const door of OPEN_DOORS) expect(DOOR_IDS as readonly string[]).toContain(door);
+  });
+
+  it('have the limits the platforms publish: Bluesky 300, Mastodon 500', () => {
+    expect(DOOR_TEXT_LIMIT.bluesky).toBe(300);
+    expect(DOOR_TEXT_LIMIT.mastodon).toBe(500);
   });
 
   it('one post per open door per day, and a seven-day window', () => {
@@ -56,64 +73,81 @@ describe('the article address and the text', () => {
   });
 
   it('the text is one plain line and the link', () => {
-    expect(doorText('Easy routine for dry skin', `${SITE}/blog/easy-routine`)).toBe(
+    expect(doorText('Easy routine for dry skin', `${SITE}/blog/easy-routine`, LIMIT)).toBe(
       `New on the blog: Easy routine for dry skin\n${SITE}/blog/easy-routine`,
     );
   });
 
-  it('a long title is clipped and the whole text stays under the limit', () => {
-    const text = doorText('x'.repeat(5000), `${SITE}/blog/a`);
-    expect(text.length).toBeLessThanOrEqual(DOOR_TEXT_MAX);
-    expect(text).toBe(`New on the blog: ${'x'.repeat(199)}…\n${SITE}/blog/a`);
+  it('a long title is clipped to 200 characters, and the text ends with the link', () => {
+    expect(doorText('x'.repeat(5000), `${SITE}/blog/a`, LIMIT)).toBe(`New on the blog: ${'x'.repeat(199)}…\n${SITE}/blog/a`);
+  });
+
+  it('a short limit clips the title further, so the whole text fits the door', () => {
+    const url = `${SITE}/blog/a-long-enough-slug`;
+    const text = doorText('y'.repeat(400), url, DOOR_TEXT_LIMIT.bluesky);
+    expect(text).not.toBeNull();
+    expect(Array.from(text as string).length).toBeLessThanOrEqual(DOOR_TEXT_LIMIT.bluesky);
+    expect((text as string).endsWith(`\n${url}`)).toBe(true);
+  });
+
+  it('a link that does not fit at all gives null, not a cut link', () => {
+    expect(doorText('Title', `${SITE}/blog/${'z'.repeat(400)}`, DOOR_TEXT_LIMIT.bluesky)).toBeNull();
   });
 
   it('whitespace in the title is flattened', () => {
-    expect(doorText('  Two\n\nlines  ', `${SITE}/blog/a`).split('\n')[0]).toBe('New on the blog: Two lines');
+    expect(doorText('  Two\n\nlines  ', `${SITE}/blog/a`, LIMIT).split('\n')[0]).toBe('New on the blog: Two lines');
   });
 });
 
 describe('which article goes to a door', () => {
   it('picks the newest fresh article the door has not had', () => {
-    const pick = pickDoorArticle({
-      articles: [article('old', { publishedAt: new Date(NOW - 3 * DAY).toISOString() }), article('new', { publishedAt: new Date(NOW - DAY / 2).toISOString() })],
-      postedIds: new Set(),
-      nowMs: NOW,
-      siteOrigin: SITE,
-    });
-    expect(pick.ok).toBe(true);
-    if (pick.ok) {
-      expect(pick.article.id).toBe('new');
-      expect(pick.articleUrl).toBe(`${SITE}/blog/article-new`);
-      expect(pick.text).toContain('New on the blog: Article new');
+    const result = pick([
+      article('old', { publishedAt: new Date(NOW - 3 * DAY).toISOString() }),
+      article('new', { publishedAt: new Date(NOW - DAY / 2).toISOString() }),
+    ]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.article.id).toBe('new');
+      expect(result.articleUrl).toBe(`${SITE}/blog/article-new`);
+      expect(result.text).toContain('New on the blog: Article new');
     }
   });
 
   it('skips an article the door already has, in any status, so a failed post is not retried', () => {
-    const pick = pickDoorArticle({ articles: [article('a')], postedIds: new Set(['a']), nowMs: NOW, siteOrigin: SITE });
-    expect(pick).toEqual({ ok: false, reason: 'nothing_new' });
+    expect(pick([article('a')], { postedIds: new Set(['a']) })).toEqual({ ok: false, reason: 'nothing_new' });
   });
 
   it('never sends an article older than the window', () => {
     const old = article('old', { publishedAt: new Date(NOW - (DOOR_WINDOW_DAYS + 1) * DAY).toISOString() });
-    expect(pickDoorArticle({ articles: [old], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE })).toEqual({ ok: false, reason: 'nothing_new' });
+    expect(pick([old])).toEqual({ ok: false, reason: 'nothing_new' });
   });
 
   it('never sends an article dated in the future, or with no date', () => {
     const future = article('f', { publishedAt: new Date(NOW + DAY).toISOString() });
     const undated = article('u', { publishedAt: null });
-    expect(pickDoorArticle({ articles: [future, undated], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE })).toEqual({ ok: false, reason: 'nothing_new' });
+    expect(pick([future, undated])).toEqual({ ok: false, reason: 'nothing_new' });
   });
 
   it('skips an article without a clean slug', () => {
     for (const slug of [null, '', 'Bad Slug', '../escape', 'a--b', 'x/y']) {
-      expect(pickDoorArticle({ articles: [article('s', { slug })], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE }), String(slug)).toEqual({ ok: false, reason: 'nothing_new' });
+      expect(pick([article('s', { slug })]), String(slug)).toEqual({ ok: false, reason: 'nothing_new' });
     }
   });
 
   it('a title with a dash, a country name or non-US money is refused with a plain reason', () => {
     for (const title of ['Routine — easy', 'Made in Nigeria', 'Costs £5', 'Lagos skin guide', 'From NGN 5000']) {
-      const pick = pickDoorArticle({ articles: [article('t', { title })], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE });
-      expect(pick, title).toEqual({ ok: false, reason: 'copy_not_clean' });
+      expect(pick([article('t', { title })]), title).toEqual({ ok: false, reason: 'copy_not_clean' });
     }
+  });
+
+  it('a door whose limit cannot hold the link says so, and nothing is cut', () => {
+    const result = pickDoorArticle({
+      articles: [article('long', { slug: 'a'.repeat(60) })],
+      postedIds: new Set(),
+      nowMs: NOW,
+      siteOrigin: SITE,
+      limit: 60,
+    });
+    expect(result).toEqual({ ok: false, reason: 'too_long' });
   });
 });

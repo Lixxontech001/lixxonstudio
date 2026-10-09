@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { OPEN_DOORS } from '../../supabase/functions/_shared/doorPosts';
 
 const MIGRATIONS = [
   '20261009140000_minds_controls.sql',
@@ -17,6 +18,7 @@ const MIGRATIONS = [
   '20261009220000_minds_gap_notes.sql',
   '20261009230000_minds_apply_placement.sql',
   '20261011100000_door_posts.sql',
+  '20261011110000_door_posts_open_more.sql',
 ];
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -150,7 +152,26 @@ describe('reserving a post is refused when Takeover is off or Kill stops the run
 
 describe('a post is reserved once, per door, per local day', () => {
   it('a door that is not open is refused', async () => {
-    expect(await attempt(reserve('bluesky', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
+    expect(await attempt(reserve('tumblr', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
+    expect(await attempt(reserve('blogger', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
+    expect(await attempt(reserve('instagram', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
+  });
+
+  it('the four open doors are accepted: Telegram, Discord, Bluesky and Mastodon', async () => {
+    for (const [index, door] of ['telegram', 'discord', 'bluesky', 'mastodon'].entries()) {
+      const postId = [POST_A, POST_B, POST_C][index % 3];
+      expect(await attempt(reserve(door, postId, '2026-10-10')), door).toBeNull();
+    }
+    const rows = await asServer<{ door: string }>('select door from public.minds_door_posts order by door');
+    expect(rows.map((row) => row.door)).toEqual(['bluesky', 'discord', 'mastodon', 'telegram']);
+  });
+
+  it('the list of open doors in the database is the same as OPEN_DOORS in the code', () => {
+    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261011110000_door_posts_open_more.sql'), 'utf8');
+    const match = /p_door NOT IN \(([^)]*)\)/.exec(sql);
+    expect(match).not.toBeNull();
+    const listed = (match?.[1] ?? '').split(',').map((item) => item.trim().replace(/'/g, ''));
+    expect([...listed].sort()).toEqual([...OPEN_DOORS].sort());
   });
 
   it('the first reservation is a queued row', async () => {

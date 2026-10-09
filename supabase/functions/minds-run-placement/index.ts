@@ -15,7 +15,7 @@ import { checkArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
 import { runDoors, type DoorRunResult } from "../_shared/runDoors.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
-import { sendDiscord, sendTelegram } from "../_shared/doorAdapters.ts";
+import { sendBluesky, sendDiscord, sendMastodon, sendTelegram } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
   type ApplyEdit,
@@ -289,10 +289,16 @@ async function runDoorsForDay(
         if (error) return { ok: false, reason: reasonFrom(error.message) };
         return typeof data === "string" ? { ok: true, id: data } : { ok: false, reason: "failed" };
       },
-      send: async (door, values, text) =>
-        door === "telegram"
-          ? sendTelegram({ token: values.telegram_bot_token ?? "", chatId: values.telegram_chat_id ?? "" }, text, fetch)
-          : sendDiscord(values.discord_webhook_url ?? "", text, fetch),
+      send: async (door, values, text, key) => {
+        if (door === "telegram") {
+          return sendTelegram({ token: values.telegram_bot_token ?? "", chatId: values.telegram_chat_id ?? "" }, text, fetch);
+        }
+        if (door === "discord") return sendDiscord(values.discord_webhook_url ?? "", text, fetch);
+        if (door === "bluesky") {
+          return sendBluesky({ handle: values.bluesky_handle ?? "", appPassword: values.bluesky_app_password ?? "" }, text, fetch);
+        }
+        return sendMastodon({ instanceUrl: values.mastodon_instance_url ?? "", accessToken: values.mastodon_access_token ?? "" }, text, key, fetch);
+      },
       finish: async (id, status, externalRef, errorNote) => {
         const { error } = await sb.rpc("minds_finish_door_post", {
           p_id: id,

@@ -174,7 +174,7 @@ Server side:
 - The page is `/admin/ai/connections` (`src/admin/pages/AdminConnections.tsx`). It is reached by a plain "Connections" link on the Minds page. It is not a tab. Only the owner can see it (`automation.keys`).
 - The four gated channels are not doors. The page says they stay manual.
 - Tests: `doorRegistry.test.ts` (six doors, no gated channel, every field is a real catalogue name, status rules, inherited names rejected), `doorConnectionsCatalogDb.test.ts` (migration in PGlite: rows present, once each, kinds match, safe to repeat, no table, no function, no Vault call), `adminConnections.test.tsx` (the page in jsdom: states, no value shown back, trimmed save, empty and failed saves, remove asks first, only the three owner functions), `connectionsRoute.test.ts` (route, permission, no tab, Minds link).
-- Not yet: the posting steps for Bluesky, Mastodon, Tumblr and Blogger, and the connection test buttons. Telegram and Discord post from slice 3 (below).
+- Not yet: the posting steps for Tumblr and Blogger, and the connection test buttons. Telegram and Discord post from slice 3, Bluesky and Mastodon from slice 4 (below).
 
 ## Phase 5 slice 3: the day run posts to Telegram and Discord
 
@@ -189,3 +189,16 @@ Server side:
 - The day run's reply names what happened for each door, in plain words. Briefing "What went out" does not list door posts yet. That is a later slice.
 - Tests: `doorPosts.test.ts` (open doors, the window, the picks, the text, copy refusals), `doorAdapters.test.ts` (request shape, refusals, timeouts, no secret in any reason), `runDoors.test.ts` (gates, connected checks, caps, failures, no secret in details or logs), `doorPostsDb.test.ts` (PGlite: reservation refusals, one per door per day, finish rules, owner-only read, service-role-only functions), `doorWiring.test.ts` (the day run calls the step in order, behind the gate, and the step never writes articles).
 - Not tested live: no real Telegram or Discord message was sent. This sandbox cannot reach those services, and no token or webhook was used. The Edge function is parse-checked only (no Deno here). Nothing is deployed.
+
+## Phase 5 slice 4: the day run posts to Bluesky and Mastodon
+
+- Open doors are now Telegram, Discord, Bluesky and Mastodon (`OPEN_DOORS` in `supabase/functions/_shared/doorPosts.ts`). Tumblr and Blogger are not open yet. The four gated apps stay manual and are never posted to.
+- Per-door text limits: Telegram 1000, Discord 1000, Bluesky 300 characters (counted by code points), Mastodon 500. The title is clipped to fit, and the link is always kept whole. If the link alone does not fit, the article is skipped with "the article link is too long for this door." Nothing is cut in the middle of a link.
+- Bluesky (`sendBluesky`): sign in at `bsky.social` with the handle and an app password, then write one `app.bsky.feed.post` record. The link at the end of the text gets a link facet, so it is clickable. Other Bluesky hosts are not supported. A handle in the wrong form is refused before any request.
+- Mastodon (`sendMastodon`): one status to `/api/v1/statuses` with the access token. The reserved row id is sent as the `Idempotency-Key`, so a repeat of the same post is not made twice. The server address must be https with no path, query, or user name.
+- The send function now receives the reserved row id as its key for every door. Doors that do not use it ignore it.
+- Not-connected doors are listed on one line: "Not connected yet: Telegram, Bluesky, Mastodon." Other messages are unchanged.
+- Migration `20261011110000_door_posts_open_more.sql` (not applied) replaces `minds_reserve_door_post` so that it accepts Bluesky and Mastodon. Nothing else in the table or the rules changes. A test checks that the SQL list of open doors matches `OPEN_DOORS` in the code.
+- Tests: `doorAdaptersBlueskyMastodon.test.ts` (sign-in and post steps, facets counted in bytes, handle and server checks, refusals with no password or token in any reason), and updates to `doorPosts.test.ts`, `runDoors.test.ts` (all four doors in order, each with its row id as the key, Bluesky length limit, Bluesky link-too-long skip), `doorPostsDb.test.ts` (the four doors accepted, the refused doors, SQL list equals `OPEN_DOORS`), and `doorWiring.test.ts` (four senders, Mastodon key).
+- Not tested live: no Bluesky or Mastodon post was sent. This sandbox cannot reach those services, and no account or token was used. The Edge function is parse-checked only (no Deno here). Nothing is deployed.
+- Known risk: a `finish` error can leave a row "queued", which blocks that door for the rest of that day. This is not fixed in this slice.

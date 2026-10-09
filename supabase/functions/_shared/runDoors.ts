@@ -1,10 +1,10 @@
 // The day run's door step: post the newest fresh article to each open free door that is fully connected.
 // Order per door: check connected, check today's cap, pick the article, reserve the post (the database refuses when
-// Takeover is off or Kill stops the run), send, then record the result. Pure logic. Doors come in through `ports`.
+// Takeover is off or Kill stops the minds), send, then record the result. Pure logic. Doors come in through `ports`.
 // Secret values are read only to send. They are never put in a detail, a log line, or a reply.
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
-import { DOOR_DAILY_LIMIT, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
+import { DOOR_DAILY_LIMIT, DOOR_TEXT_LIMIT, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
 import type { DoorSendResult } from "./doorAdapters.ts";
 import { blockedDetail, KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from "./runDay.ts";
 import type { KillScope } from "./placementRun.ts";
@@ -27,7 +27,8 @@ export interface DoorRunPorts {
   countToday: (door: DoorId, localDay: string) => Promise<number>;
   readSecret: (name: string) => Promise<string | null>;
   reserve: (door: DoorId, articleId: string, localDay: string, articleUrl: string) => Promise<ReserveResult>;
-  send: (door: DoorId, values: Record<string, string>, text: string) => Promise<DoorSendResult>;
+  /** `key` is the reserved row's id. It is sent as the door's idempotency key where the door supports one. */
+  send: (door: DoorId, values: Record<string, string>, text: string, key: string) => Promise<DoorSendResult>;
   finish: (id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null) => Promise<void>;
   log: (entry: { door: DoorId; outcome: "done" | "failed"; detail: string }) => Promise<void>;
 }
@@ -75,7 +76,7 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
     }
     const status = doorStatus(door, new Set(Object.keys(values)));
     if (status.state !== "connected") {
-      outcomes.push({ door, outcome: "not_connected", detail: `${label} is not connected yet.` });
+      outcomes.push({ door, outcome: "not_connected", detail: label });
       continue;
     }
 
@@ -85,11 +86,19 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
     }
 
     articles ??= await ports.readArticles();
-    const pick = pickDoorArticle({ articles, postedIds: await ports.readPostedIds(door), nowMs: input.nowMs, siteOrigin: input.siteOrigin });
+    const pick = pickDoorArticle({
+      articles,
+      postedIds: await ports.readPostedIds(door),
+      nowMs: input.nowMs,
+      siteOrigin: input.siteOrigin,
+      limit: DOOR_TEXT_LIMIT[door],
+    });
     if (!pick.ok) {
       const detail = pick.reason === "copy_not_clean"
         ? `${label}: the newest article title has text that cannot be posted.`
-        : `${label}: no new article to post yet.`;
+        : pick.reason === "too_long"
+          ? `${label}: the article link is too long for this door.`
+          : `${label}: no new article to post yet.`;
       outcomes.push({ door, outcome: "skipped", detail });
       continue;
     }
@@ -106,7 +115,7 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
       continue;
     }
 
-    const sent = await ports.send(door, values, pick.text);
+    const sent = await ports.send(door, values, pick.text, reserved.id);
     if (sent.ok) {
       await ports.finish(reserved.id, "posted", sent.externalRef, null);
       const detail = `Posted to ${label}: "${pick.article.title}".`;
@@ -121,8 +130,11 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
   }
 
   const posted = outcomes.filter((item) => item.outcome === "posted").length;
-  if (outcomes.every((item) => item.outcome === "not_connected")) {
+  const notConnected = outcomes.filter((item) => item.outcome === "not_connected").map((item) => item.detail);
+  if (notConnected.length === OPEN_DOORS.length) {
     return { status: "nothing_to_do", detail: DOORS_NOTHING_CONNECTED_DETAIL, posted, outcomes };
   }
-  return { status: "done", detail: clip(outcomes.map((item) => item.detail).join(" ")), posted, outcomes };
+  const lines = outcomes.filter((item) => item.outcome !== "not_connected").map((item) => item.detail);
+  if (notConnected.length > 0) lines.push(`Not connected yet: ${notConnected.join(", ")}.`);
+  return { status: "done", detail: clip(lines.join(" ")), posted, outcomes };
 }

@@ -23,9 +23,18 @@ const ALL_SECRETS: Record<string, string> = {
   discord_webhook_url: HOOK,
 };
 
+const FOUR_DOOR_SECRETS: Record<string, string> = {
+  ...ALL_SECRETS,
+  bluesky_handle: 'lixxon.bsky.social',
+  bluesky_app_password: 'APP-PASS-SECRET',
+  mastodon_instance_url: 'https://mastodon.example',
+  mastodon_access_token: 'MASTO-TOKEN-SECRET',
+};
+
 interface Harness {
   ports: DoorRunPorts;
   sent: Array<{ door: string; text: string }>;
+  keys: Array<{ door: string; key: string }>;
   reserved: string[];
   finished: Array<{ id: string; status: string; externalRef: string | null; errorNote: string | null }>;
   logs: Array<{ door: string; outcome: string; detail: string }>;
@@ -41,6 +50,7 @@ function harness(options: {
 } = {}): Harness {
   const secrets = options.secrets ?? ALL_SECRETS;
   const sent: Harness['sent'] = [];
+  const keys: Harness['keys'] = [];
   const reserved: string[] = [];
   const finished: Harness['finished'] = [];
   const logs: Harness['logs'] = [];
@@ -53,8 +63,9 @@ function harness(options: {
       reserved.push(`${door}:${articleId}`);
       return options.reserve ? options.reserve(door) : { ok: true, id: `row-${door}` };
     },
-    send: async (door, _values, text) => {
+    send: async (door, _values, text, key) => {
       sent.push({ door, text });
+      keys.push({ door, key });
       return options.send ? options.send(door) : { ok: true, externalRef: `ref-${door}` };
     },
     finish: async (id, status, externalRef, errorNote) => {
@@ -64,7 +75,7 @@ function harness(options: {
       logs.push(entry);
     },
   };
-  return { ports, sent, reserved, finished, logs };
+  return { ports, sent, keys, reserved, finished, logs };
 }
 
 const DAY_INPUT = { localDay: '2026-10-10', takeover: true, killScope: 'none' as const, nowMs: NOW, siteOrigin: SITE };
@@ -122,14 +133,52 @@ describe('a door posts only when it is fully connected', () => {
     expect(h.sent).toEqual([{ door: 'discord', text: `New on the blog: Easy routine for dry skin\n${SITE}/blog/easy-routine-dry-skin` }]);
     expect(h.finished).toEqual([{ id: 'row-discord', status: 'posted', externalRef: 'ref-discord', errorNote: null }]);
     expect(h.logs).toEqual([{ door: 'discord', outcome: 'done', detail: 'Posted to Discord: "Easy routine for dry skin".' }]);
-    expect(result.detail).toBe('Telegram is not connected yet. Posted to Discord: "Easy routine for dry skin".');
+    expect(result.detail).toBe('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon.');
   });
 
-  it('both open doors can post on the same day, one article each', async () => {
+  it('both connected doors can post on the same day, one article each', async () => {
     const h = harness();
     const result = await runDoors(DAY_INPUT, h.ports);
     expect(result.posted).toBe(2);
     expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord']);
+    expect(result.detail).toContain('Not connected yet: Bluesky, Mastodon.');
+  });
+
+  it('all four open doors can post, in order, each with its own reserved row as the key', async () => {
+    const h = harness({ secrets: FOUR_DOOR_SECRETS });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.status).toBe('done');
+    expect(result.posted).toBe(4);
+    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord', 'bluesky', 'mastodon']);
+    expect(h.keys).toEqual([
+      { door: 'telegram', key: 'row-telegram' },
+      { door: 'discord', key: 'row-discord' },
+      { door: 'bluesky', key: 'row-bluesky' },
+      { door: 'mastodon', key: 'row-mastodon' },
+    ]);
+    expect(result.detail).not.toContain('Not connected yet');
+  });
+
+  it('a Bluesky post stays within its 300-character limit, even with a long title', async () => {
+    const h = harness({
+      secrets: { bluesky_handle: 'lixxon.bsky.social', bluesky_app_password: 'APP-PASS-SECRET' },
+      articles: [{ ...ARTICLE, title: 'A very long title '.repeat(40).trim() }],
+    });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.posted).toBe(1);
+    const text = h.sent.find((item) => item.door === 'bluesky')?.text ?? '';
+    expect(Array.from(text).length).toBeLessThanOrEqual(300);
+    expect(text.endsWith(`\n${SITE}/blog/easy-routine-dry-skin`)).toBe(true);
+  });
+
+  it('a Bluesky article whose link cannot fit is skipped with a plain reason, and nothing is sent', async () => {
+    const h = harness({
+      secrets: { bluesky_handle: 'lixxon.bsky.social', bluesky_app_password: 'APP-PASS-SECRET' },
+      articles: [{ ...ARTICLE, slug: 'a'.repeat(290) }],
+    });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(h.sent).toHaveLength(0);
+    expect(result.outcomes.find((item) => item.door === 'bluesky')?.detail).toBe('Bluesky: the article link is too long for this door.');
   });
 });
 
