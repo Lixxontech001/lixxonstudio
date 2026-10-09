@@ -41,6 +41,8 @@ Server side:
 ## What is not here
 
 - The old typed-command screen (typed commands, draft list) was removed in Phase 2, slice 1. Its sign-in gate now lives in `BuddyAccessGate.tsx`.
+- Phase 2 slice 3 adds the records the minds will use. All four migrations are additive and not applied: `20261009150000_buddy_orders.sql` (the owner's orders: waiting, done, blocked), `20261009160000_minds_daily_log.sql` (every mind action; the browser can read it but never write it), `20261009170000_minds_notable_events.sql` (things worth attention, with a trigger that records Takeover and Kill changes), and `20261009180000_buddy_night_report_writer.sql` (one night report per owner per day).
+- `supabase/functions/_shared/mindsNightReport.ts` builds the night report from the day's log, orders and events, and saves it to Reports. A night with no action says so plainly. A failed read writes nothing. Nothing calls it yet: there is no schedule.
 - The old Admin AI screen (22 tabs) is still in `src/admin/pages/AdminAI.tsx`, but nothing routes to it any more. The owner's screen at `/admin/ai` is the Minds watch in `src/admin/pages/AdminMinds.tsx`.
 - `minds/mindRoster.ts` lists the five minds and the Kill options. `minds/mindsControlsStore.ts` saves the Takeover and Kill settings to the one-row `minds_controls` table (migration `20261009140000_minds_controls.sql`, not applied). Takeover is off by default, and nothing reads these settings yet.
 - Buddy cannot change the site. It only reads published article titles and active shop products, and never article bodies (see `supabase/functions/_shared/buddySiteFacts.ts`).
