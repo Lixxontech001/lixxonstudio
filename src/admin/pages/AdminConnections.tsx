@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { Btn, Loading, Notice } from '../components/ui';
 import { DOOR_IDS, DOORS, doorStatus, type DoorField, type DoorId, type DoorState } from '../../../supabase/functions/_shared/doorRegistry';
+import { DOOR_TEST_MESSAGE, type DoorTestStatus } from '../../../supabase/functions/_shared/doorConnectionTests';
 
 // One simple page: the six free doors, each with its details typed once. Values are saved to Vault by the owner-only
 // functions the Keys page already uses. Nothing here posts. Buddy only posts once a door is connected and the
@@ -16,6 +17,8 @@ export const CONNECTIONS_SAVE_FAILED = 'Could not save. Nothing changed. Try aga
 export const CONNECTIONS_REMOVE_FAILED = 'Could not remove it. Nothing changed. Try again.';
 export const CONNECTIONS_EMPTY_VALUE = 'Type a value first.';
 export const CONNECTIONS_REMOVE_CONFIRM = 'Remove this saved value? Buddy cannot post there until you add it again.';
+export const CONNECTIONS_TEST_FAILED = 'The test could not run. Nothing was posted. Try again.';
+export const CONNECTIONS_TEST_NOTE = 'Test connection checks the saved details with the door. It never posts.';
 
 const STATE_LABEL: Record<DoorState, string> = {
   connected: 'Connected',
@@ -56,6 +59,8 @@ export default function AdminConnections() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<Message>(null);
+  const [testing, setTesting] = useState<DoorId | null>(null);
+  const [testResults, setTestResults] = useState<Partial<Record<DoorId, DoorTestStatus>>>({});
 
   const load = async () => {
     const { data, error } = await supabase.rpc('automation_list_secrets');
@@ -99,6 +104,20 @@ export default function AdminConnections() {
     await load();
   };
 
+  const runTest = async (id: DoorId) => {
+    setTesting(id);
+    setTestResults((current) => ({ ...current, [id]: undefined }));
+    const { data, error } = await supabase.functions.invoke('door-connection-test', { body: { door: id } });
+    setTesting(null);
+    const status = (data as { status?: unknown } | null)?.status;
+    if (error || typeof status !== 'string' || !Object.prototype.hasOwnProperty.call(DOOR_TEST_MESSAGE, status)) {
+      setTestResults((current) => ({ ...current, [id]: 'unavailable' }));
+      setMessage({ tone: 'error', text: CONNECTIONS_TEST_FAILED });
+      return;
+    }
+    setTestResults((current) => ({ ...current, [id]: status as DoorTestStatus }));
+  };
+
   const remove = async (field: DoorField) => {
     if (!window.confirm(CONNECTIONS_REMOVE_CONFIRM)) return;
     setBusy(field.secretName);
@@ -137,6 +156,22 @@ export default function AdminConnections() {
               <span className="text-sm text-charcoal-muted">{stateLabel(status.state)}</span>
             </div>
             <p className="mt-1 text-sm text-charcoal-muted">{door.summary}</p>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Btn
+                onClick={() => runTest(id)}
+                busy={testing === id}
+                disabled={status.state !== 'connected' || (testing !== null && testing !== id)}
+              >
+                Test connection
+              </Btn>
+              {status.state !== 'connected' && (
+                <span className="text-xs text-charcoal-muted">{DOOR_TEST_MESSAGE.not_connected}</span>
+              )}
+              {testResults[id] && (
+                <span role="status" className="text-sm text-charcoal">{DOOR_TEST_MESSAGE[testResults[id]!]}</span>
+              )}
+            </div>
 
             <ul className="mt-3 space-y-3">
               {door.fields.map((field) => {
@@ -177,7 +212,7 @@ export default function AdminConnections() {
       })}
 
       {read.status === 'ready' && (
-        <p className="text-xs text-charcoal-muted">Connected means every field is saved. It does not mean a test post went out.</p>
+        <p className="text-xs text-charcoal-muted">Connected means every field is saved. {CONNECTIONS_TEST_NOTE}</p>
       )}
     </div>
   );

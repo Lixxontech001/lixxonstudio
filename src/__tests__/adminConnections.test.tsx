@@ -5,14 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DOOR_IDS, DOORS } from '../../supabase/functions/_shared/doorRegistry';
 
 type Result = { data: unknown; error: unknown };
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), can: vi.fn(() => true) }));
-vi.mock('../lib/supabaseClient', () => ({ supabase: { rpc: mocks.rpc } }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), can: vi.fn(() => true), invoke: vi.fn() }));
+vi.mock('../lib/supabaseClient', () => ({ supabase: { rpc: mocks.rpc, functions: { invoke: mocks.invoke } } }));
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ can: mocks.can }) }));
 
 import AdminConnections, {
   CONNECTIONS_EMPTY_VALUE,
   CONNECTIONS_READ_FAILED,
   CONNECTIONS_SAVE_FAILED,
+  CONNECTIONS_TEST_FAILED,
   fieldStatus,
   savedNamesFrom,
   stateLabel,
@@ -101,6 +102,8 @@ beforeEach(() => {
   mocks.can.mockReturnValue(true);
   mocks.rpc.mockReset();
   mocks.rpc.mockImplementation(async (name: string, args?: Record<string, unknown>) => answer(name, args));
+  mocks.invoke.mockReset();
+  mocks.invoke.mockResolvedValue({ data: { door: 'telegram', status: 'connected', message: 'x' }, error: null });
 });
 
 afterEach(() => {
@@ -253,5 +256,79 @@ describe('the small helpers', () => {
     expect(stateLabel('not_connected')).toBe('Not connected');
     expect(fieldStatus(true)).toBe('Saved');
     expect(fieldStatus(false)).toBe('Not saved yet');
+  });
+});
+
+function doorCard(id: string): HTMLElement {
+  const card = host.querySelector<HTMLElement>(`section[aria-labelledby="door-${id}"]`);
+  if (!card) throw new Error(`no card for ${id}`);
+  return card;
+}
+
+function testButtonFor(id: string): HTMLButtonElement {
+  const button = [...doorCard(id).querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === 'Test connection');
+  if (!button) throw new Error(`no Test connection for ${id}`);
+  return button as HTMLButtonElement;
+}
+
+const TELEGRAM_SAVED = [
+  { name: 'telegram_bot_token', configured: true },
+  { name: 'telegram_chat_id', configured: true },
+];
+
+describe('testing a door connection', () => {
+  it('the Test button is disabled until every field of the door is saved', async () => {
+    listRows = [{ name: 'telegram_bot_token', configured: true }];
+    await render();
+    expect(testButtonFor('telegram').disabled).toBe(true);
+    expect(doorCard('telegram').textContent).toContain('Save every field for this door first.');
+  });
+
+  it('with every field saved: sends only the door id, then shows the one fixed line', async () => {
+    listRows = TELEGRAM_SAVED;
+    mocks.invoke.mockResolvedValue({ data: { door: 'telegram', status: 'connected', message: 'SERVER TEXT' }, error: null });
+    await render();
+    expect(testButtonFor('telegram').disabled).toBe(false);
+    await click(testButtonFor('telegram'));
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.invoke).toHaveBeenCalledWith('door-connection-test', { body: { door: 'telegram' } });
+    expect(doorCard('telegram').querySelector('[role="status"]')?.textContent).toBe('Connected. The door answered. Nothing was posted.');
+    expect(text()).not.toContain('SERVER TEXT');
+  });
+
+  it('an invalid answer shows the plain refusal', async () => {
+    listRows = TELEGRAM_SAVED;
+    mocks.invoke.mockResolvedValue({ data: { door: 'telegram', status: 'invalid', message: 'x' }, error: null });
+    await render();
+    await click(testButtonFor('telegram'));
+    expect(doorCard('telegram').querySelector('[role="status"]')?.textContent).toBe('The door did not accept these details.');
+  });
+
+  it('a failed call shows the test-failed line, and nothing is shown as a result', async () => {
+    listRows = TELEGRAM_SAVED;
+    mocks.invoke.mockResolvedValue({ data: null, error: { message: 'boom' } });
+    await render();
+    await click(testButtonFor('telegram'));
+    expect(text()).toContain(CONNECTIONS_TEST_FAILED);
+    expect(doorCard('telegram').querySelector('[role="status"]')?.textContent).toBe('The door did not answer. Try later.');
+  });
+
+  it('an unknown status from the server is never shown as text', async () => {
+    listRows = TELEGRAM_SAVED;
+    mocks.invoke.mockResolvedValue({ data: { status: 'toString' }, error: null });
+    await render();
+    await click(testButtonFor('telegram'));
+    expect(text()).toContain(CONNECTIONS_TEST_FAILED);
+    expect(text()).not.toContain('[object Function]');
+  });
+
+  it('the test never reads a saved value into the page, and never saves or removes one', async () => {
+    listRows = TELEGRAM_SAVED;
+    await render();
+    await click(testButtonFor('telegram'));
+    const names = new Set(mocks.rpc.mock.calls.map(([name]) => name));
+    expect(names.has('automation_secret_get_internal')).toBe(false);
+    expect(names.has('automation_secret_save')).toBe(false);
+    expect(names.has('automation_secret_delete')).toBe(false);
   });
 });

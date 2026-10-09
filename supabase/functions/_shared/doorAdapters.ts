@@ -28,9 +28,22 @@ const TELEGRAM_HOST = "api.telegram.org";
 const DISCORD_HOSTS = new Set(["discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com"]);
 const BLUESKY_HOST = "https://bsky.social";
 const BLUESKY_HANDLE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+const TUMBLR_BLOG_NAME = /^[a-z0-9-]{1,32}$/;
+
+/** The handle as Bluesky takes it (no leading @, lower case), or null when it is not in the right form. */
+export function normalizeBlueskyHandle(value: string): string | null {
+  const handle = value.replace(/^@/, "").toLowerCase();
+  return handle.length <= 253 && BLUESKY_HANDLE.test(handle) ? handle : null;
+}
+
+/** The Tumblr blog name without .tumblr.com, in lower case, or null when it is not in the right form. */
+export function tumblrBlogName(value: string): string | null {
+  const blog = value.trim().toLowerCase().replace(/\.tumblr\.com$/, "");
+  return TUMBLR_BLOG_NAME.test(blog) ? blog : null;
+}
 
 /** Runs one request with a time limit. Maps network and timeout failures to plain reasons. */
-async function withTimeout(fetchImpl: FetchLike, url: string, init: RequestInit): Promise<Response | { failed: string }> {
+export async function withTimeout(fetchImpl: FetchLike, url: string, init: RequestInit): Promise<Response | { failed: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DOOR_TIMEOUT_MS);
   try {
@@ -43,7 +56,7 @@ async function withTimeout(fetchImpl: FetchLike, url: string, init: RequestInit)
   }
 }
 
-async function readJson(response: Response): Promise<unknown> {
+export async function readJson(response: Response): Promise<unknown> {
   try {
     return await response.json();
   } catch {
@@ -122,8 +135,8 @@ export function blueskyLinkFacets(text: string): Array<Record<string, unknown>> 
 /** Bluesky: sign in with the handle and an app password, then write one post record. Returns the post address. */
 export async function sendBluesky(values: BlueskyValues, text: string, fetchImpl: FetchLike): Promise<DoorSendResult> {
   if (!values.handle || !values.appPassword) return { ok: false, reason: "Bluesky is not connected yet." };
-  const handle = values.handle.replace(/^@/, "").toLowerCase();
-  if (handle.length > 253 || !BLUESKY_HANDLE.test(handle)) return { ok: false, reason: "The Bluesky handle is not in the right form." };
+  const handle = normalizeBlueskyHandle(values.handle);
+  if (!handle) return { ok: false, reason: "The Bluesky handle is not in the right form." };
 
   const session = await withTimeout(fetchImpl, `${BLUESKY_HOST}/xrpc/com.atproto.server.createSession`, {
     method: "POST",
@@ -211,7 +224,6 @@ export interface BloggerValues {
 }
 
 const TUMBLR_HOST = "https://api.tumblr.com";
-const TUMBLR_BLOG_NAME = /^[a-z0-9-]{1,32}$/;
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const BLOGGER_HOST = "https://www.googleapis.com/blogger/v3";
 const BLOGGER_BLOG_ID = /^\d{1,30}$/;
@@ -283,8 +295,8 @@ export async function sendTumblr(values: TumblrValues, text: string, fetchImpl: 
   if (!values.consumerKey || !values.consumerSecret || !values.accessToken || !values.tokenSecret || !values.blogName) {
     return { ok: false, reason: "Tumblr is not connected yet." };
   }
-  const blog = values.blogName.trim().toLowerCase().replace(/\.tumblr\.com$/, "");
-  if (!TUMBLR_BLOG_NAME.test(blog)) return { ok: false, reason: "The Tumblr blog name is not in the right form." };
+  const blog = tumblrBlogName(values.blogName);
+  if (!blog) return { ok: false, reason: "The Tumblr blog name is not in the right form." };
   const parts = splitLinkText(text);
   if (!parts) return { ok: false, reason: "The article link is not in the right form." };
 

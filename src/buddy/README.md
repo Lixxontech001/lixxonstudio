@@ -213,3 +213,32 @@ Server side:
 - Tests: `doorAdaptersTumblrBlogger.test.ts` (the OAuth encoding and the published signature example, Tumblr request shape and refusals, the text split, Blogger token exchange, escaping, refusals, no secret in any reason). Updated: `doorPosts.test.ts`, `runDoors.test.ts` (all six doors in order, each with its row id as the key), `doorPostsDb.test.ts` (six doors accepted, other doors refused, SQL list equals `OPEN_DOORS`), `doorWiring.test.ts` (six senders).
 - Not tested live: no Tumblr or Blogger post was sent, and no keys or tokens were used. This sandbox cannot reach those services. The Edge function is parse-checked only (no Deno here). Nothing is deployed.
 - Known risk, as before: a `finish` error can leave a row "queued", which blocks that door for the rest of that day.
+
+## Phase 5 slice 6: connection test buttons and the Phase 5 close-out
+
+- Each door card on Connections has a "Test connection" button. It is enabled only when every field of that door is saved. It shows one plain line. The line comes from a fixed list of five words, never from the provider's reply.
+- The test is read-only. Telegram reads the chat (`getChat`). Discord reads the webhook's own address without its query. Mastodon checks the account (`verify_credentials`). Tumblr reads the blog info (OAuth-signed GET). Blogger exchanges the refresh token and reads the blog record. Bluesky signs in only. Nothing is posted, and `minds_*` write functions are never called. A test in `doorConnectionTests.test.ts` records every request for all six doors and proves that no posting address is reached.
+- The check runs in a new owner-only function, `door-connection-test`. It reads the saved values on the server through the internal Vault read. The browser sends only the door id. The function replies with the door, one status word and the fixed line. It never logs. It clears the values after each check. It is limited to 6 tests per owner per 10 minutes, with its own action name.
+- Status words: connected (the door answered; nothing was posted), invalid (the door did not accept these details), not_connected (save every field first), rate_limited, unavailable.
+- Shared helpers now exported from `doorAdapters.ts`: `normalizeBlueskyHandle` and `tumblrBlogName` (used by both the senders and the test), `oauthAuthorization` (OAuth 1.0a), `withTimeout`, `readJson`.
+- Tests: `doorConnectionTests.test.ts` (17), `doorConnectionWiring.test.ts` (the function is owner-only, reads only through Vault, accepts only a door id, is rate limited, posts nothing, logs nothing, and replies with the fixed shape), and `adminConnections.test.tsx` (the button is disabled until saved, sends only the door id, shows only the fixed line, never shows an unknown status).
+- Not tested live: no test was run against a real Telegram, Discord, Bluesky, Mastodon, Tumblr or Google account. This sandbox cannot reach them, and no keys were used. The new function is parse-checked only (no Deno here).
+
+### PHASE 5 REPORT (close-out)
+
+What Phase 5 built, by slice:
+1. Slice 1: packs from a day run, the article picture check, the Distribution page and sidebar hidden.
+2. Slice 2: the Connections page (one page, six doors), the door registry, the catalogue migration.
+3. Slice 3: the day run posts to Telegram and Discord, with the door rules, the runner, and the first door table.
+4. Slice 4: Bluesky and Mastodon.
+5. Slice 5: Tumblr and Blogger. All six free doors are open.
+6. Slice 6: the connection test buttons, and this report.
+
+What is still not done, or not verified:
+- No door has been tried live. The six senders and the six connection checks are tested only against fake answers.
+- Nothing is deployed. The Edge functions `minds-run-placement`, `automation-keys` and `door-connection-test` are source only (parse-checked, not run on Deno).
+- Migrations `20261011090000`, `20261011100000`, `20261011110000` and `20261011120000` are not applied. They ship at the Phase 6 merge, as the plan says.
+- Known risk: a `finish` error can leave a door post "queued". That blocks the door for the rest of that local day. It is not fixed yet.
+- Known gap: the Keys page also lists the twelve door fields. A tidy-up can come later.
+- The four gated channels (Instagram, TikTok, Facebook, Pinterest) stay manual. No posting API is used for them.
+- Takeover is still off by default. Nothing is turned on by this phase.
