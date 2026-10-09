@@ -47,6 +47,7 @@ import { resolveAutomationAdminRoute } from './automationRoutes';
 import { ShieldAlert } from 'lucide-react';
 
 const AdminMinds = lazy(() => import('./pages/AdminMinds'));
+const AdminConnections = lazy(() => import('./pages/AdminConnections'));
 const AdminArticleEditor = lazy(() => import('./pages/AdminArticleEditor'));
 const AdminProductEditor = lazy(() => import('./pages/AdminProductEditor'));
 const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor'));
@@ -200,6 +201,7 @@ export default function AdminApp() {
       case 'admin-growth': return <AdminGrowth />;
       case 'admin-advisor': return <AdminAdvisor />;
       case 'admin-ai': return <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading Minds...</div>}><AdminMinds /></Suspense>;
+      case 'admin-connections': return <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading Connections...</div>}><AdminConnections /></Suspense>;
       case 'admin-frontend': return <AdminFrontend />;
       case 'admin-backups': return <AdminBackups />;
       case 'admin-security': return <AdminSecurity />;

@@ -97,6 +97,9 @@ export default function AdminMinds() {
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-charcoal-muted">
           Buddy is the only voice you hear. The five minds below work behind the scenes and report to Buddy.
         </p>
+        <div className="mt-3">
+          <a href="/admin/ai/connections" className="inline-flex items-center rounded-sm border border-taupe/50 bg-white px-3 py-1.5 text-sm text-charcoal hover:border-bronze">Connections</a>
+        </div>
       </header>
 
       {message && <Notice tone={message.tone === 'ok' ? 'ok' : 'error'}>{message.text}</Notice>}

@@ -165,3 +165,13 @@ Server side:
 - Distribution retired: the sidebar link is gone, and `/admin/automation/distribution` opens Minds once (`RetiredDistributionRedirect` in `AdminApp.tsx`). The old page file stays in the repository, unused.
 - Tests: `articleImage.test.ts` (picture rules, timeouts, sizes, types), `dayPacks.test.ts` (Takeover off, Kill, one article, no key, four rows, Auditor block on one channel, pairwise captions, clean copy), `dayPacksDb.test.ts` (real saves in PGlite, the database refusing with Takeover off or Kill on, a repeat run adds nothing), `adminRbac.test.ts` (no Distribution link, redirect in place).
 - Not yet run in a live Edge function: Deno is not available here, so the function is parse-checked only. No migration was added in this slice.
+
+## Phase 5 slice 2: Connections (the six doors' details, typed once)
+
+- The six free doors are Telegram, Bluesky, Mastodon, Tumblr, Discord and Blogger. Their fields are listed once in `supabase/functions/_shared/doorRegistry.ts`. A door is "connected" only when every field is saved. That is not a live test, and nothing is posted.
+- Migration `20261011090000_door_connections_catalog.sql` (not applied) adds 12 rows to the existing secret catalogue. Telegram's bot token and Tumblr's three existing keys are reused. The migration adds rows only. It makes no table and no function.
+- Values are saved by the owner-only functions the Keys page already uses (`automation_secret_save`, `automation_secret_delete`, `automation_list_secrets`). They go to Vault. A saved value is never shown again. Tokens and webhooks are typed in hidden fields. Names and IDs are typed in plain fields.
+- The page is `/admin/ai/connections` (`src/admin/pages/AdminConnections.tsx`). It is reached by a plain "Connections" link on the Minds page. It is not a tab. Only the owner can see it (`automation.keys`).
+- The four gated channels are not doors. The page says they stay manual.
+- Tests: `doorRegistry.test.ts` (six doors, no gated channel, every field is a real catalogue name, status rules, inherited names rejected), `doorConnectionsCatalogDb.test.ts` (migration in PGlite: rows present, once each, kinds match, safe to repeat, no table, no function, no Vault call), `adminConnections.test.tsx` (the page in jsdom: states, no value shown back, trimmed save, empty and failed saves, remove asks first, only the three owner functions), `connectionsRoute.test.ts` (route, permission, no tab, Minds link).
+- Not yet: the door posting steps (Telegram, Bluesky and the rest) and the connection test buttons. Those are later Phase 5 slices.

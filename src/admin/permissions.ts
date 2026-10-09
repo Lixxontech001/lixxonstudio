@@ -54,6 +54,7 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   'admin-health': 'ops.health',
   'admin-advisor': 'ops.health',
   'admin-ai': 'admin.ai.run',
+  'admin-connections': 'automation.keys',
   'admin-data': 'data.explore',
   'admin-settings': 'settings.read',
   'admin-frontend': 'settings.frontend',
