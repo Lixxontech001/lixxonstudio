@@ -11,7 +11,8 @@ This folder is Buddy. Buddy is the only one who talks to the owner.
 
 | File | What it does |
 | --- | --- |
-| `BuddyEntry.tsx` | Decides what `/buddy` shows: the greeting, then the chat. `/buddy/controls` shows the old screen. |
+| `BuddyEntry.tsx` | Decides what `/buddy` shows: the greeting, then the chat. `/buddy/controls` is not a screen any more; it moves the owner to `/buddy`. |
+| `BuddyAccessGate.tsx` | The owner gate for Buddy: sign-in, Admin role, then the verified code (MFA). |
 | `BuddyGreeting.tsx` | The greeting: a short gold line, a time-of-day word, and a Continue button that appears after about 9.5 seconds (at once with reduced motion). |
 | `BuddyChat.tsx` | The chat: today's briefing first, then the message list, composer, New chat, a Chats drawer for past chats, and a Reports button. |
 | `BuddyBriefingCard.tsx` | One morning briefing as titled sections. A quiet day shows "Quiet since you left." |
@@ -22,12 +23,9 @@ This folder is Buddy. Buddy is the only one who talks to the owner.
 | `buddyVibes.ts` | The four looks: Noir Gold (default), Ivory Silk, Velvet Opera, Porcelain. Unknown values fall back to Noir Gold. |
 | `buddySettingsStore.ts` | Saves and reloads the look and the read-aloud switch on the owner's row. |
 | `buddySpeech.ts` | Read-aloud through the browser's own voice. Only Buddy's replies and the briefing are read, and only when switched on. |
-| `buddy.css` | Buddy's look. Scoped to `.buddy-app`. Noir Gold is the only vibe for now. |
+| `buddy.css` | Buddy's look. Scoped to `.buddy-app`. Four looks: Noir Gold (default), Ivory Silk, Velvet Opera, Porcelain. |
 | `buddyThinkResult.ts` | Reads the answers from the think function. Anything malformed is dropped. |
-| `BuddyPwaApp.tsx` | The old Buddy: a typed command box with a draft list. Kept at `/buddy/controls` until it is retired. It also holds the shared sign-in and MFA gate (`BuddyAccessGate`). |
-| `buddyOperations.ts` | The old typed command list (status, daily kit, help, pause or resume the daily schedule). |
-| `offlineBuddyQueue.ts` | The old draft list saved in the browser. |
-| `buddyPaths.ts` | The `/buddy/controls` path check. |
+| `buddyPaths.ts` | The `/buddy/controls` path check (the old address, which now redirects). |
 
 Server side:
 
@@ -42,6 +40,7 @@ Server side:
 
 ## What is not here
 
-- The Admin AI control tower lives in `src/admin/pages/AdminAI.tsx` (22 tabs). It is not Buddy and is not touched in phase 1.
+- The old typed-command screen (typed commands, draft list) was removed in Phase 2, slice 1. Its sign-in gate now lives in `BuddyAccessGate.tsx`.
+- The Admin AI control tower lives in `src/admin/pages/AdminAI.tsx` (22 tabs). It is not Buddy. Phase 2 replaces what the owner sees there.
 - Buddy cannot change the site. It only reads published article titles and active shop products, and never article bodies (see `supabase/functions/_shared/buddySiteFacts.ts`).
 - Night reports are not written by anything yet. The Reports door only lists them.

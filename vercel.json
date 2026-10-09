@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    { "source": "/buddy/controls", "destination": "/buddy", "permanent": false }
+  ],
   "headers": [
     {
       "source": "/(.*)",

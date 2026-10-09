@@ -1,7 +1,7 @@
 /*
  * Buddy's look. Scoped to .buddy-app so nothing leaks into the magazine or Admin.
- * Only the Noir Gold vibe exists in this slice; the other vibes arrive in slice 5 as more
- * [data-vibe] blocks that set the same variables.
+ * Four looks, each a [data-vibe] block that sets the same variables: Noir Gold (the default),
+ * Ivory Silk, Velvet Opera and Porcelain. The look is Buddy's own and never follows the magazine.
  */
 
 /* The four looks. Each sets the same variables, and each is also used by the swatches in settings. */

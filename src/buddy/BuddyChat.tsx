@@ -310,9 +310,6 @@ export default function BuddyChat() {
                 ))}
               </ul>
             )}
-            <div className="buddy-drawer-foot">
-              <a href="/buddy/controls">Old Buddy controls</a>
-            </div>
           </div>
         </div>
       )}
