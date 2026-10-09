@@ -46,6 +46,17 @@ export interface DoorRunInput {
 
 export type ReserveResult = { ok: true; id: string } | { ok: false; reason: string };
 
+/**
+ * A row from earlier today that is still queued: its send is done, or its failure is known, but its record was not saved.
+ * `pendingStatus` says which: "posted" (the post went out) or "failed" (it did not). null means the send state is unknown.
+ */
+export interface PendingPost {
+  id: string;
+  pendingStatus: "posted" | "failed" | null;
+  externalRef: string | null;
+  errorNote: string | null;
+}
+
 export interface DoorRunPorts {
   readArticles: () => Promise<DoorArticle[]>;
   readPostedIds: (door: DoorId) => Promise<Set<string>>;
@@ -61,6 +72,10 @@ export interface DoorRunPorts {
   /** The episode's audio file for this article. Before anything is reserved. */
   loadAudio?: (articleId: string) => Promise<AudioLoad>;
   finish: (id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null) => Promise<void>;
+  /** Queued rows for this door and day whose record was not saved yet. Read before any new send. */
+  readPendingPosts: (door: DoorId, localDay: string) => Promise<PendingPost[]>;
+  /** Keeps what a queued row needs to be saved later: whether it posted (or failed), its reference and its note. Never sends. */
+  markPending: (id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null) => Promise<void>;
   log: (entry: { door: DoorId; outcome: "done" | "failed"; detail: string }) => Promise<void>;
   /** Waits between save retries. Tests pass a no-op. */
   pause?: (ms: number) => Promise<void>;
@@ -116,6 +131,15 @@ async function finishWithRetry(
   return false;
 }
 
+/** Keeps the state of a queued row for a later save. A failed keep is ignored: the row then stays queued with an unknown state. */
+async function keepPendingSafely(ports: DoorRunPorts, id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null): Promise<void> {
+  try {
+    await ports.markPending(id, status, externalRef, errorNote);
+  } catch {
+    // Nothing more can be done here. The next run will see a queued row with an unknown state, and will not send it again.
+  }
+}
+
 /** Writes a log line. A failed log write is ignored, so it can never stop the step. */
 async function logSafely(ports: DoorRunPorts, entry: { door: DoorId; outcome: "done" | "failed"; detail: string }): Promise<void> {
   try {
@@ -126,6 +150,47 @@ async function logSafely(ports: DoorRunPorts, entry: { door: DoorId; outcome: "d
 }
 
 type DoorStep = { held: string; posted: number } | DoorOutcome;
+
+/**
+ * Earlier today's queued rows for this door. Their record is saved again (a fourth try, and more on later runs the same day).
+ * Nothing is sent again: a post that went out is only recorded. Returns null when there is nothing to save.
+ */
+async function savePendingPosts(input: DoorRunInput, ports: DoorRunPorts, door: DoorId): Promise<DoorOutcome | null> {
+  const label = DOORS[door].label;
+  let rows: PendingPost[];
+  try {
+    rows = await ports.readPendingPosts(door, input.localDay);
+  } catch {
+    return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
+  }
+  const row = rows[0];
+  if (!row) return null;
+
+  if (row.pendingStatus === null) {
+    // We cannot tell whether the earlier send went out, so nothing is sent again today.
+    const detail = `${label}: an earlier post today needs a look. Nothing new was posted.`;
+    await logSafely(ports, { door, outcome: "failed", detail: `${label}: an earlier post today has no saved state. It was not sent again. Check the log.` });
+    return { door, outcome: "skipped", detail };
+  }
+
+  if (row.pendingStatus === "posted") {
+    const saved = await finishWithRetry(ports, row.id, "posted", row.externalRef, null);
+    if (saved) {
+      const detail = `Posted to ${label}: the record was saved on a later try today.`;
+      await logSafely(ports, { door, outcome: "done", detail });
+      return { door, outcome: "posted", detail };
+    }
+    const detail = `${label}: posted, but the record could not be saved. Check the log.`;
+    await logSafely(ports, { door, outcome: "failed", detail });
+    return { door, outcome: "posted", detail };
+  }
+
+  // The earlier send did not go out. Its failure is recorded now. Nothing is sent again.
+  const note = row.errorNote ?? "Nothing was posted.";
+  const saved = await finishWithRetry(ports, row.id, "failed", null, note);
+  if (saved) return { door, outcome: "failed", detail: `${label} did not take it: ${note}` };
+  return { door, outcome: "skipped", detail: `${label}: an earlier try could not be saved yet. Nothing new was posted.` };
+}
 
 /** One door, start to finish. Only a held gate (Takeover off, Kill) stops the whole step. */
 async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId, readArticles: () => Promise<DoorArticle[]>, postedSoFar: number): Promise<DoorStep> {
@@ -143,6 +208,10 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   }
   const status = doorStatus(door, new Set(Object.keys(values)));
   if (status.state !== "connected") return { door, outcome: "not_connected", detail: label };
+
+  // An earlier try today that did not save its record is saved first. If that step has a result, the door's day is used.
+  const pending = await savePendingPosts(input, ports, door);
+  if (pending) return pending;
 
   try {
     if ((await ports.countToday(door, input.localDay)) >= DOOR_DAILY_LIMIT) {
@@ -254,13 +323,15 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       await logSafely(ports, { door, outcome: "done", detail });
       return { door, outcome: "posted", detail };
     }
-    // The post went out, but its record could not be saved. The row stays queued, so this door does not post again today.
+    // The post went out, but its record could not be saved. The row stays queued, marked as posted, and a later run today saves it again. Nothing is sent again.
+    await keepPendingSafely(ports, reserved.id, "posted", sent.externalRef, null);
     const detail = `${label}: posted, but the record could not be saved. Check the log.`;
     await logSafely(ports, { door, outcome: "failed", detail });
     return { door, outcome: "posted", detail };
   }
 
-  await finishWithRetry(ports, reserved.id, "failed", null, sent.reason);
+  const recorded = await finishWithRetry(ports, reserved.id, "failed", null, sent.reason);
+  if (!recorded) await keepPendingSafely(ports, reserved.id, "failed", null, sent.reason);
   const detail = `${label} did not take it: ${sent.reason}`;
   await logSafely(ports, { door, outcome: "failed", detail });
   return { door, outcome: "failed", detail };

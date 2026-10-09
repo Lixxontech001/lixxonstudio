@@ -24,6 +24,7 @@ const MIGRATIONS = [
   '20261011140000_door_posts_twelve.sql',
   '20261011150000_door_posts_three_open.sql',
   '20261011170000_door_posts_all_twelve_open.sql',
+  '20261011190000_door_post_retry.sql',
 ];
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -290,7 +291,7 @@ describe('who can read and write the door posts', () => {
       "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'minds_door_posts'",
     )).rows.map((row) => row.column_name);
     expect(columns.sort()).toEqual(
-      ['article_url', 'created_at', 'door', 'error_note', 'external_ref', 'id', 'local_day', 'owner_id', 'post_id', 'posted_at', 'status'].sort(),
+      ['article_url', 'created_at', 'door', 'error_note', 'external_ref', 'id', 'local_day', 'owner_id', 'pending_status', 'post_id', 'posted_at', 'status'].sort(),
     );
   });
 });
@@ -312,5 +313,53 @@ describe('the door-post table accepts all twelve auto doors, and no gated channe
   it('the reservation function accepts exactly the twelve auto doors, and no gated channel', () => {
     expect(OPEN_DOORS).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast']);
     expect([...OPEN_DOORS].sort()).toEqual([...DOOR_IDS].sort());
+  });
+});
+
+describe('a queued post remembers what happened, so a later run can save its record', () => {
+  it('marks a queued row as posted, and a later save of it keeps the same row and reference', async () => {
+    const [row] = await reserve('telegram', POST_A, '2026-10-10');
+    const [marked] = await asServer<{ f: boolean }>(
+      "select public.minds_mark_door_post_pending($1::uuid, 'posted', 'ref-9', null) as f",
+      [row.id],
+    );
+    expect(marked.f).toBe(true);
+    const [stored] = await asServer<{ status: string; pending_status: string; external_ref: string }>(
+      'select status, pending_status, external_ref from public.minds_door_posts where id = $1',
+      [row.id],
+    );
+    expect(stored).toEqual({ status: 'queued', pending_status: 'posted', external_ref: 'ref-9' });
+  });
+
+  it('a row that is already posted or failed is not changed by a pending mark', async () => {
+    const [row] = await reserve('telegram', POST_A, '2026-10-10');
+    await asServer("select public.minds_finish_door_post($1::uuid, 'posted', '77', null)", [row.id]);
+    const [marked] = await asServer<{ f: boolean }>(
+      "select public.minds_mark_door_post_pending($1::uuid, 'failed', null, 'late') as f",
+      [row.id],
+    );
+    expect(marked.f).toBe(false);
+    const [stored] = await asServer<{ status: string; pending_status: string | null }>(
+      'select status, pending_status from public.minds_door_posts where id = $1',
+      [row.id],
+    );
+    expect(stored).toEqual({ status: 'posted', pending_status: null });
+  });
+
+  it('only "posted" or "failed" can be kept, and only the service role can keep it', async () => {
+    const [row] = await reserve('telegram', POST_A, '2026-10-10');
+    expect(await attempt(asServer("select public.minds_mark_door_post_pending($1::uuid, 'sent', null, null)", [row.id]))).toMatch(/bad_status/);
+    await db.exec('reset role');
+    await db.exec('set role authenticated');
+    await db.query("select set_config('request.jwt.claim.sub', $1, false)", [OWNER]);
+    const error = await attempt(db.query("select public.minds_mark_door_post_pending($1::uuid, 'posted', null, null)", [row.id]));
+    await db.exec('reset role');
+    expect(error).not.toBeNull();
+  });
+
+  it('a queued row still counts toward the one post per door per day', async () => {
+    const [row] = await reserve('telegram', POST_A, '2026-10-10');
+    await asServer("select public.minds_mark_door_post_pending($1::uuid, 'posted', 'ref-9', null)", [row.id]);
+    expect(await attempt(reserve('telegram', POST_B, '2026-10-10'))).toMatch(/door_day_cap/);
   });
 });

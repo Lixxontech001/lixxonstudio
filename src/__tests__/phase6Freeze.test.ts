@@ -168,9 +168,9 @@ describe('Phase 6 freeze: nothing applied, nothing deployed, and reader copy sta
     }
   });
 
-  it('the reader-facing door, podcast and briefing modules have no em dash, and name no country, city or currency', () => {
-    // feeds/index.ts is left out on purpose: its existing crawler title has an em dash, from before Phase 6. It is flagged in the report.
+  it('the reader-facing door, podcast, feed and briefing modules have no em dash, and name no country, city or currency', () => {
     const modules = [
+      'supabase/functions/feeds/index.ts',
       'supabase/functions/_shared/podcastFeed.ts',
       'supabase/functions/_shared/buddyHowTo.ts',
       'supabase/functions/_shared/doorAdapters.ts',

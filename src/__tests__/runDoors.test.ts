@@ -68,8 +68,22 @@ const TWELVE_DOOR_SECRETS: Record<string, string> = {
   ...PODCAST_SECRETS,
 };
 
+/** A queued row, as the database would hold it. */
+interface QueuedRow {
+  door: string;
+  day: string;
+  status: 'queued' | 'posted' | 'failed';
+  pendingStatus: 'posted' | 'failed' | null;
+  externalRef: string | null;
+  errorNote: string | null;
+}
+
 interface Harness {
   ports: DoorRunPorts;
+  /** Every reserved row, by id. */
+  rows: Map<string, QueuedRow>;
+  /** Every markPending call, in order. */
+  marks: Array<{ id: string; status: string; externalRef: string | null; errorNote: string | null }>;
   sent: Array<{ door: string; text: string }>;
   keys: Array<{ door: string; key: string }>;
   reserved: string[];
@@ -101,6 +115,8 @@ function harness(options: {
   sendThrows?: boolean;
   /** The picture loader. Default: a good JPEG. */
   loadImage?: (cover: string) => ArticleImageLoad;
+  /** Makes the markPending write fail, as if the database were down. */
+  markPendingFails?: boolean;
   /** The pack video loader. Default: a real MP4. */
   loadVideo?: (articleId: string) => VideoLoad;
   /** The episode audio loader. Default: a real MP3. */
@@ -118,6 +134,8 @@ function harness(options: {
   const loadedCovers: string[] = [];
   const loadedVideo: string[] = [];
   const loadedAudio: string[] = [];
+  const rows = new Map<string, QueuedRow>();
+  const marks: Harness['marks'] = [];
   const ports: DoorRunPorts = {
     readArticles: async () => options.articles ?? [ARTICLE],
     readPostedIds: async (door) => new Set(options.postedIds?.[door] ?? []),
@@ -126,10 +144,26 @@ function harness(options: {
       if (options.readSecretThrows) throw new Error('vault');
       return secrets[name] ?? null;
     },
-    reserve: async (door, articleId) => {
+    reserve: async (door, articleId, localDay) => {
       if (options.reserveThrows) throw new Error('database');
       reserved.push(`${door}:${articleId}`);
-      return options.reserve ? options.reserve(door) : { ok: true, id: `row-${door}` };
+      const result = options.reserve ? options.reserve(door) : { ok: true as const, id: `row-${door}` };
+      if (result.ok) rows.set(result.id, { door, day: localDay, status: 'queued', pendingStatus: null, externalRef: null, errorNote: null });
+      return result;
+    },
+    readPendingPosts: async (door, day) =>
+      [...rows.entries()]
+        .filter(([, row]) => row.door === door && row.day === day && row.status === 'queued')
+        .map(([id, row]) => ({ id, pendingStatus: row.pendingStatus, externalRef: row.externalRef, errorNote: row.errorNote })),
+    markPending: async (id, status, externalRef, errorNote) => {
+      if (options.markPendingFails) throw new Error('mark');
+      marks.push({ id, status, externalRef, errorNote });
+      const row = rows.get(id);
+      if (row) {
+        row.pendingStatus = status;
+        row.externalRef = externalRef;
+        row.errorNote = errorNote;
+      }
     },
     loadImage: async (cover) => {
       loadedCovers.push(cover);
@@ -155,13 +189,19 @@ function harness(options: {
       finishAttempts[id] = (finishAttempts[id] ?? 0) + 1;
       if (options.finishFail?.(id, finishAttempts[id])) throw new Error('finish');
       finished.push({ id, status, externalRef, errorNote });
+      const row = rows.get(id);
+      if (row) {
+        row.status = status;
+        row.externalRef = externalRef;
+        row.errorNote = errorNote;
+      }
     },
     log: async (entry) => {
       logs.push(entry);
     },
     pause: async () => {},
   };
-  return { ports, sent, keys, reserved, finished, logs, finishAttempts, media, extras, loadedCovers, loadedVideo, loadedAudio };
+  return { ports, sent, keys, reserved, finished, logs, finishAttempts, media, extras, loadedCovers, loadedVideo, loadedAudio, rows, marks };
 }
 
 const DAY_INPUT = { localDay: '2026-10-10', takeover: true, killScope: 'none' as const, nowMs: NOW, siteOrigin: SITE };
@@ -408,18 +448,16 @@ describe('a failed save never stops the other doors, and never sends a door twic
     expect(result.detail).not.toContain('Nothing was posted');
   });
 
-  it('after a save that failed, the same door does not send again the same day', async () => {
+  it('after a save that failed, a later run the same day saves the record again, and never sends the post twice', async () => {
     const h = harness({
       secrets: { telegram_bot_token: TOKEN, telegram_chat_id: '-100123' },
       articles: [ARTICLE, SECOND_ARTICLE],
       finishFail: () => true,
     });
     await runDoors(DAY_INPUT, h.ports);
-    // The row stays queued, so the day cap counts it. A second run the same day must not send.
-    h.ports.countToday = async () => 1;
     const again = await runDoors(DAY_INPUT, h.ports);
     expect(h.sent.filter((item) => item.door === 'telegram')).toHaveLength(1);
-    expect(again.outcomes.find((item) => item.door === 'telegram')?.detail).toBe('Telegram: already posted today.');
+    expect(again.outcomes.find((item) => item.door === 'telegram')?.detail).toBe('Telegram: posted, but the record could not be saved. Check the log.');
   });
 
   it('the next local day, the door posts again: the next article, not the one already sent', async () => {
@@ -574,5 +612,107 @@ describe('the video and audio doors send only a real file, and skip honestly wit
       if (item.extra.media?.kind === 'video') expect(item.extra.media.bytes).toBeGreaterThan(0);
       if (item.extra.media?.kind === 'audio') expect(item.extra.media.bytes).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('a save that failed is tried again later the same day, and the post is never sent twice', () => {
+  const SECOND_ARTICLE: DoorArticle = { ...ARTICLE, id: 'post-2', title: 'Second article', slug: 'second-article' };
+  const TELEGRAM_SECRETS = { telegram_bot_token: TOKEN, telegram_chat_id: '-100123' };
+  const isTelegram = (item: { door: string }) => item.door === 'telegram';
+
+  it('three save tries fail, a fourth try the same day saves the record, and the post is not sent again', async () => {
+    const h = harness({
+      secrets: TELEGRAM_SECRETS,
+      articles: [ARTICLE, SECOND_ARTICLE],
+      finishFail: (id, attempt) => id === 'row-telegram' && attempt <= 3,
+    });
+    const first = await runDoors(DAY_INPUT, h.ports);
+    expect(first.outcomes.find(isTelegram)?.detail).toBe('Telegram: posted, but the record could not be saved. Check the log.');
+    expect(h.rows.get('row-telegram')?.pendingStatus).toBe('posted');
+    expect(h.marks).toEqual([{ id: 'row-telegram', status: 'posted', externalRef: 'ref-telegram', errorNote: null }]);
+
+    const second = await runDoors(DAY_INPUT, h.ports);
+    expect(h.finishAttempts['row-telegram']).toBe(4);
+    expect(second.outcomes.find(isTelegram)).toEqual({
+      door: 'telegram',
+      outcome: 'posted',
+      detail: 'Posted to Telegram: the record was saved on a later try today.',
+    });
+    expect(h.finished).toContainEqual({ id: 'row-telegram', status: 'posted', externalRef: 'ref-telegram', errorNote: null });
+    expect(h.sent.filter(isTelegram)).toHaveLength(1);
+    expect(h.reserved.filter((item) => item === 'telegram:post-1')).toHaveLength(1);
+  });
+
+  it('a save that keeps failing on later runs the same day: no second send, and the door is still open to try the save again', async () => {
+    const h = harness({
+      secrets: TELEGRAM_SECRETS,
+      articles: [ARTICLE, SECOND_ARTICLE],
+      finishFail: (id) => id === 'row-telegram',
+    });
+    await runDoors(DAY_INPUT, h.ports);
+    const second = await runDoors(DAY_INPUT, h.ports);
+    const third = await runDoors(DAY_INPUT, h.ports);
+    expect(h.sent.filter(isTelegram)).toHaveLength(1);
+    expect(second.outcomes.find(isTelegram)?.detail).toBe('Telegram: posted, but the record could not be saved. Check the log.');
+    expect(third.outcomes.find(isTelegram)?.detail).toBe('Telegram: posted, but the record could not be saved. Check the log.');
+    expect(h.finishAttempts['row-telegram']).toBe(9);
+  });
+
+  it('when the state of the earlier send is unknown, nothing is sent again today, and the log says why', async () => {
+    const h = harness({
+      secrets: TELEGRAM_SECRETS,
+      articles: [ARTICLE, SECOND_ARTICLE],
+      finishFail: () => true,
+      markPendingFails: true,
+    });
+    await runDoors(DAY_INPUT, h.ports);
+    const again = await runDoors(DAY_INPUT, h.ports);
+    expect(h.sent.filter(isTelegram)).toHaveLength(1);
+    expect(again.outcomes.find(isTelegram)).toEqual({
+      door: 'telegram',
+      outcome: 'skipped',
+      detail: 'Telegram: an earlier post today needs a look. Nothing new was posted.',
+    });
+    expect(h.logs).toContainEqual({
+      door: 'telegram',
+      outcome: 'failed',
+      detail: 'Telegram: an earlier post today has no saved state. It was not sent again. Check the log.',
+    });
+  });
+
+  it('a send that failed and whose record could not be saved is saved as failed on a later run, and not sent again', async () => {
+    const h = harness({
+      secrets: TELEGRAM_SECRETS,
+      articles: [ARTICLE, SECOND_ARTICLE],
+      send: () => ({ ok: false, reason: 'Telegram did not take the message.' }),
+      finishFail: (id, attempt) => id === 'row-telegram' && attempt <= 3,
+    });
+    const first = await runDoors(DAY_INPUT, h.ports);
+    expect(first.outcomes.find(isTelegram)?.detail).toBe('Telegram did not take it: Telegram did not take the message.');
+    expect(h.marks).toEqual([{ id: 'row-telegram', status: 'failed', externalRef: null, errorNote: 'Telegram did not take the message.' }]);
+
+    const second = await runDoors(DAY_INPUT, h.ports);
+    expect(second.outcomes.find(isTelegram)).toEqual({
+      door: 'telegram',
+      outcome: 'failed',
+      detail: 'Telegram did not take it: Telegram did not take the message.',
+    });
+    expect(h.finished).toContainEqual({ id: 'row-telegram', status: 'failed', externalRef: null, errorNote: 'Telegram did not take the message.' });
+    expect(h.sent.filter(isTelegram)).toHaveLength(1);
+  });
+
+  it('the next local day is not locked: the same door posts again with a new row', async () => {
+    let n = 0;
+    const h = harness({
+      secrets: TELEGRAM_SECRETS,
+      articles: [ARTICLE, SECOND_ARTICLE],
+      reserve: () => ({ ok: true, id: `row-telegram-${++n}` }),
+      finishFail: (id, attempt) => id === 'row-telegram-1' && attempt <= 3,
+    });
+    await runDoors(DAY_INPUT, h.ports);
+    const nextDay = await runDoors({ ...DAY_INPUT, localDay: '2026-10-11' }, h.ports);
+    expect(nextDay.outcomes.find(isTelegram)?.outcome).toBe('posted');
+    expect(h.sent.filter(isTelegram)).toHaveLength(2);
+    expect(h.rows.get('row-telegram-1')?.status).toBe('queued');
   });
 });

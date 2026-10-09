@@ -49,10 +49,14 @@ function secureUrl(value: string): boolean {
   }
 }
 
-/** True when the show has everything the feed needs: a title, an author, and a secure cover address. */
+/**
+ * True when the show has everything the feed needs: a title, an author, and a secure cover address.
+ * The author is a public name, so an email address is refused: the owner's email never goes into the feed.
+ */
 export function podcastShowReady(show: { title: string; author: string; coverUrl: string }): boolean {
   return show.title.trim().length > 0 && show.title.length <= 128
     && show.author.trim().length > 0 && show.author.length <= 128
+    && !show.author.includes("@") && !show.title.includes("@")
     && secureUrl(show.coverUrl);
 }
 

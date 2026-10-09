@@ -320,3 +320,11 @@ What is still not done, or not verified:
 - **Open decisions for the owner:** Medium (existing token only, and Medium's docs say the API is no longer supported); the same-day rule after a failed save (a door that already sent is not sent again the same day); the podcast category (Health & Fitness, suggested); whether the owner's email appears in the feed (not included).
 - **Known gap:** the crawler title in `supabase/functions/feeds/index.ts` (the prerender page title) contains an em dash. It was there before Phase 6 and was left unchanged, since it is site brand copy.
 - **Phase 7 has not started.**
+
+## Phase 7 slice 1: inherit, same-day retry, podcast settings
+
+- **Same-day retry after a failed save (owner decision).** A post that went out but whose record could not be saved is kept as `queued` with `pending_status = posted`. The door step tries the save three times. If all three fail, the door is not locked until tomorrow: a later run the same day saves that record again. The post is never sent a second time. If the send failed and its record could not be saved, the failure is saved on a later run. If the state of the earlier send is unknown, nothing is sent again that day and the log says so. Migration `20261011190000_door_post_retry.sql` adds the column and the function. It is not applied to production.
+- **Podcast.** The category is Health & Fitness. The owner's email is never in `/podcast.xml`: an author or title with an `@` is refused, so the feed is not served until the owner enters a public name. The Connections label for the show author says so.
+- **Feed title.** The crawler title in `supabase/functions/feeds/index.ts` now uses a colon, not an em dash. The Phase 6 known gap is closed.
+- **Tests.** `runDoors.test.ts` covers the fourth save try on the same day, a save that keeps failing, unknown earlier state, a failed send saved on a later run, and the next day. `doorPostsDb.test.ts` runs the new function against the migration in PGlite. `podcastFeed.test.ts` refuses an email address. `phase6Freeze.test.ts` now scans `feeds/index.ts` for em dashes.
+- **Not done in this slice:** pack video and episode audio saving (slices 2 and 3), Web Push (slice 4), the night report (slice 5). Nothing is deployed and nothing is applied to production.

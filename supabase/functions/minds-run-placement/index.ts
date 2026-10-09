@@ -424,6 +424,32 @@ async function runDoorsForDay(
         });
         if (error) throw new Error("finish");
       },
+      readPendingPosts: async (door, day) => {
+        // Queued rows from today for this door whose record was not saved yet. Owner scoped.
+        const { data, error } = await sb
+          .from("minds_door_posts")
+          .select("id,pending_status,external_ref,error_note")
+          .eq("owner_id", owner)
+          .eq("door", door)
+          .eq("local_day", day)
+          .eq("status", "queued");
+        if (error || !Array.isArray(data)) throw new Error("pending");
+        return data.map((row: Record<string, unknown>) => ({
+          id: String(row.id),
+          pendingStatus: row.pending_status === "posted" || row.pending_status === "failed" ? row.pending_status : null,
+          externalRef: typeof row.external_ref === "string" ? row.external_ref : null,
+          errorNote: typeof row.error_note === "string" ? row.error_note : null,
+        }));
+      },
+      markPending: async (id, status, externalRef, errorNote) => {
+        const { error } = await sb.rpc("minds_mark_door_post_pending", {
+          p_id: id,
+          p_status: status,
+          p_external_ref: externalRef,
+          p_error_note: errorNote,
+        });
+        if (error) throw new Error("pending");
+      },
       log: async (entry) => {
         await sb.from("minds_daily_log").insert({
           owner_id: owner,

@@ -1,5 +1,5 @@
 /**
- * feeds — dynamic sitemap.xml, rss.xml and bot-prerendered article HTML, straight from the DB.
+ * feeds: dynamic sitemap.xml, rss.xml and bot-prerendered article HTML, straight from the DB.
  *   GET /feeds?type=sitemap
  *   GET /feeds?type=rss
  *   GET /feeds?type=prerender&path=/blog/<slug>   (used by vercel.json rewrite for crawler UAs)
@@ -48,7 +48,7 @@ ${(authors || []).map((a) => u(`/author/${encodeURIComponent(a.slug)}`, null, "0
   if (type === "prerender") {
     const path = url.searchParams.get("path") || "/";
     const m = path.match(/^\/blog\/([^/?#]+)/);
-    let title = "Lixxon Studio — Skincare, Style & Minimalist Wellness";
+    let title = "Lixxon Studio: Skincare, Style & Minimalist Wellness";
     let desc = "A daily digital magazine covering skincare science, intentional style, and minimalist wellness.";
     let image = "";
     let bodyHtml = "";

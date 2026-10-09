@@ -30,6 +30,9 @@ describe('the show is served only when it is complete', () => {
     expect(podcastShowReady({ ...SHOW, coverUrl: 'http://lixxonstudio.example/c.jpg' })).toBe(false);
     expect(podcastShowReady({ ...SHOW, coverUrl: '' })).toBe(false);
     expect(podcastShowReady({ ...SHOW, title: 'x'.repeat(129) })).toBe(false);
+    // The author is a public name. An email address is refused, so the owner's email never reaches the feed.
+    expect(podcastShowReady({ ...SHOW, author: 'owner@example.com' })).toBe(false);
+    expect(podcastShowReady({ ...SHOW, title: 'Mail me @ the studio' })).toBe(false);
   });
 });
 
