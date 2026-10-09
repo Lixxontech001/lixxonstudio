@@ -338,3 +338,12 @@ What is still not done, or not verified:
 - **YouTube and Vimeo.** The day run already sends them when `video_path` is set, and skips with "no video yet" when it is not. With a saved video they now have a real file to send. The day run is unchanged.
 - **Tests.** `packMediaSave.test.ts` uses a 32 x 32 PNG and a one-second 64 x 64 MP4 from `src/__tests__/fixtures/pack-media/`. The two real-render tests run only when `LIXXON_FFMPEG` points to a working FFmpeg (they passed with a local binary). `mindsPacksDb.test.ts` runs the attach function against the migration.
 - **Not done in this slice:** podcast audio (slice 3), Web Push (slice 4), the night report (slice 5). Nothing is deployed or applied to production. FFmpeg is not on this sandbox's PATH, so the real-render tests were run only with a local test binary.
+
+## Phase 7 slice 3: podcast episode audio saved, and the feed lists only real files
+
+- **Where the audio comes from.** The owner makes an MP3 for an article (or a tool on the owner's machine makes it). No paid voice service is used. The file is named `<article id>.mp3`.
+- **How it is saved.** `scripts/save-podcast-audio.mjs --dir <folder>` checks each file and saves it to the public `podcast-audio` bucket under that name. A file is saved only when its name is an article id with `.mp3`, its bytes are an MP3 (an ID3 tag or an MPEG frame), the article exists, and no audio is saved for it yet. Audio that is already saved is never replaced. It never posts and never runs on a schedule. It needs `LIXXON_SUPABASE_URL` and `LIXXON_SERVICE_ROLE_KEY`, and it never prints them.
+- **The episode.** When the day run finds that file, it writes one `podcast_episodes` row with the file's path, its real size and `audio/mpeg`. No file means the podcast door is skipped with "audio not made yet." Nothing is posted.
+- **The feed.** `/podcast.xml` lists an episode only when it has a saved file and a real length. It has no enclosure for anything else. The show is Health & Fitness. The owner's email is never in the feed.
+- **Tests.** `podcastAudioSave.test.ts` uses a one-second, 4.4 KB MP3 fixture in `src/__tests__/fixtures/podcast/`, and fake storage. It covers the name rules, the MP3 check, the article check, no replacement, storage failures, the day run's file name, and the feed's enclosures.
+- **Not done here:** Web Push (slice 4), the night report (slice 5). Nothing is deployed, no production cron is attached, and no migration was added in this slice (the bucket and table are from slice 4 of Phase 6, still not applied to production).
