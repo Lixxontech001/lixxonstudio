@@ -43,6 +43,15 @@ Server side:
 - The old typed-command screen (typed commands, draft list) was removed in Phase 2, slice 1. Its sign-in gate now lives in `BuddyAccessGate.tsx`.
 - Phase 2 slice 3 adds the records the minds will use. All four migrations are additive and not applied: `20261009150000_buddy_orders.sql` (the owner's orders: waiting, done, blocked), `20261009160000_minds_daily_log.sql` (every mind action; the browser can read it but never write it), `20261009170000_minds_notable_events.sql` (things worth attention, with a trigger that records Takeover and Kill changes), and `20261009180000_buddy_night_report_writer.sql` (one night report per owner per day).
 - `supabase/functions/_shared/mindsNightReport.ts` builds the night report from the day's log, orders and events, and saves it to Reports. A night with no action says so plainly. A failed read writes nothing. Nothing calls it yet: there is no schedule.
+- Phase 2 slice 4 adds the five minds as code, under `minds/`. Each mind gets only two doors: one way to think, and one way to write its log row. There is no database, site, email or spending door, so a mind cannot write `posts.content`, publish, send, create products, change prices, or speak to a customer as the owner.
+  - `mindGuards.ts`: the only kinds of step a mind may propose (`note`, `suggest`, `sort`, `prepare`), and the rule that the Auditor and minds cannot switch each other off.
+  - `mindCore.ts`: the shared path. Kill first, then one thinking call, then a log row. With no key the row reads "Cannot think: no Google key".
+  - `analyst.ts`, `strategist.ts`, `ceo.ts`: one thinking call each.
+  - `executioner.ts`: does nothing while Takeover is off. With Takeover on, each plan goes to the Auditor. An allowed plan is still held, because no site writer is connected.
+  - `auditor.ts`: allow or block, with a plain fix. Blocks when stopped, when the kind is not allowed, when there is no key, and when unsure.
+  - `mindRun.ts`: one pass over the four thinking minds in order. Nothing calls it yet; there is no schedule.
+  - `mindsLogStore.ts`: reads the newest log row per mind for the Minds cards.
+  - `supabase/functions/_shared/mindThink.ts`: the server's one door to Gemini. It uses the existing `callGemini` and key path, makes no call without a key, and never returns the key.
 - The old Admin AI screen (22 tabs) is still in `src/admin/pages/AdminAI.tsx`, but nothing routes to it any more. The owner's screen at `/admin/ai` is the Minds watch in `src/admin/pages/AdminMinds.tsx`.
 - `minds/mindRoster.ts` lists the five minds and the Kill options. `minds/mindsControlsStore.ts` saves the Takeover and Kill settings to the one-row `minds_controls` table (migration `20261009140000_minds_controls.sql`, not applied). Takeover is off by default, and nothing reads these settings yet.
 - Buddy cannot change the site. It only reads published article titles and active shop products, and never article bodies (see `supabase/functions/_shared/buddySiteFacts.ts`).

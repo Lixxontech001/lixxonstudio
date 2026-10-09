@@ -12,6 +12,8 @@ const state = vi.hoisted(() => ({
   saveError: false,
   saves: [] as Array<Record<string, unknown>>,
   allowed: true,
+  logRows: [] as Array<Record<string, unknown>>,
+  logError: false,
 }));
 
 vi.mock('../context/AuthContext', () => ({
@@ -26,6 +28,17 @@ vi.mock('../context/AuthContext', () => ({
 vi.mock('../lib/supabaseClient', () => ({
   supabase: {
     from: (table: string) => {
+      if (table === 'minds_daily_log') {
+        return {
+          select: () => ({
+            order: () => ({
+              limit: async () => (state.logError
+                ? { data: null, error: { message: 'denied' } }
+                : { data: state.logRows, error: null }),
+            }),
+          }),
+        };
+      }
       if (table !== 'minds_controls') throw new Error(`unexpected table ${table}`);
       return {
         select: () => ({
@@ -103,6 +116,8 @@ beforeEach(() => {
   state.saveError = false;
   state.saves = [];
   state.allowed = true;
+  state.logRows = [];
+  state.logError = false;
 });
 
 afterEach(() => {
@@ -187,6 +202,30 @@ describe('Minds screen', () => {
     expect(takeoverSwitch(el)?.getAttribute('aria-checked')).toBe('false');
     expect(el.textContent).toContain('Minds could not save. Try again shortly.');
     expect(el.textContent).not.toContain('Saved.');
+  });
+
+  it('each card shows its newest logged action, and a missing key reads plainly', async () => {
+    state.logRows = [
+      { mind: 'analyst', action: 'Cannot think: no Google key', outcome: 'skipped', detail: '', happened_at: '2026-10-09T08:05:00.000Z' },
+      { mind: 'analyst', action: 'Read the site numbers', outcome: 'done', detail: 'Older row.', happened_at: '2026-10-08T08:05:00.000Z' },
+    ];
+    const el = await mount();
+    const analyst = el.querySelector('#mind-analyst')?.closest('article');
+    expect(analyst?.textContent).toContain('Last action: Cannot think: no Google key. Skipped.');
+    expect(analyst?.textContent).not.toContain('Older row.');
+    expect(analyst?.textContent).toContain('Waiting for the next run.');
+    const ceo = el.querySelector('#mind-ceo')?.closest('article');
+    expect(ceo?.textContent).toContain('Last action: none logged yet.');
+    expect(ceo?.textContent).toContain('Waiting. Nothing has run yet.');
+  });
+
+  it('when the log cannot be read, the cards say so and the switches still work', async () => {
+    state.logError = true;
+    const el = await mount();
+    const analyst = el.querySelector('#mind-analyst')?.closest('article');
+    expect(analyst?.textContent).toContain('Last action: could not be read.');
+    expect(takeoverSwitch(el)).not.toBeNull();
+    expect(killSelect(el)).not.toBeNull();
   });
 
   it('a failed read shows an honest message and no switches', async () => {

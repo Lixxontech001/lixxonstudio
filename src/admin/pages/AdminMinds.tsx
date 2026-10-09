@@ -8,8 +8,10 @@ import {
   saveMindsControls,
   type MindsControls,
 } from '../../buddy/minds/mindsControlsStore';
+import { lastActionLine, loadLastActions, type LastActions } from '../../buddy/minds/mindsLogStore';
 
 type ReadState = { status: 'loading' } | { status: 'ready'; controls: MindsControls } | { status: 'error' };
+type LogState = { readable: boolean; last: LastActions };
 type Message = { tone: 'ok' | 'error'; text: string } | null;
 
 const CARD_CLASS = 'rounded-sm border border-taupe/40 bg-white p-4 shadow-sm';
@@ -23,21 +25,28 @@ export default function AdminMinds() {
   const allowed = can('admin.ai.run');
   const userId = session?.user?.id ?? null;
   const [read, setRead] = useState<ReadState>({ status: 'loading' });
+  const [log, setLog] = useState<LogState>({ readable: true, last: {} });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<Message>(null);
 
+  const readAll = async () => {
+    const [controls, actions] = await Promise.all([loadMindsControls(), loadLastActions()]);
+    setRead(controls.ok ? { status: 'ready', controls: controls.value } : { status: 'error' });
+    setLog(actions.ok ? { readable: true, last: actions.value } : { readable: false, last: {} });
+  };
+
   const load = async () => {
     setRead({ status: 'loading' });
-    const result = await loadMindsControls();
-    setRead(result.ok ? { status: 'ready', controls: result.value } : { status: 'error' });
+    await readAll();
   };
 
   useEffect(() => {
     if (!allowed) return;
     let live = true;
-    loadMindsControls().then((result) => {
+    Promise.all([loadMindsControls(), loadLastActions()]).then(([controls, actions]) => {
       if (!live) return;
-      setRead(result.ok ? { status: 'ready', controls: result.value } : { status: 'error' });
+      setRead(controls.ok ? { status: 'ready', controls: controls.value } : { status: 'error' });
+      setLog(actions.ok ? { readable: true, last: actions.value } : { readable: false, last: {} });
     });
     return () => {
       live = false;
@@ -140,7 +149,7 @@ export default function AdminMinds() {
               <h3 id="mind-buddy" className="font-serif text-lg text-charcoal">Buddy</h3>
               <p className="mt-1 text-sm text-charcoal-muted">The only voice you hear. Takes your orders and answers questions.</p>
               <p className="mt-3 text-sm text-charcoal">Ready in chat.</p>
-              <p className="mt-1 text-xs text-charcoal-muted">Last action: none logged yet.</p>
+              <p className="mt-1 text-xs text-charcoal-muted">{lastActionLine(log.last.buddy, log.readable)}</p>
               <a href="/buddy" className="mt-4 inline-flex min-h-11 items-center text-sm text-bronze underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-charcoal">Open Buddy</a>
             </article>
           </li>
@@ -149,8 +158,8 @@ export default function AdminMinds() {
               <article aria-labelledby={`mind-${mind.key}`} className={`${CARD_CLASS} h-full`}>
                 <h3 id={`mind-${mind.key}`} className="font-serif text-lg text-charcoal">{mind.name}</h3>
                 <p className="mt-1 text-sm text-charcoal-muted">{mind.job}</p>
-                <p className="mt-3 text-sm text-charcoal">{mindStatus(controls.takeover, controls.killScope, mind.key)}</p>
-                <p className="mt-1 text-xs text-charcoal-muted">Last action: none logged yet.</p>
+                <p className="mt-3 text-sm text-charcoal">{mindStatus(controls.takeover, controls.killScope, mind.key, Boolean(log.last[mind.key]))}</p>
+                <p className="mt-1 text-xs text-charcoal-muted">{lastActionLine(log.last[mind.key], log.readable)}</p>
               </article>
             </li>
           ))}

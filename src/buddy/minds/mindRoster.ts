@@ -33,9 +33,10 @@ export function isKilled(scope: KillScope, key: MindKey): boolean {
   return scope === 'all' || scope === key;
 }
 
-/** The short status line on a mind's card. Plain words, no jargon. */
-export function mindStatus(takeover: boolean, scope: KillScope, key: MindKey): string {
+/** The short status line on a mind's card. Plain words. "Nothing has run yet" only when the log is empty for it. */
+export function mindStatus(takeover: boolean, scope: KillScope, key: MindKey, hasRun = false): string {
   if (isKilled(scope, key)) return 'Stopped by Kill.';
+  if (hasRun) return 'Waiting for the next run.';
   if (takeover) return 'Takeover is on. Nothing has run yet.';
   return 'Waiting. Nothing has run yet.';
 }
