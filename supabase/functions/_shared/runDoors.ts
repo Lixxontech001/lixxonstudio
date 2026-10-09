@@ -8,11 +8,29 @@
 // because some doors (Telegram, Discord, Bluesky, Tumblr, Blogger) cannot tell a repeat from a new post.
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
-import { DOOR_DAILY_LIMIT, DOOR_TEXT_LIMIT, DOORS_NEED_PICTURE, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
-import type { DoorImage, DoorSendResult } from "./doorAdapters.ts";
+import { DOOR_DAILY_LIMIT, DOOR_MEDIA, DOOR_TEXT_LIMIT, DOORS_NEED_PICTURE, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
+import type { DoorSendResult } from "./doorAdapters.ts";
 import { imageProblemNote, type ArticleImageLoad } from "./articleImage.ts";
 import { blockedDetail, KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from "./runDay.ts";
 import type { KillScope } from "./placementRun.ts";
+
+/** A file a door sends, already read and checked. */
+export type DoorMedia =
+  | { kind: "image"; data: ArrayBuffer; contentType: string }
+  | { kind: "video"; data: ArrayBuffer; contentType: string; bytes: number }
+  | { kind: "audio"; path: string; bytes: number; contentType: string };
+
+/** What a door gets besides its text: the file (if it needs one) and the article it is about. */
+export interface DoorSendExtra {
+  media: DoorMedia | null;
+  articleId: string;
+  title: string;
+  articleUrl: string;
+  localDay: string;
+}
+
+export type VideoLoad = { ok: true; data: ArrayBuffer; contentType: string; bytes: number } | { ok: false; reason: "no_video" | "not_readable" };
+export type AudioLoad = { ok: true; path: string; bytes: number; contentType: string } | { ok: false; reason: "no_audio" | "not_readable" };
 
 export const DOORS_NOTHING_CONNECTED_DETAIL = "No free door is connected yet. Connect one on Connections.";
 export const FINISH_ATTEMPTS = 3;
@@ -34,10 +52,14 @@ export interface DoorRunPorts {
   countToday: (door: DoorId, localDay: string) => Promise<number>;
   readSecret: (name: string) => Promise<string | null>;
   reserve: (door: DoorId, articleId: string, localDay: string, articleUrl: string) => Promise<ReserveResult>;
-  /** `key` is the reserved row's id. It is sent as the door's idempotency key where the door supports one. `image` is set only for doors that need a picture. */
-  send: (door: DoorId, values: Record<string, string>, text: string, key: string, image: DoorImage | null) => Promise<DoorSendResult>;
+  /** `key` is the reserved row's id. It is sent as the door's idempotency key where the door supports one. */
+  send: (door: DoorId, values: Record<string, string>, text: string, key: string, extra: DoorSendExtra) => Promise<DoorSendResult>;
   /** Fetches and checks the article's own cover picture. Used only by doors that need a picture, before anything is reserved. */
   loadImage?: (cover: string, siteOrigin: string | null) => Promise<ArticleImageLoad>;
+  /** The pack's real MP4 for this article and day. Before anything is reserved. */
+  loadVideo?: (articleId: string, localDay: string) => Promise<VideoLoad>;
+  /** The episode's audio file for this article. Before anything is reserved. */
+  loadAudio?: (articleId: string) => Promise<AudioLoad>;
   finish: (id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null) => Promise<void>;
   log: (entry: { door: DoorId; outcome: "done" | "failed"; detail: string }) => Promise<void>;
   /** Waits between save retries. Tests pass a no-op. */
@@ -157,9 +179,10 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
     return { door, outcome: "skipped", detail };
   }
 
-  // A door that uploads a picture checks it first. A bad picture skips the door before any post is reserved.
-  let image: DoorImage | null = null;
-  if (DOORS_NEED_PICTURE.includes(door)) {
+  // A door that needs a file checks it first. A missing or bad file skips the door before any post is reserved.
+  let media: DoorMedia | null = null;
+  const need = DOOR_MEDIA[door];
+  if (need === "image") {
     let loaded: ArticleImageLoad;
     try {
       loaded = ports.loadImage
@@ -169,7 +192,31 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       loaded = { ok: false, reason: "not_fetchable" };
     }
     if (!loaded.ok) return { door, outcome: "skipped", detail: `${label}: ${imageProblemNote(loaded.reason)} Nothing was posted.` };
-    image = { data: loaded.data, contentType: loaded.contentType };
+    media = { kind: "image", data: loaded.data, contentType: loaded.contentType };
+  } else if (need === "video") {
+    let loaded: VideoLoad;
+    try {
+      loaded = ports.loadVideo ? await ports.loadVideo(pick.article.id, input.localDay) : { ok: false, reason: "no_video" };
+    } catch {
+      loaded = { ok: false, reason: "not_readable" };
+    }
+    if (!loaded.ok) {
+      const detail = loaded.reason === "no_video" ? `${label}: no video yet. Nothing was posted.` : `${label}: the video could not be read. Nothing was posted.`;
+      return { door, outcome: "skipped", detail };
+    }
+    media = { kind: "video", data: loaded.data, contentType: loaded.contentType, bytes: loaded.bytes };
+  } else if (need === "audio") {
+    let loaded: AudioLoad;
+    try {
+      loaded = ports.loadAudio ? await ports.loadAudio(pick.article.id) : { ok: false, reason: "no_audio" };
+    } catch {
+      loaded = { ok: false, reason: "not_readable" };
+    }
+    if (!loaded.ok) {
+      const detail = loaded.reason === "no_audio" ? `${label}: audio not made yet. Nothing was posted.` : `${label}: the audio could not be read. Nothing was posted.`;
+      return { door, outcome: "skipped", detail };
+    }
+    media = { kind: "audio", path: loaded.path, bytes: loaded.bytes, contentType: loaded.contentType };
   }
 
   let reserved: ReserveResult;
@@ -189,7 +236,13 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   // From here on the door may have posted. Nothing below may report "nothing was posted" unless it is sure.
   let sent: DoorSendResult;
   try {
-    sent = await ports.send(door, values, pick.text, reserved.id, image);
+    sent = await ports.send(door, values, pick.text, reserved.id, {
+      media,
+      articleId: pick.article.id,
+      title: pick.article.title,
+      articleUrl: pick.articleUrl,
+      localDay: input.localDay,
+    });
   } catch {
     sent = { ok: false, reason: "Could not reach the door." };
   }
@@ -197,7 +250,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   if (sent.ok) {
     const saved = await finishWithRetry(ports, reserved.id, "posted", sent.externalRef, null);
     if (saved) {
-      const detail = `Posted to ${label}: "${pick.article.title}".`;
+      const detail = `Posted to ${label}: "${pick.article.title}".${sent.note ? ` ${sent.note}` : ""}`;
       await logSafely(ports, { door, outcome: "done", detail });
       return { door, outcome: "posted", detail };
     }

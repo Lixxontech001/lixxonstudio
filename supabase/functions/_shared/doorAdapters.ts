@@ -6,7 +6,8 @@
 
 export const DOOR_TIMEOUT_MS = 8000;
 
-export type DoorSendResult = { ok: true; externalRef: string | null } | { ok: false; reason: string };
+/** `note` is a plain line the owner should see, for example a YouTube upload that was kept private. */
+export type DoorSendResult = { ok: true; externalRef: string | null; note?: string } | { ok: false; reason: string };
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -541,4 +542,180 @@ export async function sendPixelfed(
     return { ok: false, reason: "Pixelfed did not take the post." };
   }
   return { ok: true, externalRef: String(body.id).slice(0, 120) };
+}
+
+// ---- Phase 6 slice 4: YouTube and Vimeo (real pack video only) ----
+
+export interface YouTubeValues {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}
+
+export interface VimeoValues {
+  accessToken: string;
+}
+
+/** A real MP4 from a pack. Only ever read from storage, never invented. */
+export interface DoorVideo {
+  data: ArrayBuffer;
+  contentType: string;
+  bytes: number;
+}
+
+const YOUTUBE_UPLOAD = "https://www.googleapis.com/upload/youtube/v3/videos";
+const YOUTUBE_CHANNELS = "https://www.googleapis.com/youtube/v3/channels";
+const VIMEO_API = "https://api.vimeo.com";
+const VIMEO_ACCEPT = "application/vnd.vimeo.*+json;version=3.4";
+/** The most a video may be. A pack video is 10 seconds, far below this. */
+export const VIDEO_MAX_BYTES = 100 * 1024 * 1024;
+
+/** Title and description text for a video: YouTube refuses < and >, so they are removed. Clipped to the door's limit. */
+export function plainVideoText(value: string, max: number): string {
+  return value.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+/** True when an address is https and on one of the given hosts (or a sub-host). Used before any bytes are sent. */
+export function onHost(url: string, hosts: readonly string[]): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && hosts.some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`));
+  } catch {
+    return false;
+  }
+}
+
+/** The shared checks for a video: an MP4, not empty, not too large. Returns a plain reason, or null when it is fine. */
+function videoProblem(video: DoorVideo | null): string | null {
+  if (!video) return "There is no video for this article yet.";
+  if (video.contentType !== "video/mp4") return "The video is not an MP4 file.";
+  if (!(video.bytes > 0)) return "The video file is empty. Nothing was sent.";
+  if (video.bytes > VIDEO_MAX_BYTES) return "The video is too large for this door.";
+  return null;
+}
+
+/**
+ * YouTube: one resumable upload of the pack's MP4, as a Short. The upload goes to Google's own upload address only.
+ * An unaudited Google project uploads as private; that is reported as a note, never as a public post.
+ * Returns the video id.
+ */
+export async function sendYouTube(values: YouTubeValues, text: string, title: string, video: DoorVideo | null, fetchImpl: FetchLike): Promise<DoorSendResult> {
+  if (!values.clientId || !values.clientSecret || !values.refreshToken) return { ok: false, reason: "YouTube is not connected yet." };
+  const problem = videoProblem(video);
+  if (problem || !video) return { ok: false, reason: problem ?? "There is no video for this article yet." };
+
+  const token = await withTimeout(fetchImpl, GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: values.clientId,
+      client_secret: values.clientSecret,
+      refresh_token: values.refreshToken,
+      grant_type: "refresh_token",
+    }).toString(),
+  });
+  if ("failed" in token) return { ok: false, reason: token.failed };
+  const signedIn = (await readJson(token)) as { access_token?: unknown } | null;
+  if (!token.ok || typeof signedIn?.access_token !== "string") return { ok: false, reason: "Google did not accept the YouTube sign-in details." };
+
+  // Step 1: describe the video and ask for an upload address.
+  const start = await withTimeout(fetchImpl, `${YOUTUBE_UPLOAD}?uploadType=resumable&part=snippet,status`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=UTF-8",
+      Authorization: `Bearer ${signedIn.access_token}`,
+      "X-Upload-Content-Type": "video/mp4",
+      "X-Upload-Content-Length": String(video.bytes),
+    },
+    body: JSON.stringify({
+      snippet: { title: plainVideoText(title, 100) || "New on the blog", description: plainVideoText(text, 5000), categoryId: "22" },
+      status: { privacyStatus: "public", selfDeclaredMadeForKids: false },
+    }),
+  });
+  if ("failed" in start) return { ok: false, reason: start.failed };
+  if (start.status === 401) return { ok: false, reason: "YouTube did not accept the sign-in for uploads." };
+  if (start.status === 403) return { ok: false, reason: "YouTube refused the upload. It may be the daily upload limit or the upload permission." };
+  if (start.status === 429) return { ok: false, reason: "YouTube is limiting uploads. Try later." };
+  const location = start.headers.get("location");
+  if (!start.ok || !location || !onHost(location, ["googleapis.com"])) return { ok: false, reason: "YouTube did not start the upload." };
+
+  // Step 2: send the bytes to that address. No sign-in header goes with them.
+  const sent = await withTimeout(fetchImpl, location, {
+    method: "PUT",
+    headers: { "Content-Type": "video/mp4" },
+    body: video.data,
+  });
+  if ("failed" in sent) return { ok: false, reason: sent.failed };
+  const body = (await readJson(sent)) as { id?: unknown; status?: { privacyStatus?: unknown } } | null;
+  if (!sent.ok || typeof body?.id !== "string") return { ok: false, reason: "YouTube did not take the video." };
+  const privacy = body.status?.privacyStatus;
+  const note = typeof privacy === "string" && privacy !== "public"
+    ? `YouTube kept it ${privacy}: the Google app is not yet approved for public uploads.`
+    : undefined;
+  return { ok: true, externalRef: body.id.slice(0, 120), ...(note ? { note } : {}) };
+}
+
+/**
+ * Vimeo: create the video, then send the MP4 with Vimeo's resumable (tus) upload. The upload address must be on Vimeo.
+ * The whole file must be taken (the offset must equal the size). Returns the video id.
+ */
+export async function sendVimeo(values: VimeoValues, text: string, title: string, video: DoorVideo | null, fetchImpl: FetchLike): Promise<DoorSendResult> {
+  if (!values.accessToken) return { ok: false, reason: "Vimeo is not connected yet." };
+  const problem = videoProblem(video);
+  if (problem || !video) return { ok: false, reason: problem ?? "There is no video for this article yet." };
+
+  // Step 1: create the video and get its upload address.
+  const created = await withTimeout(fetchImpl, `${VIMEO_API}/me/videos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${values.accessToken}`, Accept: VIMEO_ACCEPT },
+    body: JSON.stringify({
+      upload: { approach: "tus", size: String(video.bytes) },
+      name: plainVideoText(title, 128) || "New on the blog",
+      description: plainVideoText(text, 5000),
+      privacy: { view: "anybody" },
+    }),
+  });
+  if ("failed" in created) return { ok: false, reason: created.failed };
+  if (created.status === 401) return { ok: false, reason: "Vimeo did not accept the access token." };
+  if (created.status === 403 || created.status === 429) return { ok: false, reason: "Vimeo refused the upload. Check the upload limit on your Vimeo plan." };
+  const made = (await readJson(created)) as { uri?: unknown; upload?: { upload_link?: unknown } } | null;
+  const uri = made?.uri;
+  const link = made?.upload?.upload_link;
+  if (!created.ok || typeof uri !== "string" || typeof link !== "string" || !onHost(link, ["vimeo.com"])) {
+    return { ok: false, reason: "Vimeo did not start the upload." };
+  }
+
+  // Step 2: send the bytes to Vimeo's upload address. No sign-in header goes with them.
+  const sent = await withTimeout(fetchImpl, link, {
+    method: "PATCH",
+    headers: { "Tus-Resumable": "1.0.0", "Upload-Offset": "0", "Content-Type": "application/offset+octet-stream", Accept: VIMEO_ACCEPT },
+    body: video.data,
+  });
+  if ("failed" in sent) return { ok: false, reason: sent.failed };
+  const offset = sent.headers.get("upload-offset");
+  if (!sent.ok || (offset !== null && Number(offset) !== video.bytes)) return { ok: false, reason: "Vimeo did not take the whole video." };
+  const id = /\/videos\/(\d+)/.exec(uri)?.[1];
+  return { ok: true, externalRef: (id ?? uri).slice(0, 120) };
+}
+
+/** Read-only checks for the two video doors (no upload, no post). */
+export async function youtubeChannelCheck(values: YouTubeValues, fetchImpl: FetchLike): Promise<"connected" | "invalid" | "rate_limited" | "unavailable"> {
+  const token = await withTimeout(fetchImpl, GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: values.clientId, client_secret: values.clientSecret, refresh_token: values.refreshToken, grant_type: "refresh_token" }).toString(),
+  });
+  if ("failed" in token) return "unavailable";
+  const signedIn = (await readJson(token)) as { access_token?: unknown } | null;
+  if (!token.ok || typeof signedIn?.access_token !== "string") return token.status === 429 ? "rate_limited" : "invalid";
+  // Reading the channel the sign-in belongs to. Nothing is uploaded.
+  const channel = await withTimeout(fetchImpl, `${YOUTUBE_CHANNELS}?part=id&mine=true`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${signedIn.access_token}` },
+  });
+  if ("failed" in channel) return "unavailable";
+  if (channel.status === 429) return "rate_limited";
+  if (!channel.ok) return "invalid";
+  const body = (await readJson(channel)) as { items?: unknown[] } | null;
+  return Array.isArray(body?.items) && body.items.length > 0 ? "connected" : "invalid";
 }

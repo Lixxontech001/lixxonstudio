@@ -133,10 +133,11 @@ export const DOORS: Readonly<Record<DoorId, DoorSpec>> = {
   podcast: {
     id: "podcast",
     label: "Podcast",
-    summary: "Adds each episode to your podcast feed, which Apple Podcasts and Spotify can read once you submit it.",
+    summary: "Adds each episode, with its real audio file, to your podcast feed. Apple Podcasts and Spotify read it once you submit the feed yourself.",
     fields: [
       { secretName: "podcast_show_title", label: "Show title", kind: "identifier" },
       { secretName: "podcast_show_author", label: "Show author", kind: "identifier" },
+      { secretName: "podcast_cover_url", label: "Cover picture address (square, 1400 to 3000 pixels)", kind: "identifier" },
     ],
   },
   vimeo: {

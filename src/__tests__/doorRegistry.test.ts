@@ -15,6 +15,7 @@ const CATALOG_FILES = [
   'supabase/migrations/20261005100000_automation_keys_owner_and_catalog.sql',
   'supabase/migrations/20261011090000_door_connections_catalog.sql',
   'supabase/migrations/20261011130000_door_catalog_twelve.sql',
+  'supabase/migrations/20261011160000_podcast_cover_catalog.sql',
 ];
 const catalogText = CATALOG_FILES.map((file) => readFileSync(join(process.cwd(), file), 'utf8')).join('\n');
 

@@ -3,7 +3,7 @@
 // in vercel.json; the Supabase URL comes from the same env var the frontend uses.
 export const config = { runtime: 'edge' };
 
-const ALLOWED = new Set(['sitemap', 'rss', 'prerender']);
+const ALLOWED = new Set(['sitemap', 'rss', 'prerender', 'podcast']);
 
 /** Read a process env var, trying each name in order. */
 function env(...names: string[]): string | undefined {

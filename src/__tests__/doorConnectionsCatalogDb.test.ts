@@ -9,6 +9,7 @@ import { DOOR_IDS, DOORS, doorSecretNames } from '../../supabase/functions/_shar
 
 const MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/20261011090000_door_connections_catalog.sql'), 'utf8');
 const TWELVE_MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/20261011130000_door_catalog_twelve.sql'), 'utf8');
+const PODCAST_COVER_MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/20261011160000_podcast_cover_catalog.sql'), 'utf8');
 
 const CATALOG = `
 create table public.automation_secret_catalog (
@@ -42,6 +43,7 @@ beforeAll(async () => {
   await db.exec(CATALOG);
   await db.exec(MIGRATION);
   await db.exec(TWELVE_MIGRATION);
+  await db.exec(PODCAST_COVER_MIGRATION);
 });
 
 afterAll(async () => {
@@ -85,6 +87,7 @@ describe('the door fields are in the secret catalogue', () => {
     const before = await rows();
     await db.exec(MIGRATION);
     await db.exec(TWELVE_MIGRATION);
+    await db.exec(PODCAST_COVER_MIGRATION);
     expect(await rows()).toEqual(before);
   });
 
@@ -93,6 +96,13 @@ describe('the door fields are in the secret catalogue', () => {
     expect(result.rows[0].label).toBe('YouTube OAuth client ID');
     expect(TWELVE_MIGRATION).not.toMatch(/'youtube_/);
     expect(TWELVE_MIGRATION).not.toMatch(/'tumblr_|'telegram_|'bluesky_|'mastodon_|'discord_|'blogger_/);
+  });
+
+  it('the podcast cover migration adds one catalogue row, and nothing else', () => {
+    expect(PODCAST_COVER_MIGRATION).toMatch(/'podcast_cover_url'/);
+    expect(PODCAST_COVER_MIGRATION).not.toMatch(/vault\.(secrets|create_secret|decrypted_secrets)/i);
+    expect(PODCAST_COVER_MIGRATION).not.toMatch(/create\s+(table|or\s+replace\s+function|function)/i);
+    expect(PODCAST_COVER_MIGRATION).toMatch(/Additive\. NOT applied to production\./);
   });
 
   it('the migration adds catalogue rows only: no Vault value is written and no posting table is made', () => {

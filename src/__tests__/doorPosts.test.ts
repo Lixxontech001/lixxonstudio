@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { DOOR_IDS } from '../../supabase/functions/_shared/doorRegistry';
 import {
   DOOR_DAILY_LIMIT,
+  DOOR_MEDIA,
   DOOR_TEXT_LIMIT,
   DOOR_WINDOW_DAYS,
   OPEN_DOORS,
@@ -39,12 +41,22 @@ function pick(articles: DoorArticle[], overrides: Partial<{ postedIds: Set<strin
 }
 
 describe('the open doors', () => {
-  it('are the six free doors: Telegram, Discord, Bluesky, Mastodon, Tumblr and Blogger, and only those', () => {
-    expect([...OPEN_DOORS]).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com']);
+  it('are all twelve auto doors, and only those', () => {
+    expect([...OPEN_DOORS]).toEqual([
+      'telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast',
+    ]);
+    expect([...OPEN_DOORS].sort()).toEqual([...DOOR_IDS].sort());
     for (const door of OPEN_DOORS) expect(isOpenDoor(door)).toBe(true);
     expect(isOpenDoor('instagram')).toBe(false);
     expect(isOpenDoor('whatsapp')).toBe(false);
     expect(isOpenDoor('toString')).toBe(false);
+  });
+
+  it('each door that needs a file says which kind: Pixelfed a picture, YouTube and Vimeo a video, Podcast audio, and the rest none', () => {
+    expect(DOOR_MEDIA).toEqual({ pixelfed: 'image', youtube: 'video', vimeo: 'video', podcast: 'audio' });
+    for (const door of OPEN_DOORS) {
+      if (!(door in DOOR_MEDIA)) expect(DOOR_MEDIA[door], door).toBeUndefined();
+    }
   });
 
   it('never include a gated channel', () => {

@@ -6,7 +6,21 @@ import { copyProblem } from "./packRules.ts";
 import type { DoorId } from "./doorRegistry.ts";
 
 /** Doors that can post in this build. The others are listed honestly as "not built yet". */
-export const OPEN_DOORS: readonly DoorId[] = ["telegram", "discord", "bluesky", "mastodon", "tumblr", "blogger", "medium", "pixelfed", "wordpress_com"];
+export const OPEN_DOORS: readonly DoorId[] = [
+  "telegram", "discord", "bluesky", "mastodon", "tumblr", "blogger", "medium", "pixelfed", "wordpress_com", "youtube", "vimeo", "podcast",
+];
+
+/**
+ * The kind of file a door needs from the article's pack or site. Checked before anything is reserved:
+ * a missing file skips the door for the day with a plain reason, and no slot is used.
+ * Pixelfed: the article's cover picture. YouTube and Vimeo: a real pack MP4. Podcast: the episode's audio file.
+ */
+export const DOOR_MEDIA: Readonly<Partial<Record<DoorId, "image" | "video" | "audio">>> = {
+  pixelfed: "image",
+  youtube: "video",
+  vimeo: "video",
+  podcast: "audio",
+};
 
 /** Doors that need the article's own cover picture. Their article is picked only from articles that have one. */
 export const DOORS_NEED_PICTURE: readonly DoorId[] = ["pixelfed"];

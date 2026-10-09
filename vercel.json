@@ -28,6 +28,7 @@
     { "source": "/sitemap.xml", "destination": "/api/feeds?type=sitemap" },
     { "source": "/rss.xml", "destination": "/api/feeds?type=rss" },
     { "source": "/feed", "destination": "/api/feeds?type=rss" },
+    { "source": "/podcast.xml", "destination": "/api/feeds?type=podcast" },
     {
       "source": "/blog/:slug",
       "has": [{ "type": "header", "key": "user-agent", "value": ".*(bot|crawl|spider|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|pinterest|embedly|quora|outbrain|vkshare|w3c_validator|skypeuripreview|applebot|duckduckbot|baiduspider|yandex|google-inspectiontool|lighthouse|chrome-lighthouse).*" }],

@@ -29,7 +29,8 @@ describe('the free doors step is part of the day run, behind the same gates', ()
 
   it('the door step never writes the articles', () => {
     expect(DOORS_STEP).not.toMatch(/from\("posts"\)\s*\.(insert|update|upsert|delete)/);
-    expect(DOORS_STEP).not.toContain('content');
+    // An object key named content would be a write to the article body. A word like contentType (a file type) is fine.
+    expect(DOORS_STEP).not.toMatch(/\bcontent\s*:/);
   });
 
   it('the door step sends only through the six open adapters, and only to open doors', () => {

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { OPEN_DOORS } from '../../supabase/functions/_shared/doorPosts';
+import { DOOR_IDS } from '../../supabase/functions/_shared/doorRegistry';
 
 const MIGRATIONS = [
   '20261009140000_minds_controls.sql',
@@ -22,6 +23,7 @@ const MIGRATIONS = [
   '20261011120000_door_posts_open_all.sql',
   '20261011140000_door_posts_twelve.sql',
   '20261011150000_door_posts_three_open.sql',
+  '20261011170000_door_posts_all_twelve_open.sql',
 ];
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -158,24 +160,23 @@ describe('a post is reserved once, per door, per local day', () => {
     expect(await attempt(reserve('instagram', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
     expect(await attempt(reserve('tiktok', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
     expect(await attempt(reserve('whatsapp', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
-    // The Phase 6 doors that are not open yet (their send steps come later).
-    expect(await attempt(reserve('youtube', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
-    expect(await attempt(reserve('vimeo', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
-    expect(await attempt(reserve('podcast', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
+    // The gated Facebook Page and Pinterest stay manual, so they are refused too.
+    expect(await attempt(reserve('facebook', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
+    expect(await attempt(reserve('pinterest', POST_A, '2026-10-10'))).toMatch(/door_not_open/);
   });
 
-  it('the nine open doors are accepted: the six from Phase 5, then Medium, Pixelfed and WordPress.com', async () => {
-    const open = ['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com'];
+  it('all twelve auto doors are accepted: the six from Phase 5, then Medium, Pixelfed, WordPress.com, YouTube, Vimeo and Podcast', async () => {
+    const open = ['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast'];
     for (const [index, door] of open.entries()) {
       const postId = [POST_A, POST_B, POST_C][index % 3];
       expect(await attempt(reserve(door, postId, '2026-10-10')), door).toBeNull();
     }
     const rows = await asServer<{ door: string }>('select door from public.minds_door_posts order by door');
-    expect(rows.map((row) => row.door)).toEqual(['blogger', 'bluesky', 'discord', 'mastodon', 'medium', 'pixelfed', 'telegram', 'tumblr', 'wordpress_com']);
+    expect(rows.map((row) => row.door)).toEqual(['blogger', 'bluesky', 'discord', 'mastodon', 'medium', 'pixelfed', 'podcast', 'telegram', 'tumblr', 'vimeo', 'wordpress_com', 'youtube']);
   });
 
   it('the list of open doors in the database is the same as OPEN_DOORS in the code', () => {
-    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261011150000_door_posts_three_open.sql'), 'utf8');
+    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261011170000_door_posts_all_twelve_open.sql'), 'utf8');
     const match = /p_door NOT IN \(([^)]*)\)/.exec(sql);
     expect(match).not.toBeNull();
     const listed = (match?.[1] ?? '').split(',').map((item) => item.trim().replace(/'/g, ''));
@@ -308,7 +309,8 @@ describe('the door-post table accepts all twelve auto doors, and no gated channe
     }
   });
 
-  it('the reservation function still accepts only the six open doors until their send steps are built', () => {
-    expect(OPEN_DOORS).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com']);
+  it('the reservation function accepts exactly the twelve auto doors, and no gated channel', () => {
+    expect(OPEN_DOORS).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast']);
+    expect([...OPEN_DOORS].sort()).toEqual([...DOOR_IDS].sort());
   });
 });

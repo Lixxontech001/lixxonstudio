@@ -13,9 +13,9 @@ import { makeMindThink } from "../_shared/mindThink.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
-import { runDoors, type DoorRunResult } from "../_shared/runDoors.ts";
+import { runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
-import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendWordPressCom } from "../_shared/doorAdapters.ts";
+import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
   type ApplyEdit,
@@ -291,7 +291,37 @@ async function runDoorsForDay(
         return typeof data === "string" ? { ok: true, id: data } : { ok: false, reason: "failed" };
       },
       loadImage: (cover, origin) => fetchArticleImage(cover, origin),
-      send: async (door, values, text, key, image) => {
+      loadVideo: async (articleId, day): Promise<VideoLoad> => {
+        // The pack's saved MP4 for this article and day. Only a "ready" pack counts.
+        const { data, error } = await sb
+          .from("minds_packs")
+          .select("video_path")
+          .eq("owner_id", owner)
+          .eq("post_id", articleId)
+          .eq("local_day", day)
+          .eq("status", "ready")
+          .not("video_path", "is", null)
+          .limit(1);
+        if (error) return { ok: false, reason: "not_readable" };
+        const path = Array.isArray(data) && typeof data[0]?.video_path === "string" ? data[0].video_path : null;
+        if (!path) return { ok: false, reason: "no_video" };
+        const { data: file, error: fileError } = await sb.storage.from("pack-videos").download(path);
+        if (fileError || !file || file.size === 0 || file.size > VIDEO_MAX_BYTES) return { ok: false, reason: "not_readable" };
+        const contentType = path.toLowerCase().endsWith(".mp4") ? "video/mp4" : file.type;
+        return { ok: true, data: await file.arrayBuffer(), contentType, bytes: file.size };
+      },
+      loadAudio: async (articleId): Promise<AudioLoad> => {
+        // The episode's audio is the public podcast bucket's file named by the article id. Only an MP3 counts.
+        const path = `${articleId}.mp3`;
+        const { data: file, error: fileError } = await sb.storage.from("podcast-audio").download(path);
+        if (fileError || !file) return { ok: false, reason: "no_audio" };
+        if (file.size === 0) return { ok: false, reason: "no_audio" };
+        if (file.type !== "audio/mpeg") return { ok: false, reason: "not_readable" };
+        return { ok: true, path, bytes: file.size, contentType: "audio/mpeg" };
+      },
+      send: async (door, values, text, key, extra) => {
+        const media = extra.media;
+        const video = media && media.kind === "video" ? { data: media.data, contentType: media.contentType, bytes: media.bytes } : null;
         if (door === "telegram") {
           return sendTelegram({ token: values.telegram_bot_token ?? "", chatId: values.telegram_chat_id ?? "" }, text, fetch);
         }
@@ -338,6 +368,7 @@ async function runDoorsForDay(
           );
         }
         if (door === "pixelfed") {
+          const image = media && media.kind === "image" ? { data: media.data, contentType: media.contentType } : null;
           return sendPixelfed(
             { instanceUrl: values.pixelfed_instance_url ?? "", accessToken: values.pixelfed_access_token ?? "" },
             text,
@@ -345,6 +376,42 @@ async function runDoorsForDay(
             key,
             fetch,
           );
+        }
+        if (door === "youtube") {
+          return sendYouTube(
+            {
+              clientId: values.youtube_client_id ?? "",
+              clientSecret: values.youtube_client_secret ?? "",
+              refreshToken: values.youtube_refresh_token ?? "",
+            },
+            text,
+            extra.title,
+            video,
+            fetch,
+          );
+        }
+        if (door === "vimeo") {
+          return sendVimeo({ accessToken: values.vimeo_access_token ?? "" }, text, extra.title, video, fetch);
+        }
+        if (door === "podcast") {
+          // The feed is the door: an episode row is written, and /podcast.xml lists it. Nothing is sent elsewhere.
+          if (!media || media.kind !== "audio") return { ok: false, reason: "audio not made yet." };
+          const { data: episode, error: episodeError } = await sb
+            .from("podcast_episodes")
+            .insert({
+              owner_id: owner,
+              post_id: extra.articleId,
+              title: extra.title.slice(0, 200),
+              description: text.slice(0, 4000),
+              article_url: extra.articleUrl,
+              audio_path: media.path,
+              audio_bytes: media.bytes,
+              audio_type: media.contentType,
+            })
+            .select("id")
+            .single();
+          if (episodeError || !episode) return { ok: false, reason: "The podcast feed could not be updated." };
+          return { ok: true, externalRef: String(episode.id) };
         }
         return { ok: false, reason: "This door is not open." };
       },

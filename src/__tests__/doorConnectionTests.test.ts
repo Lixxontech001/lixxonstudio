@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DOOR_IDS, DOORS, type DoorId } from '../../supabase/functions/_shared/doorRegistry';
 
-// The nine doors whose check is built. The other three (YouTube, Podcast, Vimeo) answer "not_built" and make no request,
-// until their slices add a check.
-const BUILT: DoorId[] = ['telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger', 'medium', 'pixelfed', 'wordpress_com'];
-const NOT_BUILT: DoorId[] = DOOR_IDS.filter((id) => !BUILT.includes(id));
+// All twelve doors have a built check (Phase 6 slice 4 added YouTube, Vimeo and Podcast).
+const BUILT: DoorId[] = [...DOOR_IDS];
 import {
   DOOR_TEST_MESSAGE,
   doorTestMessage,
@@ -25,12 +23,15 @@ const VALUES: Record<DoorId, Record<string, string>> = {
     tumblr_token_secret: 'TK-TOKEN-SECRET',
     tumblr_blog_name: 'lixxon',
   },
-  // The new doors have no check yet. Their values are used only to test "not_built" with no request.
   medium: { medium_integration_token: 'MEDIUM-SECRET' },
   youtube: { youtube_client_id: 'YT-CLIENT', youtube_client_secret: 'YT-SECRET', youtube_refresh_token: 'YT-REFRESH' },
   pixelfed: { pixelfed_instance_url: 'https://pixelfed.example', pixelfed_access_token: 'PIX-SECRET' },
   wordpress_com: { wordpress_com_site: 'lixxon.wordpress.com', wordpress_com_access_token: 'WP-SECRET' },
-  podcast: { podcast_show_title: 'Lixxon Show', podcast_show_author: 'Lixxon' },
+  podcast: {
+    podcast_show_title: 'Lixxon Show',
+    podcast_show_author: 'Lixxon',
+    podcast_cover_url: 'https://lixxonstudio.example/podcast-cover.jpg',
+  },
   vimeo: { vimeo_access_token: 'VIMEO-SECRET' },
   blogger: {
     blogger_client_id: 'BL-CLIENT',
@@ -80,6 +81,11 @@ function healthy(url: string): Response {
   if (url.startsWith('https://www.googleapis.com/blogger/v3/blogs/')) return json({ id: '8070105920543249955' });
   if (url === 'https://api.medium.com/v1/me') return json({ data: { id: 'MEDIUM-ACCOUNT' } });
   if (url.startsWith('https://public-api.wordpress.com/rest/v1.1/sites/')) return json({ ID: 1, name: 'Lixxon' });
+  if (url.startsWith('https://www.googleapis.com/youtube/v3/channels')) return json({ items: [{ id: 'UC-CHANNEL' }] });
+  if (url === 'https://api.vimeo.com/me') return json({ uri: '/users/1' });
+  if (url === 'https://lixxonstudio.example/podcast-cover.jpg') {
+    return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200, headers: { 'content-type': 'image/jpeg' } });
+  }
   return new Response('unexpected', { status: 500 });
 }
 
@@ -138,11 +144,10 @@ describe('every door check is a read: nothing is posted', () => {
 });
 
 describe('a door that is not fully saved is not tested at all', () => {
-  it('a door without a check yet is not_built, with no request, even when every field is saved', async () => {
-    for (const door of NOT_BUILT) {
-      const { fetchImpl, calls } = network(healthy);
-      expect(await testDoorConnection(door, VALUES[door], fetchImpl), door).toBe('not_built');
-      expect(calls, door).toHaveLength(0);
+  it('every door has a built check, so none answers not_built when every field is saved', async () => {
+    for (const door of DOOR_IDS) {
+      const { fetchImpl } = network(healthy);
+      expect(await testDoorConnection(door, VALUES[door], fetchImpl), door).toBe('connected');
     }
   });
 

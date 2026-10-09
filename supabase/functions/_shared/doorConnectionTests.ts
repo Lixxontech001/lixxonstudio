@@ -8,6 +8,7 @@ import {
   mastodonOrigin,
   normalizeBlueskyHandle,
   wordpressComSite,
+  youtubeChannelCheck,
   oauthAuthorization,
   tumblrBlogName,
   validDiscordWebhook,
@@ -164,7 +165,50 @@ async function pixelfedTest(values: Values, fetchImpl: FetchLike): Promise<DoorT
   return response.ok ? "connected" : refusedStatus(response.status);
 }
 
+/** Vimeo: reads the account the token belongs to. Nothing is uploaded. */
+async function vimeoTest(values: Values, fetchImpl: FetchLike): Promise<DoorTestStatus> {
+  const response = await withTimeout(fetchImpl, "https://api.vimeo.com/me", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${values.vimeo_access_token}`, Accept: "application/vnd.vimeo.*+json;version=3.4" },
+  });
+  if ("failed" in response) return "unavailable";
+  return response.ok ? "connected" : refusedStatus(response.status);
+}
+
+/** YouTube: signs in and reads the channel. Nothing is uploaded. */
+async function youtubeTest(values: Values, fetchImpl: FetchLike): Promise<DoorTestStatus> {
+  return youtubeChannelCheck(
+    { clientId: values.youtube_client_id, clientSecret: values.youtube_client_secret, refreshToken: values.youtube_refresh_token },
+    fetchImpl,
+  );
+}
+
+/**
+ * Podcast: the cover picture is the only thing a read can check. It must be a secure link to a picture of at most
+ * 510 KB. Its square size is not checked here. The owner checks that before submitting the feed.
+ */
+async function podcastTest(values: Values, fetchImpl: FetchLike): Promise<DoorTestStatus> {
+  let url: URL;
+  try {
+    url = new URL(values.podcast_cover_url);
+  } catch {
+    return "invalid";
+  }
+  if (url.protocol !== "https:") return "invalid";
+  const response = await withTimeout(fetchImpl, url.toString(), { method: "GET", headers: { Accept: "image/*" } });
+  if ("failed" in response) return "unavailable";
+  if (!response.ok) return refusedStatus(response.status);
+  const type = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (type !== "image/jpeg" && type !== "image/png") return "invalid";
+  const body = await response.arrayBuffer().catch(() => null);
+  if (!body || body.byteLength === 0 || body.byteLength > 510 * 1024) return "invalid";
+  return "connected";
+}
+
 const CHECKS: Partial<Record<DoorId, (values: Values, fetchImpl: FetchLike) => Promise<DoorTestStatus>>> = {
+  youtube: youtubeTest,
+  vimeo: vimeoTest,
+  podcast: podcastTest,
   medium: mediumTest,
   wordpress_com: wordpressComTest,
   pixelfed: pixelfedTest,

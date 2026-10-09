@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runDoors, DOORS_NOTHING_CONNECTED_DETAIL, type DoorRunPorts, type ReserveResult } from '../../supabase/functions/_shared/runDoors';
+import { runDoors, DOORS_NOTHING_CONNECTED_DETAIL, type AudioLoad, type DoorRunPorts, type DoorSendExtra, type ReserveResult, type VideoLoad } from '../../supabase/functions/_shared/runDoors';
 import { KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from '../../supabase/functions/_shared/runDay';
 import type { DoorArticle } from '../../supabase/functions/_shared/doorPosts';
 import type { DoorSendResult } from '../../supabase/functions/_shared/doorAdapters';
@@ -27,7 +27,23 @@ const ALL_SECRETS: Record<string, string> = {
   discord_webhook_url: HOOK,
 };
 
-const NINE_DOOR_SECRETS: Record<string, string> = {
+const YOUTUBE_SECRETS: Record<string, string> = {
+  youtube_client_id: 'YT-CLIENT',
+  youtube_client_secret: 'YT-CLIENT-SECRET',
+  youtube_refresh_token: 'YT-REFRESH-SECRET',
+};
+const VIMEO_SECRETS: Record<string, string> = { vimeo_access_token: 'VIMEO-TOKEN-SECRET' };
+const PODCAST_SECRETS: Record<string, string> = {
+  podcast_show_title: 'Lixxon Show',
+  podcast_show_author: 'Lixxon Studio',
+  podcast_cover_url: 'https://lixxonstudio.example/podcast-cover.jpg',
+};
+
+/** A real MP4 from a pack, and a real MP3 episode, as the loaders would return them. */
+const VIDEO_OK: VideoLoad = { ok: true, data: new Uint8Array([0, 0, 0, 24]).buffer, contentType: 'video/mp4', bytes: 4 };
+const AUDIO_OK: AudioLoad = { ok: true, path: 'post-1.mp3', bytes: 2048, contentType: 'audio/mpeg' };
+
+const TWELVE_DOOR_SECRETS: Record<string, string> = {
   ...ALL_SECRETS,
   bluesky_handle: 'lixxon.bsky.social',
   bluesky_app_password: 'APP-PASS-SECRET',
@@ -47,6 +63,9 @@ const NINE_DOOR_SECRETS: Record<string, string> = {
   pixelfed_access_token: 'PIXELFED-TOKEN-SECRET',
   wordpress_com_site: 'lixxon.wordpress.com',
   wordpress_com_access_token: 'WORDPRESS-TOKEN-SECRET',
+  ...YOUTUBE_SECRETS,
+  ...VIMEO_SECRETS,
+  ...PODCAST_SECRETS,
 };
 
 interface Harness {
@@ -57,10 +76,15 @@ interface Harness {
   finished: Array<{ id: string; status: string; externalRef: string | null; errorNote: string | null }>;
   logs: Array<{ door: string; outcome: string; detail: string }>;
   finishAttempts: Record<string, number>;
-  /** Which doors were sent, and whether each send got a picture. Kept apart from `sent`. */
-  images: Array<{ door: string; hasImage: boolean }>;
+  /** Which doors were sent, and which kind of file each send got (null for text only). Kept apart from `sent`. */
+  media: Array<{ door: string; kind: 'image' | 'video' | 'audio' | null }>;
+  /** Every send's extra, as the door received it. */
+  extras: Array<{ door: string; extra: DoorSendExtra }>;
   /** The cover addresses the picture loader was asked for. */
   loadedCovers: string[];
+  /** The article ids the video and audio loaders were asked for. */
+  loadedVideo: string[];
+  loadedAudio: string[];
 }
 
 function harness(options: {
@@ -77,6 +101,10 @@ function harness(options: {
   sendThrows?: boolean;
   /** The picture loader. Default: a good JPEG. */
   loadImage?: (cover: string) => ArticleImageLoad;
+  /** The pack video loader. Default: a real MP4. */
+  loadVideo?: (articleId: string) => VideoLoad;
+  /** The episode audio loader. Default: a real MP3. */
+  loadAudio?: (articleId: string) => AudioLoad;
 } = {}): Harness {
   const finishAttempts: Record<string, number> = {};
   const secrets = options.secrets ?? ALL_SECRETS;
@@ -85,8 +113,11 @@ function harness(options: {
   const reserved: string[] = [];
   const finished: Harness['finished'] = [];
   const logs: Harness['logs'] = [];
-  const images: Harness['images'] = [];
+  const media: Harness['media'] = [];
+  const extras: Harness['extras'] = [];
   const loadedCovers: string[] = [];
+  const loadedVideo: string[] = [];
+  const loadedAudio: string[] = [];
   const ports: DoorRunPorts = {
     readArticles: async () => options.articles ?? [ARTICLE],
     readPostedIds: async (door) => new Set(options.postedIds?.[door] ?? []),
@@ -104,10 +135,19 @@ function harness(options: {
       loadedCovers.push(cover);
       return options.loadImage ? options.loadImage(cover) : PICTURE;
     },
-    send: async (door, _values, text, key, image) => {
+    loadVideo: async (articleId) => {
+      loadedVideo.push(articleId);
+      return options.loadVideo ? options.loadVideo(articleId) : VIDEO_OK;
+    },
+    loadAudio: async (articleId) => {
+      loadedAudio.push(articleId);
+      return options.loadAudio ? options.loadAudio(articleId) : AUDIO_OK;
+    },
+    send: async (door, _values, text, key, extra) => {
       if (options.sendThrows) throw new Error('send');
       sent.push({ door, text });
-      images.push({ door, hasImage: image !== null });
+      media.push({ door, kind: extra.media ? extra.media.kind : null });
+      extras.push({ door, extra });
       keys.push({ door, key });
       return options.send ? options.send(door) : { ok: true, externalRef: `ref-${door}` };
     },
@@ -121,7 +161,7 @@ function harness(options: {
     },
     pause: async () => {},
   };
-  return { ports, sent, keys, reserved, finished, logs, finishAttempts, images, loadedCovers };
+  return { ports, sent, keys, reserved, finished, logs, finishAttempts, media, extras, loadedCovers, loadedVideo, loadedAudio };
 }
 
 const DAY_INPUT = { localDay: '2026-10-10', takeover: true, killScope: 'none' as const, nowMs: NOW, siteOrigin: SITE };
@@ -179,7 +219,7 @@ describe('a door posts only when it is fully connected', () => {
     expect(h.sent).toEqual([{ door: 'discord', text: `New on the blog: Easy routine for dry skin\n${SITE}/blog/easy-routine-dry-skin` }]);
     expect(h.finished).toEqual([{ id: 'row-discord', status: 'posted', externalRef: 'ref-discord', errorNote: null }]);
     expect(h.logs).toEqual([{ door: 'discord', outcome: 'done', detail: 'Posted to Discord: "Easy routine for dry skin".' }]);
-    expect(result.detail).toBe('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon, Tumblr, Blogger, Medium, Pixelfed, WordPress.com.');
+    expect(result.detail).toBe('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon, Tumblr, Blogger, Medium, Pixelfed, WordPress.com, YouTube, Vimeo, Podcast.');
   });
 
   it('both connected doors can post on the same day, one article each', async () => {
@@ -187,27 +227,31 @@ describe('a door posts only when it is fully connected', () => {
     const result = await runDoors(DAY_INPUT, h.ports);
     expect(result.posted).toBe(2);
     expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord']);
-    expect(result.detail).toContain('Not connected yet: Bluesky, Mastodon, Tumblr, Blogger, Medium, Pixelfed, WordPress.com.');
+    expect(result.detail).toContain('Not connected yet: Bluesky, Mastodon, Tumblr, Blogger, Medium, Pixelfed, WordPress.com, YouTube, Vimeo, Podcast.');
   });
 
-  it('all nine open doors can post, in order, each with its own reserved row as the key', async () => {
-    const h = harness({ secrets: NINE_DOOR_SECRETS });
+  it('all twelve auto doors can post, in order, each with its own reserved row as the key', async () => {
+    const h = harness({ secrets: TWELVE_DOOR_SECRETS });
     const result = await runDoors(DAY_INPUT, h.ports);
     expect(result.status).toBe('done');
-    expect(result.posted).toBe(9);
-    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com']);
+    expect(result.posted).toBe(12);
+    expect(h.sent.map((item) => item.door)).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast']);
     expect(h.keys.map((item) => item.key)).toEqual(h.sent.map((item) => `row-${item.door}`));
     expect(result.detail).not.toContain('Not connected yet');
   });
 
-  it('only Pixelfed takes a picture: the other doors are sent with none', async () => {
-    const h = harness({ secrets: NINE_DOOR_SECRETS });
+  it('only Pixelfed takes a picture, only YouTube and Vimeo take a video, only Podcast takes audio, and the link doors take none', async () => {
+    const h = harness({ secrets: TWELVE_DOOR_SECRETS });
     await runDoors(DAY_INPUT, h.ports);
-    expect(h.images.filter((item) => item.hasImage).map((item) => item.door)).toEqual(['pixelfed']);
+    const kinds = (kind: string) => h.media.filter((item) => item.kind === kind).map((item) => item.door);
+    expect(kinds('image')).toEqual(['pixelfed']);
+    expect(kinds('video')).toEqual(['youtube', 'vimeo']);
+    expect(kinds('audio')).toEqual(['podcast']);
+    expect(h.media.filter((item) => item.kind === null).map((item) => item.door)).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'wordpress_com']);
   });
 
   it('Medium and WordPress.com get the same short line and link as the other link doors', async () => {
-    const h = harness({ secrets: NINE_DOOR_SECRETS });
+    const h = harness({ secrets: TWELVE_DOOR_SECRETS });
     await runDoors(DAY_INPUT, h.ports);
     const link = `${SITE}/blog/easy-routine-dry-skin`;
     expect(h.sent.find((item) => item.door === 'medium')?.text).toBe(`New on the blog: Easy routine for dry skin\n${link}`);
@@ -431,5 +475,104 @@ describe('no secret value leaves the step', () => {
     const everything = JSON.stringify([result, h.logs, h.finished]);
     expect(everything).not.toContain(TOKEN);
     expect(everything).not.toContain('HOOK-SECRET-VALUE');
+  });
+});
+
+describe('the video and audio doors send only a real file, and skip honestly without one', () => {
+  it('YouTube with no pack video yet is skipped with "no video yet", before anything is reserved', async () => {
+    const h = harness({ secrets: YOUTUBE_SECRETS, loadVideo: () => ({ ok: false, reason: 'no_video' }) });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'youtube')).toEqual({ door: 'youtube', outcome: 'skipped', detail: 'YouTube: no video yet. Nothing was posted.' });
+    expect(h.reserved).toHaveLength(0);
+    expect(h.sent).toHaveLength(0);
+    expect(result.posted).toBe(0);
+  });
+
+  it('Vimeo with no pack video yet is skipped the same way, and says so in plain words', async () => {
+    const h = harness({ secrets: VIMEO_SECRETS, loadVideo: () => ({ ok: false, reason: 'no_video' }) });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'vimeo')?.detail).toBe('Vimeo: no video yet. Nothing was posted.');
+    expect(h.sent).toHaveLength(0);
+  });
+
+  it('a video that cannot be read is skipped with a plain reason, and nothing is reserved', async () => {
+    const h = harness({ secrets: YOUTUBE_SECRETS, loadVideo: () => ({ ok: false, reason: 'not_readable' }) });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'youtube')?.detail).toBe('YouTube: the video could not be read. Nothing was posted.');
+    expect(h.reserved).toHaveLength(0);
+  });
+
+  it('a video loader that throws skips the door, and the other doors still run', async () => {
+    const h = harness({
+      secrets: { ...YOUTUBE_SECRETS, ...ALL_SECRETS },
+      loadVideo: () => { throw new Error('storage down'); },
+    });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'youtube')?.outcome).toBe('skipped');
+    expect(result.outcomes.find((item) => item.door === 'telegram')?.outcome).toBe('posted');
+  });
+
+  it('a door that is not connected never loads the video or the audio', async () => {
+    const h = harness({ secrets: ALL_SECRETS });
+    await runDoors(DAY_INPUT, h.ports);
+    expect(h.loadedVideo).toHaveLength(0);
+    expect(h.loadedAudio).toHaveLength(0);
+  });
+
+  it('YouTube with a real video is sent that video, with the article title, and is posted', async () => {
+    const h = harness({ secrets: YOUTUBE_SECRETS });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'youtube')?.outcome).toBe('posted');
+    const sendExtra = h.extras.find((item) => item.door === 'youtube')?.extra;
+    expect(sendExtra?.media?.kind).toBe('video');
+    expect(sendExtra?.media && 'contentType' in sendExtra.media ? sendExtra.media.contentType : '').toBe('video/mp4');
+    expect(sendExtra?.media && 'bytes' in sendExtra.media ? sendExtra.media.bytes : 0).toBe(4);
+    expect(sendExtra?.title).toBe('Easy routine for dry skin');
+    expect(sendExtra?.articleId).toBe('post-1');
+    expect(h.loadedVideo).toEqual(['post-1']);
+    expect(h.finished).toEqual([{ id: 'row-youtube', status: 'posted', externalRef: 'ref-youtube', errorNote: null }]);
+  });
+
+  it('a YouTube upload Google kept private is posted with the honest note, not called public', async () => {
+    const note = 'YouTube kept it private: the Google app is not yet approved for public uploads.';
+    const h = harness({ secrets: YOUTUBE_SECRETS, send: () => ({ ok: true, externalRef: 'yt-1', note }) });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'youtube')?.detail).toContain(note);
+    expect(h.logs.find((item) => item.door === 'youtube')?.detail).toContain('private');
+    expect(result.detail).not.toMatch(/made public|is public/i);
+  });
+
+  it('Podcast with no audio file yet is skipped with "audio not made yet", and no episode row is written', async () => {
+    const h = harness({ secrets: PODCAST_SECRETS, loadAudio: () => ({ ok: false, reason: 'no_audio' }) });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'podcast')).toEqual({ door: 'podcast', outcome: 'skipped', detail: 'Podcast: audio not made yet. Nothing was posted.' });
+    expect(h.reserved).toHaveLength(0);
+    expect(h.sent.some((item) => item.door === 'podcast')).toBe(false);
+  });
+
+  it('Podcast with an audio file is sent the episode fields, and is posted', async () => {
+    const h = harness({ secrets: PODCAST_SECRETS });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'podcast')?.outcome).toBe('posted');
+    const sendExtra = h.extras.find((item) => item.door === 'podcast')?.extra;
+    expect(sendExtra?.media).toEqual({ kind: 'audio', path: 'post-1.mp3', bytes: 2048, contentType: 'audio/mpeg' });
+    expect(sendExtra?.articleUrl).toBe(`${SITE}/blog/easy-routine-dry-skin`);
+    expect(h.loadedAudio).toEqual(['post-1']);
+  });
+
+  it('audio that is not an MP3 is skipped with a plain reason, and nothing is reserved', async () => {
+    const h = harness({ secrets: PODCAST_SECRETS, loadAudio: () => ({ ok: false, reason: 'not_readable' }) });
+    const result = await runDoors(DAY_INPUT, h.ports);
+    expect(result.outcomes.find((item) => item.door === 'podcast')?.detail).toBe('Podcast: the audio could not be read. Nothing was posted.');
+    expect(h.reserved).toHaveLength(0);
+  });
+
+  it('a video or audio door is never sent a fake or empty file: the send is only ever given the loaded bytes', async () => {
+    const h = harness({ secrets: { ...YOUTUBE_SECRETS, ...VIMEO_SECRETS, ...PODCAST_SECRETS } });
+    await runDoors(DAY_INPUT, h.ports);
+    for (const item of h.extras) {
+      if (item.extra.media?.kind === 'video') expect(item.extra.media.bytes).toBeGreaterThan(0);
+      if (item.extra.media?.kind === 'audio') expect(item.extra.media.bytes).toBeGreaterThan(0);
+    }
   });
 });
