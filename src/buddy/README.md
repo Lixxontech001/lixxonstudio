@@ -457,3 +457,13 @@ What is still not done, or not verified:
 - Buddy never replies to a reader. Nothing in `buddy-think` writes to `contact_messages`, the email queue or any mail sender. The test `buddyReaderMessages.test.ts` checks that from source.
 - Comments and the email queue were not used. Comments are public reader content, and the email queue is outbound. The reader form table already exists and already has an admin-only read policy, so no new flag or table was needed.
 - Not proven live: the owner's session reading `contact_messages` through row-level security (the policy is the admin-all policy from the security migration), and the exact count on a real form.
+
+## Phase 9 slice 4: Buddy's own look (CSS only)
+
+- Buddy keeps four looks: Noir Gold (the default), Ivory Silk, Velvet Opera and Porcelain. No fifth look was added. `buddy.css` defines exactly those four, in the same order as `VIBES`.
+- The shell (`.buddy-app`) has its own serif (Georgia), its own background (a faint gold glow over the vibe background), and tighter tracking. The name is a small, tracked capital line, not a large heading.
+- The site's global rules no longer reach inside Buddy. Headings inherit Buddy's type, so the magazine's Playfair headings do not apply. Selections use the vibe gold, not the magazine bronze. Owner bubbles, the composer and the greeting line are serif, not the sans-serif Admin stack.
+- The greeting animation takes every colour from the current `data-vibe` variables. The shimmer keyframes use `--buddy-shimmer` only. The check is in `buddyLuxury.test.ts`.
+- No tabs, no chat rebuild, no TSX changes.
+- Not done here: the sign-in notice (`BuddyAccessGate.tsx`) still uses the site's shared Tailwind classes, which look like the Admin sign-in. Changing it needs a class edit in TSX, so it was left for the owner to decide.
+- Not proven by eye: no browser was available in the sandbox, so the look was checked through the stylesheet and its tests, not a screenshot.

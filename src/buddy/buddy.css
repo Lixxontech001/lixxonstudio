@@ -80,9 +80,11 @@
   height: 100vh;
   height: 100dvh;
   width: 100%;
-  background: var(--buddy-bg);
+  background: radial-gradient(120% 55% at 50% -8%, var(--buddy-gold-tint), transparent 70%), var(--buddy-bg);
   color: var(--buddy-text);
   font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
@@ -95,6 +97,20 @@
 .buddy-app :focus-visible {
   outline: 2px solid var(--buddy-gold-strong);
   outline-offset: 2px;
+}
+
+/* Buddy keeps its own type and colours. The site's global rules (Inter body text, Playfair headings and the
+   magazine's selection colour) must not reach inside it, so Buddy never looks like the magazine or Admin. */
+.buddy-app h1,
+.buddy-app h2,
+.buddy-app h3,
+.buddy-app h4 {
+  font-family: inherit;
+}
+
+.buddy-app ::selection {
+  background: var(--buddy-gold);
+  color: var(--buddy-on-gold);
 }
 
 /* Top bar: one word and two quiet buttons. */
@@ -110,9 +126,11 @@
 
 .buddy-name {
   margin: 0;
-  font-size: 22px;
+  font-family: inherit;
+  font-size: 14px;
   font-weight: 400;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
   color: var(--buddy-gold-strong);
 }
 
@@ -146,7 +164,7 @@
 }
 
 .buddy-button--solid {
-  background: var(--buddy-gold);
+  background: linear-gradient(180deg, var(--buddy-gold-strong), var(--buddy-gold));
   border-color: var(--buddy-gold);
   color: var(--buddy-on-gold);
 }
@@ -206,7 +224,7 @@
   align-self: flex-end;
   background: var(--buddy-gold-tint);
   border: 1px solid var(--buddy-line);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: inherit;
   font-size: 15px;
 }
 
@@ -298,7 +316,7 @@
   background: var(--buddy-bg);
   color: var(--buddy-text);
   font: inherit;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: inherit;
   font-size: 16px;
   line-height: 1.4;
 }
@@ -460,6 +478,8 @@
 
 .buddy-greeting-line-text {
   margin: 0;
+  font-family: inherit;
+  font-style: italic;
   font-size: clamp(24px, 6vw, 34px);
   color: var(--buddy-gold-strong);
   animation: buddy-rise 0.9s ease-out 0.4s both, buddy-shimmer 3.2s ease-in-out 1.4s infinite;
