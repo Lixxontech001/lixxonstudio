@@ -54,7 +54,7 @@ function apiFailureMessage(): string {
 function displayTime(value: string | null): string {
   if (!value) return '—';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleString('en-NG', { timeZone: 'Africa/Lagos' }) + ' WAT';
+  return Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }) + ' (studio clock)';
 }
 
 function scheduledTimeLabel(value: string | null): string {
@@ -62,7 +62,7 @@ function scheduledTimeLabel(value: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown time';
   const utc = date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, 'Z');
-  return `${automationLagosTime(value)} WAT · ${utc} UTC`;
+  return `${automationLagosTime(value)} studio clock · ${utc} UTC`;
 }
 
 function durationLabel(duration: number | null): string {
@@ -78,9 +78,9 @@ function safeCodeLabel(code: string | null): string | null {
 
 function controlConfirmation(action: 'pause' | 'resume' | 'retry' | 'cancel', title: string): string {
   switch (action) {
-    case 'pause': return `Pause the automation run for “${title}”? Any remaining work will stop before publishing. Resume will queue it for the next 08:00 Lagos tick.`;
-    case 'resume': return `Resume “${title}” safely? It will be queued for the next 08:00 Lagos tick. This does not publish the article.`;
-    case 'retry': return `Retry the safe infrastructure failure for “${title}”? It will be queued for the next 08:00 Lagos tick and will still require owner review.`;
+    case 'pause': return `Pause the automation run for “${title}”? Any remaining work will stop before publishing. Resume will queue it for the next 08:00 studio-clock run.`;
+    case 'resume': return `Resume “${title}” safely? It will be queued for the next 08:00 studio-clock run. This does not publish the article.`;
+    case 'retry': return `Retry the safe infrastructure failure for “${title}”? It will be queued for the next 08:00 studio-clock run and will still require owner review.`;
     case 'cancel': return `Cancel “${title}” permanently? The run and its pending kit will be revoked. To try again, schedule a new run.`;
   }
 }
@@ -211,7 +211,7 @@ export default function AutomationRuns() {
       });
       if (rpcError || !record(data) || data.ok !== true) throw new Error('run control failed');
       const status = typeof data.status === 'string' ? data.status : 'updated';
-      const dispatchNote = status === 'queued' ? ' It will be picked up by the next 08:00 Lagos schedule tick.' : '';
+      const dispatchNote = status === 'queued' ? ' It will be picked up by the next 08:00 studio-clock run.' : '';
       setNotice(`Run ${action} recorded: ${status}.${dispatchNote}`);
       await refresh();
     } catch {
@@ -305,7 +305,7 @@ export default function AutomationRuns() {
           </div>
           <h1 className="font-serif text-3xl text-charcoal">Run Monitor &amp; Controls</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-            Daily schedule: <strong>08:00 Africa/Lagos (WAT)</strong>. View safe run steps, owner review flags,
+            Daily schedule: <strong>08:00 on your studio clock</strong>. View safe run steps, owner review flags,
             retry state and zero-cost usage. Article prose is never returned or changed by automation.
           </p>
         </div>
@@ -322,7 +322,7 @@ export default function AutomationRuns() {
 
       <section className="grid gap-3 md:grid-cols-2" aria-label="Owner-controlled automation schedule">
         {switchRow('automation.enabled', 'Master kill switch', 'When off, the runner pauses safely before completing work. Owner-only control; every change is database-audited.')}
-        {switchRow('automation.daily_pipeline', '08:00 Lagos daily schedule', 'Enables scheduled article preflight and owner-review preparation. Both this schedule and the master switch must be on.')}
+        {switchRow('automation.daily_pipeline', '08:00 studio-clock daily schedule', 'Enables scheduled article preflight and owner-review preparation. Both this schedule and the master switch must be on.')}
       </section>
 
       {!canManage && <p className="rounded-sm border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">Read-only view. Only an active owner or founder can change the switches or control a run.</p>}
@@ -360,7 +360,7 @@ export default function AutomationRuns() {
           {monitor.runs.length === 0 ? (
             <section className="rounded-sm border border-gray-200 bg-white p-8 text-center">
               <h2 className="mt-3 font-serif text-xl text-charcoal">No automation runs yet</h2>
-              <p className="mt-2 text-sm leading-6 text-gray-600">Runs are created for owner-approved scheduled articles on the daily Lagos tick. Turning on both switches does not edit or publish article prose.</p>
+              <p className="mt-2 text-sm leading-6 text-gray-600">Runs are created for owner-approved scheduled articles on the daily studio-clock run. Turning on both switches does not edit or publish article prose.</p>
             </section>
           ) : (
             <section className="space-y-4" aria-label="Recent article runs">
@@ -378,7 +378,7 @@ export default function AutomationRuns() {
                           </div>
                           <p className="mt-1 break-all text-xs text-gray-500">Run {run.id} · Article {run.postId}</p>
                           <div className="mt-3 grid gap-2 text-xs text-gray-700 sm:grid-cols-2 lg:grid-cols-4">
-                            <p><strong>Scheduled:</strong> {automationLagosTime(run.scheduledAtUtc)} WAT</p>
+                            <p><strong>Scheduled:</strong> {automationLagosTime(run.scheduledAtUtc)} (studio clock)</p>
                             <p><strong>Created:</strong> {displayTime(run.createdAt)}</p>
                             <p><strong>Duration:</strong> {durationLabel(run.durationMs)}</p>
                             <p><strong>Dispatch retries:</strong> {run.dispatchRetries} · Attempt {run.workflowAttempt ?? '—'}</p>

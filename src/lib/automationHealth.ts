@@ -30,7 +30,7 @@ const CATALOG: Record<AutomationHealthKey, { label: string; category: string; ac
   database: { label: 'Database & migrations', category: 'Core', actionHref: null, actionLabel: null },
   vault: { label: 'Supabase Vault', category: 'Core', actionHref: '/admin/automation/keys', actionLabel: 'Open Keys' },
   github_actions: { label: 'GitHub Actions', category: 'Orchestration', actionHref: '/admin/automation/keys', actionLabel: 'Review credentials' },
-  daily_schedule: { label: 'Daily Lagos schedule', category: 'Orchestration', actionHref: null, actionLabel: null },
+  daily_schedule: { label: 'Daily studio-clock schedule', category: 'Orchestration', actionHref: null, actionLabel: null },
   ai_providers: { label: 'AI provider checks', category: 'AI', actionHref: '/admin/automation/keys', actionLabel: 'Review AI keys' },
   ai_quota: { label: 'AI usage & quota', category: 'AI', actionHref: null, actionLabel: null },
   distribution: { label: 'Distribution channels', category: 'Channels', actionHref: '/admin/automation/keys', actionLabel: 'Review channel keys' },

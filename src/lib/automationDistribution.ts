@@ -486,9 +486,9 @@ export async function downloadDistributionImage(url: string, filename: string): 
 // ---------------------------------------------------------------------------
 
 export const KIT_SLOTS = [
-  { key: 'morning', label: 'Morning', at: '08:00 WAT' },
-  { key: 'midday', label: 'Midday', at: '13:00 WAT' },
-  { key: 'evening', label: 'Evening', at: '18:00 WAT' },
+  { key: 'morning', label: 'Morning', at: '08:00 studio clock' },
+  { key: 'midday', label: 'Midday', at: '13:00 studio clock' },
+  { key: 'evening', label: 'Evening', at: '18:00 studio clock' },
 ] as const;
 export type KitSlot = (typeof KIT_SLOTS)[number]['key'];
 export const KIT_SLOT_KEYS: readonly KitSlot[] = KIT_SLOTS.map(slot => slot.key);

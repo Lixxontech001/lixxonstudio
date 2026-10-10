@@ -93,7 +93,8 @@ describe('Automation Runs page', () => {
     const el = mount();
     await act(async () => { root.render(<AutomationRuns />); await Promise.resolve(); });
     await settle();
-    expect(el.textContent).toContain('08:00 Africa/Lagos');
+    expect(el.textContent).toContain('08:00 on your studio clock');
+    expect(el.textContent).not.toMatch(/Africa\/Lagos|Lagos|WAT|Nigeria/);
     expect(el.textContent).toContain('RUNNER STEP FAILED');
 
     const previewButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.includes('Read-only preview'));
@@ -107,9 +108,9 @@ describe('Automation Runs page', () => {
     expect(retryButton).toBeDefined();
     await act(async () => { retryButton!.click(); await Promise.resolve(); });
     await settle();
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('next 08:00 Lagos tick'));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('next 08:00 studio-clock run'));
     expect(el.textContent).toContain('Run retry recorded: queued.');
-    expect(el.textContent).toContain('picked up by the next 08:00 Lagos schedule tick');
+    expect(el.textContent).toContain('picked up by the next 08:00 studio-clock run');
     expect(el.textContent).not.toContain('Retry next tick');
     expect(mocks.rpc).toHaveBeenCalledWith('automation_control_run', { p_run_id: RUN_ID, p_action: 'retry' });
 

@@ -73,9 +73,9 @@ export function isoToLagosInput(value: string | null | undefined): string {
 export function lagosDateTimeLabel(value: string | null | undefined): string {
   if (!value) return 'No date proposed';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Invalid date' : new Intl.DateTimeFormat('en-NG', {
+  return Number.isNaN(date.getTime()) ? 'Invalid date' : new Intl.DateTimeFormat('en-GB', {
     timeZone: LAGOS_TIME_ZONE, dateStyle: 'medium', timeStyle: 'short',
-  }).format(date) + ' WAT';
+  }).format(date) + ' (studio clock)';
 }
 
 export function addLagosDays(dayKey: string, days: number): string {
@@ -132,8 +132,8 @@ export function validateIntakeMetadata(
     issues.push({ field: 'coverImage', severity: 'error', message: 'Choose a valid HTTPS image from the Media library.' });
   }
   if (!draft.coverImageAlt.trim()) issues.push({ field: 'coverImageAlt', severity: 'error', message: 'Add owner-written alt text for the selected image.' });
-  if (!proposedIso) issues.push({ field: 'proposedAt', severity: 'error', message: 'Choose a valid proposed date and time in Lagos.' });
-  else if (new Date(proposedIso).getTime() <= now.getTime()) issues.push({ field: 'proposedAt', severity: 'error', message: 'The proposed Lagos publication time must be in the future.' });
+  if (!proposedIso) issues.push({ field: 'proposedAt', severity: 'error', message: 'Choose a valid proposed date and time on your studio clock.' });
+  else if (new Date(proposedIso).getTime() <= now.getTime()) issues.push({ field: 'proposedAt', severity: 'error', message: 'The proposed publication time must be in the future on your studio clock.' });
   if (wordCount <= 0) issues.push({ field: 'wordCount', severity: 'error', message: 'The DOCX contains no importable article words.' });
   else if (wordCount < ARTICLE_WORD_TARGET.min || wordCount > ARTICLE_WORD_TARGET.max) {
     issues.push({ field: 'wordCount', severity: 'warning', message: `This article has ${wordCount.toLocaleString()} words; the target is ${ARTICLE_WORD_TARGET.min.toLocaleString()}–${ARTICLE_WORD_TARGET.max.toLocaleString()}. The prose is not changed.` });

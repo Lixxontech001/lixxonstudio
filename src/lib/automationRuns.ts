@@ -337,7 +337,7 @@ export function automationLagosTime(value: string | null): string {
   if (!value) return 'Not scheduled';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown time';
-  return new Intl.DateTimeFormat('en-NG', {
+  return new Intl.DateTimeFormat('en-GB', {
     dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos',
   }).format(date);
 }

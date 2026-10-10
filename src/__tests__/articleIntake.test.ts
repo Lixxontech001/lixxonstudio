@@ -124,7 +124,8 @@ describe('article intake validation', () => {
     expect(isoToLagosInput('2026-10-05T07:00:00.000Z')).toBe('2026-10-05T08:00');
     expect(lagosDayAtTimeToIso('2026-10-06', '09:30')).toBe('2026-10-06T08:30:00.000Z');
     expect(lagosDateKey('2026-10-05T23:30:00.000Z')).toBe('2026-10-06');
-    expect(lagosDateTimeLabel('2026-10-05T07:00:00.000Z')).toContain('WAT');
+    expect(lagosDateTimeLabel('2026-10-05T07:00:00.000Z')).toContain('studio clock');
+    expect(lagosDateTimeLabel('2026-10-05T07:00:00.000Z')).not.toMatch(/WAT|Lagos|Nigeria/);
   });
 
   it('rejects impossible wall times and provides Monday-first calendar arithmetic', () => {
