@@ -194,7 +194,7 @@ describe('making a plan', () => {
     const think = vi.fn(async () => ({ ok: false as const, reason: 'no_key' as const }));
     const plan = await planPlacement(article, SHOP, think);
     expect(plan).toEqual({ status: 'cannot_think', detail: NO_KEY_DETAIL, candidate: null, verdict: null });
-    expect(NO_KEY_DETAIL).toBe('Cannot think: no Google key.');
+    expect(NO_KEY_DETAIL).toBe('Cannot think: no brain key saved.');
   });
 
   it('fails honestly when Google is limiting or unavailable, and plans nothing', async () => {

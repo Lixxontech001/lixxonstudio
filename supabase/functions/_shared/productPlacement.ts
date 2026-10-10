@@ -13,7 +13,7 @@ export const PLACEMENT_MAX_WORDS = 60;
 /** How much of the article the Strategist reads, so one request stays small. */
 export const PLACEMENT_MAX_ARTICLE_CHARS = 8000;
 
-export const NO_KEY_DETAIL = "Cannot think: no Google key.";
+export const NO_KEY_DETAIL = "Cannot think: no brain key saved.";
 
 export interface ArticleParagraph {
   /** The line number in the article body. An edit replaces exactly this line. */
@@ -220,7 +220,7 @@ export function auditPlacement(candidate: PlacementCandidate, content: string | 
 }
 
 /**
- * Makes one plan for one article. One Gemini call through `think`, then the Auditor.
+ * Makes one plan for one article. One call through `think` (the brain chain), then the Auditor.
  * Honest about every failure: no key, a bad reply, or a blocked plan. Nothing here is ever applied.
  */
 export async function planPlacement(

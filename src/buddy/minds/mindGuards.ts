@@ -13,9 +13,9 @@ export function isProposalKind(value: unknown): value is ProposalKind {
   return typeof value === 'string' && (PROPOSAL_KINDS as readonly string[]).includes(value);
 }
 
-/** The last action when a mind has no Google key. Plain words, no em dash. */
-export const NO_KEY_ACTION = 'Cannot think: no Google key';
-export const NO_KEY_DETAIL = 'Add the Google key in Admin under Automation keys.';
+/** The last action when no brain has a saved key. Plain words, no em dash. */
+export const NO_KEY_ACTION = 'Cannot think: no brain key saved';
+export const NO_KEY_DETAIL = 'Add a brain key on the Brains page, under Automation in Admin.';
 export const STOPPED_ACTION = 'Did not run';
 export const STOPPED_DETAIL = 'Stopped by Kill.';
 export const TAKEOVER_OFF_ACTION = 'Held for you';

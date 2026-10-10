@@ -59,7 +59,7 @@ const FORBIDDEN_KINDS = [
 describe('no Google key', () => {
   const noKey: ThinkFn = async () => ({ ok: false, reason: 'no_key' });
 
-  it('reads "Cannot think: no Google key" as the last action for each thinking mind', async () => {
+  it('reads "Cannot think: no brain key saved" as the last action for each thinking mind', async () => {
     const runs = [
       await runAnalyst(fakePorts(noKey).ports, context()),
       await runStrategist(fakePorts(noKey).ports, context()),
@@ -70,7 +70,7 @@ describe('no Google key', () => {
       expect(run.entry.outcome).toBe('skipped');
       expect(run.proposals).toEqual([]);
     }
-    expect(NO_KEY_ACTION).toBe('Cannot think: no Google key');
+    expect(NO_KEY_ACTION).toBe('Cannot think: no brain key saved');
   });
 
   it('the Executioner with Takeover on, and the Auditor, also say they cannot think', async () => {
@@ -207,7 +207,7 @@ describe('refusals', () => {
   it('a failed call is logged as failed, never as done', async () => {
     const { ports } = fakePorts(async () => ({ ok: false, reason: 'rate_limited' }));
     const run = await runStrategist(ports, context());
-    expect(run.entry).toMatchObject({ outcome: 'failed', detail: 'Google is busy. Try again later.' });
+    expect(run.entry).toMatchObject({ outcome: 'failed', detail: 'The brains are busy. Try again later.' });
   });
 
   it('a thrown error from the think port is an honest failure, not a crash', async () => {

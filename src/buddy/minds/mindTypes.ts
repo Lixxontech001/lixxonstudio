@@ -19,7 +19,7 @@ export interface ThinkRequest {
   prompt: string;
 }
 
-/** One way to think. On the server it is the single Gemini call through the existing key path. */
+/** One way to think. On the server it walks the brain chain, through the existing key path. */
 export type ThinkPort = (request: ThinkRequest) => Promise<ThinkResult>;
 /** One way to write a log row. Nothing else leaves a mind. */
 export type LogPort = (entry: MindLogEntry) => Promise<void>;

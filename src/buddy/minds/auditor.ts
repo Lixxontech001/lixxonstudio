@@ -12,7 +12,7 @@ export const AUDITOR_RULES = [
 ].join(' ');
 
 export const AUDITOR_STOPPED_FIX = 'The Auditor is stopped by Kill, so no plan can pass. Set Kill back to Nothing stopped in Minds.';
-export const AUDITOR_NO_KEY_FIX = 'Add the Google key in Admin under Automation keys, so the Auditor can check plans.';
+export const AUDITOR_NO_KEY_FIX = 'Add a brain key on the Brains page, under Automation in Admin, so the Auditor can check plans.';
 export const AUDITOR_UNCLEAR_FIX = 'The Auditor could not give a clear answer. Try again later.';
 export const AUDITOR_KIND_FIX = 'Remove that step, or ask Buddy for a plan that stays within the rules.';
 

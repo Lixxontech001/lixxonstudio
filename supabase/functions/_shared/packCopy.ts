@@ -1,13 +1,13 @@
 // The daily pack's copy: one short caption for Instagram, TikTok and Facebook, and a pin title and description for
 // Pinterest. Also the publishing time picker, the rule for which article gets a pack, and the choice of products.
-// The Strategist's thinking goes through the one door to Gemini (`think`). The Auditor checks every answer before it
+// The Strategist's thinking goes through the one door to the brains (`think`). The Auditor checks every answer before it
 // can be saved. Pure logic: no database and no network. The caller passes the think function in.
 
 import { copyProblem, PACK_CHANNELS, PACK_PRODUCT_CAP, type PackChannel } from "./packRules.ts";
 import type { ShopProduct } from "./productPlacement.ts";
 import type { MindThinkResult } from "./mindThink.ts";
 
-export const NO_KEY_COPY_DETAIL = "Cannot think: no Google key.";
+export const NO_KEY_COPY_DETAIL = "Cannot think: no brain key saved.";
 export const CAPTION_LIMIT = 280;
 export const PIN_TITLE_LIMIT = 100;
 export const PIN_DESCRIPTION_LIMIT = 300;

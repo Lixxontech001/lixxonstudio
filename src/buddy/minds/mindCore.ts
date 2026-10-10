@@ -54,13 +54,13 @@ export function failureDetail(reason: ThinkFailure): string {
     case 'no_key':
       return NO_KEY_DETAIL;
     case 'rejected':
-      return 'Google refused the key. Check it in Admin.';
+      return 'A brain refused its key. Check it on the Brains page.';
     case 'rate_limited':
-      return 'Google is busy. Try again later.';
+      return 'The brains are busy. Try again later.';
     case 'unavailable':
-      return 'Could not reach Google. Try again later.';
+      return 'No brain could be reached. Try again later.';
     case 'empty':
-      return 'Google sent back nothing usable.';
+      return 'No brain sent back anything usable.';
   }
 }
 
@@ -75,7 +75,7 @@ export function stoppedRun(ports: MindPorts, mind: MindKey, context: MindContext
   return finish(ports, { mind, action: STOPPED_ACTION, outcome: 'skipped', detail: STOPPED_DETAIL });
 }
 
-/** One Gemini call through the port. A thrown error becomes an honest "could not think". */
+/** One call through the think port (the brain chain). A thrown error becomes an honest "could not think". */
 export async function thinkOnce(ports: MindPorts, mind: MindKey, system: string, prompt: string): Promise<ThinkResult> {
   try {
     return await ports.think({ mind, system, prompt });
@@ -91,7 +91,7 @@ export function factsPrompt(context: MindContext): string {
 
 /**
  * The shared path for a thinking mind: stop if killed, think once, check the reply, log one row.
- * Without a key the log row reads "Cannot think: no Google key".
+ * Without a saved key the log row reads "Cannot think: no brain key saved".
  */
 export async function runThinkingMind(
   ports: MindPorts,

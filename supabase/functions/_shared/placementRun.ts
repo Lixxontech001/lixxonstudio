@@ -1,4 +1,4 @@
-// One run of the Executioner on one waiting product-line order. Pure logic: the database and Gemini are passed in as
+// One run of the Executioner on one waiting product-line order. Pure logic: the database and the brains are passed in as
 // ports, so tests can run it with fake data. Nothing here writes to the database directly.
 //
 // Order of checks, first failure wins and nothing is written:
@@ -10,7 +10,7 @@ import { auditPlacement, planPlacement, type PlacementCandidate, type ShopProduc
 import { DRIP_DAILY_LIMIT, PRODUCT_CAP, paragraphChecksum } from "./postEdits.ts";
 import type { MindThinkResult } from "./mindThink.ts";
 
-/** How many articles one run will try, best fit first. Keeps one run small and the Gemini calls few. */
+/** How many articles one run will try, best fit first. Keeps one run small and the brain calls few. */
 export const MAX_ARTICLES_PER_RUN = 2;
 const RANK_TEXT_LIMIT = 2000;
 
@@ -18,8 +18,8 @@ export const TAKEOVER_OFF_ACTION = "Held for you";
 export const TAKEOVER_OFF_DETAIL = "Takeover is off, so nothing changed on the site.";
 export const STOPPED_ACTION = "Did not run";
 export const STOPPED_DETAIL = "Stopped by Kill.";
-export const NO_KEY_ACTION = "Cannot think: no Google key";
-export const NO_KEY_DETAIL = "Add the Google key in Admin under Automation keys.";
+export const NO_KEY_ACTION = "Cannot think: no brain key saved";
+export const NO_KEY_DETAIL = "Add a brain key on the Brains page, under Automation in Admin.";
 export const APPLY_ACTION = "Added a product line to an article";
 export const GAP_ACTION = "Found a product gap";
 export const GAP_REASON = "The shop has no product that fits. Create one, then ask again.";
@@ -309,7 +309,7 @@ export async function runPlacementOrder(input: RunInput, ports: RunPorts): Promi
 
     if (plan.status === "cannot_think") {
       await ports.log({ mind: "strategist", action: NO_KEY_ACTION, outcome: "skipped", detail: NO_KEY_DETAIL });
-      // The owner reads the same words the planner gives: "Cannot think: no Google key."
+      // The owner reads the same words the planner gives: "Cannot think: no brain key saved."
       return { status: "cannot_think", detail: plan.detail };
     }
     if (plan.status === "failed") {

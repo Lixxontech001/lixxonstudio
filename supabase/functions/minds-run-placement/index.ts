@@ -38,7 +38,6 @@ import type { ShopProduct } from "../_shared/productPlacement.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const MAX_BODY_BYTES = 512;
-const KEY_NAME = "gemini_api_key";
 const ARTICLE_LIMIT = 20;
 const SHOP_LIMIT = 200;
 const EDIT_LIMIT = 500;
@@ -155,9 +154,10 @@ export async function handleRun(req: Request): Promise<Response> {
     .limit(50);
   const waiting = await readWaitingOrders(async () => (orderRows.error || !Array.isArray(orderRows.data) ? null : orderRows.data));
   if (!waiting.ok) return reply(req, { status: "held", detail: "Waiting orders could not be read. Nothing changed." });
-  const think = makeMindThink(async () => {
+  // The minds walk the same brain chain as Buddy. Each brain's key is read here, on the server, and never passed on.
+  const think = makeMindThink(async (secretName: string) => {
     try {
-      const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: KEY_NAME });
+      const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: secretName });
       return !error && typeof data === "string" && data.length > 0 ? data : null;
     } catch {
       return null;

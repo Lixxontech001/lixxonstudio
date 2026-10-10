@@ -48,7 +48,7 @@ describe('pack copy: a Google key is needed to write it', () => {
     const think = vi.fn(async () => ({ ok: false as const, reason: 'no_key' as const }));
     const plan = await planPackCopy({ title: 'Easy Skincare Routine' }, SHOP, think);
     expect(plan).toEqual({ status: 'cannot_think', detail: NO_KEY_COPY_DETAIL, copy: null, verdict: null });
-    expect(NO_KEY_COPY_DETAIL).toBe('Cannot think: no Google key.');
+    expect(NO_KEY_COPY_DETAIL).toBe('Cannot think: no brain key saved.');
     expect(think).toHaveBeenCalledTimes(1);
   });
 

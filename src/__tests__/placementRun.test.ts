@@ -198,10 +198,10 @@ describe('the Auditor and the no-key path', () => {
     expect(ports.applyEdit).not.toHaveBeenCalled();
   });
 
-  it('no Google key: "Cannot think: no Google key" is logged and nothing is applied', async () => {
+  it('no Google key: "Cannot think: no brain key saved" is logged and nothing is applied', async () => {
     const { ports, logs } = fakePorts({ ok: false, reason: 'no_key' });
     const out = await runPlacementOrder(input(), ports);
-    expect(out).toEqual({ status: 'cannot_think', detail: 'Cannot think: no Google key.' });
+    expect(out).toEqual({ status: 'cannot_think', detail: 'Cannot think: no brain key saved.' });
     expect(logs.some((entry) => entry.action === NO_KEY_ACTION)).toBe(true);
     expect(ports.applyEdit).not.toHaveBeenCalled();
   });
