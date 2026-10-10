@@ -11,6 +11,7 @@ import {
   type GeminiTurn,
 } from "../_shared/buddyThink.ts";
 import { BRIEFING_NOTABLE_KINDS, briefingApplied, briefingDoors, briefingGaps, briefingNotables, briefingPacks, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
+import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import { controlChange, controlDoneLine, type ControlAction } from "../_shared/buddyControls.ts";
 import { ownerClock } from "../_shared/mindsNightReport.ts";
@@ -226,6 +227,18 @@ function chatStore(userClient: SupabaseClient) {
       const appliedOk = !appliedEdits.error && !titleRead.error && !nameRead.error;
       const mindLogRows = Array.isArray(mindRows.data) ? mindRows.data : null;
       const titleRows = (Array.isArray(articles.data) ? articles.data : []) as Array<{ title?: unknown }>;
+      // This week (last 7 days) against last week (the 7 days before): article views and paid orders. Counts only.
+      const w = weekWindows(new Date());
+      const weekViews = (from: string, to: string) =>
+        userClient.from("article_views").select("id", { count: "exact", head: true }).gte("created_at", from).lt("created_at", to);
+      const weekPaid = (from: string, to: string) =>
+        userClient.from("orders").select("id", { count: "exact", head: true }).eq("payment_status", "paid").gte("created_at", from).lt("created_at", to);
+      const [tv, lv, tp, lp] = await Promise.all([weekViews(w.thisStart, w.end), weekViews(w.lastStart, w.thisStart), weekPaid(w.thisStart, w.end), weekPaid(w.lastStart, w.thisStart)]);
+      const weeks: WeekFacts = {
+        ok: !tv.error && !lv.error && !tp.error && !lp.error,
+        thisWeek: { views: tv.count ?? 0, paid: tp.count ?? 0 },
+        lastWeek: { views: lv.count ?? 0, paid: lp.count ?? 0 },
+      };
       const orderRows = (Array.isArray(orders.data) ? orders.data : []) as Array<{ amount?: unknown; currency?: unknown }>;
       const failureRows = (Array.isArray(failures.data) ? failures.data : []) as Array<{ event_code?: unknown }>;
       const usdTotal = orderRows
@@ -241,6 +254,7 @@ function chatStore(userClient: SupabaseClient) {
         },
         orders: { ok: !orders.error, paidCount: orders.count ?? orderRows.length, usdTotal: Math.round(usdTotal * 100) / 100 },
         views: { ok: !views.error, count: views.count ?? 0 },
+        weeks,
         failures: { ok: !failures.error, count: failures.count ?? 0, codes },
         minds: { ok: !mindRows.error && mindLogRows !== null, rows: (mindLogRows ?? []) as BriefingMindRow[] },
         waiting: { ok: !waitingOrders.error, count: waitingOrders.count ?? 0 },

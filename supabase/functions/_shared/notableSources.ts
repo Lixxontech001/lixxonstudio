@@ -4,6 +4,7 @@
 // thing is written, and buzzed, once. Owner-only copy: plain words, USD only, no country, no em dash.
 
 import { cleanLine } from "./buddySiteFacts.ts";
+import { planWeekNotables, type WeekFacts } from "./buddyWeek.ts";
 
 export const SALES_LOOKBACK_HOURS = 48;
 export const ORDER_READ_LIMIT = 200;
@@ -11,7 +12,7 @@ export const CLICK_READ_LIMIT = 2000;
 export const TRAFFIC_SOURCE_LIMIT = 20;
 const SOURCE_MAX = 60;
 
-export type NotableSourceKind = "sale" | "product_click" | "traffic_new_kind" | "job_finished";
+export type NotableSourceKind = "sale" | "product_click" | "traffic_new_kind" | "job_finished" | "week_up" | "week_down";
 
 export interface NotablePlan {
   /** Unique per owner. The database refuses a second row with the same key. */
@@ -51,6 +52,8 @@ export interface NotablePorts {
   record(plan: NotablePlan): Promise<boolean>;
   /** Writes the plain daily-log line for a notable that was just written. Optional. A failure here never undoes the event. */
   logLine?(plan: NotablePlan): Promise<void>;
+  /** This week (last 7 days) against last week (the 7 days before), paid orders and article views. Optional. */
+  readWeekCounts?(now: Date): Promise<WeekFacts | null>;
 }
 
 export interface ScanResult {
@@ -163,6 +166,12 @@ export async function scanNotableSources(ports: NotablePorts, window: ScanWindow
       if (earlier === null) unreadable.push("traffic");
       else plans.push(...planTrafficNotables(todaySources, earlier));
     }
+  }
+
+  if (ports.readWeekCounts) {
+    const week = await safely(() => ports.readWeekCounts!(window.now));
+    if (week === null || !week.ok) unreadable.push("week");
+    else plans.push(...planWeekNotables(week, window.localDay));
   }
 
   let written = 0;

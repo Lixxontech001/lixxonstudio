@@ -576,3 +576,12 @@ What is still not done, or not verified:
 - Summary kinds (night report) and the article-change kinds are not read as briefing lines. The article changes already show from the database read.
 - RSS: a posted RSS row says the feed was updated and pinged. A failed one says the hub did not take the ping. Flipboard appears nowhere.
 - Tests: `src/__tests__/buddyBriefingSlice2.test.ts`. The Auditor line in `buddyNotables.test.ts` now expects Problems.
+
+## Phase B slice 3: this week against last week
+
+- `supabase/functions/_shared/buddyWeek.ts`: "this week" is the last 7 days and "last week" is the 7 days before (rolling, so no time zone is guessed). One plain sentence says article views and paid orders are up, down, or about the same, with the real counts. Within 10% is "about the same". A count that cannot be read gives "I cannot see last week yet."
+- The briefing shows the sentence under Money & readers. The day run and the briefing read the counts from `article_views` and `orders`.
+- Spike or drop notables: a spike is this week at least twice last week, and at least the floor (views 20, paid orders 3). A drop is last week at least the floor, and this week at most half of it. So 0 to 1 is never a spike. Each notable is written once per ISO week and direction, so the same numbers on the next run write nothing new.
+- A failed week read is named "week" as unreadable. The rest of the day run still runs.
+- Migration `supabase/migrations/20261018000000_notable_week_change.sql` adds the kinds `week_up` and `week_down`. It is additive and NOT applied to production. Until it is applied, the day run's week notables are refused by the database; the sentence still works.
+- Tests: `src/__tests__/buddyWeek.test.ts`.

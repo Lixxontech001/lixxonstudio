@@ -5,6 +5,7 @@ import { MIND_KEYS, MIND_LABELS } from "./buddyRouter.ts";
 import { DOORS, isDoorId } from "./doorRegistry.ts";
 import { HONEST_SKIP_LINE_LIMIT, isHonestSkip } from "./honestSkips.ts";
 import { isRssDoor } from "./rssHub.ts";
+import { weekSentence, type WeekFacts } from "./buddyWeek.ts";
 
 export const QUIET_LINE = "Quiet since you left.";
 /** A first visit has no earlier "left" time, so Buddy looks back this far. */
@@ -39,6 +40,8 @@ export interface BriefingFacts {
   notables?: { ok: boolean; rows: BriefingNotable[] };
   /** How many reader form messages arrived since the owner last looked. A count only: never a name, an address or the text. */
   messages?: { ok: boolean; count: number };
+  /** This week (last 7 days) against last week: paid orders and article views. Counts only. */
+  weeks?: WeekFacts;
 }
 
 /** One notable event the briefing can show. Plain fields only: its kind, its title and its detail. */
@@ -52,6 +55,8 @@ export interface BriefingNotable {
 export const BRIEFING_NOTABLE_KINDS: readonly string[] = [
   "takeover_changed",
   "kill_changed",
+  "week_up",
+  "week_down",
   "door_posted",
   "sale",
   "product_click",
@@ -63,7 +68,7 @@ export const BRIEFING_NOTABLE_KINDS: readonly string[] = [
   "mind_failed",
 ];
 const WENT_OUT_NOTABLE_KINDS = ["door_posted"];
-const MONEY_NOTABLE_KINDS = ["sale", "product_click", "traffic_new_kind"];
+const MONEY_NOTABLE_KINDS = ["sale", "product_click", "traffic_new_kind", "week_up", "week_down"];
 const JOB_NOTABLE_KINDS = ["order_blocked"];
 // The Auditor holding a change, a door that failed and a mind that failed all belong under Problems.
 const PROBLEM_NOTABLE_KINDS = ["auditor_blocked", "door_failed", "mind_failed"];
@@ -168,6 +173,9 @@ function moneyLines(facts: BriefingFacts): string[] {
   } else {
     lines.push(`${facts.views.count} article ${plural(facts.views.count, "view", "views")} since you left.`);
   }
+  // The week sentence is shown only when it was read, and says so when the counts could not be read.
+  const week = weekSentence(facts.weeks);
+  if (week) lines.push(week);
   return lines;
 }
 
@@ -378,7 +386,8 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const doorsRead = facts.doors ? facts.doors.ok : true;
   const notablesRead = facts.notables ? facts.notables.ok : true;
   const messagesRead = facts.messages ? facts.messages.ok : true;
-  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead && notablesRead && messagesRead;
+  const weeksRead = facts.weeks ? facts.weeks.ok : true;
+  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead && notablesRead && messagesRead && weeksRead;
   // A door post that went out, failed or is still saving is news, so the day is not quiet.
   const doorsReal = (facts.doors?.rows.length ?? 0) > 0;
   // An honest skip or a closed door is a problem the owner should see, so it also keeps the day from being quiet.

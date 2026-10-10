@@ -19,6 +19,7 @@ import { NO_DEVICE_COPY, PUSH_HELP_COPY, notifyOwnerDevices, shouldBuzz, type Pu
 import type { PushTarget, VapidCredentials } from "../_shared/webPush.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
 import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
+import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
 import { isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
@@ -741,6 +742,21 @@ async function scanShopNotables(sb: SupabaseClient, owner: string, localDay: str
         .limit(2000);
       if (error || !Array.isArray(data)) return null;
       return data.map((row: Record<string, unknown>) => String(row.source ?? "")).filter((item) => item.length > 0);
+    },
+    // This week (last 7 days) against last week (the 7 days before): paid orders and article views. Counts only.
+    readWeekCounts: async (now: Date): Promise<WeekFacts | null> => {
+      const w = weekWindows(now);
+      const views = (from: string, to: string) =>
+        sb.from("article_views").select("id", { count: "exact", head: true }).gte("created_at", from).lt("created_at", to);
+      const paid = (from: string, to: string) =>
+        sb.from("orders").select("id", { count: "exact", head: true }).eq("payment_status", "paid").gte("created_at", from).lt("created_at", to);
+      const [tv, lv, tp, lp] = await Promise.all([views(w.thisStart, w.end), views(w.lastStart, w.thisStart), paid(w.thisStart, w.end), paid(w.lastStart, w.thisStart)]);
+      const ok = !tv.error && !lv.error && !tp.error && !lp.error;
+      return {
+        ok,
+        thisWeek: { views: tv.count ?? 0, paid: tp.count ?? 0 },
+        lastWeek: { views: lv.count ?? 0, paid: lp.count ?? 0 },
+      };
     },
     record: async (plan: NotablePlan): Promise<boolean> => {
       const status = await recordNotable(sb, owner, localDay, plan.mind, plan.kind, plan.title, plan.detail, plan.key);
