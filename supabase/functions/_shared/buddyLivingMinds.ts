@@ -67,6 +67,10 @@ export interface LivingMindContext {
   facts: string;
   /** The owner's waiting orders, in the owner's words. */
   orders: string[];
+  /** Minds that already have a 'done' row today. They are not run again today (Phase E: a done row never retries). */
+  doneToday?: readonly LivingMind[];
+  /** Minds that already have today's stopped row. Kill writes one stopped row per mind per day, not one per run. */
+  stoppedToday?: readonly LivingMind[];
 }
 
 export interface LivingMindRun {
@@ -182,9 +186,18 @@ export async function runLivingStep(ports: LivingMindPorts, mind: LivingMind, co
   return finish(ports, { mind, action: spec.action, outcome: "done", detail: clip(detail, DETAIL_LIMIT) }, proposals, refused);
 }
 
-/** The day run's living minds, in a fixed order: Analyst, then Strategist, then CEO. Each writes its own row. */
+/**
+ * The day run's living minds, in a fixed order: Analyst, then Strategist, then CEO. Each writes its own row.
+ * Phase E: a mind with a 'done' row today is not run again. A mind that failed, was skipped (no key, unavailable,
+ * rate limited, empty) or has no row yet is run, so a later run the same local day may retry it. A mind that Kill
+ * stops writes one stopped row per day: if today's stopped row is already there, nothing more is written.
+ */
 export async function runLivingMinds(ports: LivingMindPorts, context: LivingMindContext): Promise<LivingMindRun[]> {
   const runs: LivingMindRun[] = [];
-  for (const mind of LIVING_MINDS) runs.push(await runLivingStep(ports, mind, context));
+  for (const mind of LIVING_MINDS) {
+    if (context.doneToday?.includes(mind)) continue;
+    if (isKilled(context.killScope, mind) && context.stoppedToday?.includes(mind)) continue;
+    runs.push(await runLivingStep(ports, mind, context));
+  }
   return runs;
 }

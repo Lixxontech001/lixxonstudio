@@ -21,7 +21,7 @@ import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
 import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
 import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { orderOutcomeLine } from "../_shared/buddyFeedback.ts";
-import { LIVING_MINDS, runLivingMinds, type LivingMindPorts } from "../_shared/buddyLivingMinds.ts";
+import { LIVING_MINDS, STOPPED_ACTION, runLivingMinds, type LivingMindPorts } from "../_shared/buddyLivingMinds.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
 import { isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
@@ -241,7 +241,8 @@ export async function handleRun(req: Request): Promise<Response> {
   const job = planJobNotable(outcome.status, outcome.orderId);
   if (job) await recordNotable(sb, owner, localDay, job.mind, job.kind, job.title, job.detail, job.key);
   // The day's thinking steps: the Analyst, the Strategist and the CEO. They run on the day run only (no order named),
-  // once per local day, and only when Takeover is on and Kill does not stop them (checked above, and again per mind).
+  // per mind per local day: a mind with a done row today is not run again, and a failed or empty one may retry on a later run that day.
+  // Only when Takeover is on and Kill does not stop them (checked above, and again per mind).
   // Each writes its own daily-log row. Nothing here can fail the run.
   if (orderId === null) {
     try {
@@ -572,8 +573,9 @@ async function runDoorsForDay(
  * RSS pings excluded) and ranks the posting windows. Any failed read keeps the current windows.
  */
 /**
- * The three thinking steps for one local day. Skipped when today already has their rows (once a day), and skipped
- * when the check itself cannot be read, so a flaky read never runs them twice. Facts are read here, never by a mind.
+ * The three thinking steps for one local day. A mind with a done row today is skipped; the others run (a failed, skipped or
+ * empty mind may retry the same day). Skipped entirely when the check itself cannot be read, so a flaky read never runs
+ * them twice. Facts are read here, never by a mind.
  */
 async function runLivingMindsForDay(
   sb: SupabaseClient,
@@ -584,8 +586,13 @@ async function runLivingMindsForDay(
   think: ReturnType<typeof makeMindThink>,
   orders: Array<{ instruction: string }>,
 ): Promise<void> {
-  const today = await sb.from("minds_daily_log").select("id").eq("owner_id", owner).eq("day", localDay).in("mind", [...LIVING_MINDS]).limit(1);
-  if (today.error || (today.data ?? []).length > 0) return;
+  // Each mind is read on its own: a done row means no retry today; a failed, skipped or missing row may be retried.
+  const today = await sb.from("minds_daily_log").select("mind,action,outcome").eq("owner_id", owner).eq("day", localDay).in("mind", [...LIVING_MINDS]);
+  if (today.error) return;
+  const rows = (today.data ?? []) as Array<{ mind: string; action: string; outcome: string }>;
+  const doneToday = LIVING_MINDS.filter((mind) => rows.some((row) => row.mind === mind && row.outcome === "done"));
+  const stoppedToday = LIVING_MINDS.filter((mind) => rows.some((row) => row.mind === mind && row.action === STOPPED_ACTION));
+  if (doneToday.length === LIVING_MINDS.length) return;
   const ports: LivingMindPorts = {
     think: (request) => think(request),
     log: async (entry) => {
@@ -600,7 +607,7 @@ async function runLivingMindsForDay(
       });
     },
   };
-  await runLivingMinds(ports, { takeover, killScope, facts: await readMindFacts(sb), orders: orders.map((order) => order.instruction) });
+  await runLivingMinds(ports, { takeover, killScope, facts: await readMindFacts(sb), orders: orders.map((order) => order.instruction), doneToday, stoppedToday });
 }
 
 /** This week and last week, as counts only: article views and paid orders. A failed read says so, and is never a guess. */
