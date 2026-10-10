@@ -449,3 +449,11 @@ What is still not done, or not verified:
 - The morning Continue never loads a night report. Continue calls the `briefing` action, which reads the day's rows and events. It never reads `buddy_reports`, and the reports list shows titles and dates only.
 - Tests: `buddyNightClock.test.ts` (time rules, the clock and writer against an in-memory database, the schedule source, and the briefing path).
 - Not proven live: the schedule is not applied, so no night has been written by the clock. Whether the Vault credentials exist in production is unknown until the owner applies the migration.
+
+## Phase 9 slice 3: the reader message tap
+
+- Buddy checks the reader form table (`contact_messages`) once per briefing. The read asks only for a count of rows since the owner last looked (`head: true`). It never reads a name, an address or the message text.
+- A message adds one line under "Money & readers": "There is a message for you." For more than one, "There are N messages for you." A failed read says "I cannot read your messages yet." Any message makes the day not quiet. The next move says "Read the new reader message in Admin."
+- Buddy never replies to a reader. Nothing in `buddy-think` writes to `contact_messages`, the email queue or any mail sender. The test `buddyReaderMessages.test.ts` checks that from source.
+- Comments and the email queue were not used. Comments are public reader content, and the email queue is outbound. The reader form table already exists and already has an admin-only read policy, so no new flag or table was needed.
+- Not proven live: the owner's session reading `contact_messages` through row-level security (the policy is the admin-all policy from the security migration), and the exact count on a real form.

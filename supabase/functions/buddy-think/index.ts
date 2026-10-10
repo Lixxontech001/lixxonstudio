@@ -125,7 +125,7 @@ function chatStore(userClient: SupabaseClient) {
     readBriefingFacts: async (sinceIso: string): Promise<BriefingFacts> => {
       // Packs from the last three days that still need the owner (ready to post by hand, or blocked).
       const packsSinceIso = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps, packRead, doorRead, notableRead] = await Promise.all([
+      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps, packRead, doorRead, notableRead, messageRead] = await Promise.all([
         userClient
           .from("posts")
           .select("title", { count: "exact" })
@@ -198,6 +198,12 @@ function chatStore(userClient: SupabaseClient) {
           .gt("happened_at", sinceIso)
           .order("happened_at", { ascending: false })
           .limit(50),
+        // Reader form messages since the owner last looked. Only a count is read (head), never a name, an address or the text.
+        // Read-only: Buddy never replies to a reader. Owner session, so row-level security applies.
+        userClient
+          .from("contact_messages")
+          .select("id", { count: "exact", head: true })
+          .gt("created_at", sinceIso),
       ]);
       const doorRows = (Array.isArray(doorRead.data) ? doorRead.data : []) as Array<{ door?: unknown; status?: unknown; post_id?: unknown; error_note?: unknown }>;
       // Titles and product names for the applied changes. A failed read leaves the names out, never guessed.
@@ -243,6 +249,7 @@ function chatStore(userClient: SupabaseClient) {
         packs: { ok: !packRead.error, rows: briefingPacks(packRows, postTitles) },
         doors: { ok: !doorRead.error, rows: briefingDoors(doorRows, postTitles) },
         notables: { ok: !notableRead.error, rows: briefingNotables(Array.isArray(notableRead.data) ? notableRead.data : []) },
+        messages: { ok: !messageRead.error, count: messageRead.count ?? 0 },
       };
     },
     // The "which mind?" order waiting on the last message of this chat. Owner session, so row-level security applies.

@@ -37,6 +37,8 @@ export interface BriefingFacts {
   doors?: { ok: boolean; rows: BriefingDoorPost[] };
   /** The notable events the minds wrote since the owner last looked, newest first. Only the briefing's kinds. */
   notables?: { ok: boolean; rows: BriefingNotable[] };
+  /** How many reader form messages arrived since the owner last looked. A count only: never a name, an address or the text. */
+  messages?: { ok: boolean; count: number };
 }
 
 /** One notable event the briefing can show. Plain fields only: its kind, its title and its detail. */
@@ -133,6 +135,15 @@ function articleLine(articles: BriefingFacts["articles"]): string | null {
   const titles = articles.titles.map((title) => `"${title}"`).join(", ");
   const more = articles.count > articles.titles.length ? ` and ${articles.count - articles.titles.length} more` : "";
   return `${articles.count} new ${plural(articles.count, "article is", "articles are")} live: ${titles}${more}.`;
+}
+
+/** One line for the reader form messages. The briefing says there is one; the owner reads it in Admin. Buddy never replies. */
+export function messageLines(messages: BriefingFacts["messages"]): string[] {
+  if (!messages) return [];
+  if (!messages.ok) return ["I cannot read your messages yet."];
+  if (messages.count === 0) return [];
+  if (messages.count === 1) return ["There is a message for you."];
+  return [`There are ${messages.count} messages for you.`];
 }
 
 function moneyLines(facts: BriefingFacts): string[] {
@@ -346,6 +357,7 @@ function nextMove(facts: BriefingFacts): string {
   if (anyUnread) return "Some numbers could not be read. Ask me again in a little while.";
   if (facts.failures.count > 0 || notableLines(facts.notables, PROBLEM_NOTABLE_KINDS).length > 0) return "Look at the problems above before anything else.";
   if (facts.orders.paidCount > 0) return "Check the new paid orders in Admin.";
+  if (facts.messages && facts.messages.count > 0) return "Read the new reader message in Admin.";
   if (notableLines(facts.notables, ["pack_ready"]).length > 0) return "Post the ready pack by hand, then tap I posted this.";
   if (facts.articles.count > 0) return "Read the new articles once, as a reader would.";
   return "Nothing needs you right now.";
@@ -360,7 +372,8 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const packsRead = facts.packs ? facts.packs.ok : true;
   const doorsRead = facts.doors ? facts.doors.ok : true;
   const notablesRead = facts.notables ? facts.notables.ok : true;
-  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead && notablesRead;
+  const messagesRead = facts.messages ? facts.messages.ok : true;
+  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead && notablesRead && messagesRead;
   // A door post that went out, failed or is still saving is news, so the day is not quiet.
   const doorsReal = (facts.doors?.rows.length ?? 0) > 0;
   // An honest skip or a closed door is a problem the owner should see, so it also keeps the day from being quiet.
@@ -373,8 +386,10 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const packsReal = (facts.packs?.rows.length ?? 0) > 0;
   // A notable the minds wrote since the owner last looked (a sale, a door failure, a blocked job) is news too.
   const notablesReal = (facts.notables?.rows ?? []).some((row) => BRIEFING_NOTABLE_KINDS.includes(row.kind));
+  // A reader's form message is something the owner should read, so it is not quiet either.
+  const messagesReal = (facts.messages?.count ?? 0) > 0;
   const nothingReal =
-    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal && !doorsReal && !notablesReal;
+    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal && !doorsReal && !notablesReal && !messagesReal;
   if (allRead && nothingReal) return { quiet: true, sections: [], text: QUIET_LINE };
 
   const awayMs = now.getTime() - Date.parse(sinceIso);
@@ -392,7 +407,7 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
       lines: [firstVisit ? `First visit here. Buddy looks back ${FIRST_VISIT_WINDOW_HOURS} hours.` : `You were away for ${describeAway(awayMs)}.`],
     },
     { id: "went_out", title: "What went out", lines: went },
-    { id: "money", title: "Money & readers", lines: [...moneyLines(facts), ...notableLines(facts.notables, MONEY_NOTABLE_KINDS)] },
+    { id: "money", title: "Money & readers", lines: [...moneyLines(facts), ...messageLines(facts.messages), ...notableLines(facts.notables, MONEY_NOTABLE_KINDS)] },
     { id: "minds", title: "The five minds", lines: mindLines(facts.minds) },
     { id: "problems", title: "Problems", lines: problemLines(facts.failures, facts.minds?.rows ?? [], facts.packs?.rows ?? [], facts.notables) },
     { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting, facts.gaps, facts.packs, facts.notables) },
