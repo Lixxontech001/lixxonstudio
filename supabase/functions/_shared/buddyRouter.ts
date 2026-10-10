@@ -170,6 +170,11 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
   // Asking for today's run is an order with no mind to name. It must not fall through to "which mind?".
   if (!mind && !question && isRunDayRequest(text)) return { kind: "run_day", instruction: cleanInstruction(text) };
   if (mind && imperative) return { kind: "order", mind, instruction: cleanInstruction(text), resolvesPending: false };
+  // Phase E: a swap (a product-line placement) with no mind named goes to the Executioner, who runs product lines.
+  // No "which mind?" question is asked for it. A named mind keeps its name (handled above).
+  if (!mind && imperative && filingKindFor(text) === "product_line_apply") {
+    return { kind: "order", mind: "executioner", instruction: cleanInstruction(text), resolvesPending: false };
+  }
   if (!mind && imperative && !question) return { kind: "ask_which_mind", instruction: cleanInstruction(text) };
   return { kind: "chat" };
 }

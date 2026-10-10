@@ -46,13 +46,18 @@ const REFUSED_REQUESTS: RegExp[] = [
 /** A request starts with the action word (after a name or \"please\"), or asks for it outright. */
 const REQUEST_START = /^(refund|delete|erase|trash|remove|email|e-mail|mail|blast|reply|respond|answer|change|set|raise|lower|cut|drop|update|discount|reduce|increase|publish|post|send|share|tweet)\b/i;
 const REQUEST_MARK = /\b(can|could|would|will) you\b|\bplease\b|\bi (want|need) (you )?to\b|\blet'?s\b|\bgo ahead\b/i;
+/**
+ * Phase E: an outside action asked for after "and", "then", a comma or a semicolon ("Swap the kit onto the article and
+ * email the list"). Only the words that the refused patterns are about. Narrows what is filed; adds no kind.
+ */
+const REQUEST_CLAUSE = /(\band\b|\bthen\b|[,;])\s*(refund|delete|erase|trash|email|e-mail|blast|reply|respond|change|set|raise|lower|cut|drop|update|discount|reduce|increase|publish|tweet)\b/i;
 
 /** True when the message asks for something outside the closed list. Questions and plain statements are never refused. */
 export function refusedRequest(message: string): boolean {
   const text = message.trim();
   if (!text || QUESTION_OPENER.test(text)) return false;
   const body = text.replace(/^[A-Za-z]+,\s*/, "");
-  if (!REQUEST_START.test(body) && !REQUEST_MARK.test(text)) return false;
+  if (!REQUEST_START.test(body) && !REQUEST_MARK.test(text) && !REQUEST_CLAUSE.test(text)) return false;
   return REFUSED_REQUESTS.some((pattern) => pattern.test(text));
 }
 
