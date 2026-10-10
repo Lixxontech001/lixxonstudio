@@ -192,10 +192,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const OUTCOME_MESSAGES: Record<ThinkOutcome, string> = {
-  rejected: "Google rejected the saved key. Replace it on the Brains page, under Automation in Admin.",
-  rate_limited: "Google is limiting this key for now. Wait a few minutes and try again.",
-  unavailable: "Google could not be reached just now. Try again in a little while.",
-  empty: "Google sent back nothing usable. Try asking in a shorter, plainer way.",
+  rejected: "Gemini, Buddy's first brain, rejected the saved key. Replace it on the Brains page, under Automation in Admin.",
+  rate_limited: "Gemini is limiting this key for now. Wait a few minutes and try again.",
+  unavailable: "Gemini could not be reached just now. Try again in a little while.",
+  empty: "Gemini sent back nothing usable. Try asking in a shorter, plainer way.",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -421,12 +421,13 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
         : "You have asked Buddy a lot in a short time. Wait a few minutes and try again.";
       return { status: 200, body: { ok: false, action, reason, message, can_think: false } };
     }
+    // The probe checks Gemini only (Buddy's first brain). It says so in the answer.
     const result = await deps.askGemini(key, { system: BUDDY_SYSTEM_INSTRUCTION, turns: [{ role: "user", text: BUDDY_TEST_PROMPT }] });
     await deps.recordProbe(result.ok ? "ok" : probeStatusFor(result.outcome));
     if (result.ok) {
-      return { status: 200, body: { ok: true, action, model: BUDDY_GEMINI_MODEL, reply: result.text, can_think: true } };
+      return { status: 200, body: { ok: true, action, brain: "gemini", model: BUDDY_GEMINI_MODEL, reply: result.text, can_think: true } };
     }
-    return { status: 200, body: { ok: false, action, reason: result.outcome, message: OUTCOME_MESSAGES[result.outcome], can_think: false } };
+    return { status: 200, body: { ok: false, action, brain: "gemini", reason: result.outcome, message: OUTCOME_MESSAGES[result.outcome], can_think: false } };
   }
 
   if (action === "briefing") {
@@ -506,7 +507,7 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   }
 
   // Obvious cases stay on rules, with no model: a named-mind order, "which mind?", today's run,
-  // the mind log and the how-to steps. Everything else goes to Gemini below.
+  // the mind log and the how-to steps. Everything else goes to the brain chain below (askBrains).
   if (route.kind !== "chat") return answerRouted(chatId, title, message, route, action, deps);
 
   // Any saved brain is enough. The chain below walks them in order and skips the empty ones.
@@ -592,7 +593,7 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
 }
 
 /**
- * The owner-facing line when the chain gives up. One brain only (Google alone): its own plain message.
+ * The owner-facing line when the chain gives up. One brain only (Gemini alone): its own plain message.
  * Several brains tried: one honest line that does not name a single provider.
  */
 function failureNotice(lastOutcome: BrainFailure | "none_saved", tried: readonly string[]): { reason: string; message: string } {

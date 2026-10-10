@@ -111,7 +111,7 @@ describe('Buddy think: status and proof call', () => {
       system: BUDDY_SYSTEM_INSTRUCTION,
       turns: [{ role: 'user', text: BUDDY_TEST_PROMPT }],
     });
-    expect(result.body).toEqual({ ok: true, action: 'probe', model: BUDDY_GEMINI_MODEL, reply: 'Yes, Buddy can think.', can_think: true });
+    expect(result.body).toEqual({ ok: true, action: 'probe', brain: 'gemini', model: BUDDY_GEMINI_MODEL, reply: 'Yes, Buddy can think.', can_think: true });
     expect(recordProbe).toHaveBeenCalledWith('ok');
   });
 });
