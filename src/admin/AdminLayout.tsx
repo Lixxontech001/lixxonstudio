@@ -9,7 +9,7 @@ import {
   Tag, RotateCcw, ShoppingCart,
   Activity, FileCode, Gift, Share2, Calendar,
   Layers, BookA, MessageCircleQuestion, DatabaseBackup, Moon, Sun,
-  Database, HeartPulse, TrendingUp, Lightbulb, Sparkles, Palette, KeyRound
+  Database, HeartPulse, TrendingUp, Lightbulb, Sparkles, Palette, KeyRound, Cpu
 } from 'lucide-react';
 import { canAccess } from './permissions';
 import { useTheme } from '../context/ThemeContext';
@@ -39,6 +39,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Data explorer', route: { name: 'admin-data' }, icon: Database },
       { label: 'Front end', route: { name: 'admin-frontend' }, icon: Palette },
       { label: 'Automation keys', route: { name: 'admin-automation-keys' }, href: '/admin/automation/keys', icon: KeyRound },
+      { label: 'Brains', route: { name: 'admin-automation-brains' }, href: '/admin/automation/brains', icon: Cpu },
       { label: 'System Check', route: { name: 'admin-automation-check' }, href: '/admin/automation/check', icon: HeartPulse },
       { label: 'Run monitor', route: { name: 'admin-automation-runs' }, href: '/admin/automation/runs', icon: Activity },
     ],

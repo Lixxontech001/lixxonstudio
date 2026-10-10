@@ -511,3 +511,16 @@ What is still not done, or not verified:
 - Still on Google only: the one-line proof call, the minds (`mindThink.ts`), and text to speech. Those are outside this slice.
 - Tests: `buddyThink.test.ts` (new block "the brain chain answers the owner") and `brainChain.test.ts` (accept option, anyBrainSaved, log line). Fake fetch and fake Vault only.
 - Not yet done: the Brains page and the Buddy how-to wording (slice 4). The two lies are not yet removed (slice 5).
+
+## Phase A slice 4: the Brains page and Buddy's brain how-to
+
+- Admin > Automation > Brains (`/admin/automation/brains`, owner only, even with the key permission). Eight rows in the fixed try order. Each row: name, one plain sentence of purpose, the key box (a second Account ID box for Cloudflare), Save, "Saved" or "Not saved", and Test.
+- Save uses the same Vault RPC as the other keys. The value is never shown again. Test calls the existing `automation-keys` function with the single read-only ping for that brain. Nothing is published or sent.
+- The five free brains each have one read-only GET: Groq (`/models`), NVIDIA (`/models`), Cloudflare (`/user/tokens/verify`), OpenRouter (`/key`), Hugging Face (`/whoami-v2`). Google keeps its existing check. Cerebras and DeepSeek are skipped, so Test is off for them.
+- Automation keys no longer lists brain entries. It shows a pointer to the Brains page.
+- The brain how-to: "how do I get a Groq key" gets fixed steps (Brains page, the key site, what is shown after saving). A question with no key words, or with two brain names, is not a how-to. Doors keep their own how-to.
+- Owner copy changed to name the Brains page: the no-key line in Buddy chat, the no-brain-key line from the chain, and the rejected-key notice.
+- The minds still use Google only (slice 3 left them alone), so their "no Google key" lines stay.
+- The seven new Vault entries exist only in the catalogue migration `20261017000000_buddy_brain_slots.sql`, which is NOT applied. Until the owner applies it, Save on a new brain row is refused by the database. Nothing here applies it.
+- The provider endpoints for the pings are from each provider's public docs and are NOT verified live from the sandbox. Tests check the URL, method, redirect guard and header only.
+- Tests: `src/__tests__/brainsPage.test.ts` (16 checks).

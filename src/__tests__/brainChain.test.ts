@@ -112,7 +112,7 @@ afterEach(() => {
 });
 
 describe('no key saved: skip everything, one honest line', () => {
-  it('with no brain saved, nothing is called and the line says no thinking key is saved', async () => {
+  it('with no brain saved, nothing is called and the line says no brain key is saved', async () => {
     const { ports: p, fetchMock, askGemini } = ports();
     const result = await askBrains(INPUT, p);
     expect(result).toEqual({ ok: false, reason: 'none_saved', line: NONE_SAVED_LINE, tried: [], lastOutcome: 'none_saved' });

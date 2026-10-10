@@ -3,7 +3,7 @@
 // storage, site reads and fetch.
 
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
-import { howToReply } from "./buddyHowTo.ts";
+import { brainHowToReply, howToReply } from "./buddyHowTo.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure } from "./brainChain.ts";
@@ -52,7 +52,7 @@ export const BUDDY_SYSTEM_INSTRUCTION = [
 export const BUDDY_TEST_PROMPT = "Reply with one short sentence confirming that Buddy can think. Add nothing else.";
 
 export const NO_KEY_MESSAGE =
-  "Buddy cannot think yet because no Google key is saved. Add it in Admin under Automation keys, in the box called Google key.";
+  "Buddy cannot think yet because no brain key is saved. Add one on the Brains page, under Automation in Admin.";
 
 export const SAVE_FAILED_MESSAGE = "Buddy could not save your message, so nothing was sent. Try again in a moment.";
 
@@ -190,7 +190,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const OUTCOME_MESSAGES: Record<ThinkOutcome, string> = {
-  rejected: "Google rejected the saved key. Replace it in Admin under Automation keys.",
+  rejected: "Google rejected the saved key. Replace it on the Brains page, under Automation in Admin.",
   rate_limited: "Google is limiting this key for now. Wait a few minutes and try again.",
   unavailable: "Google could not be reached just now. Try again in a little while.",
   empty: "Google sent back nothing usable. Try asking in a shorter, plainer way.",
@@ -368,6 +368,8 @@ async function answerRouted(
     reply = route.line;
   } else if (route.kind === "how_to") {
     reply = howToReply(route.door);
+  } else if (route.kind === "brain_how_to") {
+    reply = brainHowToReply(route.brain);
   } else if (route.kind === "ask_which_mind") {
     reply = ASK_WHICH_MIND_LINE;
     payload = { pending_order: cleanInstruction(route.instruction) };

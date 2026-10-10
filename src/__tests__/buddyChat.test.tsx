@@ -120,7 +120,7 @@ describe('Buddy chat screen', () => {
 
     await continueFromGreeting();
     expect(el.textContent).toContain('Quiet since you left.');
-    expect(el.textContent).toContain('no Google key is saved');
+    expect(el.textContent).toContain('no brain key is saved');
     expect(mocks.invoke).toHaveBeenCalledWith('buddy-think', { body: { action: 'status' } });
     expect(mocks.invoke).toHaveBeenCalledWith('buddy-think', { body: { action: 'briefing', local_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } });
   });

@@ -24,7 +24,7 @@ import './buddy.css';
 
 export const BUDDY_MAX_MESSAGE_CHARS = 1000;
 const COUNT_FROM_CHARS = 800;
-const NO_KEY_LINE = 'Buddy cannot think yet because no Google key is saved. Add it in Admin under Automation keys, in the box called Google key.';
+const NO_KEY_LINE = 'Buddy cannot think yet because no brain key is saved. Add one on the Brains page, under Automation in Admin.';
 const RUN_NOT_STARTED = 'Buddy could not start today\'s run just now. Your order stays waiting.';
 const CHAT_NOT_REACHED = 'Buddy could not be reached just now. Check the messages below and try again shortly.';
 const BRIEFING_NOT_REACHED = 'Buddy could not get your briefing just now. You can still type below.';

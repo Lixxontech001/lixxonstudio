@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import VapidGenerator from '../components/VapidGenerator';
+import { withoutBrainKeys } from '../../lib/brainRows';
 import {
   AUTOMATION_KEY_CATEGORIES,
   automationStatusClass,
@@ -83,7 +84,7 @@ export default function AutomationKeys() {
         setItems([]);
         return false;
       }
-      setItems(keysWithoutDoorDetails(safeItems));
+      setItems(withoutBrainKeys(keysWithoutDoorDetails(safeItems)));
       setLoadFailed(false);
       return true;
     } catch {
@@ -227,6 +228,9 @@ export default function AutomationKeys() {
           <p className="text-sm text-gray-600 mt-2 max-w-3xl">
             Owner-only Vault storage for AI, Actions, commerce, messaging, social, video and push credentials.
             Saved values are never returned to this page and cannot be revealed or copied here.
+          </p>
+          <p className="text-sm text-gray-600 mt-2 max-w-3xl">
+            Buddy's brain keys (Google, Groq and the rest) are on the <a className="underline" href="/admin/automation/brains">Brains page</a>.
           </p>
         </div>
         <button

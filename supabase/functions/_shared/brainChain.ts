@@ -9,7 +9,7 @@ import { tryableBrains, type BrainId, type BrainSlot } from "./brains.ts";
 export const BRAIN_TIMEOUT_MS = 15_000;
 export const BRAIN_MAX_REPLY_CHARS = 4000;
 
-export const NONE_SAVED_LINE = "Buddy cannot think yet because no thinking key is saved. Add one in Admin under Automation keys.";
+export const NONE_SAVED_LINE = "Buddy cannot think yet because no brain key is saved. Add one on the Brains page, under Automation in Admin.";
 export const ALL_FAILED_LINE = "Buddy could not reach any of its brains just now. Nothing was changed. Try again in a few minutes.";
 
 export type BrainTurn = { role: "user" | "model"; text: string };

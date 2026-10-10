@@ -7,7 +7,8 @@
 // - Minds cannot publish, send, spend or change prices. Buddy says so when an order touches those.
 
 import { ownerClock } from "./mindsNightReport.ts";
-import { howToDoor, type HowToDoor } from "./buddyHowTo.ts";
+import { brainHowTo, howToDoor, type HowToDoor } from "./buddyHowTo.ts";
+import type { BrainId } from "./brains.ts";
 import { parseControlRequest, type ControlAction } from "./buddyControls.ts";
 
 export const MIND_KEYS = ["analyst", "strategist", "ceo", "executioner", "auditor"] as const;
@@ -64,6 +65,7 @@ export type Route =
   | { kind: "control_refused"; line: string }
   | { kind: "ask_which_mind"; instruction: string }
   | { kind: "how_to"; door: HowToDoor }
+  | { kind: "brain_how_to"; brain: BrainId }
   | { kind: "chat" };
 
 export interface PendingOrder {
@@ -157,6 +159,8 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
   if (!mind) {
     const door = howToDoor(text);
     if (door) return { kind: "how_to", door };
+    const brain = brainHowTo(text);
+    if (brain) return { kind: "brain_how_to", brain };
   }
   // Asking for today's run is an order with no mind to name. It must not fall through to "which mind?".
   if (!mind && !question && isRunDayRequest(text)) return { kind: "run_day", instruction: cleanInstruction(text) };

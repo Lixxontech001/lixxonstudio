@@ -1,3 +1,5 @@
+import { BRAIN_SLOTS, type BrainId } from "./brains.ts";
+
 // Buddy's how-to answers for the six doors added in Phase 6. Pure: no network, no database, no model.
 // When the owner asks how to connect one of them, Buddy answers with these fixed steps. The steps name only the
 // Connections page and the fields on it. No secret is asked for in chat, and no country or currency is named.
@@ -89,4 +91,42 @@ export function howToDoor(message: string): HowToDoor | null {
 
 export function howToReply(door: HowToDoor): string {
   return HOWTO_REPLIES[door];
+}
+
+// Phase A slice 4: how to get and save each brain's key. The steps name the Brains page and the box to paste into.
+// No key is asked for in chat. A brain named with no key words ("how is Groq doing") is not a how-to question.
+const BRAIN_WORDS: Array<{ brain: BrainId; words: RegExp }> = [
+  { brain: "gemini", words: /\b(gemini|google key|google ai)\b/i },
+  { brain: "groq", words: /\bgroq\b/i },
+  { brain: "nvidia", words: /\b(nvidia|nim)\b/i },
+  { brain: "cloudflare", words: /\bcloudflare\b/i },
+  { brain: "openrouter", words: /\b(openrouter|open router)\b/i },
+  { brain: "cerebras", words: /\bcerebras\b/i },
+  { brain: "huggingface", words: /\b(hugging ?face|huggingface)\b/i },
+  { brain: "deepseek", words: /\bdeepseek\b/i },
+];
+
+const BRAIN_KEY_WORDS = /\b(key|token|sign ?up|set ?up|connect|get|add|steps?)\b/i;
+
+/**
+ * The brain a how-to question is about, or null. Needs the word "how", a key word, and exactly one brain name.
+ */
+export function brainHowTo(message: string): BrainId | null {
+  if (!/\bhow\b/i.test(message) || !BRAIN_KEY_WORDS.test(message)) return null;
+  const named = BRAIN_WORDS.filter((item) => item.words.test(message));
+  return named.length === 1 ? named[0].brain : null;
+}
+
+export function brainHowToReply(brain: BrainId): string {
+  const slot = BRAIN_SLOTS.find((item) => item.id === brain);
+  if (!slot) return "Buddy does not know that brain.";
+  const steps = [
+    `${slot.label}: go to ${slot.keySite} and make a key there. Copy it once.`,
+    "Then open Admin, go to Brains under Automation, paste the key into the box for that brain, and press Save.",
+    `${slot.accessNote}`,
+  ];
+  if (slot.id === "cloudflare") steps.push("Cloudflare also needs your account ID, which is on the Workers page. Paste it into the second box.");
+  if (slot.access === "skip") steps.push("Buddy skips this brain for now, so a saved key does not change its answers yet.");
+  steps.push("Saved keys are never shown again. Press Test to check one with a single read-only request.");
+  return steps.join(" ");
 }

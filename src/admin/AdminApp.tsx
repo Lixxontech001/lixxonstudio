@@ -52,6 +52,7 @@ const AdminArticleEditor = lazy(() => import('./pages/AdminArticleEditor'));
 const AdminProductEditor = lazy(() => import('./pages/AdminProductEditor'));
 const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor'));
 const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
+const AutomationBrains = lazy(() => import('./pages/AutomationBrains'));
 const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
 const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));
 const AutomationRuns = lazy(() => import('./pages/AutomationRuns'));
@@ -137,7 +138,7 @@ export default function AdminApp() {
           <ShieldAlert size={28} className="mx-auto text-amber-500 mb-4" />
           <h1 className="font-serif text-2xl text-charcoal mb-2">Not available to your role</h1>
           <p className="text-sm text-gray-500">
-            {routeName === 'admin-automation-keys'
+            {routeName === 'admin-automation-keys' || routeName === 'admin-automation-brains'
               ? <>Only an active owner or founder can manage automation credentials.</>
               : <>Your role is <strong>{adminAccess?.role_label || adminAccess?.role}</strong>. This section needs a permission it does not have — an owner can grant it under Team &amp; access.</>}
           </p>
@@ -150,6 +151,8 @@ export default function AdminApp() {
     switch (routeName) {
       case 'admin-automation-keys':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation keys…</div>}><AutomationKeys /></Suspense>;
+      case 'admin-automation-brains':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading brains…</div>}><AutomationBrains /></Suspense>;
       case 'admin-automation-check':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading System Check…</div>}><AutomationCheck /></Suspense>;
       case 'admin-automation-articles':

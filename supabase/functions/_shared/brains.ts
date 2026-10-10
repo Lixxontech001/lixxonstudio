@@ -31,6 +31,8 @@ export interface BrainSlot {
   access: BrainAccess;
   /** One plain sentence on the free access, for the Brains page and Buddy's how-to. */
   accessNote: string;
+  /** The website where the owner makes the key. Shown in Buddy's how-to. Domain only, no deep link. */
+  keySite: string;
   /** The Vault name for the main key. Matches automation_secret_catalog.secret_name. */
   secretName: string;
   /** Other Vault names this brain needs (for example Cloudflare's account ID). */
@@ -49,6 +51,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     purpose: "Buddy's first brain. Google's own model.",
     access: "free_no_card",
     accessNote: "Google's free tier. No card needed.",
+    keySite: "aistudio.google.com",
     secretName: "gemini_api_key",
     extraSecretNames: [],
     baseUrl: null,
@@ -61,6 +64,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     purpose: "A fast free brain. Used when Google is full.",
     access: "free_no_card",
     accessNote: "Free tier with a request-per-minute limit. No card needed.",
+    keySite: "console.groq.com",
     secretName: "groq_api_key",
     extraSecretNames: [],
     baseUrl: "https://api.groq.com/openai/v1",
@@ -73,6 +77,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     purpose: "A free brain with many open models. Used when the first two are full.",
     access: "free_no_card",
     accessNote: "Free credits from build.nvidia.com. No card needed; some accounts need a phone check.",
+    keySite: "build.nvidia.com",
     secretName: "nvidia_api_key",
     extraSecretNames: [],
     baseUrl: "https://integrate.api.nvidia.com/v1",
@@ -85,6 +90,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     purpose: "A free daily allowance of AI on Cloudflare. Needs the account ID as well as the token.",
     access: "free_no_card",
     accessNote: "A free daily allowance on the Workers free plan. No card needed.",
+    keySite: "dash.cloudflare.com",
     secretName: "cloudflare_api_token",
     extraSecretNames: ["cloudflare_account_id"],
     baseUrl: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
@@ -97,6 +103,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     purpose: "Only the models marked free. Buddy never uses a paid model here.",
     access: "free_no_card",
     accessNote: "Free models with a daily limit. No card needed.",
+    keySite: "openrouter.ai",
     secretName: "openrouter_api_key",
     extraSecretNames: [],
     baseUrl: "https://openrouter.ai/api/v1",
@@ -109,6 +116,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     purpose: "Skipped for now. Cerebras asks for a card before its trial.",
     access: "skip",
     accessNote: "Cerebras asks for a payment card before its trial, so Buddy skips it until it is free again.",
+    keySite: "cloud.cerebras.ai",
     secretName: "cerebras_api_key",
     extraSecretNames: [],
     baseUrl: "https://api.cerebras.ai/v1",
@@ -121,6 +129,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     purpose: "A small free monthly credit. Used near the end of the list.",
     access: "free_no_card",
     accessNote: "A small free monthly credit. No card needed.",
+    keySite: "huggingface.co",
     secretName: "huggingface_token",
     extraSecretNames: [],
     baseUrl: "https://router.huggingface.co/v1",
@@ -133,6 +142,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     purpose: "Skipped for now. Its API is paid and has no free tier to rely on.",
     access: "skip",
     accessNote: "The DeepSeek API is paid and has no published free tier, so Buddy skips it.",
+    keySite: "platform.deepseek.com",
     secretName: "deepseek_api_key",
     extraSecretNames: [],
     baseUrl: "https://api.deepseek.com",
