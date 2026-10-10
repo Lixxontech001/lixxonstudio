@@ -1,5 +1,5 @@
 import { sanitizeHtml, escapeHtml } from './sanitize';
-import { normalizeImageUrl } from './images';
+import { displayImageUrl } from './images';
 
 // NUL is used as a stash delimiter because it can never appear in sanitised user content.
 const PLACEHOLDER = String.fromCharCode(0);
@@ -62,7 +62,12 @@ export function renderMarkdown(content: string | null | undefined, opts: { gloss
     const keep = (s: string) => { stash.push(s); return `${PLACEHOLDER}${stash.length - 1}${PLACEHOLDER}`; };
     let t = escapeHtml(raw);
     t = t.replace(/`([^`]+)`/g, (_m, c) => keep(`<code>${c}</code>`));
-    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m: string, alt: string, src: string) => keep(`<img src="${normalizeImageUrl(src) ?? ''}" alt="${alt}" loading="lazy" decoding="async" />`));
+    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m: string, alt: string, src: string) => {
+      // Undo only our own escaping before URL parsing, then escape the resulting attribute.
+      const rawSrc = src.replace(/&(amp|lt|gt|quot|#39);/g, entity =>
+        ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" }[entity] || entity));
+      return keep(`<img src="${escapeHtml(displayImageUrl(rawSrc) ?? '')}" alt="${alt}" loading="lazy" decoding="async" />`);
+    });
     t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text, href) => keep(`<a href="${href}">${text}</a>`));
     t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
          .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')

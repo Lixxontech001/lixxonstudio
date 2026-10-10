@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import {useEffect} from 'react';
 import { Heart, ShoppingBag, ArrowRight, Trash2 } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
@@ -44,7 +45,7 @@ export default function WishlistPage() {
               <div key={item.id} className="group bg-white rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500 flex flex-col">
                 <Link to={{ name: 'shop-product', slug: item.slug }} className="block">
                   <div className="img-zoom aspect-square bg-taupe-light">
-                    {item.image_url && <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" loading="lazy" />}
+                    {item.image_url && <img src={displayImageUrl(item.image_url)} alt={item.name} className="w-full h-full object-cover" loading="lazy" />}
                   </div>
                 </Link>
                 <div className="p-5 flex flex-col flex-1">

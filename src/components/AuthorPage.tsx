@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../lib/images';
 import { useEffect } from 'react';
 import {Clock, Twitter, Instagram, Linkedin, Globe} from 'lucide-react';
 import { Link } from '../context/NavigationContext';
@@ -48,7 +49,7 @@ export default function AuthorPage({ slug }: { slug: string }) {
         <div className="container-narrow text-center">
           {author.avatar_url && (
             <img
-              src={author.avatar_url}
+              src={displayImageUrl(author.avatar_url)}
               alt={author.name}
               className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover mx-auto mb-6 luxury-shadow-lg"
             />
@@ -101,7 +102,7 @@ export default function AuthorPage({ slug }: { slug: string }) {
             {posts.map(post => (
               <Link key={post.id} to={{ name: 'article', slug: post.slug }} className="group flex flex-col">
                 <div className="img-zoom rounded-sm overflow-hidden luxury-shadow aspect-[4/5] bg-taupe-light mb-4">
-                  {post.cover_image && <img src={post.cover_image} alt={post.title} className="w-full h-full object-cover" loading="lazy" />}
+                  {post.cover_image && <img src={displayImageUrl(post.cover_image)} alt={post.title} className="w-full h-full object-cover" loading="lazy" />}
                 </div>
                 {post.category && <span className="text-[10px] tracking-editorial uppercase text-bronze mb-2">{post.category.name}</span>}
                 <h3 className="font-serif text-lg text-charcoal leading-snug group-hover:text-bronze transition-colors duration-300 line-clamp-3">{post.title}</h3>

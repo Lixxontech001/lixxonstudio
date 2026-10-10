@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { Link } from '../../context/NavigationContext';
 import { useRecentlyViewedProducts } from '../../hooks/useFeatures';
 import { Clock } from 'lucide-react';
@@ -19,7 +20,7 @@ export default function RecentlyViewedProducts({ excludeId }: { excludeId?: stri
         {filtered.slice(0, 6).map(product => (
           <Link key={product.id} to={{ name: 'shop-product', slug: product.slug }} className="group">
             <div className="aspect-square rounded-sm overflow-hidden bg-taupe-light luxury-shadow mb-3 img-zoom">
-              {product.image_url && <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" loading="lazy" />}
+              {product.image_url && <img src={displayImageUrl(product.image_url)} alt={product.name} className="w-full h-full object-cover" loading="lazy" />}
             </div>
             <p className="text-xs text-charcoal leading-snug group-hover:text-bronze transition-colors line-clamp-2">{product.name}</p>
           </Link>

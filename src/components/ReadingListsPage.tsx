@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../lib/images';
 import { useEffect, useState } from 'react';
 import { List, Trash2, Clock, ArrowRight, Plus, X, Globe, Lock } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
@@ -140,7 +141,7 @@ function ReadingListDetail({ listId, listName, onBack }: { listId: string; listN
             <div key={item.id} className="group relative">
               <Link to={{ name: 'article', slug: item.post.slug }} className="flex flex-col">
                 <div className="img-zoom rounded-sm overflow-hidden luxury-shadow aspect-[4/5] bg-taupe-light mb-3">
-                  {item.post.cover_image && <img src={item.post.cover_image} alt={item.post.title} className="w-full h-full object-cover" loading="lazy" />}
+                  {item.post.cover_image && <img src={displayImageUrl(item.post.cover_image)} alt={item.post.title} className="w-full h-full object-cover" loading="lazy" />}
                 </div>
                 <h3 className="font-serif text-base text-charcoal leading-snug group-hover:text-bronze transition-colors line-clamp-2">{item.post.title}</h3>
                 <div className="flex items-center gap-2 mt-2 text-xs text-charcoal-muted">

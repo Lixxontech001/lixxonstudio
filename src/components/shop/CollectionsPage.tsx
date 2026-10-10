@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect } from 'react';
 import { Link } from '../../context/NavigationContext';
 import { useCollections } from '../../hooks/useCommerce';
@@ -50,7 +51,7 @@ export default function CollectionsPage() {
             {collections.map(col => (
               <Link key={col.id} to={{ name: 'collection', slug: col.slug }} className="group block bg-white rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500">
                 <div className="img-zoom aspect-[4/5] bg-taupe-light relative">
-                  {col.cover_image && <img src={col.cover_image} alt={col.title} className="w-full h-full object-cover" loading="lazy" />}
+                  {col.cover_image && <img src={displayImageUrl(col.cover_image)} alt={col.title} className="w-full h-full object-cover" loading="lazy" />}
                   {col.is_featured && (
                     <span className="absolute top-3 left-3 text-[9px] tracking-editorial uppercase text-white bg-bronze/90 backdrop-blur-md px-2.5 py-1 rounded-full">
                       Featured

@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { ArrowLeft, ArrowRight, Check, Loader2, AlertCircle, Download, ShoppingBag, Mail, FileText, Tag, Gift, X, ShieldCheck } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
@@ -327,7 +328,7 @@ export default function CheckoutPage() {
                     return (
                       <div key={item.id} className="flex gap-3 pb-3 border-b border-taupe/30 last:border-0">
                         <div className="w-14 h-14 rounded-sm overflow-hidden bg-taupe-light flex-shrink-0">
-                          {item.image_url && <img src={item.image_url} alt="" className="w-full h-full object-cover" />}
+                          {item.image_url && <img src={displayImageUrl(item.image_url)} alt="" className="w-full h-full object-cover" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-charcoal font-medium line-clamp-2">{item.name}</p>

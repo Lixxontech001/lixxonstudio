@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Layers, Clock, ArrowRight } from 'lucide-react';
@@ -21,7 +22,7 @@ export function SeriesIndexPage() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {series.map(s => (
             <Link key={s.id} to={{ name: 'series', slug: s.slug }} className="group block bg-white border border-taupe/30 rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all">
-              <div className="aspect-[16/9] bg-taupe-light overflow-hidden">{s.cover_image && <img src={s.cover_image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />}</div>
+              <div className="aspect-[16/9] bg-taupe-light overflow-hidden">{s.cover_image && <img src={displayImageUrl(s.cover_image)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />}</div>
               <div className="p-6">
                 <p className="flex items-center gap-2 text-[10px] tracking-editorial uppercase text-bronze mb-2"><Layers size={12} /> {s.count} part{s.count === 1 ? '' : 's'}</p>
                 <h2 className="font-serif text-2xl text-charcoal group-hover:text-bronze transition-colors">{s.title}</h2>

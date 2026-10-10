@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../lib/images';
 import { ExternalLink, ArrowLeft, Check, Tag, Beaker, Heart, Sparkles } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { useProducts } from '../hooks/useSupabase';
@@ -47,7 +48,7 @@ export default function ProductDetail({ slug }: { slug: string }) {
           <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
             <div className="rounded-sm overflow-hidden luxury-shadow-lg aspect-square bg-taupe-light">
               {product.image_url && (
-                <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                <img src={displayImageUrl(product.image_url)} alt={product.name} className="w-full h-full object-cover" />
               )}
             </div>
 

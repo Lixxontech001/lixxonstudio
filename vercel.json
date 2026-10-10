@@ -25,6 +25,7 @@
     { "source": "/account(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
   ],
   "rewrites": [
+    { "source": "/media/public/:path*", "destination": "/api/media?p=:path*" },
     { "source": "/sitemap.xml", "destination": "/api/feeds?type=sitemap" },
     { "source": "/rss.xml", "destination": "/api/feeds?type=rss" },
     { "source": "/feed", "destination": "/api/feeds?type=rss" },

@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect } from 'react';
 import { Download, ArrowRight, Lock, Clock, Loader2 } from 'lucide-react';
 import { Link } from '../../context/NavigationContext';
@@ -61,7 +62,7 @@ function DownloadsInner() {
               return (
                 <div key={ent.id} className="bg-white rounded-sm luxury-shadow p-6 flex flex-col sm:flex-row items-start gap-4">
                   <div className="w-16 h-16 rounded-sm overflow-hidden bg-taupe-light flex-shrink-0">
-                    {ent.product?.image_url && <img src={ent.product.image_url} alt={ent.product.name} className="w-full h-full object-cover" />}
+                    {ent.product?.image_url && <img src={displayImageUrl(ent.product.image_url)} alt={ent.product.name} className="w-full h-full object-cover" />}
                   </div>
                   <div className="flex-1">
                     <h3 className="font-serif text-lg text-charcoal">{ent.product?.name || 'Digital product'}</h3>

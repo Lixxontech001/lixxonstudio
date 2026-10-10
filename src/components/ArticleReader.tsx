@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../lib/images';
 import {useEffect, useState, useMemo, useRef} from 'react';
 import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
@@ -339,7 +340,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
           {post.author && (
             <Link to={{ name: 'author', slug: post.author.slug }} className="flex items-center gap-3 group">
               {post.author.avatar_url && (
-                <img src={post.author.avatar_url} alt={post.author.name} className="w-10 h-10 rounded-full object-cover" loading="lazy" />
+                <img src={displayImageUrl(post.author.avatar_url)} alt={post.author.name} className="w-10 h-10 rounded-full object-cover" loading="lazy" />
               )}
               <div>
                 <p className="text-sm text-charcoal font-medium group-hover:text-bronze transition-colors">{post.author.name}</p>
@@ -511,7 +512,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
           <div className="container-narrow mt-12 pt-10 border-t border-taupe/50">
             <div className="flex flex-col sm:flex-row gap-5 items-start">
               {post.author.avatar_url && (
-                <img src={post.author.avatar_url} alt={post.author.name} className="w-16 h-16 rounded-full object-cover" loading="lazy" />
+                <img src={displayImageUrl(post.author.avatar_url)} alt={post.author.name} className="w-16 h-16 rounded-full object-cover" loading="lazy" />
               )}
               <div>
                 <p className="text-[10px] tracking-editorial uppercase text-bronze mb-1">Written By</p>

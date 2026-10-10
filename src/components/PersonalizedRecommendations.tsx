@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../lib/images';
 import { Clock, Sparkles } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { usePersonalizedRecommendations } from '../hooks/useFeatures';
@@ -19,7 +20,7 @@ export default function PersonalizedRecommendations() {
           {posts.map(post => (
             <Link key={post.id} to={{ name: 'article', slug: post.slug }} className="group flex flex-col bg-white rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500">
               <div className="img-zoom aspect-[4/5] overflow-hidden">
-                {post.cover_image && <img src={post.cover_image} alt={post.title} className="w-full h-full object-cover" loading="lazy" />}
+                {post.cover_image && <img src={displayImageUrl(post.cover_image)} alt={post.title} className="w-full h-full object-cover" loading="lazy" />}
               </div>
               <div className="p-5 flex flex-col flex-1">
                 {post.category && <span className="text-[10px] tracking-editorial uppercase text-bronze">{post.category.name}</span>}

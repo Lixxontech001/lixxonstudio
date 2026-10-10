@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { List, Award } from 'lucide-react';
@@ -65,7 +66,7 @@ export function SharedListPage({ token }: { token: string }) {
       <ol className="space-y-5">{items.filter(i => i.post).map((i, n) => (
         <li key={i.id}><Link to={{ name: 'article', slug: i.post!.slug }} className="group flex gap-5 items-start">
           <span className="font-serif text-2xl text-bronze/70 w-8 flex-shrink-0">{n + 1}</span>
-          <div className="w-24 h-16 bg-taupe-light rounded-sm overflow-hidden flex-shrink-0">{i.post!.cover_image && <img src={i.post!.cover_image} alt="" className="w-full h-full object-cover" />}</div>
+          <div className="w-24 h-16 bg-taupe-light rounded-sm overflow-hidden flex-shrink-0">{i.post!.cover_image && <img src={displayImageUrl(i.post!.cover_image)} alt="" className="w-full h-full object-cover" />}</div>
           <div><h2 className="font-serif text-xl text-charcoal group-hover:text-bronze transition-colors leading-snug">{i.post!.title}</h2><p className="text-[11px] text-charcoal-muted mt-1">{i.post!.reading_time_minutes} min read</p></div>
         </Link></li>
       ))}</ol>
