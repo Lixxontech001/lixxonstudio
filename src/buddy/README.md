@@ -413,3 +413,15 @@ What is still not done, or not verified:
 - The saver (`scripts/save-pack-media.mjs`) refuses any MP4 that has no sound track (`checkVideo` reads the handler box for `soun`). There is no "silent on request" switch: the owner has not asked for one, so none is built.
 - Tests: `packVoice.test.ts` (fake fetch, fake local program, key never echoed) and the updated `packVideo.test.ts`, `packMediaSave.test.ts`, `phase7Freeze.test.ts`, `buddyPhase4Freeze.test.ts`. The fixture `tiny-voiced.mp4` has a real AAC track; `tiny.mp4` stays silent and is refused.
 - Not checked live: the Gemini call was not made from this sandbox (the Gemini host is not on its allowlist), and no local speech program is installed here. The first live run on the owner's runner is the real test.
+
+## Phase 8 slice 6: freeze and report
+
+- Freeze: `src/__tests__/phase8Freeze.test.ts` (32 checks). It calls the real functions where it can and reads source only for wiring. It covers: Takeover off by default and never set on by a Phase 8 migration; a run request and a pause request wait when Takeover is off; the Auditor cannot be switched off; Gemini model `gemini-3.8-flash`; no-key line; never-list blocks; sixteen auto doors, all open, including the four RSS doors; four gated channels are not doors; the RSS ping (fake hub) logs "pinged", never "posted"; a sale fixture gives one USD sale notable; an empty day gives none; a heartbeat never buzzes; voiced MP4 has an audio track and a silent one is refused; Gemini is tried before the local program; the briefing keeps its seven sections; no Instagram, TikTok, Facebook, Pinterest or WhatsApp sender in the day run or in Buddy; no paid voice or scheduling service in owner code; forbidden owner-copy words absent; no Nigeria, Naira, Lagos or em dash in new public text; the key is not printed.
+- Known gaps, stated plainly:
+  - A single door send failure does not write its own notable. The notable for doors counts real posts only (`door_posted`, RSS pings excluded). A whole door step that cannot run writes `mind_failed`.
+  - The older Admin distribution code (`supabase/functions/automation-distribution`, `src/admin/pages/AutomationDistribution.tsx`) still has WhatsApp, Facebook and Pinterest senders from before Phase 8. Buddy and the day run do not import it. It is left as it was, for the owner to decide.
+  - `scripts/video-template.mjs` has a code default named "Lagos daylight (default)". It is not shown as reader copy in the code checked. It should be renamed.
+  - The briefing was not changed in Phase 8. Its seven sections were already in place.
+- Not proven live: Gemini text-to-speech and the Buddy Gemini call (the host is not on the sandbox allowlist, and no key was tested here); the RSS hub's 204 reply; migrations `20261013000000` and `20261014000000` (not applied); a local speech program on the runner (none installed here).
+- Full suite with FFmpeg enabled: 136 files, 1698 tests passed. Type check and lint pass on the new files.
+- Nothing was merged, deployed, or applied to production. No pull request was opened.
