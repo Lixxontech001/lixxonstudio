@@ -29,8 +29,8 @@ This folder is Buddy. Buddy is the only one who talks to the owner.
 
 Server side:
 
-- `supabase/functions/buddy-think/index.ts`: the owner check, the Google key read from Vault, the rate limit, and the chat storage through the owner's own session.
-- `supabase/functions/_shared/buddyThink.ts`: the rules for `status`, `probe`, `ask` and `briefing`, and the one Gemini call. Buddy thinks with `gemini-3.8-flash`.
+- `supabase/functions/buddy-think/index.ts`: the owner check, each brain's key read from Vault (the Google key is also read for the status probe), the rate limit, and the chat storage through the owner's own session.
+- `supabase/functions/_shared/buddyThink.ts`: the rules for `status`, `probe`, `ask` and `briefing`. Thinking goes through the brain chain (`brainChain.ts`): Gemini first (`gemini-3.8-flash`), then the free brains in their fixed order. Cerebras and DeepSeek are skipped. The minds think through the same chain (`mindThink.ts`).
 - `supabase/functions/_shared/buddyBriefing.ts`: the briefing rules. A day is "quiet" only when every source was read and none had anything real (paid orders, new articles, failed automation steps). Article views are shown but do not make a day busy.
 - `supabase/migrations/20261009110000_buddy_chats.sql`: the `buddy_chats` and `buddy_messages` tables. Each owner sees only their own rows.
 - `supabase/migrations/20261009120000_buddy_briefing_reports.sql`: briefing threads (one per owner per day), the "last seen" time, and the `buddy_reports` table (read only).

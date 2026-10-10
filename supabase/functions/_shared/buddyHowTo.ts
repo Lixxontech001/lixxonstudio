@@ -1,13 +1,23 @@
 import { BRAIN_SLOTS, type BrainId } from "./brains.ts";
 
-// Buddy's how-to answers for the six doors added in Phase 6. Pure: no network, no database, no model.
+// Buddy's how-to answers for every open door: the sixteen auto doors in doorRegistry.ts (OPEN_DOORS). Pure: no network, no database, no model.
+// The four gated channels are not doors, so they have no how-to here.
 // When the owner asks how to connect one of them, Buddy answers with these fixed steps. The steps name only the
 // Connections page and the fields on it. No secret is asked for in chat, and no country or currency is named.
 
-export const HOWTO_DOORS = ["medium", "youtube", "pixelfed", "wordpress_com", "podcast", "vimeo", "flipboard", "google_news", "microsoft_start", "smartnews"] as const;
+export const HOWTO_DOORS = [
+  "telegram", "discord", "bluesky", "mastodon", "tumblr", "blogger", "medium", "youtube", "pixelfed", "wordpress_com",
+  "podcast", "vimeo", "flipboard", "google_news", "microsoft_start", "smartnews",
+] as const;
 export type HowToDoor = (typeof HOWTO_DOORS)[number];
 
 const DOOR_WORDS: Array<{ door: HowToDoor; words: RegExp }> = [
+  { door: "telegram", words: /\btelegram\b/i },
+  { door: "discord", words: /\bdiscord\b/i },
+  { door: "bluesky", words: /\bbluesky\b/i },
+  { door: "mastodon", words: /\bmastodon\b/i },
+  { door: "tumblr", words: /\btumblr\b/i },
+  { door: "blogger", words: /\bblogger\b/i },
   { door: "medium", words: /\bmedium\b/i },
   { door: "youtube", words: /\b(youtube|you tube)\b/i },
   { door: "pixelfed", words: /\bpixelfed\b/i },
@@ -23,6 +33,42 @@ const DOOR_WORDS: Array<{ door: HowToDoor; words: RegExp }> = [
 const HOW_WORDS = /\b(how|steps?|set ?up|connect|hook up)\b/i;
 
 export const HOWTO_REPLIES: Record<HowToDoor, string> = {
+  telegram: [
+    "Telegram: open Connections, then find Telegram.",
+    "Paste your bot token, and the channel or chat ID the bot posts to, then save.",
+    "Buddy sends one text message per article, with a link back to the article.",
+    "Press Test. The test is a read-only check. It posts nothing.",
+  ].join(" "),
+  discord: [
+    "Discord: open Connections, then find Discord.",
+    "Paste the webhook address from your Discord channel's settings, then save.",
+    "Buddy sends one message per article to that channel, with a link back to the article.",
+    "Press Test. The test is a read-only check. It posts nothing.",
+  ].join(" "),
+  bluesky: [
+    "Bluesky: open Connections, then find Bluesky.",
+    "Paste your handle, such as name.bsky.social, and an app password made in your Bluesky settings, then save.",
+    "Buddy posts one short line with a link back to the article.",
+    "Press Test. The test signs in and posts nothing.",
+  ].join(" "),
+  mastodon: [
+    "Mastodon: open Connections, then find Mastodon.",
+    "Paste your server address (the full https web address of your Mastodon server) and your access token, then save.",
+    "Buddy posts one status with a link back to the article.",
+    "Press Test. The test is a read-only check. It posts nothing.",
+  ].join(" "),
+  tumblr: [
+    "Tumblr: open Connections, then find Tumblr.",
+    "Paste the consumer key, the consumer secret, the access token, the token secret and your blog name, then save.",
+    "Buddy posts one text post with a link back to the article.",
+    "Press Test. The test is a read-only check. It posts nothing.",
+  ].join(" "),
+  blogger: [
+    "Blogger: open Connections, then find Blogger.",
+    "Paste the Client ID, the Client secret, the Refresh token and the Blog ID from your Google project, then save.",
+    "Buddy publishes one post per article with a link back to the article.",
+    "Press Test. The test is a read-only check. It posts nothing.",
+  ].join(" "),
   medium: [
     "Medium: open Connections, then find Medium.",
     "Paste the integration token you already have into the token box, then save.",

@@ -38,7 +38,7 @@ verify_jwt = true
 [functions.automation-push]
 verify_jwt = true
 
-# Owner-only Buddy thinking (Google Gemini). The handler re-checks the owner through the Automation keys catalogue.
+# Owner-only Buddy thinking, through the brain chain (Gemini first, then the free brains). The handler re-checks the owner through the Automation keys catalogue.
 [functions.buddy-think]
 verify_jwt = true
 
