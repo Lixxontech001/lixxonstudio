@@ -45,8 +45,10 @@ describe('the shop scan only reads the shop, and only writes notable rows', () =
     expect(body).toContain('.in("source", sources)');
   });
 
-  it('never inserts, updates or deletes anything except through the notable writer', () => {
-    expect(body).not.toMatch(/\.(insert|update|upsert|delete)\(/);
+  it('never inserts, updates or deletes anything except the notable writer and the daily log line', () => {
+    const withoutLogLine = body.replace('sb.from("minds_daily_log").insert(', '');
+    expect(withoutLogLine).not.toMatch(/\.(insert|update|upsert|delete)\(/);
+    expect(body).toContain('sb.from("minds_daily_log").insert(');
     expect(body).not.toMatch(/\.from\("(orders|products|posts|product_clicks)"\)\s*\.(insert|update|upsert|delete)/);
     expect(body).not.toContain('.rpc(');
   });

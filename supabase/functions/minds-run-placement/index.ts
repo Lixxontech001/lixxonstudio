@@ -705,6 +705,17 @@ async function scanShopNotables(sb: SupabaseClient, owner: string, localDay: str
       const status = await recordNotable(sb, owner, localDay, plan.mind, plan.kind, plan.title, plan.detail, plan.key);
       return status !== null;
     },
+    // The daily log line a person can read later. Server writer only, same day as the event.
+    logLine: async (plan: NotablePlan): Promise<void> => {
+      await sb.from("minds_daily_log").insert({
+        owner_id: owner,
+        day: localDay,
+        mind: plan.mind,
+        action: clip(plan.title, 120),
+        outcome: "done",
+        detail: clip(plan.detail, 500),
+      });
+    },
   };
   return scanNotableSources(ports, {
     now: new Date(),

@@ -17,7 +17,7 @@ export interface NotablePlan {
   /** Unique per owner. The database refuses a second row with the same key. */
   key: string;
   kind: NotableSourceKind;
-  mind: "buddy" | "strategist";
+  mind: "analyst" | "strategist";
   title: string;
   detail: string;
 }
@@ -49,6 +49,8 @@ export interface NotablePorts {
   readEarlierSources(sources: string[], beforeIso: string): Promise<string[] | null>;
   /** Writes one notable event (and buzzes when its kind buzzes). True only when a new row was written. */
   record(plan: NotablePlan): Promise<boolean>;
+  /** Writes the plain daily-log line for a notable that was just written. Optional. A failure here never undoes the event. */
+  logLine?(plan: NotablePlan): Promise<void>;
 }
 
 export interface ScanResult {
@@ -75,7 +77,7 @@ export function planSaleNotables(orders: OrderRow[]): NotablePlan[] {
     plans.push({
       key: `sale:${id}`,
       kind: "sale",
-      mind: "buddy",
+      mind: "analyst",
       title,
       detail: "A paid order came in on the shop. Buddy changed nothing.",
     });
@@ -90,7 +92,7 @@ export function planClickNotable(clicks: ClickRow[], localDay: string): NotableP
   return [{
     key: `clicks:${localDay}`,
     kind: "product_click",
-    mind: "buddy",
+    mind: "analyst",
     title: `${count} product ${count === 1 ? "click" : "clicks"} today`,
     detail: "Shop product clicks for today. Counted by the first day run that saw them.",
   }];
@@ -108,7 +110,7 @@ export function planTrafficNotables(todaySources: string[], earlierSources: stri
     plans.push({
       key: `traffic:${source}`,
       kind: "traffic_new_kind",
-      mind: "buddy",
+      mind: "analyst",
       title: `New traffic source: ${source}`,
       detail: "This source sent shop clicks today, and none before today.",
     });
@@ -167,8 +169,16 @@ export async function scanNotableSources(ports: NotablePorts, window: ScanWindow
   let skipped = 0;
   for (const plan of plans) {
     try {
-      if (await ports.record(plan)) written += 1;
-      else skipped += 1;
+      if (await ports.record(plan)) {
+        written += 1;
+        try {
+          await ports.logLine?.(plan);
+        } catch {
+          // The event is written. Only its log line is missing, and the owner still sees the event.
+        }
+      } else {
+        skipped += 1;
+      }
     } catch {
       skipped += 1;
     }

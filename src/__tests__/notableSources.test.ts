@@ -32,14 +32,16 @@ function fakePorts(overrides: Partial<NotablePorts> = {}) {
     written.push(plan);
     return true;
   });
+  const logLine = vi.fn(async (_plan: NotablePlan) => {});
   const ports: NotablePorts = {
     readPaidOrders: async () => [],
     readClicks: async () => [],
     readEarlierSources: async () => [],
     record,
+    logLine,
     ...overrides,
   };
-  return { ports, record, written };
+  return { ports, record, written, logLine };
 }
 
 describe('sales: one per paid order, money in USD only', () => {
@@ -49,7 +51,7 @@ describe('sales: one per paid order, money in USD only', () => {
       {
         key: 'sale:ord-1',
         kind: 'sale',
-        mind: 'buddy',
+        mind: 'analyst',
         title: 'Paid order: USD 29.00.',
         detail: 'A paid order came in on the shop. Buddy changed nothing.',
       },
@@ -91,7 +93,7 @@ describe('traffic: a source is announced once, when it first appears', () => {
       {
         key: 'traffic:newsletter',
         kind: 'traffic_new_kind',
-        mind: 'buddy',
+        mind: 'analyst',
         title: 'New traffic source: newsletter',
         detail: 'This source sent shop clicks today, and none before today.',
       },
@@ -187,5 +189,49 @@ describe('the scan writes each new event once, and buzzes only buzz kinds', () =
     const result = await scanNotableSources(ports, WINDOW);
     expect(result).toEqual({ written: 0, skipped: 0, unreadable: [] });
     expect(record).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Analyst writes a daily-log line a person can read later', () => {
+  it('a paid order writes one Analyst log line with the title, and a second scan writes no second line', async () => {
+    const { ports, logLine } = fakePorts({
+      readPaidOrders: async () => [{ id: 'ord-9', amount: 34, currency: 'USD' }],
+    });
+    await scanNotableSources(ports, WINDOW);
+    expect(logLine).toHaveBeenCalledTimes(1);
+    expect(logLine.mock.calls[0][0]).toMatchObject({ kind: 'sale', mind: 'analyst', title: 'Paid order: USD 34.00.' });
+    await scanNotableSources(ports, WINDOW);
+    expect(logLine).toHaveBeenCalledTimes(1);
+  });
+
+  it('a day with no sales writes no sale and no log line', async () => {
+    const { ports, logLine, written } = fakePorts();
+    const result = await scanNotableSources(ports, WINDOW);
+    expect(result.written).toBe(0);
+    expect(written).toHaveLength(0);
+    expect(logLine).not.toHaveBeenCalled();
+  });
+
+  it('a log line that fails does not undo the event, which is still counted as written', async () => {
+    const { ports, written } = fakePorts({
+      readPaidOrders: async () => [{ id: 'ord-10', amount: 12, currency: 'USD' }],
+      logLine: async () => {
+        throw new Error('log refused');
+      },
+    });
+    const result = await scanNotableSources(ports, WINDOW);
+    expect(result).toEqual({ written: 1, skipped: 0, unreadable: [] });
+    expect(written.map((plan) => plan.key)).toEqual(['sale:ord-10']);
+  });
+
+  it('the plain copy has no em dash and names no country', () => {
+    const plans = [
+      ...planSaleNotables([{ id: 'ord-1', amount: 9, currency: 'USD' }]),
+      ...planClickNotable([{ source: 'shop' }], '2026-10-10'),
+      ...planTrafficNotables(['newsletter'], []),
+    ];
+    for (const plan of plans) {
+      expect(`${plan.title} ${plan.detail}`).not.toMatch(/—|nigeria|lagos|naira/i);
+    }
   });
 });

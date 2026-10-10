@@ -212,27 +212,28 @@ async function tryPlacement(
   if (before === undefined) return null;
 
   // The Auditor checks again on the text as it is now, not as it was when the plan was made.
+  const checkedAction = `Checked a change to "${clip(article.title, 80)}"`;
   const verdict = auditPlacement(candidate, article.content, input.shop);
   if (verdict.verdict === "block") {
-    await ports.log({ mind: "auditor", action: "Checked a plan", outcome: "blocked", detail: clip(`Blocked. ${verdict.fix}`, 500) });
+    await ports.log({ mind: "auditor", action: checkedAction, outcome: "blocked", detail: clip(`Blocked. ${verdict.fix}`, 500) });
     await ports.notable("auditor_blocked", `Auditor blocked a change to "${clip(article.title, 80)}"`, clip(verdict.fix, 500));
     return null;
   }
 
   if (candidate.productIds.some((id) => article.liveProductIds.includes(id))) {
-    await ports.log({ mind: "auditor", action: "Checked a plan", outcome: "blocked", detail: "Blocked. That product is already on this article." });
+    await ports.log({ mind: "auditor", action: checkedAction, outcome: "blocked", detail: "Blocked. That product is already on this article." });
     return null;
   }
 
   const swap = swapFor(article, candidate.productIds, before);
   if (swap === null) {
-    await ports.log({ mind: "auditor", action: "Checked a plan", outcome: "blocked", detail: CAP_BLOCK_DETAIL });
+    await ports.log({ mind: "auditor", action: checkedAction, outcome: "blocked", detail: CAP_BLOCK_DETAIL });
     return null;
   }
 
   const after = lineAfter(before, swap.removeSentences, candidate.sentences);
   if (after === null || after === before) {
-    await ports.log({ mind: "auditor", action: "Checked a plan", outcome: "blocked", detail: "Blocked. The paragraph could not be changed cleanly." });
+    await ports.log({ mind: "auditor", action: checkedAction, outcome: "blocked", detail: "Blocked. The paragraph could not be changed cleanly." });
     return null;
   }
 
@@ -322,7 +323,7 @@ export async function runPlacementOrder(input: RunInput, ports: RunPorts): Promi
     }
     if (plan.status === "blocked" || !plan.candidate) {
       sawBlock = true;
-      await ports.log({ mind: "auditor", action: "Checked a plan", outcome: "blocked", detail: clip(`Blocked. ${plan.detail}`, 500) });
+      await ports.log({ mind: "auditor", action: `Checked a change to "${clip(article.title, 80)}"`, outcome: "blocked", detail: clip(`Blocked. ${plan.detail}`, 500) });
       await ports.notable("auditor_blocked", `Auditor blocked a plan for "${clip(article.title, 80)}"`, clip(plan.detail, 500));
       continue;
     }

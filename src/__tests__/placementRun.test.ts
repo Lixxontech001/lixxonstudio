@@ -182,11 +182,14 @@ describe('the happy path: one paragraph changes, and the checksums prove it', ()
 
 describe('the Auditor and the no-key path', () => {
   it('the Auditor blocks a dash, nothing is applied, and the owner hears why', async () => {
-    const { ports, notes } = fakePorts(reply(1, ['p1'], 'The Calm Skin Routine Guide is calm — and simple.'));
+    const { ports, notes, logs } = fakePorts(reply(1, ['p1'], 'The Calm Skin Routine Guide is calm — and simple.'));
     const out = await runPlacementOrder(input(), ports);
     expect(out.status).toBe('blocked');
     expect(ports.applyEdit).not.toHaveBeenCalled();
     expect(notes[0].kind).toBe('auditor_blocked');
+    // The daily-log line names the article, so it reads on its own months later.
+    expect(logs.at(-1)).toMatchObject({ mind: 'auditor', outcome: 'blocked' });
+    expect(logs.at(-1)?.action).toMatch(/^Checked a change to ".+"$/);
   });
 
   it('a product that is not in the shop is blocked, so a mind cannot invent one', async () => {
