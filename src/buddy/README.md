@@ -524,3 +524,11 @@ What is still not done, or not verified:
 - The seven new Vault entries exist only in the catalogue migration `20261017000000_buddy_brain_slots.sql`, which is NOT applied. Until the owner applies it, Save on a new brain row is refused by the database. Nothing here applies it.
 - The provider endpoints for the pings are from each provider's public docs and are NOT verified live from the sandbox. Tests check the URL, method, redirect guard and header only.
 - Tests: `src/__tests__/brainsPage.test.ts` (16 checks).
+
+## Phase A slice 5: the two lies are gone
+
+- Lie 1 (Buddy's system text): it said Buddy can never change the site. It now states the real rule. Takeover off: nothing on the site changes, and Buddy says so. Takeover on: the minds may do the work they are already allowed to do, and Buddy must tell the owner whenever it reports such a change. Buddy itself still never publishes, edits articles, changes products or prices, or spends money. The line "You do not post ... change anything" now says "yourself".
+- Lie 2 (Minds screen): with Takeover on, it said "no change reaches the site yet". It now says the minds may make the changes they are already allowed to make, that Kill and the Auditor still apply, and that each act is written to the daily log. The Off line is unchanged.
+- The chat's empty-state line said Buddy "cannot change any of them". It now says this chat cannot change them, and that Takeover in Minds decides what the minds may change.
+- The old sentences are checked absent from every non-test source and function file: `phaseATruthCopy.test.ts` (scan plus the rule text). `mindsScreen.test.tsx` has a Takeover-on case.
+- Not changed: the minds' own "Cannot think: no Google key" lines, and the older README history, which describes past phases.

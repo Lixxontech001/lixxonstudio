@@ -87,7 +87,7 @@ export default function AdminMinds() {
   };
 
   const takeoverText = controls.takeover
-    ? 'On. Plans can be checked, but no change reaches the site yet.'
+    ? 'On. The minds may make the changes they are already allowed to make. Kill and the Auditor still apply, and each act is written to the daily log.'
     : 'Off. The minds cannot change the site.';
 
   return (

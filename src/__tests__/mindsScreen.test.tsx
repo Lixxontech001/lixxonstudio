@@ -133,6 +133,14 @@ describe('Minds screen', () => {
     expect(el.textContent).toContain('Off. The minds cannot change the site.');
   });
 
+  it('with Takeover on, the copy says what the minds may do, and never says no change reaches the site yet', async () => {
+    state.row = { takeover: true, kill_scope: 'none' };
+    const el = await mount();
+    expect(takeoverSwitch(el)?.getAttribute('aria-checked')).toBe('true');
+    expect(el.textContent).toContain('The minds may make the changes they are already allowed to make.');
+    expect(el.textContent).not.toContain('no change reaches the site yet');
+  });
+
   it('shows six cards: Buddy and the five minds', async () => {
     const el = await mount();
     const cards = Array.from(el.querySelectorAll('article h3')).map((heading) => heading.textContent);

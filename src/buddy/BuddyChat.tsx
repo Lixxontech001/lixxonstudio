@@ -241,7 +241,7 @@ export default function BuddyChat() {
           {empty && (
             <div className="buddy-empty">
               <strong>Ask Buddy anything.</strong>
-              Buddy can read your published article titles and shop products, and what you tell it. It cannot change any of them.
+              Buddy can read your published article titles and shop products, and what you tell it. This chat cannot change any of them. Takeover in Minds decides what the minds may change.
             </div>
           )}
           {messages.map((message) =>

@@ -149,7 +149,7 @@ describe('Buddy question flow with the site list', () => {
     const sent = askGemini.mock.calls[0][1] as { system: string };
     expect(sent.system).toContain('THE SITE RIGHT NOW');
     expect(sent.system).toContain('- Linen throw: USD 58.50');
-    expect(sent.system).toContain('You cannot publish, edit articles, change products or prices, or spend money.');
+    expect(sent.system).toContain('You never publish, edit articles, change products or prices, or spend money yourself.');
   });
 
   it('still answers when the list cannot be read, and tells Buddy it cannot be read', async () => {
