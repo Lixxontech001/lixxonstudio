@@ -46,6 +46,8 @@ export interface PushNotifyDeps {
   send?: (target: PushTarget, payload: string, credentials: VapidCredentials) => Promise<PushSendResult>;
   /** Called for a device the push service says is gone, so it is not tried again. */
   markGone?: (target: PushTarget) => Promise<void>;
+  /** Called for a device the push service accepted, so the owner's Settings page shows the last delivery. */
+  markSent?: (target: PushTarget) => Promise<void>;
 }
 
 function clip(value: string, max: number): string {
@@ -102,6 +104,11 @@ export async function notifyOwnerDevices(kind: string, title: string, deps: Push
     }
     if (result.status === "sent") {
       sent += 1;
+      try {
+        await deps.markSent?.(target);
+      } catch {
+        // The delivery itself happened. Only the status note is lost.
+      }
     } else if (result.status === "expired") {
       gone += 1;
       try {

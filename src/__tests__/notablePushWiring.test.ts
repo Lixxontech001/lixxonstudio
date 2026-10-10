@@ -63,3 +63,19 @@ describe('the database accepts the new kinds, and keeps the old ones', () => {
     expect(MIGRATION).toMatch(/push_note IN \('sent', 'no_device', 'not_configured', 'failed', 'not_buzzing'\)/);
   });
 });
+
+describe('the day run marks devices through the record function', () => {
+  it('a gone device is revoked and scrubbed by push_record_delivery, not by a direct update', () => {
+    expect(RUN).toContain('sb.rpc("push_record_delivery", { p_id: target.id, p_status: "expired" })');
+    expect(RUN).toContain('p_status: "sent"');
+    expect(RUN).not.toMatch(/from\("push_device_subscriptions"\)\s*\.update\(\{\s*enabled: false/);
+  });
+});
+
+describe('the placement step never replies to a request it does not have', () => {
+  it('a site-read failure inside runAgainstSite returns a held outcome, not a reply(req, ...) that has no req in scope', () => {
+    const fn = RUN.slice(RUN.indexOf('async function runAgainstSite('), RUN.indexOf('/**', RUN.indexOf('async function runAgainstSite(') + 10));
+    expect(fn).toContain('return { status: "held", detail: "Site reads failed. Nothing changed." };');
+    expect(fn).not.toMatch(/reply\(req/);
+  });
+});

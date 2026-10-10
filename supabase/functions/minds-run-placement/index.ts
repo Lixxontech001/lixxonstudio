@@ -303,9 +303,16 @@ async function recordNotable(
           auth_key: String(row.auth_key ?? ""),
         }));
       },
+      // The same record function the push handler uses. It revokes and scrubs the device in one step. A direct
+      // update would leave the endpoint and keys in place, which the table refuses, so the device would never be dropped.
       markGone: async (target: PushTarget) => {
         if (!target.id) return;
-        await sb.from("push_device_subscriptions").update({ enabled: false, revoked_at: new Date().toISOString() }).eq("id", target.id);
+        const { error } = await sb.rpc("push_record_delivery", { p_id: target.id, p_status: "expired" });
+        if (error) throw new Error("record expired");
+      },
+      markSent: async (target: PushTarget) => {
+        if (!target.id) return;
+        await sb.rpc("push_record_delivery", { p_id: target.id, p_status: "sent" });
       },
     });
     await sb.from("minds_notable_events").update({ push_note: outcome.status }).eq("id", data.id);
@@ -803,7 +810,7 @@ async function runAgainstSite(
     sb.from("post_drip_days").select("post_id").eq("owner_id", owner).eq("local_day", localDay),
   ]);
   if (articleRows.error || productRows.error || slotRows.error || editRows.error || dripRows.error) {
-    return reply(req, { status: "held", detail: "Site reads failed. Nothing changed." });
+    return { status: "held", detail: "Site reads failed. Nothing changed." };
   }
 
   const shop: ShopProduct[] = (productRows.data ?? []).map((row: Record<string, unknown>) => ({

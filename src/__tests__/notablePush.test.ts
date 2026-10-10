@@ -172,3 +172,50 @@ describe('the states that must never fail the day run', () => {
     expect(generator).toContain(PUSH_HELP_COPY);
   });
 });
+
+describe('the push outcome is recorded per device', () => {
+  it('a device the service accepted is marked sent, and a gone device is marked gone', async () => {
+    const sent: string[] = [];
+    const gone: string[] = [];
+    const outcome = await notifyOwnerDevices('door_posted', '1 free door posted today', {
+      async loadCredentials() {
+        return KEYS;
+      },
+      async loadTargets() {
+        return [DEVICE_A, DEVICE_B];
+      },
+      async send(target) {
+        return target.id === 'dev-a'
+          ? { status: 'sent', reason: 'delivered', httpStatus: 201 }
+          : { status: 'expired', reason: 'subscription_gone', httpStatus: 410 };
+      },
+      async markSent(target) {
+        sent.push(target.id ?? '');
+      },
+      async markGone(target) {
+        gone.push(target.id ?? '');
+      },
+    });
+    expect(outcome).toMatchObject({ status: 'sent', sent: 1, gone: 1 });
+    expect(sent).toEqual(['dev-a']);
+    expect(gone).toEqual(['dev-b']);
+  });
+
+  it('a failing status write does not stop the push or the run', async () => {
+    const outcome = await notifyOwnerDevices('door_posted', 'Posted', {
+      async loadCredentials() {
+        return KEYS;
+      },
+      async loadTargets() {
+        return [DEVICE_A];
+      },
+      async send() {
+        return { status: 'sent', reason: 'delivered', httpStatus: 201 };
+      },
+      async markSent() {
+        throw new Error('database down');
+      },
+    });
+    expect(outcome.status).toBe('sent');
+  });
+});
