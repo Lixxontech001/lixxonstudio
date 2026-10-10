@@ -39,8 +39,22 @@ export async function saveMindsControls(next: MindsControls, userId: string): Pr
       { id: 1, takeover: next.takeover, kill_scope: next.killScope, updated_by: userId, updated_at: new Date().toISOString(), change_source: 'minds' },
       { onConflict: 'id' },
     );
-    return { ok: !error };
+    if (error) return { ok: false };
+    notifyControlSaved();
+    return { ok: true };
   } catch {
     return { ok: false };
+  }
+}
+
+/**
+ * Asks the server to attempt the owner's push for the notable the save just wrote. Best effort: the save already
+ * happened, and a missed or unavailable push is never shown as a failed save.
+ */
+function notifyControlSaved(): void {
+  try {
+    void supabase.functions.invoke('minds-control-notify', { body: {} }).catch(() => undefined);
+  } catch {
+    // Nothing to do: the owner's switch is saved, and the push is extra.
   }
 }

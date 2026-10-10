@@ -43,9 +43,11 @@ describe('the day run records and buzzes through one helper', () => {
   });
 
   it('the keys come from the same Vault reads the push handler uses', () => {
-    expect(RUN).toContain('sb.rpc("automation_secret_get_internal"');
-    expect(RUN).toContain('read("vapid_private_key")');
-    expect(RUN).toContain('sb.rpc("push_test_targets"');
+    // The Vault reads and the device list now live in the shared server module, used by the day run and the chat path.
+    const SERVER = read('supabase/functions/_shared/notablePushServer.ts');
+    expect(SERVER).toContain('sb.rpc("automation_secret_get_internal"');
+    expect(SERVER).toContain('read("vapid_private_key")');
+    expect(SERVER).toContain('sb.rpc("push_test_targets"');
   });
 });
 
@@ -68,9 +70,10 @@ describe('the database accepts the new kinds, and keeps the old ones', () => {
 
 describe('the day run marks devices through the record function', () => {
   it('a gone device is revoked and scrubbed by push_record_delivery, not by a direct update', () => {
-    expect(RUN).toContain('sb.rpc("push_record_delivery", { p_id: target.id, p_status: "expired" })');
-    expect(RUN).toContain('p_status: "sent"');
-    expect(RUN).not.toMatch(/from\("push_device_subscriptions"\)\s*\.update\(\{\s*enabled: false/);
+    const SERVER = read('supabase/functions/_shared/notablePushServer.ts');
+    expect(SERVER).toContain('sb.rpc("push_record_delivery", { p_id: target.id, p_status: "expired" })');
+    expect(SERVER).toContain('p_status: "sent"');
+    expect(SERVER).not.toMatch(/from\("push_device_subscriptions"\)\.update\(\{\s*enabled: false/);
   });
 });
 

@@ -80,7 +80,7 @@ describe('the day run writes the briefing notables through one helper, and the n
 
   it('the one notable writer buzzes only when shouldBuzz allows, and records the push status on the row', () => {
     expect(placement).toMatch(/if \(!shouldBuzz\(kind\)\) return null;/);
-    expect(placement).toMatch(/notifyOwnerDevices\(kind, title, \{/);
+    expect(placement).toMatch(/notifyOwnerDevices\(kind, title, ownerPushDeps\(sb, owner\)\)/);
     expect(placement).toMatch(/update\(\{ push_note: outcome\.status \}\)/);
   });
 

@@ -16,7 +16,7 @@ import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from 
 import { LEARN_LOOKBACK_DAYS, learnWindows, type WindowLearning } from "../_shared/packCopy.ts";
 import { doorFailNotices, runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
 import { NO_DEVICE_COPY, PUSH_HELP_COPY, notifyOwnerDevices, shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
-import type { PushTarget, VapidCredentials } from "../_shared/webPush.ts";
+import { ownerNotablePorts, ownerPushDeps, pushNewestNotable } from "../_shared/notablePushServer.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
 import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
 import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
@@ -262,22 +262,6 @@ export async function handleRun(req: Request): Promise<Response> {
   });
 }
 
-/** The three VAPID values from Vault (the same reads the push handler makes), or null when any one is missing. */
-async function loadPushCredentials(sb: SupabaseClient): Promise<VapidCredentials | null> {
-  const read = async (name: string): Promise<string | null> => {
-    try {
-      const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: name });
-      return !error && typeof data === "string" && data.trim().length > 0 ? data.trim() : null;
-    } catch {
-      return null;
-    }
-  };
-  const publicKey = await read("vapid_public_key");
-  const subject = await read("vapid_subject");
-  const privateKey = await read("vapid_private_key");
-  return publicKey && subject && privateKey ? { publicKey, subject, privateKey } : null;
-}
-
 /**
  * Writes one notable event, then buzzes the owner's devices when the kind buzzes. Never throws into the run.
  * A kind that buzzes and has no device, or no keys, is written once to the daily log, with the plain words for the owner.
@@ -302,31 +286,7 @@ async function recordNotable(
       .single();
     if (error || !data) return null;
     if (!shouldBuzz(kind)) return null;
-    const outcome = await notifyOwnerDevices(kind, title, {
-      loadCredentials: () => loadPushCredentials(sb),
-      loadTargets: async (): Promise<PushTarget[]> => {
-        const { data: rows, error: rowsError } = await sb.rpc("push_test_targets", { p_owner_user_id: owner, p_limit: 10 });
-        if (rowsError || !Array.isArray(rows)) throw new Error("targets");
-        return rows.map((row: Record<string, unknown>) => ({
-          id: String(row.id ?? ""),
-          device_id: typeof row.device_id === "string" ? row.device_id : undefined,
-          endpoint: String(row.endpoint ?? ""),
-          p256dh: String(row.p256dh ?? ""),
-          auth_key: String(row.auth_key ?? ""),
-        }));
-      },
-      // The same record function the push handler uses. It revokes and scrubs the device in one step. A direct
-      // update would leave the endpoint and keys in place, which the table refuses, so the device would never be dropped.
-      markGone: async (target: PushTarget) => {
-        if (!target.id) return;
-        const { error } = await sb.rpc("push_record_delivery", { p_id: target.id, p_status: "expired" });
-        if (error) throw new Error("record expired");
-      },
-      markSent: async (target: PushTarget) => {
-        if (!target.id) return;
-        await sb.rpc("push_record_delivery", { p_id: target.id, p_status: "sent" });
-      },
-    });
+    const outcome = await notifyOwnerDevices(kind, title, ownerPushDeps(sb, owner));
     await sb.from("minds_notable_events").update({ push_note: outcome.status }).eq("id", data.id);
     if (outcome.status === "no_device" || outcome.status === "not_configured") {
       await sb.from("minds_daily_log").insert({
@@ -936,7 +896,10 @@ async function runAgainstSite(
         p_title: gap.title,
         p_local_day: gap.localDay,
       });
-      return error ? { ok: false, reason: reasonFrom(error.message) } : { ok: true };
+      if (error) return { ok: false, reason: reasonFrom(error.message) };
+      // The database writes the order_blocked notable in the same call. Its owner push is attempted here, once.
+      await pushNewestNotable("order_blocked", ownerNotablePorts(sb, owner));
+      return { ok: true };
     },
     log: (entry: RunLog) => logRow(orderId, entry),
     notable: async (kind, title, detail) => {

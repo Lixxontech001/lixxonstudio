@@ -80,8 +80,6 @@ export interface ThinkResponse {
 export interface BuddyThinkDeps {
   /** True when at least one tryable brain (the same chain as ask) has its Vault entries saved. Never returns a key. */
   keyConfigured(): Promise<boolean>;
-  /** Reads the key from Vault on the server. Only called for ask/probe. */
-  readKey(): Promise<string | null>;
   /** Reads any brain's Vault entry on the server. Null when not saved. Never logged. */
   readSecret(secretName: string): Promise<string | null>;
   /** The fetch for the OpenAI-style brains. Tests pass a fake. Defaults to the global fetch. */

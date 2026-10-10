@@ -16,6 +16,7 @@ import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import { controlChange, controlDoneLine, type ControlAction } from "../_shared/buddyControls.ts";
 import { ownerClock } from "../_shared/mindsNightReport.ts";
 import { anyTryableBrainConfigured } from "../_shared/brains.ts";
+import { ownerNotablePorts, pushNewestNotable } from "../_shared/notablePushServer.ts";
 import { STATE_DOOR_LIMIT, STATE_LOG_LIMIT, STATE_NOTABLE_LIMIT, STATE_ORDER_LIMIT, type BuddyStateFacts } from "../_shared/buddyStateFacts.ts";
 import {
   SITE_ARTICLE_LIMIT,
@@ -24,7 +25,7 @@ import {
   type SiteFacts,
 } from "../_shared/buddySiteFacts.ts";
 
-// The Google key's Vault name. Only the probe's stored Google status and the legacy readKey use it.
+// The Google key's Vault name. Only the probe's stored Google status uses it.
 // The status action reads every tryable brain (anyTryableBrainConfigured), so it no longer uses this name.
 const GOOGLE_KEY_NAME = "gemini_api_key";
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -527,6 +528,8 @@ Deno.serve(async (req: Request) => {
           .eq("id", 1)
           .select("id");
         if (saved.error || !Array.isArray(saved.data) || saved.data.length === 0) return false;
+        // A Kill or a restart from chat: the trigger wrote the notable row. The owner push is attempted for it, once.
+        if (!isDoor) await pushNewestNotable("kill_changed", ownerNotablePorts(sb, user.id));
         const now = new Date().toISOString();
         const logged = await sb.from("minds_daily_log").insert({
           owner_id: user.id,
@@ -542,7 +545,6 @@ Deno.serve(async (req: Request) => {
         return false;
       }
     },
-    readKey: () => readSecret(GOOGLE_KEY_NAME),
     readSecret,
     // One plain-words line per answered question: which brain answered. Never names a key.
     logBrain: async (line: string) => {

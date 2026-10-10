@@ -86,7 +86,7 @@ describe('Phase D freeze, slice 4: notables attempt one owner push', () => {
 
   it('the one notable writer makes one push attempt through the existing helper, and records the status', () => {
     expect(run).toMatch(/if \(!shouldBuzz\(kind\)\) return null;/);
-    expect(run).toMatch(/notifyOwnerDevices\(kind, title, \{/);
+    expect(run).toMatch(/notifyOwnerDevices\(kind, title, ownerPushDeps\(sb, owner\)\)/);
     expect(run).toMatch(/update\(\{ push_note: outcome\.status \}\)/);
   });
 
@@ -96,8 +96,24 @@ describe('Phase D freeze, slice 4: notables attempt one owner push', () => {
   });
 
   it('a gone device is revoked through the record function, never by a direct update', () => {
-    expect(run).toContain('sb.rpc("push_record_delivery", { p_id: target.id, p_status: "expired" })');
-    expect(run).not.toMatch(/from\("push_device_subscriptions"\)\s*\.update\(\{\s*enabled: false/);
+    const server = read('supabase/functions/_shared/notablePushServer.ts');
+    expect(server).toContain('sb.rpc("push_record_delivery", { p_id: target.id, p_status: "expired" })');
+    expect(server).not.toMatch(/from\("push_device_subscriptions"\)\s*\.update\(\{\s*enabled: false/);
+  });
+
+  it('the kinds the database writes attempt one owner push too: a Takeover or Kill from Minds or chat, and a blocked order', () => {
+    const chat = read('supabase/functions/buddy-think/index.ts');
+    const mindsNotify = read('supabase/functions/minds-control-notify/index.ts');
+    const minds = read('src/buddy/minds/mindsControlsStore.ts');
+    expect(chat).toContain('if (!isDoor) await pushNewestNotable("kill_changed", ownerNotablePorts(sb, user.id));');
+    expect(mindsNotify).toContain('const CONTROL_KINDS = ["takeover_changed", "kill_changed"] as const;');
+    expect(minds).toContain("supabase.functions.invoke('minds-control-notify'");
+    expect(run).toContain('await pushNewestNotable("order_blocked", ownerNotablePorts(sb, owner));');
+  });
+
+  it('the owner push for Minds switches is best effort: a failed notify never changes a saved switch', () => {
+    const minds = read('src/buddy/minds/mindsControlsStore.ts');
+    expect(minds).toMatch(/if \(error\) return \{ ok: false \};\s*notifyControlSaved\(\);\s*return \{ ok: true \};/);
   });
 
   it('the placement step returns a held outcome on a site-read failure, never reply(req) without req', () => {
@@ -162,5 +178,24 @@ describe('Phase D freeze, carried from earlier phases', () => {
   it('the admin AI screen is not part of Buddy, and Buddy code stays in its own folders', () => {
     expect(existsSync(join(ROOT, 'src/admin/AdminAI.tsx'))).toBe(false);
     expect(existsSync(join(ROOT, 'src/admin/pages/AdminAI.tsx'))).toBe(false);
+  });
+});
+
+describe('Phase D freeze, gaps closed after the first report', () => {
+  it('the probe and ask read brain keys through the chain only: the Gemini-only readKey dep is gone', () => {
+    const think = read('supabase/functions/_shared/buddyThink.ts');
+    const handler = read('supabase/functions/buddy-think/index.ts');
+    expect(think).not.toMatch(/readKey\(\): Promise/);
+    expect(handler).not.toMatch(/readKey: \(\) =>/);
+  });
+
+  it('the Minds notify function is configured to need the owner session', () => {
+    expect(read('supabase/config.toml')).toMatch(/\[functions\.minds-control-notify\]\s*\nverify_jwt = true/);
+  });
+
+  it('the shared push helper never sends to a device that is not the owner\'s', () => {
+    const server = read('supabase/functions/_shared/notablePushServer.ts');
+    expect(server).toContain('.eq("owner_id", owner)');
+    expect(server).toContain('p_owner_user_id: owner');
   });
 });

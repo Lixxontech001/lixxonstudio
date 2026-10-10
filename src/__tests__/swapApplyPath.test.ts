@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { laneFor } from '../../supabase/functions/_shared/buddyOrders';
 import { feedbackLine, orderOutcomeLine } from '../../supabase/functions/_shared/buddyFeedback';
-import { filingKindFor, REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
+import { filingKindFor, gateModelOrder, REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import { routeFilingGate, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
 import { planDayRun, TAKEOVER_OFF_DETAIL, type DayRunInput } from '../../supabase/functions/_shared/runDay';
 import {
@@ -170,5 +170,15 @@ describe('the cap of three and digital-first still hold for a swap', () => {
     expect(out.status).toBe('blocked');
     expect(ports.applyEdit).not.toHaveBeenCalled();
     expect(logs.some((entry) => entry.detail === CAP_BLOCK_DETAIL)).toBe(true);
+  });
+});
+
+describe('the spec examples for filing (Phase D slice 2 and 5, by name)', () => {
+  it('"put the sleep guide on the new article" is filed as product_line_apply', () => {
+    expect(filingKindFor('put the sleep guide on the new article')).toBe('product_line_apply');
+  });
+
+  it('"refund the last customer" is refused by the closed-list gate for a model order, with the one refusal line', () => {
+    expect(gateModelOrder('mind_work', 'refund the last customer')).toEqual({ ok: false, line: REFUSAL_LINE });
   });
 });
