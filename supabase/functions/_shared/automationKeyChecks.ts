@@ -35,7 +35,6 @@ const LOCAL_ONLY_IDENTIFIERS = new Set([
   "linkedin_client_id",
   "x_api_key",
   "tumblr_consumer_key",
-  "whatsapp_phone_number_id",
   "vapid_subject",
   "instagram_user_id",
   "facebook_page_id",

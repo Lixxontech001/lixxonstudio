@@ -1,4 +1,5 @@
 import { doorSecretNames } from '../../supabase/functions/_shared/doorRegistry';
+import { isNotOfferedKey } from '../../supabase/functions/_shared/notOfferedKeys';
 
 export const AUTOMATION_KEY_CATEGORIES = [
   'ai',
@@ -64,6 +65,8 @@ export function parseAutomationKeyList(value: unknown): AutomationKeyEntry[] | n
   const result: AutomationKeyEntry[] = [];
   for (const row of value) {
     if (!isRecord(row)) return null;
+    // Names this site never offers (WhatsApp) are not shown, whatever the catalogue still holds.
+    if (typeof row.name === 'string' && isNotOfferedKey(row.name)) continue;
     if (
       typeof row.name !== 'string' || !/^[a-z][a-z0-9_]{1,63}$/.test(row.name) ||
       typeof row.label !== 'string' || typeof row.purpose !== 'string' ||
