@@ -23,7 +23,8 @@ import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { orderOutcomeLine } from "../_shared/buddyFeedback.ts";
 import { LIVING_MINDS, STOPPED_ACTION, runLivingMinds, type LivingMindPorts } from "../_shared/buddyLivingMinds.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
-import { isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
+import { doorLogAction, isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
+import { DOOR_LABEL } from "../_shared/buddyControls.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
@@ -557,7 +558,7 @@ async function runDoorsForDay(
           owner_id: owner,
           day: localDay,
           mind: "executioner",
-          action: `Posted to ${entry.door}`,
+          action: doorLogAction(entry.door, DOOR_LABEL[entry.door] ?? entry.door, entry.outcome),
           outcome: entry.outcome,
           detail: clip(entry.detail, 500),
           order_id: null,

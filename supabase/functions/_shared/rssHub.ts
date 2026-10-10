@@ -32,6 +32,16 @@ export function sentLead(door: string, label: string): string {
   return isRssDoor(door) ? `RSS updated and pinged for ${label}` : `Posted to ${label}`;
 }
 
+/**
+ * The action a daily-log row for a door is filed under. Only a sent row says "posted to" or "pinged". A failed row says
+ * the door could not post, and a skipped row says it was skipped, so no log line claims a post that did not happen.
+ */
+export function doorLogAction(door: string, label: string, outcome: "done" | "failed" | "skipped"): string {
+  if (outcome === "done") return sentLead(door, label);
+  if (outcome === "failed") return isRssDoor(door) ? `Could not ping ${label}` : `Could not post to ${label}`;
+  return `Skipped ${label}`;
+}
+
 /** "Nothing was pinged." for RSS doors, "Nothing was posted." for the rest. */
 export function notSentNote(door: string): string {
   return `Nothing was ${sentVerb(door)}.`;
