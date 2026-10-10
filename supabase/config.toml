@@ -44,3 +44,6 @@ verify_jwt = true
 
 [functions.buddy-night-report]
 verify_jwt = true
+# Internal pg_cron invocation: the night report clock checks x-internal-secret itself, not the owner session.
+[functions.buddy-night-clock]
+verify_jwt = false

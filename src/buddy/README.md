@@ -438,3 +438,14 @@ What is still not done, or not verified:
 - New migrations, all NOT applied: `20261015000000_notable_door_failed.sql` (kind check, keeps every earlier kind), `20261015010000_video_template_clear_name.sql` (seeded row rename), `20261015020000_minds_controls_change_source.sql` (column and trigger copy).
 - Tests: `buddyNotables.test.ts` and `phase9Slice1.test.ts`. The Phase 7 freeze checks read the briefing source for the word "night", so the briefing comments avoid that word.
 - Not proven live: the migrations are not applied. The edge functions (`buddy-think`, `minds-run-placement`) are not type-checked here because they use Deno imports. Their changes are small, and the pure modules they call are checked.
+
+## Phase 9 slice 2: the night report on a clock
+
+- The night report is written by a clock in code. `_shared/nightReportClock.ts` holds the time rules and `runNightClock`. A night is due from 23:30 on the owner's clock. Until 04:00 the night that just ended is still written, in case the 23:30 tick missed it. Outside those hours the clock reads and writes nothing.
+- The clock writes through the same writer as the owner button (`runNightReport`, then `writeNightReport`). It runs for each owner (role `owner` only) and writes the night once. A second tick for the same night is refused by the database and counted as already written.
+- An empty night is written honestly: "Nothing ran last night. No mind took an action." A failed read writes nothing, so a failure is never shown as a quiet night.
+- The clock is `supabase/functions/buddy-night-clock`. It has no owner session. It checks the `x-internal-secret` header against `INTERNAL_FN_SECRET`, the same way the other scheduled functions do. `verify_jwt` is false for it, as for them.
+- The schedule is `supabase/migrations/20261016000000_buddy_night_clock.sql`: every 30 minutes, through pg_cron and pg_net, with the Vault credentials. It is guarded, and it is NOT applied. The old note in `scripts/night-report-schedule.sql` now points here. That file still has no live cron line.
+- The morning Continue never loads a night report. Continue calls the `briefing` action, which reads the day's rows and events. It never reads `buddy_reports`, and the reports list shows titles and dates only.
+- Tests: `buddyNightClock.test.ts` (time rules, the clock and writer against an in-memory database, the schedule source, and the briefing path).
+- Not proven live: the schedule is not applied, so no night has been written by the clock. Whether the Vault credentials exist in production is unknown until the owner applies the migration.

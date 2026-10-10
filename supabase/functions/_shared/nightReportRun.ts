@@ -1,6 +1,6 @@
 // The night report, callable from one place. It checks the owner's day, reads that day, and saves one report.
-// The owner-only Edge function calls it, and so do the tests. No timer calls it: the schedule is in
-// scripts/night-report-schedule.sql, and it is not applied. A night with nothing in it is still reported honestly.
+// Two callers use it: the owner-only Edge function, and the night report clock (_shared/nightReportClock.ts), which
+// runs once a night on a schedule that is not applied yet. A night with nothing in it is still reported honestly.
 // The report is never copied into the morning briefing. The briefing reads the day's log and events, not this report.
 
 import { serviceNightReportSource, writeNightReport, type NightReportWriteResult } from "./mindsNightReport.ts";

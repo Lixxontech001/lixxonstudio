@@ -1,5 +1,5 @@
 // Buddy's night report, owner only. The owner's browser sends the owner's local day, and this writes that day's report once.
-// Nothing calls it on a timer. The schedule is in scripts/night-report-schedule.sql and is not applied.
+// The night clock (buddy-night-clock) writes the same report on a schedule. That schedule is not applied yet.
 // The work lives in _shared/nightReportRun.ts. This file only checks the owner and passes the day on.
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";

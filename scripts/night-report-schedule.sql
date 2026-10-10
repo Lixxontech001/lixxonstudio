@@ -14,5 +14,6 @@
 --   ) $cron$
 -- );
 --
--- Known limit for later: a cron job has no owner session, so the function's owner check cannot pass from cron as written.
--- That must be solved before this line is ever applied. Until then the report is written only when the owner asks for it.
+-- Update (Phase 9 slice 2): the schedule now lives in supabase/migrations/20261016000000_buddy_night_clock.sql, which calls
+-- buddy-night-clock with the Vault internal secret, not the owner session. That migration is NOT applied either.
+-- Until the owner merges and applies it, the report is written only when the owner asks for it.
