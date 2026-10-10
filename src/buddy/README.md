@@ -585,3 +585,9 @@ What is still not done, or not verified:
 - A failed week read is named "week" as unreadable. The rest of the day run still runs.
 - Migration `supabase/migrations/20261018000000_notable_week_change.sql` adds the kinds `week_up` and `week_down`. It is additive and NOT applied to production. Until it is applied, the day run's week notables are refused by the database; the sentence still works.
 - Tests: `src/__tests__/buddyWeek.test.ts`.
+
+## Phase B slice 4: digital products win the placement
+
+- `supabase/functions/_shared/productPlacement.ts`: `digitalFirst` puts digital products that the Strategist picked in front of physical and affiliate ones. The Strategist's prompt lists digital products first and says to use a fitting digital product before a physical one or an affiliate link.
+- It is ordering only. The cap of three stays the Auditor's rule, so a four-product plan is still blocked, with digital products leading. A physical product alone that fits is still planned. Digital is preferred, never required.
+- Tests: `src/__tests__/digitalPreferred.test.ts`.

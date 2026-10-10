@@ -59,6 +59,17 @@ const CURE_OR_MEDICAL_PROMISE =
 const PERSONAL_TEST_CLAIM = /\b(i tested|i've tested|i have tested|i tried this|i've tried|in my experience|my own skin|i personally)\b/i;
 const MARKUP = /[<>]|\*\*|\]\(/;
 
+/**
+ * Digital products first, then the rest, keeping the order each group already had. Ordering only: the cap of three
+ * is still the Auditor's rule, so a plan with four products is still blocked. The Strategist decides what fits.
+ * This only decides which fitting product leads, so a digital product wins over a physical one or an affiliate link.
+ */
+export function digitalFirst(productIds: string[], shop: ShopProduct[]): string[] {
+  const digital = new Map(shop.map((product) => [product.id, product.isDigital]));
+  const isDigital = (id: string) => digital.get(id) === true;
+  return [...productIds.filter(isDigital), ...productIds.filter((id) => !isDigital(id))];
+}
+
 /** The plain paragraphs of an article body, each with the line number it sits on. */
 export function paragraphsOf(content: string | null): ArticleParagraph[] {
   if (!content) return [];
@@ -133,7 +144,7 @@ export function buildPlacementPrompt(
     "If a price appears, it must be the exact US dollar price given in the shop list, written like $12.00. Otherwise leave the price out.",
     "Name each product exactly as it appears in the shop list.",
     "Do not repeat a sentence that is already in the article. Add something new that fits the paragraph.",
-    "Choose at most three products. Prefer digital products when they fit equally well.",
+    "Choose at most three products. When a digital product fits, use it before a physical product or an affiliate link.",
     "Reply with JSON only, in this exact shape: {\"paragraph\": <line number>, \"product_ids\": [\"<id>\"], \"sentences\": \"<one or two sentences>\"}",
     "If no product fits any paragraph honestly, reply with {\"paragraph\": -1, \"product_ids\": [], \"sentences\": \"\"}.",
   ].join("\n");
@@ -141,7 +152,9 @@ export function buildPlacementPrompt(
   const lines = paragraphsOf(content).map((paragraph) => `[${paragraph.index}] ${paragraph.text}`);
   let article = lines.join("\n");
   if (article.length > PLACEMENT_MAX_ARTICLE_CHARS) article = `${article.slice(0, PLACEMENT_MAX_ARTICLE_CHARS)}\n(the article continues)`;
-  const shopLines = shop.map((product) => {
+  // Digital products are listed first, so the Strategist sees them first.
+  const shopOrdered = [...shop].sort((a, b) => Number(b.isDigital) - Number(a.isDigital));
+  const shopLines = shopOrdered.map((product) => {
     const price = product.priceUsd === null ? "no price" : `$${product.priceUsd.toFixed(2)}`;
     return `${product.id} | ${product.name} | ${product.isDigital ? "digital" : "product"} | ${price}`;
   });
@@ -227,10 +240,12 @@ export async function planPlacement(
   if (/"paragraph"\s*:\s*-1\b/.test(result.text)) {
     return { status: "no_fit", detail: "No product fits a paragraph of this article honestly. Nothing was applied.", candidate: null, verdict: null };
   }
-  const candidate = parsePlacementReply(result.text);
-  if (!candidate) {
+  const parsed = parsePlacementReply(result.text);
+  if (!parsed) {
     return { status: "failed", detail: "The Strategist's answer was not usable. Nothing was applied.", candidate: null, verdict: null };
   }
+  // Digital products that fit lead the list. The Auditor still checks the cap of three.
+  const candidate: PlacementCandidate = { ...parsed, productIds: digitalFirst(parsed.productIds, shop) };
   const verdict = auditPlacement(candidate, article.content, shop);
   if (verdict.verdict === "block") {
     return { status: "blocked", detail: verdict.fix, candidate, verdict };
