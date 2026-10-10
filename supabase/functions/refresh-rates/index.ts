@@ -7,7 +7,7 @@
 import { json, preflight, serviceClient } from "../_shared/http.ts";
 
 const INTERNAL_SECRET = Deno.env.get("INTERNAL_FN_SECRET");
-const WANT = ["NGN", "GBP", "EUR", "CAD", "GHS", "KES", "ZAR"];
+const WANT = ["GBP", "EUR", "CAD", "GHS", "KES", "ZAR"];
 
 Deno.serve(async (req) => {
   const pf = preflight(req);

@@ -420,7 +420,7 @@ What is still not done, or not verified:
 - Known gaps, stated plainly:
   - A single door send failure does not write its own notable. The notable for doors counts real posts only (`door_posted`, RSS pings excluded). A whole door step that cannot run writes `mind_failed`.
   - The older Admin distribution code (`supabase/functions/automation-distribution`, `src/admin/pages/AutomationDistribution.tsx`) still has WhatsApp, Facebook and Pinterest senders from before Phase 8. Buddy and the day run do not import it. It is left as it was, for the owner to decide.
-  - `scripts/video-template.mjs` has a code default named "Lagos daylight (default)". It is not shown as reader copy in the code checked. It should be renamed.
+  - `scripts/video-template.mjs` had a code default named "Lagos daylight (default)". Stale note: this was renamed to "Clear daylight (default)" in Phase 9 slice 1.
   - The briefing was not changed in Phase 8. Its seven sections were already in place.
 - Not proven live: Gemini text-to-speech and the Buddy Gemini call (the host is not on the sandbox allowlist, and no key was tested here); the RSS hub's 204 reply; migrations `20261013000000` and `20261014000000` (not applied); a local speech program on the runner (none installed here).
 - Full suite with FFmpeg enabled: 136 files, 1698 tests passed. Type check and lint pass on the new files.
@@ -591,3 +591,17 @@ What is still not done, or not verified:
 - `supabase/functions/_shared/productPlacement.ts`: `digitalFirst` puts digital products that the Strategist picked in front of physical and affiliate ones. The Strategist's prompt lists digital products first and says to use a fitting digital product before a physical one or an affiliate link.
 - It is ordering only. The cap of three stays the Auditor's rule, so a four-product plan is still blocked, with digital products leading. A physical product alone that fits is still planned. Digital is preferred, never required.
 - Tests: `src/__tests__/digitalPreferred.test.ts`.
+
+## Phase B slice 5: retire the old senders and remove Lagos and Naira from template copy
+
+- Grep set (`src/__tests__/phaseBSlice5.test.ts`): Buddy, components, pages, shared functions, feeds, the video template script and assertions, Minds, Connections and Brains. None of them names Nigeria, Naira, Lagos, Abuja, WAT, or NGN. Timezone ids (`Africa/Lagos`) are used for date maths and are not copy. `packRules.ts` is the one guard file that names those words on purpose.
+- Naira is hidden from readers. `src/lib/money.ts` has one list, `HIDDEN_DISPLAY_CURRENCIES`, with NGN in it. It has no symbol. A saved NGN choice falls back to USD. `displayCurrencyCodes(rates)` builds the footer list without NGN, and `CurrencySelector` uses it. `refresh-rates` no longer asks for NGN. Charges and prices stay in USD.
+- Old sender keys are retired by a new migration, `supabase/migrations/20261018010000_retire_old_sender_keys.sql`. It sets `enabled = false` on the WhatsApp token and phone-ID rows, and on the Meta, Facebook page, Pinterest token and Pinterest board rows. The Keys page then stops listing them, and the database refuses a save for a disabled name ("Unknown or disabled secret name"). It does not delete any Vault value. It is NOT applied to production.
+- No owner Distribution or WhatsApp send path is wired. `/admin/automation/distribution` redirects to Minds. The sidebar has no Distribution, WhatsApp, Facebook or Pinterest item. The `automation-distribution` handler sends only through Telegram and answers 409 "manual-kit only" for other channels. Buddy imports nothing from the distribution lib.
+- Left in place, with reasons:
+  - "Social Shares" in the sidebar is the reader share-stats page. It has no send action.
+  - `src/admin/pages/AutomationDistribution.tsx` is not routed and is imported only by tests. It is a tiny leftover to delete in a later slice.
+  - Lagos and WAT labels in the admin scheduling screens (`ArticleQueueCalendar`, `AutomationRuns`, `AutomationDistribution`, `automationHealth`, `articleIntake`, `automationDistribution` slot labels). These are owner scheduling times, not template or reader copy. The owner schedule is 08:00 Lagos.
+  - `docs/*.md` and old migration history keep the older names. Migrations are not edited.
+- Tests: `src/__tests__/phaseBSlice5.test.ts` (13 checks).
+- Not proven live: the migration is not applied. Hiding NGN in the live footer and the rate fetch is checked in code, not against the live rates table.
