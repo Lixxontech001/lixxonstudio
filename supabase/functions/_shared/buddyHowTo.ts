@@ -2,7 +2,7 @@
 // When the owner asks how to connect one of them, Buddy answers with these fixed steps. The steps name only the
 // Connections page and the fields on it. No secret is asked for in chat, and no country or currency is named.
 
-export const HOWTO_DOORS = ["medium", "youtube", "pixelfed", "wordpress_com", "podcast", "vimeo"] as const;
+export const HOWTO_DOORS = ["medium", "youtube", "pixelfed", "wordpress_com", "podcast", "vimeo", "flipboard", "google_news", "microsoft_start", "smartnews"] as const;
 export type HowToDoor = (typeof HOWTO_DOORS)[number];
 
 const DOOR_WORDS: Array<{ door: HowToDoor; words: RegExp }> = [
@@ -12,6 +12,10 @@ const DOOR_WORDS: Array<{ door: HowToDoor; words: RegExp }> = [
   { door: "wordpress_com", words: /\bwordpress(\.com)?\b/i },
   { door: "podcast", words: /\bpodcast\b/i },
   { door: "vimeo", words: /\bvimeo\b/i },
+  { door: "flipboard", words: /\bflipboard\b/i },
+  { door: "google_news", words: /\bgoogle news\b/i },
+  { door: "microsoft_start", words: /\bmicrosoft start\b/i },
+  { door: "smartnews", words: /\bsmartnews\b/i },
 ];
 
 const HOW_WORDS = /\b(how|steps?|set ?up|connect|hook up)\b/i;
@@ -49,6 +53,27 @@ export const HOWTO_REPLIES: Record<HowToDoor, string> = {
     "Vimeo: open Connections, then find Vimeo.",
     "Paste your Vimeo access token, then save.",
     "A video goes up only when a real video was made for that article. Vimeo limits uploads on your plan, and if Vimeo refuses, the door says so.",
+  ].join(" "),
+  // Phase 8: the RSS doors. Nothing is typed in. The owner adds the feed address in each service.
+  flipboard: [
+    "Flipboard: there is nothing to save on Connections.",
+    "Buddy keeps your RSS feed current and pings a free hub for each new article.",
+    "To get your articles into Flipboard, add your feed address (your site's /rss.xml address) in Flipboard yourself.",
+  ].join(" "),
+  google_news: [
+    "Google News: there is nothing to save on Connections.",
+    "Buddy keeps your RSS feed current and pings a free hub for each new article.",
+    "To get your articles into Google News, add your feed address (your site's /rss.xml address) in Google News yourself.",
+  ].join(" "),
+  microsoft_start: [
+    "Microsoft Start: there is nothing to save on Connections.",
+    "Buddy keeps your RSS feed current and pings a free hub for each new article.",
+    "To get your articles into Microsoft Start, add your feed address (your site's /rss.xml address) in Microsoft Start yourself.",
+  ].join(" "),
+  smartnews: [
+    "SmartNews: there is nothing to save on Connections.",
+    "Buddy keeps your RSS feed current and pings a free hub for each new article.",
+    "To get your articles into SmartNews, add your feed address (your site's /rss.xml address) in SmartNews yourself.",
   ].join(" "),
 };
 

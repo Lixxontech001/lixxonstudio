@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { isRssDoor } from '../../supabase/functions/_shared/rssHub';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PACK_CHANNELS } from '../../supabase/functions/_shared/packRules';
@@ -19,13 +20,14 @@ const CATALOG_FILES = [
 ];
 const catalogText = CATALOG_FILES.map((file) => readFileSync(join(process.cwd(), file), 'utf8')).join('\n');
 
-describe('the twelve auto doors', () => {
-  it('are the six from Phase 5 then the six from Phase 6, in that order', () => {
+describe('the sixteen auto doors', () => {
+  it('are the six from Phase 5, the six from Phase 6, then the four RSS doors from Phase 8, in that order', () => {
     expect([...DOOR_IDS]).toEqual([
       'telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger',
       'medium', 'youtube', 'pixelfed', 'wordpress_com', 'podcast', 'vimeo',
+      'flipboard', 'google_news', 'microsoft_start', 'smartnews',
     ]);
-    expect(DOOR_IDS).toHaveLength(12);
+    expect(DOOR_IDS).toHaveLength(16);
     expect(Object.keys(DOORS).sort()).toEqual([...DOOR_IDS].sort());
   });
 
@@ -41,8 +43,8 @@ describe('the twelve auto doors', () => {
     expect(DOOR_IDS as readonly string[]).toContain('youtube');
   });
 
-  it('every door has at least one field, and every field has a plain label and a kind', () => {
-    for (const id of DOOR_IDS) {
+  it('every door that posts has at least one field, and the RSS doors have none (the feed is the door)', () => {
+    for (const id of DOOR_IDS.filter((item) => !isRssDoor(item))) {
       expect(DOORS[id].fields.length, id).toBeGreaterThan(0);
       for (const field of DOORS[id].fields) {
         expect(field.label.length, `${id} label`).toBeGreaterThan(0);

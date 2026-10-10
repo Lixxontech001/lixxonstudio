@@ -1,4 +1,4 @@
-// The twelve auto posting doors Buddy can post through: the six from Phase 5 and six from Phase 6.
+// The sixteen auto doors Buddy can send through: the six from Phase 5, six from Phase 6, and four RSS doors from Phase 8.
 // Pure data and rules, no network. The four gated channels (Instagram, TikTok, Facebook, Pinterest) are NOT doors.
 // Buddy never posts to them.
 // Each field's secret name must exist in the secret catalogue (migrations 20261005090000, 20261011090000 and 20261011130000).
@@ -19,6 +19,10 @@ export const DOOR_IDS = [
   "wordpress_com",
   "podcast",
   "vimeo",
+  "flipboard",
+  "google_news",
+  "microsoft_start",
+  "smartnews",
 ] as const;
 export type DoorId = (typeof DOOR_IDS)[number];
 
@@ -145,6 +149,31 @@ export const DOORS: Readonly<Record<DoorId, DoorSpec>> = {
     label: "Vimeo",
     summary: "Uploads your short vertical videos to your Vimeo account. No video, no upload.",
     fields: [{ secretName: "vimeo_access_token", label: "Access token", kind: "secret" }],
+  },
+  // Phase 8: the four RSS doors. No secret. The site's /rss.xml is the door, and Buddy pings the free hub for it.
+  flipboard: {
+    id: "flipboard",
+    label: "Flipboard",
+    summary: "Buddy keeps your RSS feed current and pings a free hub for each new article. Add your feed address in Flipboard yourself.",
+    fields: [],
+  },
+  google_news: {
+    id: "google_news",
+    label: "Google News",
+    summary: "Buddy keeps your RSS feed current and pings a free hub for each new article. Add your feed address in Google News yourself.",
+    fields: [],
+  },
+  microsoft_start: {
+    id: "microsoft_start",
+    label: "Microsoft Start",
+    summary: "Buddy keeps your RSS feed current and pings a free hub for each new article. Add your feed address in Microsoft Start yourself.",
+    fields: [],
+  },
+  smartnews: {
+    id: "smartnews",
+    label: "SmartNews",
+    summary: "Buddy keeps your RSS feed current and pings a free hub for each new article. Add your feed address in SmartNews yourself.",
+    fields: [],
   },
 };
 

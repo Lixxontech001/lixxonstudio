@@ -7,6 +7,7 @@
  * Public, cached 1h at the edge. No secrets involved.
  */
 import { corsHeaders, serviceClient, escapeHtml, siteUrl } from "../_shared/http.ts";
+import { WEBSUB_HUB } from "../_shared/rssHub.ts";
 import { buildPodcastFeed, episodeAudioUrl, podcastShowReady, type PodcastEpisode } from "../_shared/podcastFeed.ts";
 
 const cache = (type: string) => ({ ...corsHeaders, "Content-Type": type, "Cache-Control": "public, max-age=3600, s-maxage=3600" });
@@ -41,7 +42,7 @@ ${(authors || []).map((a) => u(`/author/${encodeURIComponent(a.slug)}`, null, "0
   if (type === "rss") {
     const { data: posts } = await sb.from("posts").select("title, slug, excerpt, published_at, cover_image, category:categories(name)").eq("status", "published").order("published_at", { ascending: false }).limit(30);
     const items = (posts || []).map((p) => `<item><title>${escapeHtml(p.title)}</title><link>${site}/blog/${encodeURIComponent(p.slug)}</link><guid>${site}/blog/${encodeURIComponent(p.slug)}</guid><pubDate>${new Date(p.published_at).toUTCString()}</pubDate>${p.category ? `<category>${escapeHtml((p.category as unknown as { name: string }).name)}</category>` : ""}<description>${escapeHtml(p.excerpt || "")}</description>${p.cover_image ? `<enclosure url="${escapeHtml(p.cover_image)}" type="image/jpeg" />` : ""}</item>`).join("");
-    const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Lixxon Studio</title><link>${site}</link><atom:link href="${site}/rss.xml" rel="self" type="application/rss+xml"/><description>Skincare science, intentional style and minimalist wellness.</description><language>en</language>${items}</channel></rss>`;
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Lixxon Studio</title><link>${site}</link><atom:link href="${site}/rss.xml" rel="self" type="application/rss+xml"/><atom:link href="${WEBSUB_HUB}" rel="hub"/><description>Skincare science, intentional style and minimalist wellness.</description><language>en</language>${items}</channel></rss>`;
     return new Response(xml, { headers: cache("application/rss+xml; charset=utf-8") });
   }
 

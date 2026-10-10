@@ -392,3 +392,14 @@ What is still not done, or not verified:
 - A paused door is skipped by the day run's door step, and the run says "Paused by you: ...". The pause list is one new column, `minds_controls.paused_doors`, in `20261013000000_minds_paused_doors.sql` (NOT applied). Until that migration is applied, chat pause requests fail honestly, and the day run pauses nothing.
 - Known copy gap: a kill set from chat shows the existing trigger line "Set by the owner in Minds." in the notable events. The daily-log line above it is the accurate record. Not changed here.
 - Freeze check for this slice: `src/__tests__/buddyControls.test.ts` and the paused-door block in `runDoors.test.ts`.
+
+## Phase 8 slice 4: the four RSS doors
+
+- Flipboard, Google News, Microsoft Start and SmartNews are the four RSS doors. They need no secret. The site's `/rss.xml` is the door: it already lists every published article. Buddy pings Google's free WebSub hub (`https://pubsubhubbub.appspot.com/`) with a publish request for that feed. Rules and the ping live in `supabase/functions/_shared/rssHub.ts`.
+- The feed now declares the hub in its channel (`feeds/index.ts`), so the hub knows where to fetch.
+- Log lines say "RSS updated and pinged for Flipboard", never "posted". Skips for these doors say "Nothing was pinged." The day run's door notable counts real posts only, so a ping is not reported as a post.
+- A door with no fields reads as Connected. Test connection says "Nothing to test here" for the RSS doors. The owner still adds the feed address in each service by hand; Buddy does not submit it.
+- The four gated channels (Instagram, TikTok, Facebook, Pinterest) still have no door and no send.
+- Database: `20261014000000_door_posts_rss_four.sql` widens the door-post check and the reserve function to sixteen doors. `20261013000000_minds_paused_doors.sql` (slice 3) now lists the four new ids too. Both are NOT applied.
+- Freeze changes, stated plainly: the Phase 6, Phase 7, door registry, door-post, and day-run tests used to pin exactly twelve doors. They now check that the twelve earlier doors are all still open, and that the only additions are the four RSS doors. Some runDoors tests pause the RSS doors in their default input so their twelve-door counts still mean what they meant. Wording tests now match the new per-door template; the text for the twelve posting doors is unchanged.
+- Not checked live: no ping has been sent to the real hub from this sandbox. The hub response (204 expected) is unverified until the first live run.

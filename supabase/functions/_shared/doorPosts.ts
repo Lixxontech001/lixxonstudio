@@ -8,6 +8,8 @@ import type { DoorId } from "./doorRegistry.ts";
 /** Doors that can post in this build. The others are listed honestly as "not built yet". */
 export const OPEN_DOORS: readonly DoorId[] = [
   "telegram", "discord", "bluesky", "mastodon", "tumblr", "blogger", "medium", "pixelfed", "wordpress_com", "youtube", "vimeo", "podcast",
+  // Phase 8: the RSS doors. Each one pings the free hub for the site feed (rssHub.ts). No post text is sent.
+  "flipboard", "google_news", "microsoft_start", "smartnews",
 ];
 
 /**
@@ -43,6 +45,10 @@ export const DOOR_TEXT_LIMIT: Readonly<Record<DoorId, number>> = {
   wordpress_com: 1000,
   podcast: 1000,
   vimeo: 1000,
+  flipboard: 1000,
+  google_news: 1000,
+  microsoft_start: 1000,
+  smartnews: 1000,
 };
 
 /** Only articles published this recently are posted. Old articles are never sent to a door. */

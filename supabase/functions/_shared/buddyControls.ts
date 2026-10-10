@@ -36,6 +36,10 @@ const DOOR_NAMES: Record<DoorId, RegExp> = {
   wordpress_com: /\bwordpress(\.com)?\b/i,
   podcast: /\bpodcast\b/i,
   vimeo: /\bvimeo\b/i,
+  flipboard: /\bflipboard\b/i,
+  google_news: /\bgoogle news\b/i,
+  microsoft_start: /\bmicrosoft start\b/i,
+  smartnews: /\bsmartnews\b/i,
 };
 
 const MIND_NAMES: Record<ControlMind | "auditor", RegExp> = {
@@ -123,6 +127,10 @@ export const DOOR_LABEL: Record<DoorId, string> = {
   wordpress_com: "WordPress.com",
   podcast: "Podcast",
   vimeo: "Vimeo",
+  flipboard: "Flipboard",
+  google_news: "Google News",
+  microsoft_start: "Microsoft Start",
+  smartnews: "SmartNews",
 };
 
 export interface ControlCurrent {

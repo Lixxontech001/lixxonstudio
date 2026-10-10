@@ -41,9 +41,10 @@ function pick(articles: DoorArticle[], overrides: Partial<{ postedIds: Set<strin
 }
 
 describe('the open doors', () => {
-  it('are all twelve auto doors, and only those', () => {
+  it('are all sixteen auto doors (the twelve from Phases 5 and 6, and the four RSS doors), and only those', () => {
     expect([...OPEN_DOORS]).toEqual([
       'telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast',
+      'flipboard', 'google_news', 'microsoft_start', 'smartnews',
     ]);
     expect([...OPEN_DOORS].sort()).toEqual([...DOOR_IDS].sort());
     for (const door of OPEN_DOORS) expect(isOpenDoor(door)).toBe(true);

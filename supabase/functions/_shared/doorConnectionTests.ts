@@ -4,6 +4,7 @@
 // $0: each check uses an official free route. Doors whose check is not built yet answer "not_built" and make no request.
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
+import { isRssDoor } from "./rssHub.ts";
 import {
   mastodonOrigin,
   normalizeBlueskyHandle,
@@ -17,7 +18,7 @@ import {
   type FetchLike,
 } from "./doorAdapters.ts";
 
-export type DoorTestStatus = "connected" | "invalid" | "not_connected" | "not_built" | "rate_limited" | "unavailable";
+export type DoorTestStatus = "connected" | "invalid" | "not_connected" | "not_built" | "rate_limited" | "unavailable" | "feed_only";
 
 export const DOOR_TEST_MESSAGE: Readonly<Record<DoorTestStatus, string>> = {
   connected: "Connected. The door answered. Nothing was posted.",
@@ -26,6 +27,7 @@ export const DOOR_TEST_MESSAGE: Readonly<Record<DoorTestStatus, string>> = {
   not_built: "The test for this door is not built yet.",
   rate_limited: "The door is limiting checks. Try later.",
   unavailable: "The door did not answer. Try later.",
+  feed_only: "Nothing to test here. Your RSS feed is always published, and Buddy pings the free hub for each new article.",
 };
 
 export function doorTestMessage(status: DoorTestStatus): string {
@@ -225,6 +227,8 @@ const CHECKS: Partial<Record<DoorId, (values: Values, fetchImpl: FetchLike) => P
  * and no request is made. Unexpected errors become "unavailable", so nothing about them leaks out.
  */
 export async function testDoorConnection(door: DoorId, values: Values, fetchImpl: FetchLike): Promise<DoorTestStatus> {
+  // The RSS doors need no details, so there is nothing to call. The feed is the door.
+  if (isRssDoor(door)) return "feed_only";
   const check = CHECKS[door];
   if (!check) return "not_built";
   const saved = new Set(Object.keys(values).filter((name) => Boolean(values[name])));

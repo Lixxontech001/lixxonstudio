@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DOOR_IDS, DOORS, type DoorId } from '../../supabase/functions/_shared/doorRegistry';
+import { isRssDoor } from '../../supabase/functions/_shared/rssHub';
 
 // All twelve doors have a built check (Phase 6 slice 4 added YouTube, Vimeo and Podcast).
-const BUILT: DoorId[] = [...DOOR_IDS];
+// The RSS doors have no details and no check: they answer feed_only (tested below). Every other door is built.
+const BUILT: DoorId[] = DOOR_IDS.filter((door) => !isRssDoor(door));
 import {
   DOOR_TEST_MESSAGE,
   doorTestMessage,
@@ -12,6 +14,10 @@ import {
 import type { FetchLike } from '../../supabase/functions/_shared/doorAdapters';
 
 const VALUES: Record<DoorId, Record<string, string>> = {
+  flipboard: {},
+  google_news: {},
+  microsoft_start: {},
+  smartnews: {},
   telegram: { telegram_bot_token: 'TG-TOKEN-SECRET', telegram_chat_id: '-100123' },
   discord: { discord_webhook_url: 'https://discord.com/api/webhooks/1/HOOK-SECRET?wait=true' },
   bluesky: { bluesky_handle: 'lixxon.bsky.social', bluesky_app_password: 'APP-PASS-SECRET' },
@@ -145,7 +151,7 @@ describe('every door check is a read: nothing is posted', () => {
 
 describe('a door that is not fully saved is not tested at all', () => {
   it('every door has a built check, so none answers not_built when every field is saved', async () => {
-    for (const door of DOOR_IDS) {
+    for (const door of BUILT) {
       const { fetchImpl } = network(healthy);
       expect(await testDoorConnection(door, VALUES[door], fetchImpl), door).toBe('connected');
     }
@@ -256,9 +262,20 @@ describe('the result never carries a value, a token, or the provider reply', () 
   });
 
   it('every door has a field list, so none is tested with a field left out', () => {
-    for (const door of DOOR_IDS) {
+    for (const door of BUILT) {
       expect(DOORS[door].fields.length).toBeGreaterThan(0);
       expect(Object.keys(VALUES[door]).sort()).toEqual(DOORS[door].fields.map((field) => field.secretName).sort());
     }
+  });
+});
+
+describe('the four RSS doors answer feed_only, with no request', () => {
+  it('each RSS door is feed_only, makes no request, and says there is nothing to test', async () => {
+    for (const door of DOOR_IDS.filter((item) => isRssDoor(item))) {
+      const { fetchImpl, calls } = network(healthy);
+      expect(await testDoorConnection(door, {}, fetchImpl), door).toBe('feed_only');
+      expect(calls, door).toHaveLength(0);
+    }
+    expect(doorTestMessage('feed_only')).toContain('Nothing to test here');
   });
 });

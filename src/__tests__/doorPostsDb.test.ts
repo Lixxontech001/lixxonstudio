@@ -177,7 +177,7 @@ describe('a post is reserved once, per door, per local day', () => {
   });
 
   it('the list of open doors in the database is the same as OPEN_DOORS in the code', () => {
-    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261011170000_door_posts_all_twelve_open.sql'), 'utf8');
+    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261014000000_door_posts_rss_four.sql'), 'utf8');
     const match = /p_door NOT IN \(([^)]*)\)/.exec(sql);
     expect(match).not.toBeNull();
     const listed = (match?.[1] ?? '').split(',').map((item) => item.trim().replace(/'/g, ''));
@@ -310,8 +310,8 @@ describe('the door-post table accepts all twelve auto doors, and no gated channe
     }
   });
 
-  it('the reservation function accepts exactly the twelve auto doors, and no gated channel', () => {
-    expect(OPEN_DOORS).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast']);
+  it('the reservation function accepts exactly the sixteen auto doors, and no gated channel', () => {
+    expect(OPEN_DOORS).toEqual(['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast', 'flipboard', 'google_news', 'microsoft_start', 'smartnews']);
     expect([...OPEN_DOORS].sort()).toEqual([...DOOR_IDS].sort());
   });
 });

@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DOOR_IDS, DOORS } from '../../supabase/functions/_shared/doorRegistry';
+import { isRssDoor } from '../../supabase/functions/_shared/rssHub';
 
 type Result = { data: unknown; error: unknown };
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), can: vi.fn(() => true), invoke: vi.fn() }));
@@ -122,7 +123,8 @@ describe('the Connections page shows the six doors and their state', () => {
 
   it('with nothing saved: every door is Not connected, and every field says Not saved yet', async () => {
     await render();
-    expect(text().split(stateLabel('not_connected')).length - 1).toBe(DOOR_IDS.length);
+    // The four RSS doors need no details, so they are Connected from the start. Every other door is Not connected.
+    expect(text().split(stateLabel('not_connected')).length - 1).toBe(DOOR_IDS.filter((id) => !isRssDoor(id)).length);
     expect(text().split(fieldStatus(false)).length - 1).toBe(ALL_FIELDS.length);
   });
 

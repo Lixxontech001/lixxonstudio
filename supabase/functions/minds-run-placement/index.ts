@@ -19,6 +19,7 @@ import type { PushTarget, VapidCredentials } from "../_shared/webPush.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
 import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
+import { isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
@@ -206,14 +207,16 @@ export async function handleRun(req: Request): Promise<Response> {
   const pausedRaw = asRecord(pausedRow.data)?.paused_doors;
   const pausedDoors = pausedRow.error || !Array.isArray(pausedRaw) ? [] : pausedRaw.filter((item): item is string => typeof item === "string");
   const doors = await runDoorsSafely(sb, owner, localDay, takeover, killScope, pausedDoors);
-  if (doors.posted > 0) {
+  // The RSS doors only ping the hub, so they are not counted as posts in the notable.
+  const realPosts = doors.outcomes.filter((item) => item.outcome === "posted" && !isRssDoor(item.door)).length;
+  if (realPosts > 0) {
     await recordNotable(
       sb,
       owner,
       localDay,
       "executioner",
       "door_posted",
-      `${doors.posted} ${doors.posted === 1 ? "free door posted" : "free doors posted"} today`,
+      `${realPosts} ${realPosts === 1 ? "free door posted" : "free doors posted"} today`,
       "The Executioner sent these. Each one is in the log.",
     );
   }
@@ -499,6 +502,11 @@ async function runDoorsForDay(
         }
         if (door === "vimeo") {
           return sendVimeo({ accessToken: values.vimeo_access_token ?? "" }, text, extra.title, video, fetch);
+        }
+        if (isRssDoor(door)) {
+          // The RSS doors read the site feed and ping the free hub. Nothing is posted. The feed address comes from the site setting.
+          const site = (env("SITE_URL") || "").replace(/\/+$/, "");
+          return sendRssPing(site ? `${site}/rss.xml` : "", fetch);
         }
         if (door === "podcast") {
           // The feed is the door: an episode row is written, and /podcast.xml lists it. Nothing is sent elsewhere.

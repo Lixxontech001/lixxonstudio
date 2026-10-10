@@ -9,6 +9,7 @@
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
 import { DOOR_LABEL } from "./buddyControls.ts";
+import { nothingNewNote, notSentNote, sentLead, sentVerb } from "./rssHub.ts";
 import { DOOR_DAILY_LIMIT, DOOR_MEDIA, DOOR_TEXT_LIMIT, DOORS_NEED_PICTURE, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
 import { isHonestSkip } from "./honestSkips.ts";
 import type { DoorSendResult } from "./doorAdapters.ts";
@@ -38,7 +39,7 @@ export const DOORS_NOTHING_CONNECTED_DETAIL = "No free door is connected yet. Co
 export const FINISH_ATTEMPTS = 3;
 const FINISH_PAUSE_MS = [1000, 3000];
 
-export const ALL_DOORS_PAUSED_DETAIL = "Every free door is paused by you. Nothing was posted.";
+export const ALL_DOORS_PAUSED_DETAIL = "Every free door is paused by you. Nothing was sent.";
 
 export interface DoorRunInput {
   localDay: string;
@@ -167,14 +168,14 @@ async function savePendingPosts(input: DoorRunInput, ports: DoorRunPorts, door: 
   try {
     rows = await ports.readPendingPosts(door, input.localDay);
   } catch {
-    return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
+    return { door, outcome: "skipped", detail: `${label}: could not be checked today. ${notSentNote(door)}` };
   }
   const row = rows[0];
   if (!row) return null;
 
   if (row.pendingStatus === null) {
     // We cannot tell whether the earlier send went out, so nothing is sent again today.
-    const detail = `${label}: an earlier post today needs a look. Nothing new was posted.`;
+    const detail = `${label}: an earlier post today needs a look. ${nothingNewNote(door)}`;
     await logSafely(ports, { door, outcome: "failed", detail: `${label}: an earlier post today has no saved state. It was not sent again. Check the log.` });
     return { door, outcome: "skipped", detail };
   }
@@ -182,20 +183,20 @@ async function savePendingPosts(input: DoorRunInput, ports: DoorRunPorts, door: 
   if (row.pendingStatus === "posted") {
     const saved = await finishWithRetry(ports, row.id, "posted", row.externalRef, null);
     if (saved) {
-      const detail = `Posted to ${label}: the record was saved on a later try today.`;
+      const detail = `${sentLead(door, label)}: the record was saved on a later try today.`;
       await logSafely(ports, { door, outcome: "done", detail });
       return { door, outcome: "posted", detail };
     }
-    const detail = `${label}: posted, but the record could not be saved. Check the log.`;
+    const detail = `${label}: ${sentVerb(door)}, but the record could not be saved. Check the log.`;
     await logSafely(ports, { door, outcome: "failed", detail });
     return { door, outcome: "posted", detail };
   }
 
   // The earlier send did not go out. Its failure is recorded now. Nothing is sent again.
-  const note = row.errorNote ?? "Nothing was posted.";
+  const note = row.errorNote ?? notSentNote(door);
   const saved = await finishWithRetry(ports, row.id, "failed", null, note);
   if (saved) return { door, outcome: "failed", detail: `${label} did not take it: ${note}` };
-  return { door, outcome: "skipped", detail: `${label}: an earlier try could not be saved yet. Nothing new was posted.` };
+  return { door, outcome: "skipped", detail: `${label}: an earlier try could not be saved yet. ${nothingNewNote(door)}` };
 }
 
 /** One door, start to finish. Only a held gate (Takeover off, Kill) stops the whole step. */
@@ -210,7 +211,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       if (value) values[field.secretName] = value;
     }
   } catch {
-    return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
+    return { door, outcome: "skipped", detail: `${label}: could not be checked today. ${notSentNote(door)}` };
   }
   const status = doorStatus(door, new Set(Object.keys(values)));
   if (status.state !== "connected") return { door, outcome: "not_connected", detail: label };
@@ -221,10 +222,10 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
 
   try {
     if ((await ports.countToday(door, input.localDay)) >= DOOR_DAILY_LIMIT) {
-      return { door, outcome: "skipped", detail: `${label}: already posted today.` };
+      return { door, outcome: "skipped", detail: `${label}: already ${sentVerb(door)} today.` };
     }
   } catch {
-    return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
+    return { door, outcome: "skipped", detail: `${label}: could not be checked today. ${notSentNote(door)}` };
   }
 
   // A read of the articles that fails propagates. It happens before any door has sent, so nothing was posted.
@@ -241,15 +242,15 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       needPicture: DOORS_NEED_PICTURE.includes(door),
     });
   } catch {
-    return { door, outcome: "skipped", detail: `${label}: could not be checked today. Nothing was posted.` };
+    return { door, outcome: "skipped", detail: `${label}: could not be checked today. ${notSentNote(door)}` };
   }
   if (!pick.ok) {
     const detail = pick.reason === "copy_not_clean"
-      ? `${label}: the newest article title has text that cannot be posted.`
+      ? `${label}: the newest article title has text that cannot be ${sentVerb(door)}.`
       : pick.reason === "too_long"
         ? `${label}: the article link is too long for this door.`
         : DOORS_NEED_PICTURE.includes(door)
-          ? `${label}: no picture yet. Nothing was posted.`
+          ? `${label}: no picture yet. ${notSentNote(door)}`
           : `${label}: no new article to post yet.`;
     if (isHonestSkip(detail)) await logSafely(ports, { door, outcome: "skipped", detail });
     return { door, outcome: "skipped", detail };
@@ -268,7 +269,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       loaded = { ok: false, reason: "not_fetchable" };
     }
     if (!loaded.ok) {
-      const detail = `${label}: ${imageProblemNote(loaded.reason)} Nothing was posted.`;
+      const detail = `${label}: ${imageProblemNote(loaded.reason)} ${notSentNote(door)}`;
       await logSafely(ports, { door, outcome: "skipped", detail });
       return { door, outcome: "skipped", detail };
     }
@@ -281,7 +282,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       loaded = { ok: false, reason: "not_readable" };
     }
     if (!loaded.ok) {
-      const detail = loaded.reason === "no_video" ? `${label}: no video yet. Nothing was posted.` : `${label}: the video could not be read. Nothing was posted.`;
+      const detail = loaded.reason === "no_video" ? `${label}: no video yet. ${notSentNote(door)}` : `${label}: the video could not be read. ${notSentNote(door)}`;
       if (loaded.reason === "no_video") await logSafely(ports, { door, outcome: "skipped", detail });
       return { door, outcome: "skipped", detail };
     }
@@ -294,7 +295,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       loaded = { ok: false, reason: "not_readable" };
     }
     if (!loaded.ok) {
-      const detail = loaded.reason === "no_audio" ? `${label}: audio not made yet. Nothing was posted.` : `${label}: the audio could not be read. Nothing was posted.`;
+      const detail = loaded.reason === "no_audio" ? `${label}: audio not made yet. ${notSentNote(door)}` : `${label}: the audio could not be read. ${notSentNote(door)}`;
       if (loaded.reason === "no_audio") await logSafely(ports, { door, outcome: "skipped", detail });
       return { door, outcome: "skipped", detail };
     }
@@ -305,13 +306,13 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   try {
     reserved = await ports.reserve(door, pick.article.id, input.localDay, pick.articleUrl);
   } catch {
-    return { door, outcome: "skipped", detail: `${label}: could not start the post. Nothing was posted.` };
+    return { door, outcome: "skipped", detail: `${label}: could not start the post. ${notSentNote(door)}` };
   }
   if (!reserved.ok) {
     if (HELD_REASONS[reserved.reason]) return { held: HELD_REASONS[reserved.reason], posted: postedSoFar };
     const detail = reserved.reason === "already_posted" || reserved.reason === "door_day_cap"
-      ? `${label}: nothing new was posted.`
-      : `${label}: could not start the post. Nothing was posted.`;
+      ? `${label}: ${nothingNewNote(door)}`
+      : `${label}: could not start the post. ${notSentNote(door)}`;
     return { door, outcome: "skipped", detail };
   }
 
@@ -332,13 +333,13 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   if (sent.ok) {
     const saved = await finishWithRetry(ports, reserved.id, "posted", sent.externalRef, null);
     if (saved) {
-      const detail = `Posted to ${label}: "${pick.article.title}".${sent.note ? ` ${sent.note}` : ""}`;
+      const detail = `${sentLead(door, label)}: "${pick.article.title}".${sent.note ? ` ${sent.note}` : ""}`;
       await logSafely(ports, { door, outcome: "done", detail });
       return { door, outcome: "posted", detail };
     }
     // The post went out, but its record could not be saved. The row stays queued, marked as posted, and a later run today saves it again. Nothing is sent again.
     await keepPendingSafely(ports, reserved.id, "posted", sent.externalRef, null);
-    const detail = `${label}: posted, but the record could not be saved. Check the log.`;
+    const detail = `${label}: ${sentVerb(door)}, but the record could not be saved. Check the log.`;
     await logSafely(ports, { door, outcome: "failed", detail });
     return { door, outcome: "posted", detail };
   }
@@ -346,7 +347,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   const recorded = await finishWithRetry(ports, reserved.id, "failed", null, sent.reason);
   if (!recorded) await keepPendingSafely(ports, reserved.id, "failed", null, sent.reason);
   // A door the service has closed is said in plain words, once a day. Nothing is posted, and nothing is scraped.
-  const detail = sent.closed ? `${label}: this door is closed. Nothing was posted.` : `${label} did not take it: ${sent.reason}`;
+  const detail = sent.closed ? `${label}: this door is closed. ${notSentNote(door)}` : `${label} did not take it: ${sent.reason}`;
   await logSafely(ports, { door, outcome: "failed", detail });
   return { door, outcome: "failed", detail };
 }

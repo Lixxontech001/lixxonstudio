@@ -26,6 +26,7 @@ function filesUnder(folder: string, extensions: string[]): string[] {
 const RUN = read('supabase/functions/minds-run-placement/index.ts');
 const RUN_DOORS = read('supabase/functions/_shared/runDoors.ts');
 const GATED = ['instagram', 'tiktok', 'facebook', 'pinterest'];
+const PHASE6_TWELVE = ['telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger', 'medium', 'youtube', 'pixelfed', 'wordpress_com', 'podcast', 'vimeo'];
 const PHASE6_MIGRATIONS = [
   'supabase/migrations/20261011130000_door_catalog_twelve.sql',
   'supabase/migrations/20261011140000_door_posts_twelve.sql',
@@ -36,9 +37,10 @@ const PHASE6_MIGRATIONS = [
 ];
 
 describe('Phase 6 freeze: twelve auto doors, four gated channels manual', () => {
-  it('exactly twelve auto doors are open, and they are the same list as the registry', () => {
-    expect(OPEN_DOORS).toHaveLength(12);
+  it('the twelve Phase 6 doors are still open, and the open list is the registry list (Phase 8 adds four RSS doors)', () => {
+    expect(OPEN_DOORS).toHaveLength(16);
     expect([...OPEN_DOORS].sort()).toEqual([...DOOR_IDS].sort());
+    for (const door of PHASE6_TWELVE) expect(OPEN_DOORS as readonly string[]).toContain(door);
   });
 
   it('the four gated channels and WhatsApp are not doors', () => {
@@ -48,9 +50,11 @@ describe('Phase 6 freeze: twelve auto doors, four gated channels manual', () => 
     }
   });
 
-  it('the day run sends to the twelve open doors and to nothing else (no 13th send)', () => {
+  it('the day run sends to the twelve Phase 6 doors by their own branch, to the RSS doors by the ping branch, and to nothing else', () => {
     const branches = new Set([...RUN.matchAll(/door === "([a-z_]+)"/g)].map((match) => match[1]));
-    expect([...branches].sort()).toEqual([...OPEN_DOORS].sort());
+    expect([...branches].sort()).toEqual([...PHASE6_TWELVE].sort());
+    expect(RUN).toContain('if (isRssDoor(door)) {');
+    expect([...OPEN_DOORS].filter((door) => !PHASE6_TWELVE.includes(door)).sort()).toEqual(['flipboard', 'google_news', 'microsoft_start', 'smartnews']);
   });
 
   it('no posting address for a gated channel exists in the day run or the door modules', () => {
@@ -100,7 +104,7 @@ describe('Phase 6 freeze: takeover, Kill and the Auditor', () => {
 describe('Phase 6 freeze: a failed save never jams a door, and never sends it twice', () => {
   it('a failed save is tried again, then logged as a notable error', () => {
     expect(RUN_DOORS).toMatch(/FINISH_ATTEMPTS = 3/);
-    expect(RUN_DOORS).toMatch(/posted, but the record could not be saved\. Check the log\./);
+    expect(RUN_DOORS).toMatch(/\$\{sentVerb\(door\)\}, but the record could not be saved\. Check the log\./);
   });
 
   it('one article goes to one door once: the reservation refuses a second send for the same article', () => {
@@ -114,8 +118,8 @@ describe('Phase 6 freeze: a failed save never jams a door, and never sends it tw
 
 describe('Phase 6 freeze: honest skips, no fake uploads or enclosures', () => {
   it('a missing video or audio file skips the door with a plain reason, before anything is reserved', () => {
-    expect(RUN_DOORS).toContain('no video yet. Nothing was posted.');
-    expect(RUN_DOORS).toContain('audio not made yet. Nothing was posted.');
+    expect(RUN_DOORS).toContain('no video yet. ${notSentNote(door)}');
+    expect(RUN_DOORS).toContain('audio not made yet. ${notSentNote(door)}');
     const skip = RUN_DOORS.indexOf('audio not made yet');
     const reserve = RUN_DOORS.indexOf('ports.reserve(');
     expect(skip).toBeLessThan(reserve);

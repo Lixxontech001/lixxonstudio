@@ -230,7 +230,10 @@ describe('Phase 7 freeze: the four gated channels send nothing, and the reader c
 });
 
 describe('Phase 7 freeze: twelve auto doors, and the Phase 7 work changed no send count', () => {
-  it('exactly twelve auto doors are open', () => {
-    expect(OPEN_DOORS).toHaveLength(12);
+  it('the twelve auto doors from Phases 5 and 6 are still open (Phase 8 adds four RSS doors)', () => {
+    expect(OPEN_DOORS).toHaveLength(16);
+    for (const door of ['telegram', 'bluesky', 'mastodon', 'tumblr', 'discord', 'blogger', 'medium', 'youtube', 'pixelfed', 'wordpress_com', 'podcast', 'vimeo']) {
+      expect(OPEN_DOORS as readonly string[]).toContain(door);
+    }
   });
 });

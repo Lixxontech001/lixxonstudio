@@ -204,7 +204,10 @@ function harness(options: {
   return { ports, sent, keys, reserved, finished, logs, finishAttempts, media, extras, loadedCovers, loadedVideo, loadedAudio, rows, marks };
 }
 
-const DAY_INPUT = { localDay: '2026-10-10', takeover: true, killScope: 'none' as const, nowMs: NOW, siteOrigin: SITE };
+// The four RSS doors are paused in these older tests, so the twelve-door counts stay as they were. Their own tests are at the end.
+const RSS_FOUR = ['flipboard', 'google_news', 'microsoft_start', 'smartnews'];
+const TWELVE = ['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast'];
+const DAY_INPUT = { localDay: '2026-10-10', takeover: true, killScope: 'none' as const, nowMs: NOW, siteOrigin: SITE, pausedDoors: RSS_FOUR };
 
 describe('the door step is held when it is not allowed to run', () => {
   it('Takeover off: nothing is read, reserved, sent or logged', async () => {
@@ -259,7 +262,7 @@ describe('a door posts only when it is fully connected', () => {
     expect(h.sent).toEqual([{ door: 'discord', text: `New on the blog: Easy routine for dry skin\n${SITE}/blog/easy-routine-dry-skin` }]);
     expect(h.finished).toEqual([{ id: 'row-discord', status: 'posted', externalRef: 'ref-discord', errorNote: null }]);
     expect(h.logs).toEqual([{ door: 'discord', outcome: 'done', detail: 'Posted to Discord: "Easy routine for dry skin".' }]);
-    expect(result.detail).toBe('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon, Tumblr, Blogger, Medium, Pixelfed, WordPress.com, YouTube, Vimeo, Podcast.');
+    expect(result.detail).toContain('Posted to Discord: "Easy routine for dry skin". Not connected yet: Telegram, Bluesky, Mastodon, Tumblr, Blogger, Medium, Pixelfed, WordPress.com, YouTube, Vimeo, Podcast.');
   });
 
   it('both connected doors can post on the same day, one article each', async () => {
@@ -770,16 +773,16 @@ describe('Phase 7 slice 5: honest skips are logged, and a closed door is said pl
 describe('a door the owner paused in chat is skipped', () => {
   it('Telegram paused: nothing is reserved or sent there, Discord still posts, and the detail says it is paused', async () => {
     const h = harness();
-    const result = await runDoors({ ...DAY_INPUT, pausedDoors: ['telegram'] }, h.ports);
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: [...RSS_FOUR, 'telegram'] }, h.ports);
     expect(h.sent.some((item) => item.door === 'telegram')).toBe(false);
     expect(h.reserved.some((item) => item.startsWith('telegram:'))).toBe(false);
     expect(h.sent.some((item) => item.door === 'discord')).toBe(true);
-    expect(result.detail).toContain('Paused by you: Telegram.');
+    expect(result.detail).toContain('Paused by you: Telegram');
   });
 
   it('two connected doors paused: neither gets a send', async () => {
     const h = harness();
-    const result = await runDoors({ ...DAY_INPUT, pausedDoors: ['telegram', 'discord'] }, h.ports);
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: [...RSS_FOUR, 'telegram', 'discord'] }, h.ports);
     // The other ten doors are not connected in this fixture, so the run has nothing to send either way.
     expect(result.status).toBe('nothing_to_do');
     expect(h.sent.some((item) => item.door === 'telegram' || item.door === 'discord')).toBe(false);
@@ -787,10 +790,52 @@ describe('a door the owner paused in chat is skipped', () => {
 
   it('a pause list that pauses every open door: nothing to do, with the plain message', async () => {
     const h = harness();
-    const all = ['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast'];
-    const result = await runDoors({ ...DAY_INPUT, pausedDoors: all }, h.ports);
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: [...RSS_FOUR, ...TWELVE] }, h.ports);
     expect(result).toEqual({ status: 'nothing_to_do', detail: ALL_DOORS_PAUSED_DETAIL, posted: 0, outcomes: [] });
     expect(h.sent).toHaveLength(0);
     expect(h.reserved).toHaveLength(0);
+  });
+});
+
+describe('the four RSS doors: a ping, logged as RSS, never as a post', () => {
+  it('each RSS door sends once and logs "RSS updated and pinged for <name>", with no "posted" anywhere in its lines', async () => {
+    const h = harness();
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: TWELVE }, h.ports);
+    expect(result.status).toBe('done');
+    for (const door of RSS_FOUR) {
+      expect(h.sent.filter((item) => item.door === door)).toHaveLength(1);
+      expect(h.logs.some((entry) => entry.door === door && entry.outcome === 'done')).toBe(true);
+    }
+    expect(h.logs.find((entry) => entry.door === 'flipboard')?.detail).toContain('RSS updated and pinged for Flipboard');
+    expect(h.logs.find((entry) => entry.door === 'google_news')?.detail).toContain('RSS updated and pinged for Google News');
+    for (const door of RSS_FOUR) {
+      const lines = h.logs.filter((entry) => entry.door === door).map((entry) => entry.detail);
+      for (const line of lines) expect(line).not.toMatch(/posted/i);
+    }
+  });
+
+  it('no secret is needed: the RSS doors still ping with nothing saved on Connections', async () => {
+    const h = harness({ secrets: {} });
+    await runDoors({ ...DAY_INPUT, pausedDoors: TWELVE }, h.ports);
+    expect(h.sent.map((item) => item.door).sort()).toEqual([...RSS_FOUR].sort());
+  });
+
+  it('a hub that refuses the ping is logged as a plain failure, and the other RSS doors still go', async () => {
+    const h = harness({
+      send: (door) => (door === 'smartnews' ? { ok: false, reason: 'The RSS hub did not take the ping (status 500).' } : { ok: true, externalRef: null }),
+    });
+    await runDoors({ ...DAY_INPUT, pausedDoors: TWELVE }, h.ports);
+    const failed = h.logs.find((entry) => entry.door === 'smartnews');
+    expect(failed?.outcome).toBe('failed');
+    expect(failed?.detail).toContain('did not take it');
+    expect(failed?.detail).not.toMatch(/posted/i);
+    expect(h.sent.some((item) => item.door === 'flipboard')).toBe(true);
+  });
+
+  it('pausing an RSS door in chat stops its ping, and the rest still go', async () => {
+    const h = harness();
+    await runDoors({ ...DAY_INPUT, pausedDoors: [...TWELVE, 'flipboard'] }, h.ports);
+    expect(h.sent.some((item) => item.door === 'flipboard')).toBe(false);
+    expect(h.sent.some((item) => item.door === 'google_news')).toBe(true);
   });
 });
