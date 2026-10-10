@@ -10,7 +10,7 @@ import {
   type ChatRole,
   type GeminiTurn,
 } from "../_shared/buddyThink.ts";
-import { briefingApplied, briefingDoors, briefingGaps, briefingPacks, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
+import { BRIEFING_NOTABLE_KINDS, briefingApplied, briefingDoors, briefingGaps, briefingNotables, briefingPacks, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
 import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import { controlChange, controlDoneLine, type ControlAction } from "../_shared/buddyControls.ts";
 import { ownerClock } from "../_shared/mindsNightReport.ts";
@@ -125,7 +125,7 @@ function chatStore(userClient: SupabaseClient) {
     readBriefingFacts: async (sinceIso: string): Promise<BriefingFacts> => {
       // Packs from the last three days that still need the owner (ready to post by hand, or blocked).
       const packsSinceIso = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps, packRead, doorRead] = await Promise.all([
+      const [articles, orders, views, failures, mindRows, waitingOrders, appliedEdits, openGaps, packRead, doorRead, notableRead] = await Promise.all([
         userClient
           .from("posts")
           .select("title", { count: "exact" })
@@ -190,6 +190,14 @@ function chatStore(userClient: SupabaseClient) {
           .gt("created_at", sinceIso)
           .order("created_at", { ascending: false })
           .limit(20),
+        // The notable events the minds wrote since the owner last looked (only the kinds the briefing reads). Owner session.
+        userClient
+          .from("minds_notable_events")
+          .select("kind,title,detail,happened_at")
+          .in("kind", [...BRIEFING_NOTABLE_KINDS])
+          .gt("happened_at", sinceIso)
+          .order("happened_at", { ascending: false })
+          .limit(50),
       ]);
       const doorRows = (Array.isArray(doorRead.data) ? doorRead.data : []) as Array<{ door?: unknown; status?: unknown; post_id?: unknown; error_note?: unknown }>;
       // Titles and product names for the applied changes. A failed read leaves the names out, never guessed.
@@ -234,6 +242,7 @@ function chatStore(userClient: SupabaseClient) {
         gaps: { ok: !openGaps.error, rows: briefingGaps((Array.isArray(openGaps.data) ? openGaps.data : []) as Array<{ angle: unknown }>) },
         packs: { ok: !packRead.error, rows: briefingPacks(packRows, postTitles) },
         doors: { ok: !doorRead.error, rows: briefingDoors(doorRows, postTitles) },
+        notables: { ok: !notableRead.error, rows: briefingNotables(Array.isArray(notableRead.data) ? notableRead.data : []) },
       };
     },
     // The "which mind?" order waiting on the last message of this chat. Owner session, so row-level security applies.
@@ -468,7 +477,7 @@ Deno.serve(async (req: Request) => {
         const change = controlChange(action, { killScope, pausedDoors });
         const saved = await userClient
           .from("minds_controls")
-          .update({ ...change, updated_by: user.id, updated_at: new Date().toISOString() })
+          .update({ ...change, updated_by: user.id, updated_at: new Date().toISOString(), change_source: "chat" })
           .eq("id", 1)
           .select("id");
         if (saved.error || !Array.isArray(saved.data) || saved.data.length === 0) return false;

@@ -68,7 +68,7 @@ describe('video template documents', () => {
     const list = parseVideoTemplates({
       active_id: '11111111-2222-3333-4444-555555555555',
       templates: [
-        { id: '11111111-2222-3333-4444-555555555555', name: 'Lagos daylight (default)', is_active: true, duration_seconds: 12, fps: 30, music: 'none', created_at: '2026-10-06T20:00:00.000Z' },
+        { id: '11111111-2222-3333-4444-555555555555', name: 'Clear daylight (default)', is_active: true, duration_seconds: 12, fps: 30, music: 'none', created_at: '2026-10-06T20:00:00.000Z' },
       ],
       active_document: DEFAULT_DOCUMENT,
     });

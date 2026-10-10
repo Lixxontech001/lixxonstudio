@@ -72,7 +72,7 @@ BEGIN
   -- numbers prove the document carries no numeric column padding.
   IF v_active IS DISTINCT FROM '{
     "schema": "lixxon.video-template.v1",
-    "name": "Lagos daylight (default)",
+    "name": "Clear daylight (default)",
     "duration_seconds": 12,
     "music": "none",
     "fps": 30,
@@ -222,7 +222,7 @@ BEGIN
     -- original look with the same id-independent name.
     PERFORM _template_text('authenticated', v_owner,
       format('SELECT automation_save_video_template(%L::jsonb, true)',
-        (base || jsonb_build_object('name', 'Lagos daylight (default)'))::text));
+        (base || jsonb_build_object('name', 'Clear daylight (default)'))::text));
     PERFORM _template_text('authenticated', v_owner,
       format('SELECT automation_delete_video_template(%L::uuid)', v_new_id));
     IF (SELECT count(*) FROM video_templates) <> 1

@@ -13,7 +13,7 @@ import { makeMindThink } from "../_shared/mindThink.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
-import { runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
+import { doorFailNotices, runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
 import { NO_DEVICE_COPY, PUSH_HELP_COPY, notifyOwnerDevices, shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
 import type { PushTarget, VapidCredentials } from "../_shared/webPush.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
@@ -207,6 +207,10 @@ export async function handleRun(req: Request): Promise<Response> {
   const pausedRaw = asRecord(pausedRow.data)?.paused_doors;
   const pausedDoors = pausedRow.error || !Array.isArray(pausedRaw) ? [] : pausedRaw.filter((item): item is string => typeof item === "string");
   const doors = await runDoorsSafely(sb, owner, localDay, takeover, killScope, pausedDoors);
+  // A door send that did not go out is a notable (one per door per day, by source key). It does not buzz the phone.
+  for (const notice of doorFailNotices(doors.outcomes, localDay)) {
+    await recordNotable(sb, owner, localDay, notice.mind, notice.kind, notice.title, notice.detail, notice.key);
+  }
   // The RSS doors only ping the hub, so they are not counted as posts in the notable.
   const realPosts = doors.outcomes.filter((item) => item.outcome === "posted" && !isRssDoor(item.door)).length;
   if (realPosts > 0) {

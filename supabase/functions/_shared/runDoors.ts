@@ -352,6 +352,31 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   return { door, outcome: "failed", detail };
 }
 
+/** One notable for a door send that did not go out. The key keeps one notable per door per day. */
+export interface DoorFailNotice {
+  key: string;
+  mind: "executioner";
+  kind: "door_failed";
+  title: string;
+  detail: string;
+}
+
+/**
+ * The notables for the day's failed door sends. Only outcome "failed" counts: a post that went out but whose record
+ * could not be saved stays "posted", and a skip (not connected, paused, capped) is not a failed send.
+ */
+export function doorFailNotices(outcomes: DoorOutcome[], localDay: string): DoorFailNotice[] {
+  return outcomes
+    .filter((item) => item.outcome === "failed")
+    .map((item) => ({
+      key: `door_failed:${item.door}:${localDay}`,
+      mind: "executioner" as const,
+      kind: "door_failed" as const,
+      title: `Did not go out to ${DOORS[item.door].label}`.slice(0, 160),
+      detail: item.detail.slice(0, 500),
+    }));
+}
+
 export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promise<DoorRunResult> {
   const gate = blockedDetail(input.takeover, input.killScope);
   if (gate) return { status: "held", detail: gate, posted: 0, outcomes: [] };

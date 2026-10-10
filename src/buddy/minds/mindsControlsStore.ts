@@ -36,7 +36,7 @@ export async function loadMindsControls(): Promise<{ ok: true; value: MindsContr
 export async function saveMindsControls(next: MindsControls, userId: string): Promise<{ ok: boolean }> {
   try {
     const { error } = await supabase.from('minds_controls').upsert(
-      { id: 1, takeover: next.takeover, kill_scope: next.killScope, updated_by: userId, updated_at: new Date().toISOString() },
+      { id: 1, takeover: next.takeover, kill_scope: next.killScope, updated_by: userId, updated_at: new Date().toISOString(), change_source: 'minds' },
       { onConflict: 'id' },
     );
     return { ok: !error };

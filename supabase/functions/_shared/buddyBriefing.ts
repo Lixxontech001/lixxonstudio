@@ -4,6 +4,7 @@
 import { MIND_KEYS, MIND_LABELS } from "./buddyRouter.ts";
 import { DOORS, isDoorId } from "./doorRegistry.ts";
 import { HONEST_SKIP_LINE_LIMIT, isHonestSkip } from "./honestSkips.ts";
+import { isRssDoor } from "./rssHub.ts";
 
 export const QUIET_LINE = "Quiet since you left.";
 /** A first visit has no earlier "left" time, so Buddy looks back this far. */
@@ -34,7 +35,34 @@ export interface BriefingFacts {
   packs?: { ok: boolean; rows: BriefingPack[] };
   /** The free-door send log since the owner last looked, newest first (the real record of what went out). */
   doors?: { ok: boolean; rows: BriefingDoorPost[] };
+  /** The notable events the minds wrote since the owner last looked, newest first. Only the briefing's kinds. */
+  notables?: { ok: boolean; rows: BriefingNotable[] };
 }
+
+/** One notable event the briefing can show. Plain fields only: its kind, its title and its detail. */
+export interface BriefingNotable {
+  kind: string;
+  title: string;
+  detail: string;
+}
+
+/** The notable kinds the briefing reads. Summary kinds written for later reading are never listed, so they cannot become the morning briefing. */
+export const BRIEFING_NOTABLE_KINDS: readonly string[] = [
+  "door_posted",
+  "sale",
+  "product_click",
+  "traffic_new_kind",
+  "auditor_blocked",
+  "order_blocked",
+  "pack_ready",
+  "door_failed",
+  "mind_failed",
+];
+const WENT_OUT_NOTABLE_KINDS = ["door_posted"];
+const MONEY_NOTABLE_KINDS = ["sale", "product_click", "traffic_new_kind"];
+const JOB_NOTABLE_KINDS = ["auditor_blocked", "order_blocked"];
+const PROBLEM_NOTABLE_KINDS = ["door_failed", "mind_failed"];
+export const NOTABLE_LINE_LIMIT = 3;
 
 /** One door post the owner can see. `status` is the send log's own word: queued, posted or failed. */
 export interface BriefingDoorPost {
@@ -142,8 +170,29 @@ function honestProblemLines(minds: BriefingMindRow[], packs: BriefingPack[]): st
   return lines.slice(0, HONEST_SKIP_LINE_LIMIT);
 }
 
-function problemLines(failures: BriefingFacts["failures"], minds: BriefingMindRow[], packs: BriefingPack[]): string[] {
-  const honest = honestProblemLines(minds, packs);
+/** Maps the notable rows the server read into the briefing's shape. Kinds the briefing does not read are dropped. */
+export function briefingNotables(rows: Array<{ kind?: unknown; title?: unknown; detail?: unknown }>): BriefingNotable[] {
+  return rows
+    .filter((row) => typeof row.kind === "string" && BRIEFING_NOTABLE_KINDS.includes(row.kind) && typeof row.title === "string" && row.title.trim().length > 0)
+    .map((row) => ({ kind: String(row.kind), title: String(row.title), detail: typeof row.detail === "string" ? row.detail : "" }));
+}
+
+/** One plain line per notable of the given kinds, newest first. A door failure shows its own sentence, which names the door. */
+function notableLines(notables: BriefingFacts["notables"], kinds: string[]): string[] {
+  if (!notables || !notables.ok) return [];
+  return notables.rows
+    .filter((row) => kinds.includes(row.kind))
+    .slice(0, NOTABLE_LINE_LIMIT)
+    .map((row) => {
+      const detail = row.detail.trim();
+      if (row.kind === "door_failed" && detail) return detail.slice(0, DOOR_NOTE_LIMIT);
+      return `${clipTitle(row.title).replace(/[.!?]+$/, "")}.`;
+    });
+}
+
+function problemLines(failures: BriefingFacts["failures"], minds: BriefingMindRow[], packs: BriefingPack[], notables: BriefingFacts["notables"]): string[] {
+  const honest = [...honestProblemLines(minds, packs), ...notableLines(notables, PROBLEM_NOTABLE_KINDS)];
+  if (notables && !notables.ok) honest.push("I cannot read the notable events yet.");
   if (!failures.ok) return ["I cannot read the error log yet.", ...honest];
   if (failures.count === 0) return honest.length > 0 ? honest : ["No errors since you left."];
   const codes = failures.codes.length ? ` (${failures.codes.join(", ")})` : "";
@@ -181,12 +230,13 @@ export function packLines(packs: BriefingFacts["packs"]): string[] {
   });
 }
 
-function jobLines(waiting: BriefingFacts["waiting"], gaps: BriefingFacts["gaps"], packs: BriefingFacts["packs"]): string[] {
+function jobLines(waiting: BriefingFacts["waiting"], gaps: BriefingFacts["gaps"], packs: BriefingFacts["packs"], notables: BriefingFacts["notables"]): string[] {
   const lines: string[] = [];
   if (!waiting || !waiting.ok) lines.push("I cannot read your orders yet.");
   else if (waiting.count === 0) lines.push("No orders waiting.");
   else lines.push(`${waiting.count} ${plural(waiting.count, "order", "orders")} waiting for you.`);
   lines.push(...packLines(packs));
+  lines.push(...notableLines(notables, JOB_NOTABLE_KINDS));
   if (!gaps) return lines;
   if (!gaps.ok) return [...lines, "I cannot read the product gaps yet."];
   for (const gap of gaps.rows.slice(0, GAP_LINE_LIMIT)) {
@@ -248,9 +298,11 @@ export function briefingGaps(rows: Array<{ angle: unknown }>): BriefingGap[] {
 function doorPostLine(row: BriefingDoorPost): string {
   const label = isDoorId(row.door) ? DOORS[row.door].label : "A free door";
   const title = `"${clipTitle(row.postTitle)}"`;
-  if (row.status === "posted") return `Posted to ${label}: ${title}.`;
+  // An RSS door only pings the hub: the feed was updated and the hub was told. It never posts anywhere.
+  if (row.status === "posted") return isRssDoor(row.door) ? `RSS updated and pinged for ${label}: ${title}.` : `Posted to ${label}: ${title}.`;
   if (row.status === "failed") {
     const note = row.errorNote ? row.errorNote.slice(0, DOOR_NOTE_LIMIT) : "Nothing was posted.";
+    if (isRssDoor(row.door)) return `${label} did not take the ping for ${title}. ${note}`;
     return `${label} did not post ${title}. ${note}`;
   }
   return `${label} is still saving a post for ${title}.`;
@@ -290,10 +342,11 @@ export function briefingDoors(
 }
 
 function nextMove(facts: BriefingFacts): string {
-  const anyUnread = !facts.articles.ok || !facts.orders.ok || !facts.views.ok || !facts.failures.ok;
+  const anyUnread = !facts.articles.ok || !facts.orders.ok || !facts.views.ok || !facts.failures.ok || (facts.notables ? !facts.notables.ok : false);
   if (anyUnread) return "Some numbers could not be read. Ask me again in a little while.";
-  if (facts.failures.count > 0) return "Look at the problems above before anything else.";
+  if (facts.failures.count > 0 || notableLines(facts.notables, PROBLEM_NOTABLE_KINDS).length > 0) return "Look at the problems above before anything else.";
   if (facts.orders.paidCount > 0) return "Check the new paid orders in Admin.";
+  if (notableLines(facts.notables, ["pack_ready"]).length > 0) return "Post the ready pack by hand, then tap I posted this.";
   if (facts.articles.count > 0) return "Read the new articles once, as a reader would.";
   return "Nothing needs you right now.";
 }
@@ -306,7 +359,8 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const gapsRead = facts.gaps ? facts.gaps.ok : true;
   const packsRead = facts.packs ? facts.packs.ok : true;
   const doorsRead = facts.doors ? facts.doors.ok : true;
-  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead;
+  const notablesRead = facts.notables ? facts.notables.ok : true;
+  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead && notablesRead;
   // A door post that went out, failed or is still saving is news, so the day is not quiet.
   const doorsReal = (facts.doors?.rows.length ?? 0) > 0;
   // An honest skip or a closed door is a problem the owner should see, so it also keeps the day from being quiet.
@@ -317,8 +371,10 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const changesReal = (facts.applied?.rows.length ?? 0) > 0 || (facts.gaps?.rows.length ?? 0) > 0;
   // A pack ready to post by hand, or blocked, is something the owner needs to see, so the day is not quiet.
   const packsReal = (facts.packs?.rows.length ?? 0) > 0;
+  // A notable the minds wrote since the owner last looked (a sale, a door failure, a blocked job) is news too.
+  const notablesReal = (facts.notables?.rows ?? []).some((row) => BRIEFING_NOTABLE_KINDS.includes(row.kind));
   const nothingReal =
-    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal && !doorsReal;
+    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal && !doorsReal && !notablesReal;
   if (allRead && nothingReal) return { quiet: true, sections: [], text: QUIET_LINE };
 
   const awayMs = now.getTime() - Date.parse(sinceIso);
@@ -327,6 +383,7 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const article = articleLine(facts.articles);
   if (article) went.push(article);
   went.push(...appliedLines(facts.applied));
+  went.push(...notableLines(facts.notables, WENT_OUT_NOTABLE_KINDS));
 
   const sections: BriefingSection[] = [
     {
@@ -335,10 +392,10 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
       lines: [firstVisit ? `First visit here. Buddy looks back ${FIRST_VISIT_WINDOW_HOURS} hours.` : `You were away for ${describeAway(awayMs)}.`],
     },
     { id: "went_out", title: "What went out", lines: went },
-    { id: "money", title: "Money & readers", lines: moneyLines(facts) },
+    { id: "money", title: "Money & readers", lines: [...moneyLines(facts), ...notableLines(facts.notables, MONEY_NOTABLE_KINDS)] },
     { id: "minds", title: "The five minds", lines: mindLines(facts.minds) },
-    { id: "problems", title: "Problems", lines: problemLines(facts.failures, facts.minds?.rows ?? [], facts.packs?.rows ?? []) },
-    { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting, facts.gaps, facts.packs) },
+    { id: "problems", title: "Problems", lines: problemLines(facts.failures, facts.minds?.rows ?? [], facts.packs?.rows ?? [], facts.notables) },
+    { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting, facts.gaps, facts.packs, facts.notables) },
     { id: "next", title: "Your next move", lines: [nextMove(facts)] },
   ];
 

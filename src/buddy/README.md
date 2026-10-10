@@ -425,3 +425,16 @@ What is still not done, or not verified:
 - Not proven live: Gemini text-to-speech and the Buddy Gemini call (the host is not on the sandbox allowlist, and no key was tested here); the RSS hub's 204 reply; migrations `20261013000000` and `20261014000000` (not applied); a local speech program on the runner (none installed here).
 - Full suite with FFmpeg enabled: 136 files, 1698 tests passed. Type check and lint pass on the new files.
 - Nothing was merged, deployed, or applied to production. No pull request was opened.
+
+## Phase 9 slice 1: inherit the Phase 8 notables
+
+- The morning briefing now reads the Phase 8 notables from `minds_notable_events`, for the kinds `BRIEFING_NOTABLE_KINDS` lists. Sales, product clicks and new traffic show under "Money & readers". The door summary shows under "What went out". Blocked placements and orders show under "Your jobs". A failed door and a failed mind show under "Problems", and the next move says to look at them. A ready pack makes the next move "post it by hand". A notable makes the day not quiet. A failed notable read says so under Problems.
+- A night report is never read by the briefing. Only the listed kinds are read.
+- A door send that did not go out (outcome `failed`) writes one `door_failed` notable per door per day, from `doorFailNotices` in `runDoors.ts`. It does not buzz the phone. A post that went out but whose record did not save is not a failed send, and a skipped door is not one either.
+- An RSS door that posted now reads "RSS updated and pinged for <label>" in the briefing, and a failed RSS ping reads "did not take the ping". Non-RSS doors keep "Posted to" and "did not post".
+- Kill and Takeover changes made from chat now say "Stopped from chat." or "Started again from chat." The chat path writes `minds_controls.change_source = 'chat'`. The Minds screen writes `'minds'`, and the trigger reads it.
+- The seeded video template is renamed to "Clear daylight (default)" in a new migration. The code default, the assertion script and its test use the same name. The applied seed migration was not edited.
+- The legacy Distribution page is not an owner route. `/admin/automation/distribution` redirects to Minds, and the sidebar has no link. `AdminAI.tsx` is not imported by any route. The `automation-distribution` function still answers WhatsApp, Facebook and Pinterest requests with "manual-kit only", and Telegram and the owner's own newsletter test are still reachable by a direct request with an owner session. No screen calls them. This is left for the owner to decide.
+- New migrations, all NOT applied: `20261015000000_notable_door_failed.sql` (kind check, keeps every earlier kind), `20261015010000_video_template_clear_name.sql` (seeded row rename), `20261015020000_minds_controls_change_source.sql` (column and trigger copy).
+- Tests: `buddyNotables.test.ts` and `phase9Slice1.test.ts`. The Phase 7 freeze checks read the briefing source for the word "night", so the briefing comments avoid that word.
+- Not proven live: the migrations are not applied. The edge functions (`buddy-think`, `minds-run-placement`) are not type-checked here because they use Deno imports. Their changes are small, and the pure modules they call are checked.
