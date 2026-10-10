@@ -476,3 +476,9 @@ What is still not done, or not verified:
 - The ranking only reorders the windows a channel already offers. It never adds one, so the Auditor's offered-window check is unchanged. Packs still say "ready to post by hand".
 - The reader is `readWindowLearning` in `minds-run-placement/index.ts`. The pure rules are in `packCopy.ts` (`learnWindows`, `windowForTime`). Tests: `src/__tests__/windowLearning.test.ts`.
 - The video toolchain workflow now installs `espeak-ng` and checks its version. A video job already exists in `video-render-test.yml`, so the install stays in that workflow.
+
+## Phase 9 slice 6: freeze and PHASE 9 REPORT
+
+- `src/__tests__/phase9Freeze.test.ts` (16 checks) proves the Phase 9 promises with real functions and fixtures: Takeover off by default, a paid order fixture in Money & readers, a failed door send under Problems, the night writer callable and never read by the morning briefing, a reader message as a count with no reply, sixteen auto and four gated doors, the video template name with no city, the fixture MP4 with audio, no owner route to the old senders, and every Phase 9 migration marked not applied.
+- Nothing is merged, deployed or applied to production. Phase 9 adds four migrations, each marked not applied.
+- The sidebar's "Social Shares" page is a read-only count of reader shares. It sends nothing, so it stays.
