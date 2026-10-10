@@ -37,6 +37,8 @@ export interface BrainSlot {
   extraSecretNames: readonly string[];
   /** The OpenAI-style base URL. Null for Gemini, which keeps its own Google path. */
   baseUrl: string | null;
+  /** The model name sent to that provider. If a provider drops it ("model gone"), the chain moves to the next brain. */
+  model: string;
 }
 
 export const BRAIN_SLOTS: readonly BrainSlot[] = [
@@ -50,6 +52,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "gemini_api_key",
     extraSecretNames: [],
     baseUrl: null,
+    model: "gemini-3.8-flash",
   },
   {
     id: "groq",
@@ -61,6 +64,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "groq_api_key",
     extraSecretNames: [],
     baseUrl: "https://api.groq.com/openai/v1",
+    model: "openai/gpt-oss-120b",
   },
   {
     id: "nvidia",
@@ -72,6 +76,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "nvidia_api_key",
     extraSecretNames: [],
     baseUrl: "https://integrate.api.nvidia.com/v1",
+    model: "meta/llama-3.3-70b-instruct",
   },
   {
     id: "cloudflare",
@@ -83,6 +88,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "cloudflare_api_token",
     extraSecretNames: ["cloudflare_account_id"],
     baseUrl: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
+    model: "@cf/openai/gpt-oss-120b",
   },
   {
     id: "openrouter",
@@ -94,6 +100,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "openrouter_api_key",
     extraSecretNames: [],
     baseUrl: "https://openrouter.ai/api/v1",
+    model: "openai/gpt-oss-120b:free",
   },
   {
     id: "cerebras",
@@ -105,6 +112,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "cerebras_api_key",
     extraSecretNames: [],
     baseUrl: "https://api.cerebras.ai/v1",
+    model: "llama3.1-8b",
   },
   {
     id: "huggingface",
@@ -116,6 +124,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "huggingface_token",
     extraSecretNames: [],
     baseUrl: "https://router.huggingface.co/v1",
+    model: "zai-org/GLM-5.3-Flash",
   },
   {
     id: "deepseek",
@@ -127,6 +136,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "deepseek_api_key",
     extraSecretNames: [],
     baseUrl: "https://api.deepseek.com",
+    model: "deepseek-flash",
   },
 ];
 

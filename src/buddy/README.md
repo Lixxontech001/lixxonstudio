@@ -490,3 +490,12 @@ What is still not done, or not verified:
 - GitHub Models and Bytez are not brains. Mistral is not a workhorse.
 - Each brain's key uses the same Vault catalogue as the Connections keys. The migration `20261017000000_buddy_brain_slots.sql` adds seven catalogue rows and is NOT applied. Gemini keeps its existing row.
 - No key is shown, stored in chat, or logged. No UI yet (slice 4). No thinking change yet (slice 2).
+
+## Phase A slice 2: the brain chain (askBrains)
+
+- `supabase/functions/_shared/brainChain.ts` asks the brains in the fixed order from `brains.ts`. Brains with no saved key are skipped. A brain that is rate limited, unavailable, rejects the key, returns no text, or hangs past 15 seconds moves the chain on to the next brain.
+- Each brain is called at most once per request, so a dead key is never retried in a loop. Cerebras and DeepSeek (skip) are never called.
+- If no brain has a key, the owner sees one plain line: no thinking key is saved, and where to add one. If keys are saved and every brain fails, the owner sees one plain line and nothing is changed. Neither path throws.
+- Gemini keeps its existing Google path, passed in as a port. Keys are never logged or returned. The reply is capped at 4,000 characters.
+- Tests call the chain with a fake fetch and a fake Vault only: `src/__tests__/brainChain.test.ts`. No live provider is called.
+- Not yet wired into Buddy's chat (slice 3). Model names come from current free-tier listings; a model that a provider drops moves the chain on.
