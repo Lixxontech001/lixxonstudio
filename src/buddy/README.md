@@ -605,3 +605,11 @@ What is still not done, or not verified:
   - `docs/*.md` and old migration history keep the older names. Migrations are not edited.
 - Tests: `src/__tests__/phaseBSlice5.test.ts` (13 checks).
 - Not proven live: the migration is not applied. Hiding NGN in the live footer and the rate fetch is checked in code, not against the live rates table.
+
+## Phase B slice 6: freeze and report
+
+- Freeze: `src/__tests__/phaseBFreeze.test.ts` (21 checks). It calls the real functions with small fixtures and reads source only for wiring. It covers: Takeover off by default, and no migration turns it on; the closed list of five order kinds; the refusal line for refunds, deletes and email to the list, with questions and today's run never refused; a waiting, done or blocked line that names Takeover; a week-against-last-week sentence, the "I cannot see last week yet." line, a spike at twice last week above the floor (0 to 1 is not a spike), and a heartbeat with the same key; the briefing reads `week_up`, `week_down` and `door_failed`; a digital product that fits is ordered before a physical one; eight brains with Gemini first and no GitHub Models, Bytez or Mistral; sixteen auto doors and four gated channels that are not doors; five background minds and four looks; Naira hidden from the footer list; no owner call to the Distribution function (the only caller is the unrouted legacy page).
+- Counts as they stand: eight brains, sixteen auto doors, four gated channels, seven briefing sections, four Buddy looks, five background minds. Buddy is the voice the owner hears on top of the five minds.
+- Not changed in Phase B: the brains, the doors, the looks, the briefing sections, the audio on video, and the Takeover default.
+- Not proven live: the migrations (`20261018000000_notable_week_change.sql`, `20261018010000_retire_old_sender_keys.sql`) are not applied. The Gemini call and the live rate fetch were not run from this sandbox.
+- Nothing was merged, opened as a pull request, deployed, or applied to production.
