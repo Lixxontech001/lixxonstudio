@@ -532,3 +532,31 @@ What is still not done, or not verified:
 - The chat's empty-state line said Buddy "cannot change any of them". It now says this chat cannot change them, and that Takeover in Minds decides what the minds may change.
 - The old sentences are checked absent from every non-test source and function file: `phaseATruthCopy.test.ts` (scan plus the rule text). `mindsScreen.test.tsx` has a Takeover-on case.
 - Not changed: the minds' own "Cannot think: no Google key" lines, and the older README history, which describes past phases.
+
+## Phase A slice 6: freeze and PHASE A REPORT
+
+- `src/__tests__/phaseAFreeze.test.ts` (13 checks) freezes the promises of the eight-brains phase: the try order, the free-brain list, no GitHub Models, Bytez or Mistral brain, the 15-second cap, a real 429 falling to the next key, a dead key not retried, the no-key and all-failed lines (no key, no stack trace), the two lies gone, Takeover off by default, an additive Phase A migration, and no Nigeria, Naira or Lagos in the reader-facing folders.
+- Slice commits on `arena/1d438dc4-lixxonstudio`:
+  - Slice 1, catalogue and try order: `d36d49c`.
+  - Slice 2, `askBrains` chain: `209a079`.
+  - Slice 3, Buddy's chat through the chain: `04012a7`.
+  - Slice 4, Brains page and brain how-to: `d27011e`.
+  - Slice 5, the two lies: `aae4d9f`.
+  - Slice 6, this freeze and report.
+- Report keys:
+  - Branch: `arena/1d438dc4-lixxonstudio`.
+  - Latest SHA: the head of this branch after slice 6 (`git log -1`).
+  - `569913c` (Phase 9 slice 6, origin's tip before Phase A) is still in the history.
+  - GitHub Models or Bytez present as a brain: no. The words appear only in a comment in `brains.ts` that says they are excluded.
+  - A 429 falls to the next brain: yes, in tests (`brainChain.test.ts`, `phaseAFreeze.test.ts`).
+  - All brains empty or failing: one honest line, no key, no stack trace.
+  - Minds On copy has "no change reaches the site yet": no.
+  - Buddy system text has "can never change the site": no.
+  - Takeover default: off, in the app and in the migration.
+  - Merge, PR, deploy or production migration: none. No pull request exists for this branch. The Phase A migration is not applied.
+- Open items for the owner:
+  - Apply `20261017000000_buddy_brain_slots.sql` before Save works on the seven new brains. Until then the database refuses the new names.
+  - The provider ping endpoints and the model names (Groq, NVIDIA, Cloudflare, OpenRouter, Hugging Face, and Gemini's `gemini-3.8-flash`) are from public docs. Nothing was called live from the sandbox. Test them once on the Brains page with a real key.
+  - Cerebras and DeepSeek stay skipped: Cerebras needs a card for its trial, and DeepSeek is paid.
+  - The minds, the proof call and voice text-to-speech still use Google only, as the plan kept them out of scope.
+  - Lagos appears in admin screens as a timezone label from earlier phases. None of it is in reader-facing folders.
