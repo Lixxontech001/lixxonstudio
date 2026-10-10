@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { publicMediaOrigin, publicMediaPath } from './src/lib/publicMedia';
 
 /**
  * Names the Supabase URL / browser key may be configured under in Vercel.
@@ -23,7 +24,7 @@ const KEY_NAMES = [
 
 export default defineConfig(({ mode }) => {
   // `.env*` files PLUS real process env (Vercel injects its variables into the build process).
-  const env: Record<string, string> = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...(process.env as Record<string, string>) };
+  const env: Record<string, string> = { ...loadEnv(mode, process.cwd(), ''), ...(process.env as Record<string, string>) };
   const swEnabled = env.VITE_DISABLE_SW !== '1';
   console.log(`[lixxon] SW enabled: ${swEnabled ? 'yes' : 'no'}`);
   const buildId = env.VERCEL_GIT_COMMIT_SHA || env.VITE_COMMIT_SHA || new Date().toISOString();
@@ -61,8 +62,28 @@ export default defineConfig(({ mode }) => {
     console.log(`[lixxon] Supabase env detected — url via ${urlNames[0]}, key via ${keyNames[0]}`);
   }
 
+  const mediaOrigin = publicMediaOrigin(env.SUPABASE_URL || env.VITE_PUBLIC_SUPABASE_URL || env[urlNames[0]]);
+
   return {
     server: {
+      proxy: {
+        '/media/public': {
+          target: mediaOrigin || 'https://invalid.invalid',
+          changeOrigin: true,
+          bypass(req, res) {
+            const path = (req.url || '').split('?')[0].slice('/media/public/'.length);
+            if (!mediaOrigin || !req.url?.startsWith('/media/public/') || !publicMediaPath(path) ||
+                !['GET', 'HEAD'].includes(req.method || '')) {
+              if (res) { res.statusCode = 404; res.end(); }
+              return false;
+            }
+            // Match production: never send credentials to Storage.
+            delete req.headers.cookie;
+            delete req.headers.authorization;
+          },
+          rewrite: path => `/storage/v1/object/public/${publicMediaPath(path.split('?')[0].slice('/media/public/'.length))}`,
+        },
+      },
       host: true,
       allowedHosts: true,
     },

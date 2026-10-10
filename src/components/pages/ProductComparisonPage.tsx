@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Scale, X, ShoppingBag } from 'lucide-react';
@@ -47,7 +48,7 @@ export default function ProductComparisonPage() {
                   <th key={p.id} className="p-3 align-top text-left font-normal border-l border-taupe/40">
                     <div className="relative">
                       <button onClick={() => remove(p.id)} aria-label={`Remove ${p.name}`} className="absolute -top-1 right-0 p-1 text-charcoal-muted hover:text-red-600"><X size={14} /></button>
-                      <div className="aspect-square w-full max-w-[180px] bg-taupe-light rounded-sm overflow-hidden mb-3">{p.image_url && <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />}</div>
+                      <div className="aspect-square w-full max-w-[180px] bg-taupe-light rounded-sm overflow-hidden mb-3">{p.image_url && <img src={displayImageUrl(p.image_url)} alt={p.name} className="w-full h-full object-cover" />}</div>
                       <Link to={{ name: 'shop-product', slug: p.slug || p.id }} className="font-serif text-lg text-charcoal hover:text-bronze leading-tight">{p.name}</Link>
                     </div>
                   </th>

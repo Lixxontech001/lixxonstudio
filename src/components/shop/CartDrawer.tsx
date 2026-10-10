@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { X, ShoppingBag, Plus, Minus, Trash2 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useNavigation, Link } from '../../context/NavigationContext';
@@ -58,7 +59,7 @@ export default function CartDrawer() {
               {items.map(item => (
                 <div key={item.id} className="flex gap-4 pb-4 border-b border-taupe/30 last:border-0">
                   <div className="w-20 h-20 rounded-sm overflow-hidden bg-taupe-light flex-shrink-0">
-                    {item.image_url && <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />}
+                    {item.image_url && <img src={displayImageUrl(item.image_url)} alt={item.name} className="w-full h-full object-cover" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <Link to={{ name: 'shop-product', slug: item.slug }} onClick={closeCart}>

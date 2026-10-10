@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../lib/images';
 import { useEffect, useState } from 'react';
 import { Clock, Trash2, BookOpen, ArrowRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
@@ -60,7 +61,7 @@ export default function ReadingHistoryPage() {
           {history.map(item => (
             <Link key={item.id} to={{ name: 'article', slug: item.slug }} className="group flex flex-col">
               <div className="img-zoom rounded-sm overflow-hidden luxury-shadow aspect-[4/5] bg-taupe-light">
-                {item.cover_image && <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover" loading="lazy" />}
+                {item.cover_image && <img src={displayImageUrl(item.cover_image)} alt={item.title} className="w-full h-full object-cover" loading="lazy" />}
               </div>
               <div className="mt-4">
                 <h3 className="font-serif text-lg text-charcoal leading-snug group-hover:text-bronze transition-colors duration-300 line-clamp-2">{item.title}</h3>

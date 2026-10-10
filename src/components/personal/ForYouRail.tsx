@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { Clock, RefreshCw, Sparkles } from 'lucide-react';
 import { Link } from '../../context/NavigationContext';
 import { useForYouFeed } from '../../hooks/usePersonalisation';
@@ -32,7 +33,7 @@ export default function ForYouRail({ limit = 6 }: { limit?: number }) {
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
               <Link key={item.post_id} to={{ name: 'article', slug: item.slug }} className="group flex min-h-full flex-col overflow-hidden rounded-sm border border-taupe/60 bg-white transition-colors hover:border-bronze focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze">
-                {item.cover_image && <div className="aspect-[16/10] overflow-hidden bg-taupe-light"><img src={item.cover_image} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" /></div>}
+                {item.cover_image && <div className="aspect-[16/10] overflow-hidden bg-taupe-light"><img src={displayImageUrl(item.cover_image)} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" /></div>}
                 <div className="flex flex-1 flex-col p-5">
                   <span className="mb-3 inline-flex w-fit items-center rounded-full border border-bronze/30 bg-bronze/5 px-3 py-1 text-[10px] tracking-editorial text-bronze">{item.reason}</span>
                   <h3 className="font-serif text-lg leading-snug text-charcoal group-hover:text-bronze">{item.title}</h3>

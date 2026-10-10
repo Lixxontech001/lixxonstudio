@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect } from 'react';
 import { Plus, Minus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
@@ -44,7 +45,7 @@ export default function CartPage() {
               {items.map(item => (
                 <div key={item.id} className="flex gap-4 p-5 bg-white rounded-sm luxury-shadow">
                   <div className="w-24 h-24 rounded-sm overflow-hidden bg-taupe-light flex-shrink-0">
-                    {item.image_url && <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />}
+                    {item.image_url && <img src={displayImageUrl(item.image_url)} alt={item.name} className="w-full h-full object-cover" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <Link to={{ name: 'shop-product', slug: item.slug }}>

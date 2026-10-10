@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../lib/images';
 import type { Product } from '../lib/types';
 import { ExternalLink, ArrowRight, Download } from 'lucide-react';
 import { useShopProducts } from '../hooks/useCommerce';
@@ -92,7 +93,7 @@ function ProductMiniCard({ product }: { product: Product }) {
     >
       <div className="img-zoom aspect-square bg-taupe-light relative">
         {product.image_url && (
-          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
+          <img src={displayImageUrl(product.image_url)} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
         )}
         {isDigital && (
           <span className="absolute top-3 left-3 inline-flex items-center gap-1 text-[9px] tracking-editorial uppercase text-white bg-bronze/80 backdrop-blur-sm px-2.5 py-1 rounded-full">

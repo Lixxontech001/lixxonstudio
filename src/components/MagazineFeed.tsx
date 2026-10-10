@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../lib/images';
 import { Clock, ArrowUpRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { pickHeadline, trackHeadline } from '../hooks/useV3';
@@ -89,7 +90,7 @@ export default function MagazineFeed({ posts, categories, activeCategory, onCate
                 {post.author && (
                   <div className="flex items-center gap-2 mb-2.5">
                     {post.author.avatar_url && (
-                      <img src={post.author.avatar_url} alt={post.author.name} className="w-6 h-6 rounded-full object-cover" />
+                      <img src={displayImageUrl(post.author.avatar_url)} alt={post.author.name} className="w-6 h-6 rounded-full object-cover" />
                     )}
                     <span className="text-[11px] tracking-wider text-charcoal-muted uppercase">{post.author.name}</span>
                   </div>

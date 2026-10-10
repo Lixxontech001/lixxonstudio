@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect } from 'react';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { Link, useNavigation } from '../../context/NavigationContext';
@@ -46,7 +47,7 @@ export default function CollectionDetailPage({ slug }: { slug: string }) {
 
         {collection.cover_image && (
           <div className="aspect-[21/9] rounded-sm overflow-hidden luxury-shadow-lg mb-8 bg-taupe-light">
-            <img src={collection.cover_image} alt={collection.title} className="w-full h-full object-cover" />
+            <img src={displayImageUrl(collection.cover_image)} alt={collection.title} className="w-full h-full object-cover" />
           </div>
         )}
 
@@ -72,7 +73,7 @@ export default function CollectionDetailPage({ slug }: { slug: string }) {
               return (
                 <Link key={item.id} to={{ name: 'article', slug: post.slug }} className="group block bg-white rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500">
                   <div className="img-zoom aspect-[4/3] bg-taupe-light">
-                    {post.cover_image && <img src={post.cover_image} alt={post.cover_image_alt || post.title} className="w-full h-full object-cover" loading="lazy" width={400} height={300} />}
+                    {post.cover_image && <img src={displayImageUrl(post.cover_image)} alt={post.cover_image_alt || post.title} className="w-full h-full object-cover" loading="lazy" width={400} height={300} />}
                   </div>
                   <div className="p-5">
                     <div className="flex items-center gap-3 mb-2 text-[10px] tracking-editorial uppercase text-charcoal-muted">

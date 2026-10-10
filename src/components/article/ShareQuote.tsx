@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { useEffect, useRef, useState } from 'react';
 import { Quote, Download, Twitter, X } from 'lucide-react';
 import { trackSocialShare } from '../../hooks/usePlatform';
@@ -78,7 +79,7 @@ export default function ShareQuote({ postId, title, url }: { postId: string; tit
               <h3 className="font-serif text-xl text-charcoal">Share this quote</h3>
               <button onClick={() => setCard(null)} aria-label="Close" className="p-2 text-charcoal-muted hover:text-charcoal"><X size={18} /></button>
             </div>
-            <img src={card} alt={`Quote card: ${quote}`} className="w-full rounded-sm border border-taupe/40" />
+            <img src={displayImageUrl(card)} alt={`Quote card: ${quote}`} className="w-full rounded-sm border border-taupe/40" />
             <div className="flex flex-wrap gap-3 mt-5">
               <button onClick={download} className="inline-flex items-center gap-2 px-5 py-3 bg-charcoal text-white text-xs tracking-editorial uppercase rounded-sm hover:bg-bronze transition-colors"><Download size={14} /> Download image</button>
               <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`“${quote.slice(0, 200)}${quote.length > 200 ? '…' : ''}”`)}&url=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" onClick={() => trackSocialShare(postId, 'twitter')} className="inline-flex items-center gap-2 px-5 py-3 border border-taupe text-charcoal text-xs tracking-editorial uppercase rounded-sm hover:border-bronze transition-colors"><Twitter size={14} /> Post on X</a>

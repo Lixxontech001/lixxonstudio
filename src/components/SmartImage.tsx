@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { applyImageFallback, buildSrcSet, normalizeImageUrl } from '../lib/images';
+import { applyImageFallback, buildSrcSet, displayImageUrl } from '../lib/images';
 
 interface SmartImageProps {
   /** Raw URL from the CMS — Pexels photo-page URLs are normalised automatically. */
@@ -36,7 +36,7 @@ export default function SmartImage({
   priority = false,
   style,
 }: SmartImageProps) {
-  const normalized = normalizeImageUrl(src);
+  const normalized = displayImageUrl(src);
   if (!normalized) return null;
 
   const srcSet = buildSrcSet(normalized);

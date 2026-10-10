@@ -1,3 +1,4 @@
+import { displayImageUrl } from '../../lib/images';
 import { Clock, RefreshCw } from 'lucide-react';
 import { Link } from '../../context/NavigationContext';
 import { useContinueReading } from '../../hooks/usePersonalisation';
@@ -46,7 +47,7 @@ export default function ContinueReadingRail({ limit = 3, inline = false }: Conti
             return (
               <Link key={item.post_id} to={{ name: 'article', slug: item.slug }} className="group flex min-h-32 overflow-hidden rounded-sm border border-taupe/60 bg-white transition-colors hover:border-bronze focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bronze">
                 <div className="h-32 w-24 shrink-0 overflow-hidden bg-taupe-light sm:w-28">
-                  {item.cover_image && <img src={item.cover_image} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                  {item.cover_image && <img src={displayImageUrl(item.cover_image)} alt="" loading="lazy" className="h-full w-full object-cover" />}
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col justify-center p-4">
                   {item.category_name && <span className="mb-1 text-[10px] uppercase tracking-editorial text-bronze">{item.category_name}</span>}
