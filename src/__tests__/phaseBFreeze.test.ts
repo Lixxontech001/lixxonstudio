@@ -169,11 +169,11 @@ describe('Phase B freeze: brains, doors, minds, looks and briefing', () => {
 });
 
 describe('Phase B freeze: no owner Distribution send route', () => {
-  it('only the unrouted legacy page names the automation-distribution function, and no route mounts it', () => {
+  it('no admin file calls the automation-distribution function (the legacy page is gone)', () => {
     const adminFiles = walk('src/admin');
     // A send is a call to the function. A route name or a permission key is not a send.
     const callers = adminFiles.filter((file) => /invoke\(\s*['"`]automation-distribution|functions\/v1\/automation-distribution/.test(read(file)));
-    expect(callers).toEqual(['src/admin/pages/AutomationDistribution.tsx']);
+    expect(callers).toEqual([]);
     const app = read('src/admin/AdminApp.tsx');
     expect(app).not.toMatch(/AutomationDistribution/);
   });
