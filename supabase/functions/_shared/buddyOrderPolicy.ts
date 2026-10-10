@@ -23,12 +23,14 @@ export function closedOrderKind(value: unknown): AllowedOrder | null {
 export const REFUSAL_LINE =
   "Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, price changes, and posting or publishing stay with you. Nothing was filed or changed.";
 
-/** A model order with no kind, or a kind only the owner's own words can start. Nothing is filed. */
-export const NOT_ON_LIST_LINE =
-  "Buddy can only file work for a named mind from here. Nothing was filed or changed. Name the mind and say what you want done.";
-
 /** A question about one of these is answered as a question. Only a request is refused. */
 const QUESTION_OPENER = /^\s*(please\s+)?(what|which|how|why|who|when|where|did|does|is|are|was|were|tell me|show me)\b/i;
+
+/** True when the text reads as a question. A question is answered, never filed. */
+export function isQuestionText(text: string): boolean {
+  const trimmed = text.trim();
+  return /\?\s*$/.test(trimmed) || QUESTION_OPENER.test(trimmed);
+}
 
 /** Requests outside the closed list. Each pattern names the action and what it touches. */
 const REFUSED_REQUESTS: RegExp[] = [
@@ -52,4 +54,29 @@ export function refusedRequest(message: string): boolean {
   const body = text.replace(/^[A-Za-z]+,\s*/, "");
   if (!REQUEST_START.test(body) && !REQUEST_MARK.test(text)) return false;
   return REFUSED_REQUESTS.some((pattern) => pattern.test(text));
+}
+
+/**
+ * `line` is the owner-facing refusal. It is null for a question: a question is answered, never filed, and gets no refusal.
+ */
+export type FilingGate = { ok: true; kind: AllowedOrder } | { ok: false; line: string | null };
+
+/**
+ * The one gate every filed order passes (router, model answer, or any other route into the waiting list).
+ * An order is filed only when its kind is on the closed list, its text is not an outside request, and it is not a
+ * question. Anything else is not saved: an outside request or an off-list kind gets REFUSAL_LINE, a question gets none.
+ */
+export function gateOrder(kind: unknown, instruction: string): FilingGate {
+  if (isQuestionText(instruction)) return { ok: false, line: null };
+  const closed = closedOrderKind(kind);
+  if (!closed) return { ok: false, line: REFUSAL_LINE };
+  if (refusedRequest(instruction)) return { ok: false, line: REFUSAL_LINE };
+  return { ok: true, kind: closed };
+}
+
+/** A model may file only mind_work. The other four kinds come from the owner's own words, never from a model reply. */
+export function gateModelOrder(kind: unknown, instruction: string): FilingGate {
+  const gate = gateOrder(kind, instruction);
+  if (!gate.ok) return gate;
+  return gate.kind === MODEL_FILEABLE_ORDER ? gate : { ok: false, line: REFUSAL_LINE };
 }

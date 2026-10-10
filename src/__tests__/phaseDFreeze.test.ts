@@ -4,7 +4,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_ORDERS, MODEL_FILEABLE_ORDER, NOT_ON_LIST_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
+import { ALLOWED_ORDERS, MODEL_FILEABLE_ORDER, REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import { NOT_OFFERED_KEY_NAMES } from '../../supabase/functions/_shared/notOfferedKeys';
 import { NO_KEY_ACTION, NO_KEY_DETAIL } from '../../src/buddy/minds/mindGuards';
 import { BUZZ_KINDS } from '../../supabase/functions/_shared/notablePush';
@@ -32,11 +32,12 @@ describe('Phase D freeze 2: model-filed orders are checked against the closed li
     expect(MODEL_FILEABLE_ORDER).toBe('mind_work');
   });
 
-  it('the chat path refuses a model order that is not mind_work, with the plain line', () => {
+  it('the chat path gates every model order through the closed list, with the one refusal line', () => {
     const think = read('supabase/functions/_shared/buddyThink.ts');
-    expect(think).toMatch(/answer\.order && answer\.order\.kind !== MODEL_FILEABLE_ORDER/);
-    expect(think).toContain('reply = NOT_ON_LIST_LINE;');
-    expect(NOT_ON_LIST_LINE).toMatch(/Nothing was filed or changed/);
+    expect(think).toContain('gateModelOrder(answer.order.kind, answer.order.instruction)');
+    expect(think).toContain('if (modelGate.line) reply = modelGate.line;');
+    expect(think).not.toContain('NOT_ON_LIST_LINE');
+    expect(REFUSAL_LINE).toMatch(/Nothing was filed or changed/);
   });
 });
 

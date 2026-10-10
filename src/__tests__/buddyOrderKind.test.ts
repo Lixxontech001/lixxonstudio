@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NOT_ON_LIST_LINE, REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
+import { REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import {
   handleBuddyThink,
   parseBuddyAnswer,
@@ -67,7 +67,7 @@ describe('Buddy model orders: the closed list', () => {
     const result = await handleBuddyThink(QUESTION, deps);
     expect(result.body).toMatchObject({ ok: true, filed: 'strategist' });
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Look at the spring kit plan', 'strategist');
-    expect(saved.at(-1)?.content).not.toBe(NOT_ON_LIST_LINE);
+    expect(saved.at(-1)?.content).not.toBe(REFUSAL_LINE);
   });
 
   it('an order with no kind is not filed, and the owner is told plainly', async () => {
@@ -76,21 +76,21 @@ describe('Buddy model orders: the closed list', () => {
     expect(saveOrder).not.toHaveBeenCalled();
     expect(result.body).toMatchObject({ ok: true, route: 'chat' });
     expect(result.body).not.toHaveProperty('filed');
-    expect(saved.at(-1)?.content).toBe(NOT_ON_LIST_LINE);
+    expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
   });
 
   it('an order with a kind only the owner can start is not filed, even with no mind', async () => {
     const { deps, saveOrder, saved } = chatDeps('{"reply":"Okay.","order":{"mind":null,"kind":"pause_resume_free_door","instruction":"Pause the RSS door"}}');
     await handleBuddyThink(QUESTION, deps);
     expect(saveOrder).not.toHaveBeenCalled();
-    expect(saved.at(-1)?.content).toBe(NOT_ON_LIST_LINE);
+    expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
   });
 
   it('a kind that is not on the list is not filed', async () => {
     const { deps, saveOrder, saved } = chatDeps('{"reply":"Okay.","order":{"mind":"ceo","kind":"buy_ads","instruction":"Buy ads for the kit"}}');
     await handleBuddyThink(QUESTION, deps);
     expect(saveOrder).not.toHaveBeenCalled();
-    expect(saved.at(-1)?.content).toBe(NOT_ON_LIST_LINE);
+    expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
   });
 
   it('a refused request is still refused first, whatever kind the model gives', async () => {

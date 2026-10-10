@@ -10,7 +10,7 @@ import { ownerClock } from "./mindsNightReport.ts";
 import { brainHowTo, howToDoor, type HowToDoor } from "./buddyHowTo.ts";
 import type { BrainId } from "./brains.ts";
 import { parseControlRequest, type ControlAction } from "./buddyControls.ts";
-import { REFUSAL_LINE, refusedRequest } from "./buddyOrderPolicy.ts";
+import { REFUSAL_LINE, gateOrder, refusedRequest, type FilingGate } from "./buddyOrderPolicy.ts";
 
 export const MIND_KEYS = ["analyst", "strategist", "ceo", "executioner", "auditor"] as const;
 export type MindName = (typeof MIND_KEYS)[number];
@@ -172,6 +172,22 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
   if (mind && imperative) return { kind: "order", mind, instruction: cleanInstruction(text), resolvesPending: false };
   if (!mind && imperative && !question) return { kind: "ask_which_mind", instruction: cleanInstruction(text) };
   return { kind: "chat" };
+}
+
+/** The closed-list kind a routed message would file as. Control requests split into their two kinds. */
+function controlKind(action: ControlAction): string {
+  return action.kind === "pause_door" || action.kind === "resume_door" ? "pause_resume_free_door" : "kill_or_start_mind";
+}
+
+/**
+ * The gate every routed order passes before anything is saved. Null for routes that file nothing.
+ * A route that would file outside the closed list, or whose words are an outside request, is refused here.
+ */
+export function routeFilingGate(route: Route): FilingGate | null {
+  if (route.kind === "order") return gateOrder("mind_work", route.instruction);
+  if (route.kind === "run_day") return gateOrder("run_today", route.instruction);
+  if (route.kind === "control") return gateOrder(controlKind(route.action), route.instruction);
+  return null;
 }
 
 export interface MindLogLine {

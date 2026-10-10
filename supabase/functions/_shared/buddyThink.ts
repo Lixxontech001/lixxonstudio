@@ -5,7 +5,7 @@
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
 import { brainHowToReply, howToReply } from "./buddyHowTo.ts";
 import { feedbackLine } from "./buddyFeedback.ts";
-import { MODEL_FILEABLE_ORDER, NOT_ON_LIST_LINE, REFUSAL_LINE, closedOrderKind, refusedRequest, type AllowedOrder } from "./buddyOrderPolicy.ts";
+import { closedOrderKind, gateModelOrder, type AllowedOrder } from "./buddyOrderPolicy.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure, type BrainPorts } from "./brainChain.ts";
@@ -20,6 +20,7 @@ import {
   cleanInstruction,
   isRestricted,
   neverListLine,
+  routeFilingGate,
   routeMessage,
   type MindLogLine,
   type MindName,
@@ -134,7 +135,7 @@ export const BUDDY_ANSWER_RULES = [
   'Reply with JSON only, in this exact shape: {"reply": "your answer to the owner", "order": null}.',
   'Put your whole answer in "reply". Be short, warm and practical. Plain English. No em dash.',
   'If the owner asks for work to be done by a mind, set "order" to {"mind": "analyst" | "strategist" | "ceo" | "executioner" | "auditor" | null, "kind": "mind_work", "instruction": "the work, in the owner\'s words"}.',
-  'Always set "kind" to "mind_work" for an order. Any other kind is refused, so do not use one.',
+  'Only five kinds of order exist: run_today, pause_resume_free_door, kill_or_start_mind, product_line_apply and mind_work. Only those five kinds become orders. Set "kind" to "mind_work" for an order you propose. Any other kind, or a missing kind, is refused and nothing is filed.',
   'Use null for "mind" when the owner named no mind. Then ask in "reply" which mind should take it.',
   'Use null for "order" for questions, thanks, small talk, and anything that is not work for a mind.',
   "An order is only filed as waiting for the owner. Nothing runs because of your reply.",
@@ -180,6 +181,7 @@ export function parseBuddyAnswer(text: string): BuddyAnswer | null {
 
 const ORDER_SAVE_FAILED = "Buddy could not save that order, so nothing was filed. Try again in a moment.";
 const ANSWER_UNREADABLE_LINE = "Buddy could not read its own answer just now, so nothing was filed. Ask again in a moment.";
+const QUESTION_NOT_FILED_LINE = "That reads as a question, so nothing was filed. Ask it as a request if you want a mind to do it.";
 const PENDING_FLUSH_LINE = "Saved your earlier order as waiting. No mind was picked, so it waits for you.";
 
 function isRealDate(value: string): boolean {
@@ -336,6 +338,16 @@ async function answerRouted(
   action: BuddyThinkAction,
   deps: BuddyThinkDeps,
 ): Promise<ThinkResponse> {
+  // The closed-list gate comes first: a routed order that is not on the list, or asks for something outside it, is not saved.
+  const filing = routeFilingGate(route);
+  if (filing && !filing.ok) {
+    const savedAsk = await deps.saveMessage(chatId, "owner", "reply", message);
+    if (!savedAsk) return fail(503, "not_saved", SAVE_FAILED_MESSAGE);
+    const line = filing.line ?? QUESTION_NOT_FILED_LINE;
+    const savedLine = await deps.saveMessage(chatId, "buddy", "reply", line);
+    await deps.touchChat(chatId, title);
+    return { status: 200, body: { ok: true, action, route: "refused", reply: line, saved: savedLine } };
+  }
   if (route.kind === "order") {
     const filed = await deps.saveOrder(chatId, route.instruction, route.mind);
     if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
@@ -581,12 +593,11 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   let reply = answer.reply;
   let replyPayload: Record<string, unknown> | null = null;
   let filedAs: string | null = null;
-  if (answer.order && refusedRequest(answer.order.instruction)) {
-    // The model proposed something outside the closed list. Nothing is filed; the owner gets the one refusal line.
-    reply = REFUSAL_LINE;
-  } else if (answer.order && answer.order.kind !== MODEL_FILEABLE_ORDER) {
-    // No kind, or a kind that only the owner's own words can start. Nothing is filed.
-    reply = NOT_ON_LIST_LINE;
+  // Every order the model proposes passes the same gate as the router's. A refused one is never saved.
+  // A question is answered as the reply and filed as nothing.
+  const modelGate = answer.order ? gateModelOrder(answer.order.kind, answer.order.instruction) : null;
+  if (answer.order && modelGate && !modelGate.ok) {
+    if (modelGate.line) reply = modelGate.line;
   } else if (answer.order) {
     if (answer.order.mind) {
       // A named mind: filed as waiting. Nothing runs from this reply.
