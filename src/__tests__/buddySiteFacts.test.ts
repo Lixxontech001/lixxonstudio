@@ -105,6 +105,7 @@ describe('Buddy question flow with the site list', () => {
     const deps: BuddyThinkDeps = {
       keyConfigured: async () => true,
       readKey: async () => 'FAKE-GEMINI-KEY-NOT-REAL-0002',
+      readSecret: async (name: string) => (name === 'gemini_api_key' ? 'FAKE-GEMINI-KEY-NOT-REAL-0002' : null),
       allowCall: async () => true,
       askGemini,
       recordProbe: async () => {},

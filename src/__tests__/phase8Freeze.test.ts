@@ -72,6 +72,7 @@ function thinkDeps(overrides: Partial<BuddyThinkDeps> = {}) {
   const base = {
     keyConfigured: async () => true,
     readKey: async () => FAKE_KEY,
+    readSecret: async (name: string) => (name === 'gemini_api_key' ? (await base.readKey()) : null),
     allowCall: async () => true,
     askGemini: vi.fn(async () => ({ ok: true as const, text: 'unused' })),
     recordProbe: async () => {},

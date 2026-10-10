@@ -469,6 +469,15 @@ Deno.serve(async (req: Request) => {
   }
 
   const store = chatStore(userClient);
+  // One Vault read through the service role. Used for the Google key and every other brain key.
+  const readSecret = async (secretName: string): Promise<string | null> => {
+    try {
+      const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: secretName });
+      return !error && typeof data === "string" && data.length > 0 ? data : null;
+    } catch {
+      return null;
+    }
+  };
   const deps: BuddyThinkDeps = {
     keyConfigured: async () => keyConfigured,
     // One pause, stop or start change, made in the owner's session (row-level security), then one daily-log line.
@@ -503,13 +512,21 @@ Deno.serve(async (req: Request) => {
         return false;
       }
     },
-    readKey: async () => {
-      try {
-        const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: KEY_NAME });
-        return !error && typeof data === "string" && data.length > 0 ? data : null;
-      } catch {
-        return null;
-      }
+    readKey: () => readSecret(KEY_NAME),
+    readSecret,
+    // One plain-words line per answered question: which brain answered. Never names a key.
+    logBrain: async (line: string) => {
+      const now = new Date().toISOString();
+      const logged = await sb.from("minds_daily_log").insert({
+        owner_id: user.id,
+        day: ownerClock(now),
+        happened_at: now,
+        mind: "buddy",
+        action: "Buddy answered a question",
+        outcome: "done",
+        detail: line.slice(0, 500),
+      });
+      if (logged.error) throw new Error("log not saved");
     },
     allowCall: async (action) => {
       try {

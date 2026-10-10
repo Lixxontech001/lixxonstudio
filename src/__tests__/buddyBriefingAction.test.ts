@@ -26,6 +26,7 @@ function fakeStore(options: { seenAt?: string | null; facts?: BriefingFacts; sav
   const deps: BuddyThinkDeps = {
     keyConfigured: async () => true,
     readKey: async () => null,
+    readSecret: async () => null,
     allowCall: async () => true,
     askGemini: vi.fn(),
     recordProbe: async () => {},

@@ -28,6 +28,7 @@ function setup(options: { key?: string | null; pending?: string | null; pendingO
   const d: BuddyThinkDeps = {
     keyConfigured: async () => options.key !== null,
     readKey,
+    readSecret: async (name: string) => (name === 'gemini_api_key' ? readKey() : null),
     allowCall: async () => true,
     askGemini,
     recordProbe: async () => {},

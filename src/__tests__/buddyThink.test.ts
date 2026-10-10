@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ALL_FAILED_LINE } from '../../supabase/functions/_shared/brainChain';
 import { NEVER_LIST_LINES, RESTRICTED_LINE } from '../../supabase/functions/_shared/buddyRouter';
 import type { BuddyStateFacts } from '../../supabase/functions/_shared/buddyStateFacts';
 import {
@@ -40,6 +41,7 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
   const base: BuddyThinkDeps = {
     keyConfigured: async () => true,
     readKey: async () => FAKE_KEY,
+    readSecret: async () => null,
     allowCall: async () => true,
     askGemini,
     recordProbe,
@@ -78,6 +80,8 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
     }),
     ...overrides,
   };
+  // Brain keys follow the Google key unless a test sets its own readSecret, so dropping the key drops it everywhere.
+  if (!overrides.readSecret) base.readSecret = async (name: string) => (name === 'gemini_api_key' ? base.readKey() : null);
   return { deps: base, askGemini, recordProbe, saved, touchChat };
 }
 
@@ -438,5 +442,96 @@ describe('Buddy think: a messy question about the shop reaches Gemini with real 
     expect(askGemini.mock.calls[0][1].system).toContain('Linen Bath Sheet');
     expect(askGemini.mock.calls[0][1].turns.at(-1)).toEqual({ role: 'user', text: message });
     expect(saved.at(-1)?.content).toBe('The Linen Bath Sheet is a good fit for that.');
+  });
+});
+
+describe('Buddy think: the brain chain answers the owner', () => {
+  const GROQ_KEY = 'FAKE-GROQ-KEY-PHASE-A';
+  const GROQ_ANSWER = '{"reply":"Groq says hello.","order":null}';
+  const QUESTION = 'Tell me how the shop is doing this week.';
+
+  /** A saved-key map for the fake Vault. Only the names given are saved. */
+  function vaultWith(saved: Record<string, string>) {
+    return async (name: string) => (Object.prototype.hasOwnProperty.call(saved, name) ? saved[name] : null);
+  }
+
+  /** A fake chat-completions fetch. Each call gets the reply text for that brain. */
+  function fakeChat(content: string | null, status = 200) {
+    return vi.fn(async () => {
+      if (content === null) return new Response('', { status });
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status });
+    });
+  }
+
+  it('Gemini rate limited, Groq saved: Groq answers, the body names Groq, and the log says so', async () => {
+    const fetchImpl = fakeChat(GROQ_ANSWER);
+    const logBrain = vi.fn(async () => {});
+    const gemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: false, outcome: 'rate_limited' }));
+    const { deps: d, saved } = deps({
+      askGemini: gemini,
+      readSecret: vaultWith({ gemini_api_key: FAKE_KEY, groq_api_key: GROQ_KEY }),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      logBrain,
+    });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: QUESTION }, d);
+    expect(result.body).toMatchObject({ ok: true, brain: 'groq', model: 'openai/gpt-oss-120b', reply: 'Groq says hello.' });
+    expect(gemini).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(saved.at(-1)?.content).toBe('Groq says hello.');
+    expect(logBrain).toHaveBeenCalledWith('Groq answered after Google Gemini did not.');
+  });
+
+  it('Gemini sends text that is not the JSON answer: the next saved brain is asked and answers', async () => {
+    const fetchImpl = fakeChat(GROQ_ANSWER);
+    const { deps: d } = deps({
+      askGemini: vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: '{"reply":' })),
+      readSecret: vaultWith({ gemini_api_key: FAKE_KEY, groq_api_key: GROQ_KEY }),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: QUESTION }, d);
+    expect(result.body).toMatchObject({ ok: true, brain: 'groq', reply: 'Groq says hello.' });
+  });
+
+  it('only one brain saved and it is rate limited: the one honest line, a notice, and nothing crashes', async () => {
+    const { deps: d, saved } = deps({
+      readSecret: vaultWith({ groq_api_key: GROQ_KEY }),
+      fetchImpl: fakeChat(null, 429) as unknown as typeof fetch,
+    });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: QUESTION }, d);
+    expect(result.body).toMatchObject({ ok: false, reason: 'rate_limited', message: ALL_FAILED_LINE });
+    expect(saved.at(-1)).toEqual({ chatId: CHAT_ID, role: 'buddy', kind: 'notice', content: ALL_FAILED_LINE });
+  });
+
+  it('every saved brain fails: one honest line in the chat, and no key or stack trace in it', async () => {
+    const { deps: d, saved } = deps({
+      askGemini: vi.fn(async (): Promise<GeminiResult> => ({ ok: false, outcome: 'rate_limited' })),
+      readSecret: vaultWith({ gemini_api_key: FAKE_KEY, groq_api_key: GROQ_KEY }),
+      fetchImpl: fakeChat(null, 500) as unknown as typeof fetch,
+    });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: QUESTION }, d);
+    expect(result.body).toMatchObject({ ok: false, message: ALL_FAILED_LINE });
+    const everything = `${JSON.stringify(result.body)} ${saved.map((row) => row.content).join(' ')}`;
+    expect(everything).not.toContain(FAKE_KEY);
+    expect(everything).not.toContain(GROQ_KEY);
+    expect(everything).not.toMatch(/\bat\b.*\.ts:\d+/);
+  });
+
+  it('a log line that cannot be saved does not stop the answer', async () => {
+    const { deps: d } = deps({
+      readSecret: vaultWith({ gemini_api_key: FAKE_KEY, groq_api_key: GROQ_KEY }),
+      askGemini: vi.fn(async (): Promise<GeminiResult> => ({ ok: false, outcome: 'unavailable' })),
+      fetchImpl: fakeChat(GROQ_ANSWER) as unknown as typeof fetch,
+      logBrain: async () => {
+        throw new Error('insert failed');
+      },
+    });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: QUESTION }, d);
+    expect(result.body).toMatchObject({ ok: true, brain: 'groq' });
+  });
+
+  it('Gemini alone, answering: the model is still Gemini and the brain is named gemini', async () => {
+    const { deps: d } = deps({ askGemini: vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: '{"reply":"Hi.","order":null}' })) });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: QUESTION }, d);
+    expect(result.body).toMatchObject({ ok: true, brain: 'gemini', model: BUDDY_GEMINI_MODEL });
   });
 });

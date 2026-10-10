@@ -26,6 +26,7 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
   const base = {
     keyConfigured: async () => true,
     readKey: async () => 'FAKE-GEMINI-KEY-NOT-REAL-0001',
+    readSecret: async (name: string) => (name === 'gemini_api_key' ? 'FAKE-GEMINI-KEY-NOT-REAL-0001' : null),
     allowCall: async () => true,
     askGemini: vi.fn(async () => ({ ok: true as const, text: 'unused' })),
     recordProbe: async () => {},

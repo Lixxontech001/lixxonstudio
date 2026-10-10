@@ -6,7 +6,9 @@ import {
   BRAIN_MAX_REPLY_CHARS,
   BRAIN_TIMEOUT_MS,
   NONE_SAVED_LINE,
+  anyBrainSaved,
   askBrains,
+  brainAnswerLine,
   type BrainInput,
   type BrainPorts,
 } from '../../supabase/functions/_shared/brainChain';
@@ -113,7 +115,7 @@ describe('no key saved: skip everything, one honest line', () => {
   it('with no brain saved, nothing is called and the line says no thinking key is saved', async () => {
     const { ports: p, fetchMock, askGemini } = ports();
     const result = await askBrains(INPUT, p);
-    expect(result).toEqual({ ok: false, reason: 'none_saved', line: NONE_SAVED_LINE, tried: [] });
+    expect(result).toEqual({ ok: false, reason: 'none_saved', line: NONE_SAVED_LINE, tried: [], lastOutcome: 'none_saved' });
     expect(askGemini).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -153,7 +155,7 @@ describe('the first brain that answers wins', () => {
       gemini: async () => ({ ok: false, outcome: 'rate_limited' }),
     });
     const result = await askBrains(INPUT, p);
-    expect(result).toEqual({ ok: true, brain: 'groq', label: 'Groq', text: `ok from ${HOST.groq}`, tried: ['gemini', 'groq'] });
+    expect(result).toEqual({ ok: true, brain: 'groq', label: 'Groq', model: 'openai/gpt-oss-120b', text: `ok from ${HOST.groq}`, tried: ['gemini', 'groq'] });
     expect(askGemini).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -261,6 +263,7 @@ describe('every brain fails: one honest line, no crash, no key in it', () => {
       reason: 'all_failed',
       line: ALL_FAILED_LINE,
       tried: ['gemini', 'groq', 'nvidia', 'cloudflare', 'openrouter', 'huggingface'],
+      lastOutcome: 'unavailable',
     });
     expect(ALL_FAILED_LINE).toBe('Buddy could not reach any of its brains just now. Nothing was changed. Try again in a few minutes.');
   });
@@ -309,5 +312,42 @@ describe('what the brains are sent', () => {
 
   it('the Gemini slot model is the one Buddy already uses', () => {
     expect(BRAIN_SLOTS[0].model).toBe(BUDDY_GEMINI_MODEL);
+  });
+});
+
+describe('accept option: a reply that is not the shape asked for moves on', () => {
+  it('an unreadable Gemini reply is skipped and the next saved brain answers', async () => {
+    const fetchMock = fakeFetch({ [HOST.groq]: { status: 200, body: OK_BODY('{"reply":"ok"}') } });
+    const { ports: p, askGemini } = ports({ saved: { gemini_api_key: 'FAKE-GOOGLE-KEY-PHASE-A', groq_api_key: 'FAKE-GROQ-KEY-PHASE-A' }, fetch: fetchMock, gemini: async () => ({ ok: true, text: '{"reply":' }) });
+    const accept = (text: string) => text.endsWith('}');
+    const result = await askBrains(INPUT, p, { accept });
+    expect(askGemini).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ ok: true, brain: 'groq', tried: ['gemini', 'groq'] });
+  });
+
+  it('when every reply is unreadable, lastOutcome says so', async () => {
+    const { ports: p } = ports({ saved: { gemini_api_key: 'FAKE-GOOGLE-KEY-PHASE-A' }, gemini: async () => ({ ok: true, text: 'not json' }) });
+    const result = await askBrains(INPUT, p, { accept: () => false });
+    expect(result).toMatchObject({ ok: false, reason: 'all_failed', lastOutcome: 'unreadable', tried: ['gemini'] });
+  });
+});
+
+describe('anyBrainSaved and the log line', () => {
+  it('anyBrainSaved is false with no key, true with any one key, and never calls a brain', async () => {
+    const fetchMock = fakeFetch({});
+    expect(await anyBrainSaved(ports({ saved: {}, fetch: fetchMock }).ports)).toBe(false);
+    expect(await anyBrainSaved(ports({ saved: { groq_api_key: 'FAKE-GROQ-KEY-PHASE-A' }, fetch: fetchMock }).ports)).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('the log line names the brain that answered and the brains that failed first, never a key', async () => {
+    const fetchMock = fakeFetch({ [HOST.groq]: { status: 200, body: OK_BODY('ok') } });
+    const { ports: p } = ports({ saved: { gemini_api_key: 'FAKE-GOOGLE-KEY-PHASE-A', groq_api_key: 'FAKE-GROQ-KEY-PHASE-A' }, fetch: fetchMock, gemini: async () => ({ ok: false, outcome: 'rate_limited' }) });
+    const result = await askBrains(INPUT, p);
+    if (!result.ok) throw new Error('expected an answer');
+    const line = brainAnswerLine(result);
+    expect(line).toBe('Groq answered after Google Gemini did not.');
+    expect(line).not.toContain('FAKE-');
+    expect(brainAnswerLine({ ok: true, brain: 'gemini', label: 'Google Gemini', model: 'gemini-3.8-flash', text: 'x', tried: ['gemini'] })).toBe('Google Gemini answered.');
   });
 });

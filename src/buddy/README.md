@@ -499,3 +499,15 @@ What is still not done, or not verified:
 - Gemini keeps its existing Google path, passed in as a port. Keys are never logged or returned. The reply is capped at 4,000 characters.
 - Tests call the chain with a fake fetch and a fake Vault only: `src/__tests__/brainChain.test.ts`. No live provider is called.
 - Not yet wired into Buddy's chat (slice 3). Model names come from current free-tier listings; a model that a provider drops moves the chain on.
+
+## Phase A slice 3: Buddy's chat uses the brain chain
+
+- Buddy's ordinary chat answer in `buddyThink.ts` now goes through `askBrains`, not straight to Google. The Google key check is replaced by `anyBrainSaved`: any one saved brain is enough. With none saved, the owner sees the same no-key notice as before.
+- Each reply must parse as Buddy's JSON answer to count. Text that does not parse (for example a cut-off reply) moves the chain on to the next brain. If nothing parses, the owner sees the old unreadable line.
+- If one brain was tried and it was Google, the owner sees Google's own plain message, as before. If several brains were tried, the owner sees one line: "could not reach any of its brains just now". Nothing is changed in either case.
+- After an answer, one daily-log row (mind `buddy`, action "Buddy answered a question") says which brain answered, for example "Groq answered after Google Gemini did not." A failed log write does not stop the answer. The row never names a key.
+- The body of an ok answer now includes `brain`. `model` is that brain's model. For Google it is still `gemini-3.8-flash`.
+- New ports on `BuddyThinkDeps`: `readSecret` (any Vault name, through the same service RPC as the Google key), `fetchImpl` (optional), and `logBrain` (optional). The probe still tests the Google key only.
+- Still on Google only: the one-line proof call, the minds (`mindThink.ts`), and text to speech. Those are outside this slice.
+- Tests: `buddyThink.test.ts` (new block "the brain chain answers the owner") and `brainChain.test.ts` (accept option, anyBrainSaved, log line). Fake fetch and fake Vault only.
+- Not yet done: the Brains page and the Buddy how-to wording (slice 4). The two lies are not yet removed (slice 5).

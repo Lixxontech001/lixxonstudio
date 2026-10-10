@@ -6,6 +6,7 @@ import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type Brief
 import { howToReply } from "./buddyHowTo.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
+import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure } from "./brainChain.ts";
 import { stateFactsBlock, type BuddyStateFacts } from "./buddyStateFacts.ts";
 import {
   ASK_WHICH_MIND_LINE,
@@ -78,6 +79,12 @@ export interface BuddyThinkDeps {
   keyConfigured(): Promise<boolean>;
   /** Reads the key from Vault on the server. Only called for ask/probe. */
   readKey(): Promise<string | null>;
+  /** Reads any brain's Vault entry on the server. Null when not saved. Never logged. */
+  readSecret(secretName: string): Promise<string | null>;
+  /** The fetch for the OpenAI-style brains. Tests pass a fake. Defaults to the global fetch. */
+  fetchImpl?: typeof fetch;
+  /** Writes one plain-words daily-log line saying which brain answered. Optional; a failure changes nothing. */
+  logBrain?(line: string): Promise<void>;
   /** Rate limit for one model call. Null means the limit could not be checked (fail closed). */
   allowCall(action: "probe" | "ask"): Promise<boolean | null>;
   askGemini(apiKey: string, input: { system: string; turns: GeminiTurn[]; json?: boolean }): Promise<GeminiResult>;
@@ -486,8 +493,9 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   // the mind log and the how-to steps. Everything else goes to Gemini below.
   if (route.kind !== "chat") return answerRouted(chatId, title, message, route, action, deps);
 
-  const key = await deps.readKey();
-  if (!key) {
+  // Any saved brain is enough. The chain below walks them in order and skips the empty ones.
+  const brainPorts = { readSecret: deps.readSecret, fetchImpl: deps.fetchImpl, askGemini: deps.askGemini };
+  if (!(await anyBrainSaved(brainPorts))) {
     const saved = await deps.saveMessage(chatId, "owner", "reply", message);
     if (!saved) return fail(503, "not_saved", SAVE_FAILED_MESSAGE);
     await deps.saveMessage(chatId, "buddy", "notice", NO_KEY_MESSAGE);
@@ -513,17 +521,29 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   // Read-only: the site list and the mind state are read fresh for each question.
   const [facts, state] = await Promise.all([deps.readSiteFacts(deps.now().toISOString()), deps.readStateFacts()]);
   const system = [BUDDY_SYSTEM_INSTRUCTION, BUDDY_ANSWER_RULES, siteFactsBlock(facts), stateFactsBlock(state)].join("\n\n");
-  const result = await deps.askGemini(key, { system, turns, json: true });
+  // A reply only counts when it parses as Buddy's JSON answer. Otherwise the next brain is asked.
+  const result = await askBrains({ system, turns, json: true }, brainPorts, { accept: (text) => parseBuddyAnswer(text) !== null });
 
   if (!result.ok) {
-    const notice = OUTCOME_MESSAGES[result.outcome];
-    await deps.saveMessage(chatId, "buddy", "notice", notice);
-    return { status: 200, body: { ok: false, action, reason: result.outcome, message: notice } };
+    if (result.reason === "none_saved") {
+      await deps.saveMessage(chatId, "buddy", "notice", NO_KEY_MESSAGE);
+      return { status: 200, body: { ok: false, action, reason: "no_key", message: NO_KEY_MESSAGE } };
+    }
+    const failure = failureNotice(result.lastOutcome, result.tried);
+    await deps.saveMessage(chatId, "buddy", "notice", failure.message);
+    return { status: 200, body: { ok: false, action, reason: failure.reason, message: failure.message } };
   }
   const answer = parseBuddyAnswer(result.text);
   if (!answer) {
     await deps.saveMessage(chatId, "buddy", "notice", ANSWER_UNREADABLE_LINE);
     return { status: 200, body: { ok: false, action, reason: "unreadable", message: ANSWER_UNREADABLE_LINE } };
+  }
+  if (deps.logBrain) {
+    try {
+      await deps.logBrain(brainAnswerLine(result));
+    } catch {
+      // The log line is for the owner's record. A failed write must not stop the answer.
+    }
   }
 
   let reply = answer.reply;
@@ -547,6 +567,19 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, replyPayload);
   return {
     status: 200,
-    body: { ok: true, action, model: BUDDY_GEMINI_MODEL, route: "chat", reply, saved, ...(filedAs ? { filed: filedAs } : {}) },
+    body: { ok: true, action, model: result.model, brain: result.brain, route: "chat", reply, saved, ...(filedAs ? { filed: filedAs } : {}) },
   };
+}
+
+/**
+ * The owner-facing line when the chain gives up. One brain only (Google alone): its own plain message.
+ * Several brains tried: one honest line that does not name a single provider.
+ */
+function failureNotice(lastOutcome: BrainFailure | "none_saved", tried: readonly string[]): { reason: string; message: string } {
+  if (lastOutcome === "none_saved") return { reason: "no_key", message: NO_KEY_MESSAGE };
+  if (tried.length === 1 && tried[0] === "gemini") {
+    if (lastOutcome === "unreadable") return { reason: "unreadable", message: ANSWER_UNREADABLE_LINE };
+    return { reason: lastOutcome, message: OUTCOME_MESSAGES[lastOutcome] };
+  }
+  return { reason: lastOutcome, message: ALL_FAILED_LINE };
 }

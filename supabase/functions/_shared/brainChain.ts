@@ -21,6 +21,13 @@ export interface BrainInput {
 
 export type BrainCallOutcome = "rejected" | "rate_limited" | "unavailable" | "empty";
 export type BrainCallResult = { ok: true; text: string } | { ok: false; outcome: BrainCallOutcome };
+/** Why the last brain in a failed request did not answer. "unreadable" means it replied but not in the shape asked for. */
+export type BrainFailure = BrainCallOutcome | "unreadable";
+
+export interface BrainOptions {
+  /** A reply counts only when this returns true. Otherwise the chain moves on. */
+  accept?: (text: string) => boolean;
+}
 
 export interface BrainPorts {
   /** Reads one Vault entry on the server. Returns null when it is not saved. Never returns the value to a log. */
@@ -32,8 +39,8 @@ export interface BrainPorts {
 }
 
 export type BrainAnswer =
-  | { ok: true; brain: BrainId; label: string; text: string; tried: BrainId[] }
-  | { ok: false; reason: "none_saved" | "all_failed"; line: string; tried: BrainId[] };
+  | { ok: true; brain: BrainId; label: string; model: string; text: string; tried: BrainId[] }
+  | { ok: false; reason: "none_saved" | "all_failed"; line: string; tried: BrainId[]; lastOutcome: BrainFailure | "none_saved" };
 
 interface BrainKeys {
   apiKey: string;
@@ -41,7 +48,7 @@ interface BrainKeys {
 }
 
 /** The saved keys for one brain, or null when any required key is missing or blank. A read that throws counts as missing. */
-async function keysFor(slot: BrainSlot, ports: BrainPorts): Promise<BrainKeys | null> {
+async function keysFor(slot: BrainSlot, ports: Pick<BrainPorts, "readSecret">): Promise<BrainKeys | null> {
   const apiKey = await safeRead(ports, slot.secretName);
   if (!apiKey) return null;
   const extras: Record<string, string> = {};
@@ -53,7 +60,7 @@ async function keysFor(slot: BrainSlot, ports: BrainPorts): Promise<BrainKeys | 
   return { apiKey, extras };
 }
 
-async function safeRead(ports: BrainPorts, name: string): Promise<string | null> {
+async function safeRead(ports: Pick<BrainPorts, "readSecret">, name: string): Promise<string | null> {
   try {
     const value = await ports.readSecret(name);
     const trimmed = typeof value === "string" ? value.trim() : "";
@@ -63,12 +70,21 @@ async function safeRead(ports: BrainPorts, name: string): Promise<string | null>
   }
 }
 
+/** True when at least one brain has a usable key saved. Reads Vault only; never calls a brain. */
+export async function anyBrainSaved(ports: Pick<BrainPorts, "readSecret">): Promise<boolean> {
+  for (const slot of tryableBrains()) {
+    if (await keysFor(slot, ports)) return true;
+  }
+  return false;
+}
+
 /**
  * Asks the brains in order and returns the first reply. Skips brains without a key. Never throws.
  * `tried` lists the brains that were actually called, in order, so the log can say which one answered.
  */
-export async function askBrains(input: BrainInput, ports: BrainPorts): Promise<BrainAnswer> {
+export async function askBrains(input: BrainInput, ports: BrainPorts, options: BrainOptions = {}): Promise<BrainAnswer> {
   const tried: BrainId[] = [];
+  let lastOutcome: BrainFailure | "none_saved" = "none_saved";
   for (const slot of tryableBrains()) {
     const keys = await keysFor(slot, ports);
     if (!keys) continue;
@@ -81,10 +97,20 @@ export async function askBrains(input: BrainInput, ports: BrainPorts): Promise<B
     } catch {
       result = { ok: false, outcome: "unavailable" };
     }
-    if (result.ok) return { ok: true, brain: slot.id, label: slot.label, text: result.text, tried };
+    if (result.ok && (!options.accept || options.accept(result.text))) {
+      return { ok: true, brain: slot.id, label: slot.label, model: slot.model, text: result.text, tried };
+    }
+    lastOutcome = result.ok ? "unreadable" : result.outcome;
   }
-  if (tried.length === 0) return { ok: false, reason: "none_saved", line: NONE_SAVED_LINE, tried };
-  return { ok: false, reason: "all_failed", line: ALL_FAILED_LINE, tried };
+  if (tried.length === 0) return { ok: false, reason: "none_saved", line: NONE_SAVED_LINE, tried, lastOutcome: "none_saved" };
+  return { ok: false, reason: "all_failed", line: ALL_FAILED_LINE, tried, lastOutcome };
+}
+
+/** The plain-words daily-log line for the brain that answered. Names the brains that failed first. Never names a key. */
+export function brainAnswerLine(answer: Extract<BrainAnswer, { ok: true }>): string {
+  const earlier = answer.tried.slice(0, -1).map((id) => tryableBrains().find((slot) => slot.id === id)?.label ?? id);
+  if (earlier.length === 0) return `${answer.label} answered.`;
+  return `${answer.label} answered after ${earlier.join(" and ")} did not.`;
 }
 
 /** One OpenAI-style chat call. The key goes only in the Authorization header. Each failure is a plain outcome, never a throw. */
