@@ -74,7 +74,7 @@ describe('automation health API boundary', () => {
     expect(body).not.toContain(PRIVATE_SENTINEL);
     const safe = JSON.parse(body) as { checks: Array<{ key: string; detail: string }> };
     expect(safe.checks).toHaveLength(12);
-    expect(safe.checks.find(check => check.key === 'ai_providers')?.detail).toBe('No AI provider keys are stored.');
+    expect(safe.checks.find(check => check.key === 'ai_providers')?.detail).toBe('No AI keys are saved.');
   });
 
   it('returns safe 401/403 errors and never relays provider or database error text', async () => {

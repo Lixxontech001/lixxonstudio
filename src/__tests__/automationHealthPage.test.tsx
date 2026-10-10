@@ -49,10 +49,10 @@ describe('Automation System Check page', () => {
     await settle();
 
     expect(el.textContent).toContain('Check');
-    expect(el.textContent).toContain('Database & migrations');
-    expect(el.textContent).toContain('No AI provider keys are stored.');
+    expect(el.textContent).toContain('Database updates');
+    expect(el.textContent).toContain('No AI keys are saved.');
     expect(el.textContent).toContain('Distribution is off; channel connectivity is not yet configured.');
-    expect(el.textContent).toContain('Video rendering is deliberately disabled: no Coverr stock key is configured in Vault, and hosted FFmpeg, approved asset attribution and Android playback have not been verified. Keep video upload off; the manual Daily Kit remains available.');
+    expect(el.textContent).toContain('Video making is paused. The stock video key is not saved, and the video tool and Android playback have not been checked. Keep video upload off; the manual Daily Kit remains available.');
     expect(el.textContent).not.toContain(HEALTH_TEST_SECRET);
     expect(fetch).toHaveBeenCalledWith('/api/automation/health', expect.objectContaining({
       method: 'GET', cache: 'no-store',
@@ -72,7 +72,7 @@ describe('Automation System Check page', () => {
     const el = mount();
     await act(async () => { root.render(<AutomationCheck />); await Promise.resolve(); });
     await settle();
-    expect(el.textContent).toContain('database-verified automation health permission');
+    expect(el.textContent).toContain('not allowed to see this check');
     expect(el.textContent).not.toContain(HEALTH_TEST_SECRET);
   });
 });

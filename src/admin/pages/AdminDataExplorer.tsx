@@ -274,7 +274,7 @@ function SqlConsole({ allowed }: { allowed: boolean }) {
     <Panel title="Read-only SQL" icon={<Play size={15} className="text-bronze" />}
       actions={<Btn onClick={run} busy={busy} icon={<Play size={13} />}>Run (⌘/Ctrl + Enter)</Btn>}>
       <p className="text-xs text-charcoal-muted mb-3">
-        Single <code>SELECT</code>/<code>WITH</code> statement. It runs as you inside a read-only transaction with a 5-second timeout and a 200-row cap, so writes fail by construction and RLS still hides rows you could not read elsewhere.
+        Single <code>SELECT</code>/<code>WITH</code> statement. It runs as you inside a read-only transaction with a 5-second timeout and a 200-row cap, so writes fail, and the database access rules still hide rows you could not read elsewhere.
       </p>
       <textarea value={sql} onChange={e => setSql(e.target.value)} rows={7} spellCheck={false}
         onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run(); }}

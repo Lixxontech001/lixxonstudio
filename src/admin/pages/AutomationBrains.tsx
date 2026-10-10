@@ -107,18 +107,18 @@ export default function AutomationBrains() {
         body: { action: 'test', name: row.keyName },
       });
       if (error) {
-        setNotice({ tone: 'error', message: `The ${row.slot.label} test could not complete. No provider response or credential was shown.` });
+        setNotice({ tone: 'error', message: `The ${row.slot.label} test could not complete. Nothing was shown.` });
         return;
       }
       const result = safeAutomationKeyTestResult(data);
       if (!result) {
-        setNotice({ tone: 'error', message: `The ${row.slot.label} test returned an unrecognized result. No provider response was shown.` });
+        setNotice({ tone: 'error', message: `The ${row.slot.label} test returned an unrecognized result. Nothing was shown.` });
         return;
       }
       setNotice({ tone: toneFor(result.status), message: `${row.slot.label}: ${result.message}` });
       await refresh();
     } catch {
-      setNotice({ tone: 'error', message: `The ${row.slot.label} test could not complete. No provider response or credential was shown.` });
+      setNotice({ tone: 'error', message: `The ${row.slot.label} test could not complete. Nothing was shown.` });
     } finally {
       setBusyName(null);
     }

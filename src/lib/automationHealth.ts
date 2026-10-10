@@ -27,18 +27,18 @@ export interface AutomationHealthSnapshot {
 }
 
 const CATALOG: Record<AutomationHealthKey, { label: string; category: string; actionHref: string | null; actionLabel: string | null }> = {
-  database: { label: 'Database & migrations', category: 'Core', actionHref: null, actionLabel: null },
-  vault: { label: 'Supabase Vault', category: 'Core', actionHref: '/admin/automation/keys', actionLabel: 'Open Keys' },
-  github_actions: { label: 'GitHub Actions', category: 'Orchestration', actionHref: '/admin/automation/keys', actionLabel: 'Review credentials' },
-  daily_schedule: { label: 'Daily studio-clock schedule', category: 'Orchestration', actionHref: null, actionLabel: null },
-  ai_providers: { label: 'AI provider checks', category: 'AI', actionHref: '/admin/automation/keys', actionLabel: 'Review AI keys' },
-  ai_quota: { label: 'AI usage & quota', category: 'AI', actionHref: null, actionLabel: null },
+  database: { label: 'Database updates', category: 'Core', actionHref: null, actionLabel: null },
+  vault: { label: 'Saved keys', category: 'Core', actionHref: '/admin/automation/keys', actionLabel: 'Open Keys' },
+  github_actions: { label: 'GitHub jobs', category: 'Orchestration', actionHref: '/admin/automation/keys', actionLabel: 'Review keys' },
+  daily_schedule: { label: 'Daily schedule', category: 'Orchestration', actionHref: null, actionLabel: null },
+  ai_providers: { label: 'AI service checks', category: 'AI', actionHref: '/admin/automation/keys', actionLabel: 'Review AI keys' },
+  ai_quota: { label: 'AI usage and limits', category: 'AI', actionHref: null, actionLabel: null },
   distribution: { label: 'Distribution channels', category: 'Channels', actionHref: '/admin/automation/keys', actionLabel: 'Review channel keys' },
-  video: { label: 'Video toolchain', category: 'Media', actionHref: '/admin/automation/keys', actionLabel: 'Review video key' },
-  push: { label: 'Web Push readiness', category: 'Notifications', actionHref: '/admin/automation/keys', actionLabel: 'Review push keys' },
-  commerce: { label: 'Commerce & webhook', category: 'Commerce', actionHref: '/admin/automation/keys', actionLabel: 'Review commerce keys' },
+  video: { label: 'Video tools', category: 'Media', actionHref: '/admin/automation/keys', actionLabel: 'Review video key' },
+  push: { label: 'Phone alert readiness', category: 'Notifications', actionHref: '/admin/automation/keys', actionLabel: 'Review phone alert keys' },
+  commerce: { label: 'Shop and payments', category: 'Commerce', actionHref: '/admin/automation/keys', actionLabel: 'Review commerce keys' },
   incidents: { label: 'Recent automation incidents', category: 'Operations', actionHref: null, actionLabel: null },
-  automation_safety: { label: 'Automation kill switches', category: 'Safety', actionHref: null, actionLabel: null },
+  automation_safety: { label: 'Automation off switches', category: 'Safety', actionHref: null, actionLabel: null },
 };
 
 const TEST_STATUSES = new Set(['not_tested', 'ok', 'local_ok', 'invalid', 'rate_limited', 'unavailable', 'not_configured']);
@@ -156,49 +156,49 @@ function detailFor(key: AutomationHealthKey, status: AutomationHealthStatus, evi
     case 'database':
       return status === 'healthy'
         ? `Authenticated database probe succeeded; automation schema is present${evidence.latest_migration_version ? ` (latest recorded migration ${evidence.latest_migration_version}).` : '.'}`
-        : 'Required automation schema objects are missing.';
+        : 'Required automation tables or functions are missing.';
     case 'vault':
       return evidence.vault_available
-        ? `Vault objects are available; ${evidence.configured_credentials} credential${evidence.configured_credentials === 1 ? '' : 's'} configured. Values are not read by this check.`
-        : 'Vault availability could not be confirmed.';
+        ? `Saved-key storage is available; ${evidence.configured_credentials} credential${evidence.configured_credentials === 1 ? '' : 's'} configured. Values are not read by this check.`
+        : 'Saved-key storage could not be confirmed.';
     case 'github_actions':
       return !evidence.credential_configured
-        ? 'No GitHub Actions credential is stored.'
-        : `Credential test: ${evidence.credential_test_status}. Read-only workflow access does not verify dispatch permission; last recorded job: ${evidence.last_job_at || 'none'}.`;
+        ? 'No GitHub key is saved.'
+        : `Credential test: ${evidence.credential_test_status}. Read-only GitHub access does not confirm permission to start jobs; last recorded job: ${evidence.last_job_at || 'none'}.`;
     case 'daily_schedule':
       if (evidence.registered_job_count === 0) return 'The daily automation schedule is not registered.';
       if (Number(evidence.registered_job_count) > 1) return `Found ${evidence.registered_job_count} schedules with the same name; exactly one is expected.`;
       return `Schedule ${evidence.job_active ? 'is active' : 'is inactive'}; last run ${evidence.last_run_status || 'not recorded'}${evidence.last_run_at ? ` at ${evidence.last_run_at}` : ''}; successful run within ${evidence.freshness_window_hours} hours: ${evidence.last_run_fresh ? 'yes' : 'no'}.`;
     case 'ai_providers':
       return evidence.configured_providers === 0
-        ? 'No AI provider keys are stored.'
+        ? 'No AI keys are saved.'
         : `${evidence.recent_successful_tests} of ${evidence.configured_providers} configured providers passed a read-only check in the last ${evidence.freshness_window_hours} hours; invalid tests: ${evidence.invalid_tests}.`;
     case 'ai_quota':
-      if (!evidence.quota_measured) return 'Provider quota usage is not measured yet; no quota claim is made.';
-      if (!evidence.all_recent_samples_positive) return 'A recent provider quota measurement reports no remaining capacity; stop AI jobs until quota resets.';
-      return `${evidence.quota_samples_last_24h} safe quota measurements in the last ${evidence.measurement_window_hours} hours report remaining capacity; provider units are not inferred.`;
+      if (!evidence.quota_measured) return 'AI usage is not measured yet; no limit is claimed.';
+      if (!evidence.all_recent_samples_positive) return 'A recent AI usage check shows no room left; stop AI jobs until the limit resets.';
+      return `${evidence.quota_samples_last_24h} usage checks in the last ${evidence.measurement_window_hours} hours show room left; no units are guessed.`;
     case 'distribution':
       return evidence.feature_enabled
         ? `Distribution is enabled with ${evidence.configured_provider_tokens} provider tokens, but no channel readback is verified.`
         : 'Distribution is off; channel connectivity is not yet configured.';
     case 'video':
       if (!evidence.feature_enabled && !evidence.stock_api_key_configured) {
-        return 'Video rendering is deliberately disabled: no Coverr stock key is configured in Vault, and hosted FFmpeg, approved asset attribution and Android playback have not been verified. Keep video upload off; the manual Daily Kit remains available.';
+        return 'Video making is paused. The stock video key is not saved, and the video tool and Android playback have not been checked. Keep video upload off; the manual Daily Kit remains available.';
       }
       if (!evidence.feature_enabled) {
-        return `Video rendering is deliberately disabled. Coverr key is present, but no enabled owner-approved render has completed; hosted FFmpeg verified: ${evidence.toolchain_verified ? 'yes' : 'no'}, Android playback: not verified.`;
+        return `Video making is paused. The stock video key is saved, but no owner-approved video has been made yet; video tool checked on the server: ${evidence.toolchain_verified ? 'yes' : 'no'}, Android playback: not checked.`;
       }
-      return `Last render: ${evidence.last_render_status || 'not recorded'}; FFmpeg toolchain verified: ${evidence.toolchain_verified ? 'yes' : 'no'}; Android playback: not verified.`;
+      return `Last video: ${evidence.last_render_status || 'not recorded'}; video tool checked: ${evidence.toolchain_verified ? 'yes' : 'no'}; Android playback: not checked.`;
     case 'push':
       if (evidence.delivery_verified) {
-        return `A confirmed test notification was delivered to an owner device${evidence.last_test_at ? ` at ${evidence.last_test_at}` : ''}; ${evidence.vapid_values_configured} of 3 VAPID values are stored.`;
+        return `A confirmed test notification was delivered to an owner device${evidence.last_test_at ? ` at ${evidence.last_test_at}` : ''}; ${evidence.vapid_values_configured} of 3 phone alert keys are saved.`;
       }
       if (evidence.last_test_status === 'failed') {
-        return `The last test notification failed${evidence.last_test_at ? ` at ${evidence.last_test_at}` : ''}; ${evidence.vapid_values_configured} of 3 VAPID values are stored. Owner alerts still fall back to email and Telegram.`;
+        return `The last test notification failed${evidence.last_test_at ? ` at ${evidence.last_test_at}` : ''}; ${evidence.vapid_values_configured} of 3 phone alert keys are saved. Owner alerts still fall back to email and Telegram.`;
       }
       return evidence.feature_enabled
-        ? `${evidence.vapid_values_configured} of 3 VAPID values are stored; no confirmed test delivery is recorded yet.`
-        : 'Web Push is off; no delivery check has been run.';
+        ? `${evidence.vapid_values_configured} of 3 phone alert keys are saved; no confirmed test delivery is recorded yet.`
+        : 'Phone alerts are off; no test alert has been sent.';
     case 'commerce':
       return evidence.vault_credentials_configured === 0
         ? 'No automation commerce credentials are stored. Existing checkout credentials remain infrastructure-managed.'
@@ -217,18 +217,18 @@ function detailFor(key: AutomationHealthKey, status: AutomationHealthStatus, evi
 function remediationFor(key: AutomationHealthKey, status: AutomationHealthStatus): string | null {
   if (status === 'healthy' || status === 'not_configured') return null;
   switch (key) {
-    case 'database': return 'Apply the reviewed Supabase migrations, then refresh this check.';
-    case 'vault': return 'Confirm Supabase Vault is enabled; do not paste values into logs or environment output.';
-    case 'github_actions': return 'Review the key in the Keys page and configure a run-bound workflow proof before dispatch is enabled.';
+    case 'database': return 'Apply the reviewed database updates, then refresh this check.';
+    case 'vault': return 'Confirm saved keys are turned on; never paste key values into logs.';
+    case 'github_actions': return 'Review the key on the Keys page and set up the run check before starting jobs.';
     case 'daily_schedule': return status === 'blocked' ? 'Repair the missing, inactive or duplicated schedule; keep dispatch paused.' : 'Review the latest scheduled run and its freshness; keep dispatch paused until a recent successful run is recorded.';
     case 'ai_providers': return status === 'blocked' ? 'Replace the rejected provider key in the Keys page; never enable a paid fallback.' : 'Test a stored provider key and configure usage caps before enabling AI work.';
-    case 'ai_quota': return 'Add a measured provider-usage adapter and a hard free-tier cap before enabling AI jobs.';
-    case 'distribution': return 'Keep distribution paused until every channel has a successful readback and explicit owner approval.';
-    case 'video': return 'Keep rendering paused until the hosted runner and FFmpeg checks are verified.';
-    case 'push': return 'Keep push off until all VAPID values are present and a test delivery/unsubscribe flow passes.';
-    case 'commerce': return 'Verify webhook signatures and the existing checkout path in a sandbox before migration.';
-    case 'incidents': return 'Inspect redacted run metadata, pause affected work, and resolve failures before retrying.';
-    case 'automation_safety': return 'Turn automation off while reviewing permissions, quotas and approvals.';
+    case 'ai_quota': return 'Add a real usage check and a hard free-tier limit before turning on AI jobs.';
+    case 'distribution': return 'Keep sharing paused until every channel has a confirmed check and your explicit approval.';
+    case 'video': return 'Keep video making paused until the server and video tool checks pass.';
+    case 'push': return 'Keep phone alerts off until all three keys are saved and a test alert and unsubscribe both work.';
+    case 'commerce': return 'Check payment confirmations and the checkout in a test setup before moving anything.';
+    case 'incidents': return 'Look over the run details, pause affected work, and fix the failures before retrying.';
+    case 'automation_safety': return 'Turn automation off while you review permissions, limits and approvals.';
   }
 }
 

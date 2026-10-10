@@ -178,18 +178,18 @@ export default function AutomationKeys() {
         body: { action: 'test', name: item.name },
       });
       if (error) {
-        setNotice({ tone: 'error', message: 'The owner-only key test could not complete. No provider response or credential was shown.' });
+        setNotice({ tone: 'error', message: 'The owner-only key test could not complete. Nothing was shown.' });
         return;
       }
       const result = safeAutomationKeyTestResult(data);
       if (!result) {
-        setNotice({ tone: 'error', message: 'The key test returned an unrecognized result. No provider response was shown.' });
+        setNotice({ tone: 'error', message: 'The key test returned an unrecognized result. Nothing was shown.' });
         return;
       }
       setNotice(statusNotice(result.status));
       await refresh();
     } catch {
-      setNotice({ tone: 'error', message: 'The key test could not complete. No provider response or credential was shown.' });
+      setNotice({ tone: 'error', message: 'The key test could not complete. Nothing was shown.' });
     } finally {
       setBusyName(null);
     }

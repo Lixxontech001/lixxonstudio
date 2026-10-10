@@ -34,9 +34,9 @@ const STATUS_CLASSES: Record<AutomationRunStatus, string> = {
   cancelled: 'border-gray-300 bg-gray-50 text-gray-600',
 };
 const STEP_LABELS: Record<string, string> = {
-  preflight: 'Metadata preflight', source_snapshot: 'Source integrity', metadata_links: 'Metadata and links',
-  channel_kit: 'Owner channel kit', asset_render: 'Optional video rendering',
-  owner_review: 'Owner review', publish_dispatch: 'Publishing dispatch',
+  preflight: 'Quick check', source_snapshot: 'Source check', metadata_links: 'Metadata and links',
+  channel_kit: 'Owner sharing kit', asset_render: 'Optional video rendering',
+  owner_review: 'Owner review', publish_dispatch: 'Publishing step',
 };
 const STEP_STATUS_LABELS: Record<string, string> = {
   queued: 'Queued', running: 'Running', succeeded: 'Passed', failed: 'Failed',
@@ -48,7 +48,7 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function apiFailureMessage(): string {
-  return 'The database-verified automation operation could not be completed. No provider response or credential details are shown.';
+  return 'The operation could not be completed. Nothing was shown.';
 }
 
 function displayTime(value: string | null): string {
@@ -72,15 +72,27 @@ function durationLabel(duration: number | null): string {
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
+/** Plain English for the safe error codes the runner can report. */
+const PLAIN_ERROR_LABELS: Record<string, string> = {
+  AUTOMATION_PAUSED: 'Automation was paused', OWNER_CANCELLED: 'Cancelled by owner', PREFLIGHT_INVALID: 'Quick check failed',
+  GITHUB_TOKEN_MISSING: 'GitHub key missing', GITHUB_AUTH: 'GitHub refused the key', GITHUB_FORBIDDEN: 'GitHub refused the request',
+  GITHUB_RATE_LIMITED: 'GitHub asked us to wait', GITHUB_UNAVAILABLE: 'GitHub is unavailable', GITHUB_UNEXPECTED: 'Unexpected reply from GitHub',
+  GITHUB_NETWORK_ERROR: 'Could not reach GitHub', APPROVAL_REVOKED: 'Approval was withdrawn', POST_MISSING: 'Article not found',
+  SOURCE_HASH_FAILED: 'Source check failed', SOURCE_EMPTY: 'Source was empty', SOURCE_CHANGED: 'Source changed',
+  METADATA_INVALID: 'Details need fixing', UNSAFE_LINKS: 'Unsafe links found', RUNNER_STEP_FAILED: 'A step failed',
+  RUNNER_DATABASE_UNAVAILABLE: 'Database unavailable', VIDEO_RENDERER_NOT_READY: 'Video tool not ready',
+  PRIOR_STAGE_FAILED: 'An earlier step failed', CLAIMS_REVIEW_REQUIRED: 'Claims need review', VIDEO_DISABLED: 'Video is off',
+};
+
 function safeCodeLabel(code: string | null): string | null {
-  return code && (AUTOMATION_SAFE_ERROR_CODES as readonly string[]).includes(code) ? code.replace(/_/g, ' ') : null;
+  return code && (AUTOMATION_SAFE_ERROR_CODES as readonly string[]).includes(code) ? (PLAIN_ERROR_LABELS[code] || null) : null;
 }
 
 function controlConfirmation(action: 'pause' | 'resume' | 'retry' | 'cancel', title: string): string {
   switch (action) {
-    case 'pause': return `Pause the automation run for “${title}”? Any remaining work will stop before publishing. Resume will queue it for the next 08:00 studio-clock run.`;
-    case 'resume': return `Resume “${title}” safely? It will be queued for the next 08:00 studio-clock run. This does not publish the article.`;
-    case 'retry': return `Retry the safe infrastructure failure for “${title}”? It will be queued for the next 08:00 studio-clock run and will still require owner review.`;
+    case 'pause': return `Pause the automation run for “${title}”? Any remaining work will stop before publishing. Resume will queue it for the next 08:00 daily run.`;
+    case 'resume': return `Resume “${title}” safely? It will be queued for the next 08:00 daily run. This does not publish the article.`;
+    case 'retry': return `Retry the safe infrastructure failure for “${title}”? It will be queued for the next 08:00 daily run and will still require owner review.`;
     case 'cancel': return `Cancel “${title}” permanently? The run and its pending kit will be revoked. To try again, schedule a new run.`;
   }
 }
@@ -102,7 +114,7 @@ function PreviewChecks({ preview }: { preview: AutomationArticlePreview }) {
         <div className="min-w-0 flex-1">
           <h4 className="font-semibold text-sky-950">Read-only preflight preview</h4>
           <p className="mt-1 text-sm text-sky-900">{preview.title} · {preview.status} · {scheduledTimeLabel(preview.scheduledAtUtc)}</p>
-          <p className="mt-1 text-xs leading-5 text-sky-900">No provider calls, emails, payments, publishing, or article writes were made. Article prose was not returned.</p>
+          <p className="mt-1 text-xs leading-5 text-sky-900">No calls to services, emails, payments, publishing or article changes were made. Article text was not shown.</p>
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {rows.map(([label, passed]) => (
               <li key={label} className="flex items-start gap-2 text-xs leading-5 text-sky-950">
@@ -147,7 +159,7 @@ export default function AutomationRuns() {
       const safe = parseAutomationRunMonitor(data);
       if (!safe) {
         setMonitor(null);
-        setError('The run monitor returned an incomplete or unrecognized safe schema.');
+        setError('The run list returned an incomplete or unrecognized result.');
         return;
       }
       setMonitor(safe);
@@ -211,7 +223,7 @@ export default function AutomationRuns() {
       });
       if (rpcError || !record(data) || data.ok !== true) throw new Error('run control failed');
       const status = typeof data.status === 'string' ? data.status : 'updated';
-      const dispatchNote = status === 'queued' ? ' It will be picked up by the next 08:00 studio-clock run.' : '';
+      const dispatchNote = status === 'queued' ? ' It will be picked up by the next 08:00 daily run.' : '';
       setNotice(`Run ${action} recorded: ${status}.${dispatchNote}`);
       await refresh();
     } catch {
@@ -232,7 +244,7 @@ export default function AutomationRuns() {
       if (!safe) throw new Error('preview schema invalid');
       setPreview(safe);
     } catch {
-      setPreviewError('A read-only preview is temporarily unavailable. No provider request or write was attempted.');
+      setPreviewError('The preview is unavailable for now. Nothing was changed.');
     }
   };
 
@@ -321,8 +333,8 @@ export default function AutomationRuns() {
       </header>
 
       <section className="grid gap-3 md:grid-cols-2" aria-label="Owner-controlled automation schedule">
-        {switchRow('automation.enabled', 'Master kill switch', 'When off, the runner pauses safely before completing work. Owner-only control; every change is database-audited.')}
-        {switchRow('automation.daily_pipeline', '08:00 studio-clock daily schedule', 'Enables scheduled article preflight and owner-review preparation. Both this schedule and the master switch must be on.')}
+        {switchRow('automation.enabled', 'Main off switch', 'When off, runs pause before they finish their work. Owner-only control; every change is recorded.')}
+        {switchRow('automation.daily_pipeline', '08:00 daily schedule', 'Lets the scheduled article check and the owner-review prep run. Both this schedule and the main switch must be on.')}
       </section>
 
       {!canManage && <p className="rounded-sm border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">Read-only view. Only an active owner or founder can change the switches or control a run.</p>}
@@ -345,14 +357,14 @@ export default function AutomationRuns() {
           <section className="grid gap-3 lg:grid-cols-2" aria-label="Usage and failure-alert readiness">
             <div className="rounded-sm border border-gray-200 bg-white p-4">
               <div className="flex items-center gap-2"><h2 className="font-semibold text-charcoal">Usage &amp; quotas</h2></div>
-              <p className="mt-2 text-sm text-gray-700">Provider calls: <strong>{monitor.usage.providerCalls}</strong> · Paid calls: <strong>{monitor.usage.paidCalls}</strong> · Quota: <strong>Not applicable</strong></p>
-              <p className="mt-1 text-xs leading-5 text-gray-600">{monitor.usage.note} AI and video remain disabled until a free/zero-cost path is explicitly verified; no spend is triggered here.</p>
+              <p className="mt-2 text-sm text-gray-700">Calls to services: <strong>{monitor.usage.providerCalls}</strong> · Paid calls: <strong>{monitor.usage.paidCalls}</strong> · Quota: <strong>Not applicable</strong></p>
+              <p className="mt-1 text-xs leading-5 text-gray-600">{monitor.usage.note} AI and video stay off until a free route is confirmed; no spending is started here.</p>
             </div>
             <div className="rounded-sm border border-gray-200 bg-white p-4">
               <div className="flex items-center gap-2"><AlertTriangle size={17} className="text-bronze" aria-hidden="true" /><h2 className="font-semibold text-charcoal">Failure-alert delivery</h2></div>
               <p className="mt-2 text-sm text-gray-700">Email via Resend: <strong>{monitor.notifications.emailConfigured ? 'Configured' : 'Not configured'}</strong> · Telegram fallback: <strong>{monitor.notifications.telegramConfigured ? 'Configured' : 'Not configured'}</strong></p>
               {!monitor.notifications.emailConfigured && !monitor.notifications.telegramConfigured && (
-                <p className="mt-1 text-xs leading-5 text-amber-900">No alert destination is ready. Add a Resend API key for owner email or configure both Telegram bot token and chat ID in Keys. Alerts contain only the run ID and safe failure code.</p>
+                <p className="mt-1 text-xs leading-5 text-amber-900">No alert place is ready. Add a Resend key for owner email, or set both the Telegram bot token and chat ID on Keys. Alerts contain only the run ID and a safe failure code.</p>
               )}
             </div>
           </section>
@@ -378,10 +390,10 @@ export default function AutomationRuns() {
                           </div>
                           <p className="mt-1 break-all text-xs text-gray-500">Run {run.id} · Article {run.postId}</p>
                           <div className="mt-3 grid gap-2 text-xs text-gray-700 sm:grid-cols-2 lg:grid-cols-4">
-                            <p><strong>Scheduled:</strong> {automationLagosTime(run.scheduledAtUtc)} (studio clock)</p>
+                            <p><strong>Scheduled:</strong> {automationLagosTime(run.scheduledAtUtc)}</p>
                             <p><strong>Created:</strong> {displayTime(run.createdAt)}</p>
                             <p><strong>Duration:</strong> {durationLabel(run.durationMs)}</p>
-                            <p><strong>Dispatch retries:</strong> {run.dispatchRetries} · Attempt {run.workflowAttempt ?? '—'}</p>
+                            <p><strong>Start retries:</strong> {run.dispatchRetries} · Attempt {run.workflowAttempt ?? '—'}</p>
                           </div>
                           {errorLabel && <p className="mt-3 inline-flex items-center gap-2 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-900"><AlertTriangle size={14} aria-hidden="true" />Safe failure: {errorLabel}</p>}
                           {run.workflowUrl && <p className="mt-2"><a href={run.workflowUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm text-bronze underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze">View the run on GitHub</a></p>}
