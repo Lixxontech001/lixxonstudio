@@ -51,7 +51,7 @@ export default function VapidGenerator({
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-charcoal px-4 text-sm font-medium text-white hover:bg-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <KeyRound size={15} aria-hidden="true" />}
-          Generate VAPID keypair
+          Make phone alert keys
         </button>
       </div>
       {publicKey && (

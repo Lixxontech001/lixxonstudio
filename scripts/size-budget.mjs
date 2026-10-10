@@ -95,6 +95,13 @@ const ADMIN_ROUTE_LIMITS = new Map([
 const adminRouteFiles = jsFiles.filter((f) => [...ADMIN_ROUTE_LIMITS.keys()].some((prefix) => f.startsWith(prefix)));
 const publicJsFiles = jsFiles.filter((f) => !adminJsFiles.includes(f) && !adminRouteFiles.includes(f));
 const cssFiles = files.filter((f) => f.endsWith('.css'));
+// Buddy's own stylesheet is lazy: it loads only on /buddy, never for a reader. It gets its own hard ceiling below
+// and is kept out of total-css, which covers the stylesheets a reader can load. The reader's css budget is unchanged.
+const LAZY_CSS_LIMITS = new Map([
+  ['BuddyEntry-', 3 * 1024],
+]);
+const lazyCssFiles = cssFiles.filter((f) => [...LAZY_CSS_LIMITS.keys()].some((prefix) => f.startsWith(prefix)));
+const publicCssFiles = cssFiles.filter((f) => !lazyCssFiles.includes(f));
 const sumFiles = (list) => ({
   file: `${list.length} chunks`,
   raw: list.reduce((n, f) => n + readFileSync(join(ASSETS, f)).length, 0),
@@ -104,10 +111,11 @@ measured['total-js'] = sumFiles(publicJsFiles);
 measured['admin-total-js'] = sumFiles(adminJsFiles);
 measured['admin-route-js'] = sumFiles(adminRouteFiles);
 measured['total-css'] = {
-  file: `${cssFiles.length} file(s)`,
-  raw: cssFiles.reduce((n, f) => n + readFileSync(join(ASSETS, f)).length, 0),
-  gzip: cssFiles.reduce((n, f) => n + gzipSize(join(ASSETS, f)), 0),
+  file: `${publicCssFiles.length} file(s)`,
+  raw: publicCssFiles.reduce((n, f) => n + readFileSync(join(ASSETS, f)).length, 0),
+  gzip: publicCssFiles.reduce((n, f) => n + gzipSize(join(ASSETS, f)), 0),
 };
+measured['lazy-css'] = { ...sumFiles(lazyCssFiles), file: `${lazyCssFiles.length} file(s)` };
 
 const asJson = process.argv.includes('--json');
 const update = process.argv.includes('--update');
@@ -131,6 +139,14 @@ if (update || !baseline) {
 const failures = [];
 const rows = [];
 const routeBudgets = [];
+for (const [prefix, limit] of LAZY_CSS_LIMITS) {
+  const cssRoute = cssFiles.filter((file) => file.startsWith(prefix));
+  const current = sumFiles(cssRoute);
+  const route = prefix.slice(0, -1);
+  routeBudgets.push({ route, files: cssRoute.length, current: current.gzip, limit });
+  if (cssRoute.length === 0) failures.push(`${route}: expected lazy stylesheet is missing`);
+  else if (current.gzip > limit) failures.push(`${route}: ${formatKb(current.gzip)} > hard limit ${formatKb(limit)}`);
+}
 for (const [prefix, limit] of ADMIN_ROUTE_LIMITS) {
   const routeFiles = jsFiles.filter((file) => file.startsWith(prefix));
   const current = sumFiles(routeFiles);

@@ -180,7 +180,7 @@ describe('Automation Keys page', () => {
     await act(async () => { root.render(<AutomationKeys />); await Promise.resolve(); });
     await settle();
 
-    const generateButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.includes('Generate VAPID keypair'));
+    const generateButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.includes('Make phone alert keys'));
     expect(generateButton).toBeDefined();
     await act(async () => { generateButton!.click(); await Promise.resolve(); });
     await settle();
