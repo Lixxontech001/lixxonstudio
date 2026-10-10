@@ -21,7 +21,8 @@ describe('the day run records and buzzes through one helper', () => {
   });
 
   it('the day run sends only through the shared helper, never through a provider call of its own', () => {
-    expect(RUN).toContain('notifyOwnerDevices(');
+    expect(RUN).toContain('return await attemptRow(row, servicePushPorts(sb));');
+    expect(RUN).not.toContain('notifyOwnerDevices(');
     expect(RUN).not.toMatch(/sendPushNotification\(/);
     expect(RUN).not.toMatch(/fetch\([^)]*push\./i);
   });
@@ -34,11 +35,11 @@ describe('the day run records and buzzes through one helper', () => {
   it('a push problem is caught inside the helper, so the run keeps going', () => {
     const helper = RUN.slice(RUN.indexOf('async function recordNotable('), RUN.indexOf('/** The door step never throws'));
     expect(helper).toMatch(/catch \{\n\s*return null;\n\s*\}/);
-    expect(helper).toContain('const outcome = await notifyOwnerDevices(');
+    expect(helper).toContain('return await attemptRow(row, servicePushPorts(sb));');
   });
 
   it('no device or no keys writes the plain words once to the daily log, and never a key', () => {
-    expect(RUN).toContain('outcome.status === "no_device" ? NO_DEVICE_COPY : PUSH_HELP_COPY');
+    expect(read('supabase/functions/_shared/notablePushServer.ts')).toContain('outcome.status === "no_device" ? NO_DEVICE_COPY : PUSH_HELP_COPY');
     expect(RUN).not.toMatch(/vapid_private_key[^)]*\)\s*,\s*\n\s*detail/);
   });
 

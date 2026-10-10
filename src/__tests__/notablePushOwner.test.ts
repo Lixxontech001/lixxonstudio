@@ -80,13 +80,14 @@ describe('the day run writes the briefing notables through one helper, and the n
 
   it('the one notable writer buzzes only when shouldBuzz allows, and records the push status on the row', () => {
     expect(placement).toMatch(/if \(!shouldBuzz\(kind\)\) return null;/);
-    expect(placement).toMatch(/notifyOwnerDevices\(kind, title, ownerPushDeps\(sb, owner\)\)/);
-    expect(placement).toMatch(/update\(\{ push_note: outcome\.status \}\)/);
+    expect(placement).toContain('return await attemptRow(row, servicePushPorts(sb));');
+    expect(read('supabase/functions/_shared/notablePushServer.ts')).toMatch(/push_note: status/);
   });
 
   it('a missing key or device writes one honest daily-log line, with the same help copy', () => {
-    expect(placement).toMatch(/action: "Owner phone push"/);
-    expect(placement).toMatch(/outcome\.status === "no_device" \? NO_DEVICE_COPY : PUSH_HELP_COPY/);
+    const server = read('supabase/functions/_shared/notablePushServer.ts');
+    expect(server).toMatch(/action: "Owner phone push"/);
+    expect(server).toMatch(/outcome\.status === "no_device" \? NO_DEVICE_COPY : PUSH_HELP_COPY/);
   });
 
   it('night report writes no notables, so it has no push path of its own to route', () => {

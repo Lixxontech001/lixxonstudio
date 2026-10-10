@@ -44,6 +44,11 @@ export interface PushNotifyDeps {
   markGone?: (target: PushTarget) => Promise<void>;
   /** Called for a device the push service accepted, so the owner's Settings page shows the last delivery. */
   markSent?: (target: PushTarget) => Promise<void>;
+  /**
+   * Called once keys and at least one device are present, right before the first send. Returning false means another
+   * attempt holds this notable, so nothing is sent. Phase E: the claim that makes one send per notable.
+   */
+  beforeSend?: () => Promise<boolean>;
 }
 
 function clip(value: string, max: number): string {
@@ -84,6 +89,7 @@ export async function notifyOwnerDevices(kind: string, title: string, deps: Push
     return { status: "failed", ...none, failed: 1 };
   }
   if (targets.length === 0) return { status: "no_device", ...none };
+  if (deps.beforeSend && !(await deps.beforeSend())) return { status: "failed", ...none, failed: 1 };
 
   const payload = pushPayload(kind, title);
   const send = deps.send ?? ((target: PushTarget, body: string, creds: VapidCredentials) => sendPushNotification(target, body, creds));

@@ -15,8 +15,8 @@ import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
 import { LEARN_LOOKBACK_DAYS, learnWindows, type WindowLearning } from "../_shared/packCopy.ts";
 import { doorFailNotices, runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
-import { NO_DEVICE_COPY, PUSH_HELP_COPY, notifyOwnerDevices, shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
-import { ownerNotablePorts, ownerPushDeps, pushNewestNotable } from "../_shared/notablePushServer.ts";
+import { shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
+import { attemptRow, flushUnpushedNotables, ownerNotablePorts, pushNewestNotable, servicePushPorts, type NotableRow } from "../_shared/notablePushServer.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
 import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
 import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
@@ -135,6 +135,9 @@ export async function handleRun(req: Request): Promise<Response> {
     return reply(req, { error: "The Executioner is not configured." }, 503);
   }
   const owner = user.id;
+
+  // Owner pushes that are still waiting go out first, whatever the switches say. A sent row is never sent again.
+  await flushUnpushedNotables(servicePushPorts(sb), Date.now(), owner);
 
   // Switches first. Takeover is on only when the saved value is exactly true. An unknown Kill value stops everything.
   const controlsRow = await sb.from("minds_controls").select("takeover,kill_scope").eq("id", 1).maybeSingle();
@@ -269,7 +272,7 @@ export async function handleRun(req: Request): Promise<Response> {
 async function recordNotable(
   sb: SupabaseClient,
   owner: string,
-  localDay: string,
+  _localDay: string, // The skip line uses the row's own owner day (ownerDayOf), so the run day is not needed here.
   mind: string,
   kind: string,
   title: string,
@@ -282,24 +285,22 @@ async function recordNotable(
     const { data, error } = await sb
       .from("minds_notable_events")
       .insert({ owner_id: owner, mind, kind, title: clip(title, 160), detail: clip(detail, 500), ...(sourceKey ? { source_key: sourceKey } : {}) })
-      .select("id")
+      .select("id,happened_at")
       .single();
     if (error || !data) return null;
     if (!shouldBuzz(kind)) return null;
-    const outcome = await notifyOwnerDevices(kind, title, ownerPushDeps(sb, owner));
-    await sb.from("minds_notable_events").update({ push_note: outcome.status }).eq("id", data.id);
-    if (outcome.status === "no_device" || outcome.status === "not_configured") {
-      await sb.from("minds_daily_log").insert({
-        owner_id: owner,
-        day: localDay,
-        mind,
-        action: "Owner phone push",
-        outcome: "skipped",
-        detail: clip(outcome.status === "no_device" ? NO_DEVICE_COPY : PUSH_HELP_COPY, 500),
-        order_id: null,
-      });
-    }
-    return outcome.status;
+    // The same claim-then-send path as every other owner push. The flush cannot send this row a second time.
+    const row: NotableRow = {
+      id: String(data.id),
+      owner,
+      mind,
+      kind,
+      title,
+      happenedAt: String(data.happened_at ?? new Date().toISOString()),
+      pushNote: null,
+      claimedAt: null,
+    };
+    return await attemptRow(row, servicePushPorts(sb));
   } catch {
     return null;
   }

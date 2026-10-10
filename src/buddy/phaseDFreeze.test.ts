@@ -86,13 +86,13 @@ describe('Phase D freeze, slice 4: notables attempt one owner push', () => {
 
   it('the one notable writer makes one push attempt through the existing helper, and records the status', () => {
     expect(run).toMatch(/if \(!shouldBuzz\(kind\)\) return null;/);
-    expect(run).toMatch(/notifyOwnerDevices\(kind, title, ownerPushDeps\(sb, owner\)\)/);
-    expect(run).toMatch(/update\(\{ push_note: outcome\.status \}\)/);
+    expect(run).toContain('return await attemptRow(row, servicePushPorts(sb));');
+    expect(read('supabase/functions/_shared/notablePushServer.ts')).toMatch(/push_note: status/);
   });
 
   it('missing VAPID is an honest skip with one daily-log line, and no push is sent', () => {
     expect(push).toMatch(/if \(!credentials\) return \{ status: "not_configured"/);
-    expect(run).toMatch(/outcome\.status === "no_device" \|\| outcome\.status === "not_configured"/);
+    expect(read('supabase/functions/_shared/notablePushServer.ts')).toMatch(/outcome\.status === "no_device" \? NO_DEVICE_COPY : PUSH_HELP_COPY/);
   });
 
   it('a gone device is revoked through the record function, never by a direct update', () => {
