@@ -68,12 +68,12 @@ Notes on the files above:
 - `20261016000000_buddy_night_clock.sql`: the header says it applies only when you merge and turn the schedule on. The night report then writes between 23:30 and 04:00 on your clock.
 - `20261010090000_minds_daily_run.sql`: the daily cron line is a comment. It stays a comment until you turn the schedule on (see Owner decisions, item A).
 - `20261019000000_abandoned_carts_no_anon_update.sql`: before you apply it, check the live `abandoned_carts` policies. It drops `abandoned_carts_anon_update` and `rl_ac_update` if they exist. The storefront writes carts only through the database function `upsert_abandoned_cart`.
-- `20261019010000_push_note_pending.sql`: applies the one-send guarantee. Until it is applied, the code does not read `push_claimed_at`, and a send can happen twice if two attempts run at once.
+- `20261019010000_push_note_pending.sql`: applies the one-send guarantee. Until it is applied, the claim cannot be written, and the send goes ahead as it did before Phase E. So two attempts at once can both send.
 - `20261018010000_retire_old_sender_keys.sql`: turns off the old sender key rows (WhatsApp, and the manual Facebook and Pinterest keys). It does not delete any saved value.
 
 ## 4. Deploy the edge functions
 
-The function folder has these twenty functions. Their `verify_jwt` setting is in `supabase/config.toml`. `true (default)` means the function has no entry and uses the default, which is also on. Deploy each one with the Supabase CLI, for example `supabase functions deploy <name>`. `_shared` is a folder of shared code, not a function, and it is not deployed on its own.
+The function folder has these twenty functions. Each one has an explicit `verify_jwt` entry in `supabase/config.toml`, and the table matches that file. Deploy each one with the Supabase CLI, for example `supabase functions deploy <name>`. `_shared` and `_types` are folders of shared code, not functions, and are not deployed on their own.
 
 | Function | verify_jwt |
 |---|---|
@@ -102,20 +102,20 @@ The functions the owner most needs: `buddy-think` (Buddy's chat and the brain ch
 
 ## 5. Keys: paste them only in the app
 
-- Paste every key in **Admin**, on the **Brains** page, the **Connections** page, or the **Keys** page. Never in chat, never in a file, never in git.
+- Paste every key in **Admin**: the **Automation keys** page (`/admin/automation/keys`), the **Brains** page (`/admin/automation/brains`), or **Connections** (`/admin/ai/connections`, linked from Minds). Never in chat, never in a file, never in git.
 - The brain keys are the eight brain slots, with Gemini first. Buddy does not try Cerebras or DeepSeek, so a key for either one changes nothing yet.
 - The door keys are on Connections. A saved value is never shown again.
-- The phone push keys (VAPID) are on **Keys**.
+- The phone push keys (VAPID) are generated and saved on **Automation keys**.
 
 ## 6. Register your phone for push
 
-- On **Keys**, save the VAPID values first.
+- On **Automation keys**, save the VAPID values first.
 - On your phone, open `/admin/settings` and tap **Register this device**. Without VAPID, push is skipped honestly and nothing is sent.
 
 ## 7. Connect only the doors you actually have
 
 - On **Connections**, connect only the doors you have accounts for. A door is "connected" only when every field is saved.
-- **Test** makes a read-only check. It publishes nothing.
+- **Test** checks the connection. It publishes nothing.
 - The four gated channels (Instagram, TikTok, Facebook, Pinterest) are never sent by a robot. Buddy makes the caption, the time, the picture, the video and the link for each. You post by hand, then tap **I posted this**.
 
 ## 8. Open Buddy, and read the briefing
@@ -140,7 +140,7 @@ The functions the owner most needs: `buddy-think` (Buddy's chat and the brain ch
 
 These are your decisions. Each one is either a choice the code already supports, or a limit that the screen or the report states. None is an unfinished code path left for the agent.
 
-- **A. Daily run and the schedule.** The 08:00 Lagos pipeline is in code. The minds' daily run is queued by a cron line that is still a comment (`20261010090000_minds_daily_run.sql`). When that line is on, it queues today's order only. The run starts when you say "run today" in Buddy, or press Run in Minds. A fully automatic daily run is not built. Decide before you turn the schedule on.
+- **A. Daily run and the schedule.** The 08:00 Lagos pipeline is in code. The minds' daily run is queued by a cron line that is still a comment (`20261010090000_minds_daily_run.sql`). When that line is on, it queues today's order only. The run starts when you ask Buddy to run today, with Takeover on. A fully automatic daily run is not built. Decide before you turn the schedule on.
 - **B. "Delete the old one".** Fixed in Phase F: "Delete the old one" and "Erase it" are refused like other deletes, with the refusal line. Nothing for you to decide. Tell the agent if you want a different wording.
 - **C. "Which mind?" for unnamed orders.** Swaps go to the Executioner with no question. Other unnamed orders still ask which mind. Keep the question or drop it.
 - **D. The saved video look.** The Video look screen saves three values. The daily video and the pack video do not read them yet. Decide whether they should, in a later phase.

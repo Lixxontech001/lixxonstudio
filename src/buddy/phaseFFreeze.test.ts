@@ -501,7 +501,7 @@ describe('Phase F freeze: video, night, brains', () => {
     expect(read('supabase/config.toml')).toContain('[functions.automation-scheduler]');
   });
 
-  it('the minds daily-run cron line stays a comment (owner decision A: the run starts on "run today" or Run)', () => {
+  it('the minds daily-run cron line stays a comment (owner decision A: the run starts when the owner asks Buddy to run today, with Takeover on)', () => {
     expect(read('supabase/migrations/20261010090000_minds_daily_run.sql')).toMatch(/^-- SELECT cron\.schedule\('minds-daily-run'/m);
   });
 
