@@ -2,14 +2,14 @@ import { type ReactNode, useState } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 import {
-  LayoutDashboard, FileText, FolderTree, Users, MessageSquare,
+  LayoutDashboard, FileText, FolderTree, Users, MessageSquare, Film,
   Image, Star, Settings, LogOut, PenLine, ExternalLink,
   ShoppingBag, Package, UserCircle, FolderHeart, Mail,
   BarChart3, ShieldCheck, ChevronDown, ChevronRight, Inbox,
   Tag, RotateCcw, ShoppingCart,
   Activity, FileCode, Gift, Share2, Calendar,
   Layers, BookA, MessageCircleQuestion, DatabaseBackup, Moon, Sun,
-  Database, HeartPulse, TrendingUp, Lightbulb, Sparkles, Palette, KeyRound
+  Database, HeartPulse, TrendingUp, Lightbulb, Sparkles, Palette, KeyRound, Cpu
 } from 'lucide-react';
 import { canAccess } from './permissions';
 import { useTheme } from '../context/ThemeContext';
@@ -34,14 +34,15 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Team & access', route: { name: 'admin-access' }, icon: KeyRound },
       { label: 'Health & issues', route: { name: 'admin-health' }, icon: HeartPulse },
       { label: 'Advisor', route: { name: 'admin-advisor' }, icon: Lightbulb },
-      { label: 'Admin AI', route: { name: 'admin-ai' }, icon: Sparkles },
+      { label: 'Minds', route: { name: 'admin-ai' }, icon: Sparkles },
       { label: 'Growth & SEO', route: { name: 'admin-growth' }, icon: TrendingUp },
-      { label: 'Data explorer', route: { name: 'admin-data' }, icon: Database },
+      { label: 'Data', route: { name: 'admin-data' }, icon: Database },
       { label: 'Front end', route: { name: 'admin-frontend' }, icon: Palette },
-      { label: 'Automation keys', route: { name: 'admin-automation-keys' }, href: '/admin/automation/keys', icon: KeyRound },
-      { label: 'System Check', route: { name: 'admin-automation-check' }, href: '/admin/automation/check', icon: HeartPulse },
+      { label: 'Keys', route: { name: 'admin-automation-keys' }, href: '/admin/automation/keys', icon: KeyRound },
+      { label: 'Brains', route: { name: 'admin-automation-brains' }, href: '/admin/automation/brains', icon: Cpu },
+      { label: 'Check', route: { name: 'admin-automation-check' }, href: '/admin/automation/check', icon: HeartPulse },
       { label: 'Run monitor', route: { name: 'admin-automation-runs' }, href: '/admin/automation/runs', icon: Activity },
-      { label: 'Daily Distribution Kit', route: { name: 'admin-automation-distribution' }, href: '/admin/automation/distribution', icon: Share2 },
+      { label: 'Video look', route: { name: 'admin-automation-video-look' }, href: '/admin/automation/video-look', icon: Film },
     ],
   },
   {
@@ -133,7 +134,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <PenLine size={18} strokeWidth={1.5} className="text-bronze" />
             <span className="font-serif text-lg">Lixxon Studio</span>
           </div>
-          <p className="text-xs text-gray-500 mt-1 tracking-wider uppercase">Editorial CMS</p>
+          <p className="text-xs text-gray-500 mt-1 tracking-wider uppercase">Admin</p>
           {adminAccess && (
             <p className="text-[10px] text-gray-500 mt-2 truncate" title={email || ''}>
               <span className="text-bronze uppercase tracking-wider">{adminAccess.role_label || adminAccess.role}</span>

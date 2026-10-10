@@ -59,7 +59,7 @@ const AccountRefundsPage = lazyWithRetry(() => import('./components/shop/Account
 const ReaderProfilePage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage'));
 const SharedListPage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage').then(m => ({ default: m.SharedListPage })));
 const AdminApp = lazyWithRetry(() => import('./admin/AdminApp'));
-const BuddyPwaApp = lazyWithRetry(() => import('./buddy/BuddyPwaApp'));
+const BuddyEntry = lazyWithRetry(() => import('./buddy/BuddyEntry'));
 
 const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
 
@@ -123,7 +123,7 @@ function AppContent() {
   if (buddySurface) {
     return (
       <Suspense fallback={<div role="status" aria-live="polite" className="min-h-screen bg-[#E9E5DC] p-8 text-center text-sm text-charcoal-muted">Loading Buddy…</div>}>
-        <BuddyPwaApp />
+        <BuddyEntry pathname={pathname} />
       </Suspense>
     );
   }

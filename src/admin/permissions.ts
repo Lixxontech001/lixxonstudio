@@ -54,14 +54,17 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   'admin-health': 'ops.health',
   'admin-advisor': 'ops.health',
   'admin-ai': 'admin.ai.run',
+  'admin-connections': 'automation.keys',
   'admin-data': 'data.explore',
   'admin-settings': 'settings.read',
   'admin-frontend': 'settings.frontend',
   'admin-automation-keys': 'automation.keys',
+  'admin-automation-brains': 'automation.keys',
   'admin-automation-check': 'automation.check',
   'admin-automation-articles': 'content.read',
   'admin-automation-runs': 'automation.check',
   'admin-automation-distribution': 'automation.check',
+  'admin-automation-video-look': 'automation.check',
   // 'admin-security' (own 2FA), 'admin', 'admin-login' need no capability
 };
 
@@ -84,7 +87,7 @@ export function canAccess(access: AdminAccess | null, routeName: string): boolea
   if (access.is_founder || access.is_owner) return true;
   // This screen manages application-wide provider secrets: an explicit RBAC
   // override must not turn it into a non-owner capability.
-  if (routeName === 'admin-automation-keys') return false;
+  if (routeName === 'admin-automation-keys' || routeName === 'admin-automation-brains') return false;
   const needed = ROUTE_PERMISSIONS[routeName];
   if (!needed) return true; // e.g. admin-security: any active admin
   return access.permissions.includes(needed);

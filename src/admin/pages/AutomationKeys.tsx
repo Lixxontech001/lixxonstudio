@@ -5,10 +5,12 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import VapidGenerator from '../components/VapidGenerator';
+import { withoutBrainKeys } from '../../lib/brainRows';
 import {
   AUTOMATION_KEY_CATEGORIES,
   automationStatusClass,
   automationTestStatusLabel,
+  keysWithoutDoorDetails,
   parseAutomationKeyList,
   safeAutomationKeyTestResult,
   type AutomationKeyCategory,
@@ -17,28 +19,38 @@ import {
 
 const DEFAULT_VAPID_SUBJECT = 'mailto:owner@lixxonstudio.com';
 
+/** Plain English for a key's label. The catalogue rows in the database still carry engine words; the screen does not show them. */
+function plainKeyLabel(label: string): string {
+  return label
+    .replace(/GitHub Actions dispatch token/g, 'GitHub token for starting jobs')
+    .replace(/GitHub Actions/g, 'GitHub')
+    .replace(/Web Push VAPID /g, 'Phone alert ')
+    .replace(/Web Push /g, 'Phone alert ')
+    .replace(/\bVAPID /g, 'phone alert ')
+    .replace(/ OAuth\b/g, '');
+}
+
 const CATEGORY_LABELS: Record<AutomationKeyCategory, string> = {
-  ai: 'AI providers',
-  actions: 'GitHub Actions',
+  ai: 'Thinking keys',
+  actions: 'Scheduled jobs',
   commerce: 'Commerce & payments',
   email: 'Email',
   social: 'Social & messaging',
   video: 'Video & stock media',
-  push: 'Web Push',
+  push: 'Phone alerts',
 };
 
 function testNote(name: string): string {
   if (name.startsWith('x_')) return 'Local format check only. No X request is made because API access can consume paid credit.';
-  if (name.startsWith('tumblr_')) return 'Local format check only. A provider probe needs the complete OAuth 1.0a channel adapter.';
-  if (name.startsWith('youtube_')) return 'When the client ID, client secret and refresh token are all stored, this tests OAuth and reads the channel ID. Otherwise it checks format only.';
+  if (name.startsWith('tumblr_')) return 'Format check only. The login for Tumblr is not finished, so this only checks the format.';
+  if (name.startsWith('youtube_')) return 'When the client ID, client secret and refresh token are all saved, this logs in to YouTube and reads the channel ID. Otherwise it checks the format only.';
   if (name === 'telegram_chat_id') return 'Private destination for failure alerts; the test checks numeric format locally and sends no message.';
-  if (name === 'whatsapp_access_token' || name === 'whatsapp_phone_number_id') return 'With both the token and phone-number ID stored, this makes one read-only Graph API request; otherwise it checks format only.';
-  if (name === 'github_dispatch_token') return 'Checks read access to this repository only. Workflow-dispatch write permission is not exercised.';
+  if (name === 'github_dispatch_token') return 'Checks that it can read this repository only. Starting a job from here is not tested.';
   if (name === 'coverr_api_key') return 'Makes one read-only video-list request and consumes one Coverr API request from your account quota.';
-  if (name === 'flutterwave_webhook_hash' || name.startsWith('vapid_')) return 'Local format check only. Delivery or webhook verification is tested by its later end-to-end flow.';
-  if (name.endsWith('_client_secret') || name.endsWith('_client_id') || name.endsWith('_client_key')) return 'This app credential cannot authenticate alone; the check validates its format without contacting the provider.';
-  if (name.endsWith('_id') || name.endsWith('_identifier') || name.endsWith('_board_id')) return 'Account identifier only; the check validates its format and makes no provider request.';
-  return 'Makes one read-only provider request. It does not publish, send, charge, or modify account data.';
+  if (name === 'flutterwave_webhook_hash' || name.startsWith('vapid_')) return 'Format check only. Delivery is not tested from here.';
+  if (name.endsWith('_client_secret') || name.endsWith('_client_id') || name.endsWith('_client_key')) return 'This app key cannot log in on its own. The check only checks the format.';
+  if (name.endsWith('_id') || name.endsWith('_identifier') || name.endsWith('_board_id')) return 'Account ID only. The check only checks the format and contacts nothing.';
+  return 'Makes one read-only request to the service. It does not publish, send, charge, or change anything.';
 }
 
 function lastTestTime(value: string | null): string {
@@ -82,7 +94,7 @@ export default function AutomationKeys() {
         setItems([]);
         return false;
       }
-      setItems(safeItems);
+      setItems(withoutBrainKeys(keysWithoutDoorDetails(safeItems)));
       setLoadFailed(false);
       return true;
     } catch {
@@ -112,7 +124,7 @@ export default function AutomationKeys() {
       setNotice({ tone: 'warning', message: 'Paste a credential before saving. The value is never shown again after a save attempt.' });
       return;
     }
-    if (item.configured && !window.confirm(`Replace the stored ${item.label}? The current Vault value will be permanently replaced.`)) return;
+    if (item.configured && !window.confirm(`Replace the saved ${plainKeyLabel(item.label)}? The current value will be permanently replaced.`)) return;
 
     // Remove it from React state before sending the one-time RPC; failed saves are
     // not copied back into the input or browser storage.
@@ -125,10 +137,10 @@ export default function AutomationKeys() {
         p_secret_value: value,
       });
       if (error) {
-        setNotice({ tone: 'error', message: 'Could not save this credential. Confirm owner access and Vault availability, then paste it again.' });
+        setNotice({ tone: 'error', message: 'Could not save this key. Confirm owner access, then paste it again.' });
         return;
       }
-      setNotice({ tone: 'success', message: `${item.label} saved in Supabase Vault. The saved value cannot be viewed here.` });
+      setNotice({ tone: 'success', message: `${plainKeyLabel(item.label)} saved. It cannot be shown again.` });
       await refresh();
     } catch {
       setNotice({ tone: 'error', message: 'Could not save this credential. No value was retained in the form; check the connection and paste it again.' });
@@ -138,7 +150,7 @@ export default function AutomationKeys() {
   };
 
   const remove = async (item: AutomationKeyEntry) => {
-    if (!item.configured || !window.confirm(`Permanently delete the stored ${item.label} from Supabase Vault?`)) return;
+    if (!item.configured || !window.confirm(`Permanently delete the saved ${plainKeyLabel(item.label)}?`)) return;
     setDrafts(current => ({ ...current, [item.name]: '' }));
     setBusyName(item.name);
     setNotice(null);
@@ -148,7 +160,7 @@ export default function AutomationKeys() {
         setNotice({ tone: 'error', message: 'Could not delete this credential. Confirm owner access and try again.' });
         return;
       }
-      setNotice({ tone: 'success', message: `${item.label} was deleted from Vault.` });
+      setNotice({ tone: 'success', message: `${plainKeyLabel(item.label)} was deleted.` });
       await refresh();
     } catch {
       setNotice({ tone: 'error', message: 'Could not delete this credential. Check the connection and try again.' });
@@ -166,18 +178,18 @@ export default function AutomationKeys() {
         body: { action: 'test', name: item.name },
       });
       if (error) {
-        setNotice({ tone: 'error', message: 'The owner-only key test could not complete. No provider response or credential was shown.' });
+        setNotice({ tone: 'error', message: 'The owner-only key test could not complete. Nothing was shown.' });
         return;
       }
       const result = safeAutomationKeyTestResult(data);
       if (!result) {
-        setNotice({ tone: 'error', message: 'The key test returned an unrecognized result. No provider response was shown.' });
+        setNotice({ tone: 'error', message: 'The key test returned an unrecognized result. Nothing was shown.' });
         return;
       }
       setNotice(statusNotice(result.status));
       await refresh();
     } catch {
-      setNotice({ tone: 'error', message: 'The key test could not complete. No provider response or credential was shown.' });
+      setNotice({ tone: 'error', message: 'The key test could not complete. Nothing was shown.' });
     } finally {
       setBusyName(null);
     }
@@ -190,7 +202,7 @@ export default function AutomationKeys() {
       return;
     }
     if (items.some(item => item.name.startsWith('vapid_') && item.configured)
-      && !window.confirm('Replace the stored VAPID keypair and contact subject? The current private key will be permanently replaced.')) return;
+      && !window.confirm('Replace the saved phone alert keys and contact address? The current private key will be permanently replaced.')) return;
 
     setBusyName('__vapid__');
     try {
@@ -199,14 +211,14 @@ export default function AutomationKeys() {
       });
       const publicKey = (data as { public_key?: unknown } | null)?.public_key;
       if (error || typeof publicKey !== 'string') {
-        setNotice({ tone: 'error', message: 'VAPID generation failed; private key not returned.' });
+        setNotice({ tone: 'error', message: 'Could not make the phone alert keys. Nothing was shown.' });
         return;
       }
       setGeneratedVapidPublicKey(publicKey);
-      setNotice({ tone: 'success', message: 'Generated VAPID pair; private key in Vault, not returned.' });
+      setNotice({ tone: 'success', message: 'Phone alert keys made. The private key is saved and cannot be shown.' });
       await refresh();
     } catch {
-      setNotice({ tone: 'error', message: 'VAPID generation failed; private key not returned.' });
+      setNotice({ tone: 'error', message: 'Could not make the phone alert keys. Nothing was shown.' });
     } finally {
       setBusyName(null);
     }
@@ -224,8 +236,11 @@ export default function AutomationKeys() {
           </div>
           <h1 className="font-serif text-3xl text-charcoal">Keys & connections</h1>
           <p className="text-sm text-gray-600 mt-2 max-w-3xl">
-            Owner-only Vault storage for AI, Actions, commerce, messaging, social, video and push credentials.
+            Owner-only saved keys for thinking, scheduled jobs, the shop, messages, social, video and phone alerts.
             Saved values are never returned to this page and cannot be revealed or copied here.
+          </p>
+          <p className="text-sm text-gray-600 mt-2 max-w-3xl">
+            Buddy's brain keys (Google, Groq and the rest) are on the <a className="underline" href="/admin/automation/brains">Brains page</a>.
           </p>
         </div>
         <button
@@ -242,7 +257,7 @@ export default function AutomationKeys() {
       <section className="grid gap-3 sm:grid-cols-2" aria-label="Key storage protections">
         <div className="flex gap-3 rounded-sm border border-emerald-200 bg-emerald-50 p-4">
           <LockKeyhole size={18} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden="true" />
-          <p className="text-sm text-emerald-900"><strong>Encrypted at rest.</strong> Vault values are retrieved only by server-side automation functions.</p>
+          <p className="text-sm text-emerald-900"><strong>Encrypted at rest.</strong> Saved keys are read only by the automation functions on the server.</p>
         </div>
         <div className="flex gap-3 rounded-sm border border-sky-200 bg-sky-50 p-4">
           <ShieldCheck size={18} className="mt-0.5 shrink-0 text-sky-700" aria-hidden="true" />
@@ -268,7 +283,7 @@ export default function AutomationKeys() {
 
       {loadFailed && (
         <div role="alert" className="rounded-sm border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-          The owner-only key catalogue could not be loaded. Confirm that you are an active owner and that the automation migrations are deployed. No credential values were received.
+          The key list could not be loaded. Confirm that you are signed in as the owner and that the database updates are in place. No saved values were received.
         </div>
       )}
 
@@ -316,11 +331,11 @@ export default function AutomationKeys() {
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <h2 className="font-medium text-charcoal">{item.label}</h2>
+                                <h2 className="font-medium text-charcoal">{plainKeyLabel(item.label)}</h2>
                                 <span className={`inline-flex min-h-6 items-center rounded-full border px-2 text-[11px] font-medium ${
                                   item.configured ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-gray-200 bg-gray-50 text-gray-600'
                                 }`}>
-                                  {item.configured ? '•••••••• Stored in Vault' : 'Not configured'}
+                                  {item.configured ? '•••••••• Saved. It cannot be shown.' : 'Not configured'}
                                 </span>
                                 <span className={`inline-flex min-h-6 items-center rounded-full border px-2 text-[11px] ${statusClass}`}>
                                   {automationTestStatusLabel(item.last_test_status)}
@@ -338,7 +353,7 @@ export default function AutomationKeys() {
                                 type="button"
                                 onClick={() => void test(item)}
                                 disabled={!item.configured || busyName !== null}
-                                aria-label={`Test ${item.label}`}
+                                aria-label={`Test ${plainKeyLabel(item.label)}`}
                                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {isBusy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <FlaskConical size={15} aria-hidden="true" />}
@@ -348,7 +363,7 @@ export default function AutomationKeys() {
                                 type="button"
                                 onClick={() => void remove(item)}
                                 disabled={!item.configured || busyName !== null}
-                                aria-label={`Delete ${item.label}`}
+                                aria-label={`Delete ${plainKeyLabel(item.label)}`}
                                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-red-200 bg-white px-3 text-sm text-red-800 hover:border-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 <Trash2 size={15} aria-hidden="true" />
@@ -371,12 +386,12 @@ export default function AutomationKeys() {
                                 autoComplete="off"
                                 spellCheck={false}
                                 maxLength={10000}
-                                placeholder={item.configured ? 'Paste to replace the stored value' : 'Paste value'}
+                                placeholder={item.configured ? 'Paste to replace the saved value' : 'Paste value'}
                                 aria-describedby={`automation-key-help-${item.name}`}
                                 className="min-h-11 w-full rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze"
                               />
                               <p id={`automation-key-help-${item.name}`} className="mt-1 text-xs text-gray-500">
-                                {item.credential_type === 'secret' ? 'Hidden while typing; cleared from the form after the save attempt.' : 'Account identifier/public value; stored encrypted and not displayed again after saving.'}
+                                {item.credential_type === 'secret' ? 'Hidden while typing; cleared from the form after the save attempt.' : 'Account ID or public value. Saved safely and not shown again after saving.'}
                               </p>
                             </div>
                             <button
@@ -401,7 +416,7 @@ export default function AutomationKeys() {
       )}
 
       <p className="border-t border-gray-200 pt-4 text-xs leading-5 text-gray-500">
-        Keys saved here are stored in Supabase Vault for the automation runtime. Existing deployment credentials for checkout, scheduled email, Supabase and Vercel remain in their current infrastructure settings until their later migration is evidenced. See <code>docs/AUTOMATION_SETUP.md</code> for the exact key names and limitations.
+        Keys saved here are stored for the automation functions. Existing deployment credentials for checkout, scheduled email, Supabase and Vercel remain in their current infrastructure settings until they are moved here. See <code>docs/AUTOMATION_SETUP.md</code> for the exact key names and limitations.
       </p>
     </div>
   );

@@ -22,7 +22,7 @@ export const MAX_TEMPLATE_BYTES = 4096;
 /** The look the renderer shipped with, now expressible as a document. */
 export const DEFAULT_VIDEO_TEMPLATE = Object.freeze({
   schema: VIDEO_TEMPLATE_SCHEMA,
-  name: 'Lagos daylight (default)',
+  name: 'Clear daylight (default)',
   duration_seconds: 12,
   music: 'none',
   fps: 30,

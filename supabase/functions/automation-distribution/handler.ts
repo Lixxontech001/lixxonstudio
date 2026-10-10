@@ -29,7 +29,7 @@ const MAX_BODY_BYTES = 2048;
 const PROVIDER_TIMEOUT_MS = 8_000;
 const CHANNELS: readonly DistributionAdapterChannel[] = [
   "instagram", "facebook", "youtube_shorts", "tiktok", "pinterest", "telegram",
-  "threads", "linkedin", "x", "tumblr", "whatsapp", "newsletter", "site_widget",
+  "threads", "linkedin", "x", "tumblr", "newsletter", "site_widget",
 ];
 
 export interface DistributionHandlerDeps {
@@ -125,7 +125,6 @@ async function credentialsFor(sb: ReturnType<typeof serviceClient>, channel: Dis
     linkedin: ["linkedin_access_token", "linkedin_organization_id"],
     x: ["x_api_key", "x_api_secret", "x_access_token", "x_access_token_secret"],
     tumblr: ["tumblr_consumer_key", "tumblr_consumer_secret", "tumblr_access_token", "tumblr_token_secret", "tumblr_blog_identifier"],
-    whatsapp: ["whatsapp_access_token", "whatsapp_phone_number_id"],
     newsletter: ["resend_api_key"],
     site_widget: [],
   };
@@ -145,7 +144,6 @@ function pairConfigured(channel: DistributionAdapterChannel, secrets: Distributi
     linkedin: ["linkedin_access_token", "linkedin_organization_id"],
     x: ["x_api_key", "x_api_secret", "x_access_token", "x_access_token_secret"],
     tumblr: ["tumblr_consumer_key", "tumblr_consumer_secret", "tumblr_access_token", "tumblr_token_secret", "tumblr_blog_identifier"],
-    whatsapp: ["whatsapp_access_token", "whatsapp_phone_number_id"],
     newsletter: ["resend_api_key"],
     site_widget: [],
   };

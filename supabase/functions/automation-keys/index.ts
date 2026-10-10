@@ -5,6 +5,7 @@ import {
   serviceClient,
   sha256,
 } from "../_shared/http.ts";
+import { isNotOfferedKey } from "../_shared/notOfferedKeys.ts";
 import {
   buildProviderCheckRequest,
   classifyProviderResponse,
@@ -270,46 +271,14 @@ async function testYouTubeCredential(
   }
 }
 
-async function testWhatsAppCredential(
-  sb: ReturnType<typeof serviceClient>,
-  currentName: string,
-  currentValue: string,
-): Promise<AutomationKeyTestStatus> {
-  const token = currentName === "whatsapp_access_token"
-    ? currentValue
-    : await getVaultCredential(sb, "whatsapp_access_token");
-  const phoneId = currentName === "whatsapp_phone_number_id"
-    ? currentValue
-    : await getVaultCredential(sb, "whatsapp_phone_number_id");
-
-  if (!token || !phoneId) {
-    if (currentName === "whatsapp_phone_number_id") return localFallback(currentName, currentValue);
-    return currentValue.trim().length >= 12 ? "local_ok" : "invalid";
-  }
-
-  const safePhoneId = phoneId.trim();
-  if (!/^[A-Za-z0-9_-]{1,128}$/.test(safePhoneId)) return "invalid";
-  return await fetchReadOnly({
-    url: `https://graph.facebook.com/v23.0/${encodeURIComponent(safePhoneId)}?fields=id`,
-    init: {
-      method: "GET",
-      redirect: "error",
-      cache: "no-store",
-      referrerPolicy: "no-referrer",
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-    },
-  });
-}
-
 async function runKeyTest(
   sb: ReturnType<typeof serviceClient>,
   name: string,
   value: string,
 ): Promise<AutomationKeyTestStatus> {
   if (name.startsWith("youtube_")) return await testYouTubeCredential(sb, name, value);
-  if (name === "whatsapp_access_token" || name === "whatsapp_phone_number_id") {
-    return await testWhatsAppCredential(sb, name, value);
-  }
+  // Names this site never offers (WhatsApp) get no test and no provider request.
+  if (isNotOfferedKey(name)) return "invalid";
 
   const localStatus = localCredentialCheck(name, value);
   if (localStatus) return localStatus;

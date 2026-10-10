@@ -79,17 +79,19 @@ describe('admin RBAC map vs the database catalogue', () => {
     expect(ADMIN_APP).toContain("const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));");
     expect(ADMIN_APP).toContain("const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));");
     expect(ADMIN_APP).toContain("const AutomationRuns = lazy(() => import('./pages/AutomationRuns'));");
-    expect(ADMIN_APP).toContain("const AutomationDistribution = lazy(() => import('./pages/AutomationDistribution'));");
     expect(ADMIN_APP).toContain('resolveAutomationAdminRoute(path) ?? route.name');
     expect(ADMIN_APP).toContain("case 'admin-automation-check':");
     expect(ADMIN_APP).toContain("case 'admin-automation-articles':");
     expect(ADMIN_APP).toContain("case 'admin-automation-runs':");
+    // Phase 5: the retired Distribution address opens Minds, never the old screen.
     expect(ADMIN_APP).toContain("case 'admin-automation-distribution':");
+    expect(ADMIN_APP).toContain('RetiredDistributionRedirect');
+    expect(ADMIN_APP).not.toContain("import('./pages/AutomationDistribution')");
     expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/keys'");
     expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/check'");
     expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/articles'");
     expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/runs'");
-    expect(ADMIN_LAYOUT).toContain("href: '/admin/automation/distribution'");
+    expect(ADMIN_LAYOUT).not.toContain("href: '/admin/automation/distribution'");
   });
 
   it('refuses a route when the permission is absent, and allows it when present', () => {

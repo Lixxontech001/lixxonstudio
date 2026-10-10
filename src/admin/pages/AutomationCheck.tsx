@@ -48,8 +48,8 @@ const STATUS_CLASSES: Record<AutomationHealthStatus, string> = {
 
 function apiError(status: number): string {
   if (status === 401) return 'Your admin session is missing or expired. Sign in again.';
-  if (status === 403) return 'Your account does not have the database-verified automation health permission.';
-  return 'The read-only automation health check is temporarily unavailable. No provider output was returned.';
+  if (status === 403) return 'Your account is not allowed to see this check.';
+  return 'The check is unavailable for now. Nothing was changed.';
 }
 
 function displayTime(value: string): string {
@@ -87,7 +87,7 @@ export default function AutomationCheck() {
       const payload: unknown = await response.json();
       if (!isSafeHealthSnapshot(payload)) {
         setSnapshot(null);
-        setError('The health endpoint returned an incomplete or unrecognized safe schema.');
+        setError('The check returned an incomplete or unrecognized result.');
         return;
       }
       setSnapshot(payload);
@@ -128,10 +128,10 @@ export default function AutomationCheck() {
             <ShieldCheck size={18} aria-hidden="true" />
             <span className="text-xs font-semibold uppercase tracking-[0.18em]">Automation diagnostics</span>
           </div>
-          <h1 className="font-serif text-3xl text-charcoal">System Check</h1>
+          <h1 className="font-serif text-3xl text-charcoal">Check</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-            Read-only evidence from the database and recorded job metadata. This page does not contact providers,
-            enable switches, dispatch jobs, publish content, or expose credential values.
+            Read-only facts from the database and the job records. This page does not contact services,
+            turn switches on, start jobs, publish content, or show key values.
           </p>
         </div>
         <button
@@ -148,8 +148,8 @@ export default function AutomationCheck() {
       <section className="flex gap-3 rounded-sm border border-sky-200 bg-sky-50 p-4" aria-label="Check meaning">
         <Info size={18} className="mt-0.5 shrink-0 text-sky-700" aria-hidden="true" />
         <p className="text-sm leading-6 text-sky-950">
-          <strong>Healthy</strong> requires recorded evidence. A saved key alone is not proof of connectivity;
-          quota, channel-readback, webhook-signature, and delivery checks remain explicitly unverified until tested.
+          <strong>Healthy</strong> needs a recorded result. A saved key alone does not prove the connection works;
+          limit, read-back, webhook and delivery checks stay marked as not checked until they are tested.
           “Not configured” is expected for disabled future-phase features.
         </p>
       </section>
@@ -166,7 +166,7 @@ export default function AutomationCheck() {
         </div>
       ) : snapshot && (
         <>
-          <section aria-label="System check summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <section aria-label="Check summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {DISPLAY_STATUSES.map(status => (
               <div key={status} className={`rounded-sm border p-3 ${STATUS_CLASSES[status]}`}>
                 <p className="text-xs uppercase tracking-wide">{STATUS_LABELS[status]}</p>

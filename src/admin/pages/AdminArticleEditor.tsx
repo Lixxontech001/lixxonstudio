@@ -977,7 +977,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
             <div className="bg-white border border-gray-200 rounded-lg p-4 text-xs text-gray-500 space-y-1">
               <p className="flex items-center gap-1 text-gray-700 font-medium"><ShieldCheck size={13} /> Editorial rules</p>
               <p>Every save is captured as a revision by the database, so nothing typed here is ever lost.</p>
-              <p>Quality score is computed in Postgres — the same number search engines and the dashboard see.</p>
+              <p>Quality score is worked out on the server — the same number search engines and the dashboard see.</p>
             </div>
           </div>
         )}

@@ -9,7 +9,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 const SURFACES: Array<{ id: InstallableSurface; title: string; href: string; description: string }> = [
   { id: 'owner', title: 'Owner/Admin', href: '/admin/dashboard', description: 'Secure controls, daily kit and owner alerts.' },
-  { id: 'buddy', title: 'Buddy', href: '/buddy', description: 'A safe assistant with an offline-safe review queue.' },
+  { id: 'buddy', title: 'Buddy', href: '/buddy', description: 'Your private chat with Buddy, for owners only.' },
   { id: 'reader', title: 'Reader', href: '/', description: 'The existing magazine and shop app.' },
 ];
 

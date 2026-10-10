@@ -44,9 +44,10 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install --yes --no-install-recommends ffmpeg fonts-dejavu-core
+          sudo apt-get install --yes --no-install-recommends ffmpeg fonts-dejavu-core espeak-ng
           ffmpeg -hide_banner -version | sed -n '1p'
           ffprobe -hide_banner -version | sed -n '1p'
+          espeak-ng --version | sed -n '1p'
           ffmpeg -filters > "$RUNNER_TEMP/ffmpeg-filters.txt" 2>&1
           grep -qE '[[:space:]]zoompan[[:space:]]' "$RUNNER_TEMP/ffmpeg-filters.txt"
           grep -qE '[[:space:]]drawtext[[:space:]]' "$RUNNER_TEMP/ffmpeg-filters.txt"

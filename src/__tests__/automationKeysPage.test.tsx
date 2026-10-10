@@ -135,7 +135,7 @@ describe('Automation Keys page', () => {
     expect(replaceButton).toBeDefined();
     await act(async () => { replaceButton!.click(); await Promise.resolve(); });
     await settle();
-    expect(window.confirm).toHaveBeenCalledWith('Replace the stored OpenAI API key? The current Vault value will be permanently replaced.');
+    expect(window.confirm).toHaveBeenCalledWith('Replace the saved OpenAI API key? The current value will be permanently replaced.');
     expect(savedValues).toEqual([FAKE_KEY, REPLACEMENT_KEY]);
     expect(input?.value).toBe('');
     expect(el.textContent).not.toContain(REPLACEMENT_KEY);
@@ -144,7 +144,7 @@ describe('Automation Keys page', () => {
     expect(deleteButton).toBeDefined();
     await act(async () => { deleteButton!.click(); await Promise.resolve(); });
     await settle();
-    expect(window.confirm).toHaveBeenCalledWith('Permanently delete the stored OpenAI API key from Supabase Vault?');
+    expect(window.confirm).toHaveBeenCalledWith('Permanently delete the saved OpenAI API key?');
     expect(el.textContent).toContain('Not configured');
     expect(el.textContent).not.toContain(FAKE_KEY);
     expect(el.textContent).not.toContain(REPLACEMENT_KEY);
@@ -180,7 +180,7 @@ describe('Automation Keys page', () => {
     await act(async () => { root.render(<AutomationKeys />); await Promise.resolve(); });
     await settle();
 
-    const generateButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.includes('Generate VAPID keypair'));
+    const generateButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.includes('Make phone alert keys'));
     expect(generateButton).toBeDefined();
     await act(async () => { generateButton!.click(); await Promise.resolve(); });
     await settle();
@@ -189,7 +189,7 @@ describe('Automation Keys page', () => {
       body: { action: 'generate_vapid', subject: 'mailto:owner@lixxonstudio.com' },
     });
     expect(el.querySelector<HTMLInputElement>('#generated-vapid-public-key')?.value).toBe('PUBLIC-KEY-ONLY');
-    expect(el.textContent).toContain('private key in Vault, not returned.');
+    expect(el.textContent).toContain('The private key is saved and cannot be shown.');
     expect(el.textContent).not.toContain('private_key');
   });
 });

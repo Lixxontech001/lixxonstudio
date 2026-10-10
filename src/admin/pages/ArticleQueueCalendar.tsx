@@ -111,11 +111,11 @@ function makeId(): string {
 
 function monthName(day: string): string {
   const date = new Date(`${day}T12:00:00Z`);
-  return new Intl.DateTimeFormat('en-NG', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
+  return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
 }
 
 function dateLabel(day: string, options: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric' }): string {
-  return new Intl.DateTimeFormat('en-NG', { ...options, timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`));
+  return new Intl.DateTimeFormat('en-GB', { ...options, timeZone: 'UTC' }).format(new Date(`${day}T12:00:00Z`));
 }
 
 function getCalendarRange(selectedDay: string, mode: CalendarMode): CalendarRange {
@@ -192,7 +192,7 @@ function MetadataDateEditor({ record, canWrite, onSaved }: { record: IntakeRecor
   const saveDate = async () => {
     const proposed = lagosInputToIso(value);
     if (!proposed || new Date(proposed).getTime() <= Date.now()) {
-      setError('Choose a valid future date and time in Africa/Lagos.');
+      setError('Choose a valid future date and time on your studio clock.');
       return;
     }
     setBusy(true); setError(''); setMessage('');
@@ -201,7 +201,7 @@ function MetadataDateEditor({ record, canWrite, onSaved }: { record: IntakeRecor
         p_proposed_publish_at: proposed, p_post_id: post.id,
       });
       if (capacityError || !capacity?.allowed) {
-        setError('Date unavailable; choose a future Lagos day with capacity.');
+        setError('Date unavailable; choose a future day with room on your studio clock.');
         return;
       }
       const { error: saveError } = await supabase.rpc('article_intake_save', {
@@ -225,7 +225,7 @@ function MetadataDateEditor({ record, canWrite, onSaved }: { record: IntakeRecor
   return (
     <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
       <label className="block flex-1 text-xs font-medium text-gray-600">
-        Proposed Lagos date and time (WAT)
+        Proposed date and time (studio clock)
         <input type="datetime-local" value={value} onChange={e => { setValue(e.target.value); setError(''); setMessage(''); }} disabled={!canWrite || busy || post.status !== 'draft'} className="mt-1 min-h-11 w-full rounded border border-gray-300 bg-white px-3 text-sm text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:bg-gray-100" />
       </label>
       <button type="button" onClick={() => void saveDate()} disabled={!canWrite || busy || post.status !== 'draft'} className="min-h-11 rounded border border-gray-300 px-4 text-sm font-medium text-charcoal hover:border-bronze disabled:cursor-not-allowed disabled:opacity-50">
@@ -500,7 +500,7 @@ export default function ArticleQueueCalendar() {
       return;
     }
     const proposed = lagosInputToIso(row.metadata.proposedAt);
-    if (!proposed) { updateDraft(row.id, { saving: false, saveError: 'Choose a valid future date and time in Lagos.' }); return; }
+    if (!proposed) { updateDraft(row.id, { saving: false, saveError: 'Choose a valid future date and time on your studio clock.' }); return; }
 
     const slug = row.metadata.slug.trim().toLowerCase();
     try {
@@ -522,7 +522,7 @@ export default function ArticleQueueCalendar() {
         p_post_id: row.savedPostId,
       });
       if (slotError || !slot?.allowed) {
-        updateDraft(row.id, { attempted: true, saving: false, saveError: 'That Lagos date is past, full, or could not be checked. Choose a future day with fewer than two articles.' });
+        updateDraft(row.id, { attempted: true, saving: false, saveError: 'That date is past, full, or could not be checked on your studio clock. Choose a future day with fewer than two articles.' });
         return;
       }
 
@@ -640,7 +640,7 @@ export default function ArticleQueueCalendar() {
     if (event.kind === 'rejected') { setDropError('Rejected items cannot be moved. Reopen the draft from the queue first.'); return; }
     const wallTime = isoToLagosInput(event.at).split('T')[1] || '08:00';
     const proposed = lagosDayAtTimeToIso(date, wallTime);
-    if (!proposed || new Date(proposed).getTime() <= Date.now()) { setDropError('Choose a future Lagos date and time.'); return; }
+    if (!proposed || new Date(proposed).getTime() <= Date.now()) { setDropError('Choose a future date and time on your studio clock.'); return; }
     setDropBusy(true); setDropError('');
     try {
       if (event.kind === 'proposal' && event.meta) {
@@ -760,7 +760,7 @@ export default function ArticleQueueCalendar() {
                         <input value={row.metadata.coverImageAlt} maxLength={250} onChange={e => updateMetadata(row.id, { coverImageAlt: e.target.value })} disabled={!canWrite || row.saving} className="mt-1 min-h-11 w-full rounded border border-gray-300 px-3 text-sm" />
                       </label>
                     </div>
-                    <label className="text-sm font-medium text-gray-700 sm:col-span-2">Proposed publication date and time (Africa/Lagos, WAT)
+                    <label className="text-sm font-medium text-gray-700 sm:col-span-2">Proposed publication date and time (studio clock)
                       <input type="datetime-local" value={row.metadata.proposedAt} onChange={e => updateMetadata(row.id, { proposedAt: e.target.value })} disabled={!canWrite || row.saving} className="mt-1 min-h-11 w-full rounded border border-gray-300 px-3 text-sm sm:max-w-sm" />
                     </label>
                   </div>
@@ -809,7 +809,7 @@ export default function ArticleQueueCalendar() {
         </section>
       )}
 
-      {dropRequest && <div role="dialog" aria-modal="true" aria-labelledby="reschedule-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"><h2 id="reschedule-title" className="font-serif text-xl text-gray-900">Confirm reschedule</h2><p className="mt-2 text-sm text-gray-700">Move “{dropRequest.event.post.title}” to {dateLabel(dropRequest.date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} (Lagos)? Its time stays the same. {dropRequest.event.kind === 'scheduled' ? 'Channel distribution remains unapproved.' : 'The draft stays unpublished.'}</p>{dropError && <p role="alert" className="mt-3 text-sm text-red-700">{dropError}</p>}<div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => { setDropRequest(null); setDropError(''); }} disabled={dropBusy} className="min-h-11 rounded border border-gray-300 px-4 text-sm">Cancel</button><button type="button" onClick={() => void confirmReschedule()} disabled={dropBusy || (dropRequest.event.kind === 'scheduled' ? !canPublish : !canWrite)} className="min-h-11 rounded bg-bronze px-4 text-sm font-semibold text-white disabled:opacity-50">{dropBusy ? 'Saving…' : 'Confirm change'}</button></div></div></div>}
+      {dropRequest && <div role="dialog" aria-modal="true" aria-labelledby="reschedule-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"><h2 id="reschedule-title" className="font-serif text-xl text-gray-900">Confirm reschedule</h2><p className="mt-2 text-sm text-gray-700">Move “{dropRequest.event.post.title}” to {dateLabel(dropRequest.date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} on your studio clock? Its time stays the same. {dropRequest.event.kind === 'scheduled' ? 'Channel distribution remains unapproved.' : 'The draft stays unpublished.'}</p>{dropError && <p role="alert" className="mt-3 text-sm text-red-700">{dropError}</p>}<div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => { setDropRequest(null); setDropError(''); }} disabled={dropBusy} className="min-h-11 rounded border border-gray-300 px-4 text-sm">Cancel</button><button type="button" onClick={() => void confirmReschedule()} disabled={dropBusy || (dropRequest.event.kind === 'scheduled' ? !canPublish : !canWrite)} className="min-h-11 rounded bg-bronze px-4 text-sm font-semibold text-white disabled:opacity-50">{dropBusy ? 'Saving…' : 'Confirm change'}</button></div></div></div>}
     </div>
   );
 }

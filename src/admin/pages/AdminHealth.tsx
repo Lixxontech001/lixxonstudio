@@ -24,6 +24,19 @@ type Metrics = {
 
 const bytes = (n: number) => n > 1024 * 1024 * 1024 ? `${(n / 1024 / 1024 / 1024).toFixed(2)} GB` : n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
 
+const CHECK_LABELS: Record<string, string> = {
+  'db.cache_hit': 'Reads served from memory',
+  'db.unindexed_fk': 'Links without a quick lookup',
+  'db.seq_scans': 'Tables read the slow way',
+  'db.dead_tuples': 'Tables needing a clean-up',
+  'security.rls': 'Tables without access rules',
+};
+
+/** Plain English for a check's label. The check text itself is written in the database; this only changes the label on screen. */
+function plainCheckLabel(c: { key: string; label: string }): string {
+  return CHECK_LABELS[c.key] || c.label.replace(/ & /g, ' and ');
+}
+
 export default function AdminHealth() {
   const { can } = useAuth();
   const { navigate } = useNavigation();
@@ -100,14 +113,14 @@ export default function AdminHealth() {
               <div key={c.key} className="border border-taupe/30 rounded-sm p-4">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <Severity level={c.severity} />
-                  <span className="text-sm text-charcoal font-medium">{c.label}</span>
+                  <span className="text-sm text-charcoal font-medium">{plainCheckLabel(c)}</span>
                   <span className="text-[10px] uppercase tracking-wide text-charcoal-muted">{c.category}</span>
                 </div>
                 <p className="text-xs text-charcoal-light">{c.detail}</p>
                 {c.suggestion && <p className="text-xs text-charcoal-muted mt-1">{c.suggestion}</p>}
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   {c.fix_key && canFix && <Btn variant="ghost" icon={<Wrench size={12} />} busy={action.busy === `fix-${c.key}`} onClick={() => fix(c)}>Fix now</Btn>}
-                  {c.fix_key && !canFix && <span className="text-[11px] text-charcoal-muted">Needs <code>ops.fix</code> to repair.</span>}
+                  {c.fix_key && !canFix && <span className="text-[11px] text-charcoal-muted">You need the repair permission to fix this.</span>}
                   {c.action_route && <Btn variant="ghost" onClick={() => navigate({ name: c.action_route } as never)}>{c.action_label || 'Open'}</Btn>}
                 </div>
               </div>
@@ -120,12 +133,12 @@ export default function AdminHealth() {
         {metrics.loading ? <Loading /> : metrics.error ? <Notice tone="error">{metrics.error}</Notice> : metrics.data && (
           <>
             <div className="grid sm:grid-cols-3 gap-3 mb-4 text-sm">
-              <div><p className="text-xs text-charcoal-muted">Database</p><p className="text-charcoal">{metrics.data.database_pretty} of {bytes(metrics.data.free_tier_limit)}</p></div>
-              <div><p className="text-xs text-charcoal-muted">Cache hit ratio</p><p className="text-charcoal">{Math.round((metrics.data.cache_hit || 0) * 1000) / 10}%</p></div>
+              <div><p className="text-xs text-charcoal-muted">Database size</p><p className="text-charcoal">{metrics.data.database_pretty} of {bytes(metrics.data.free_tier_limit)}</p></div>
+              <div><p className="text-xs text-charcoal-muted">Reads served from memory</p><p className="text-charcoal">{Math.round((metrics.data.cache_hit || 0) * 1000) / 10}%</p></div>
               <div><p className="text-xs text-charcoal-muted">Connections</p><p className="text-charcoal">{metrics.data.connections}</p></div>
-              <div><p className="text-xs text-charcoal-muted">Tables / indexes</p><p className="text-charcoal">{metrics.data.tables} / {metrics.data.indexes}</p></div>
+              <div><p className="text-xs text-charcoal-muted">Tables and lookups</p><p className="text-charcoal">{metrics.data.tables} / {metrics.data.indexes}</p></div>
               <div><p className="text-xs text-charcoal-muted">Estimated rows</p><p className="text-charcoal">{metrics.data.estimated_rows.toLocaleString()}</p></div>
-              <div><p className="text-xs text-charcoal-muted">PostgreSQL</p><p className="text-charcoal">{metrics.data.server_version}</p></div>
+              <div><p className="text-xs text-charcoal-muted">Database version</p><p className="text-charcoal">{metrics.data.server_version}</p></div>
             </div>
             <div className="h-2 bg-taupe-light/50 rounded-sm mb-5">
               <div className={`h-2 rounded-sm ${metrics.data.database_size / metrics.data.free_tier_limit > 0.9 ? 'bg-red-500' : 'bg-bronze'}`}
@@ -135,7 +148,7 @@ export default function AdminHealth() {
             <p className="text-xs font-medium text-charcoal mb-2 flex items-center gap-1.5"><HardDrive size={13} /> Largest tables</p>
             <div className="overflow-auto mb-4">
               <table className="min-w-full text-xs">
-                <thead><tr className="text-charcoal-muted text-left"><th className="p-2">Table</th><th className="p-2">Size</th><th className="p-2">Rows</th><th className="p-2">Dead</th><th className="p-2">Seq / idx scans</th></tr></thead>
+                <thead><tr className="text-charcoal-muted text-left"><th className="p-2">Table</th><th className="p-2">Size</th><th className="p-2">Rows</th><th className="p-2">Old rows to clean</th><th className="p-2">Full scans / quick lookups</th></tr></thead>
                 <tbody>
                   {metrics.data.top_tables.map(t => (
                     <tr key={t.table} className="border-t border-taupe/15">
@@ -151,7 +164,7 @@ export default function AdminHealth() {
 
             {metrics.data.unused_indexes.length > 0 && (
               <>
-                <p className="text-xs font-medium text-charcoal mb-2 flex items-center gap-1.5"><Database size={13} /> Indexes never used since the last stats reset</p>
+                <p className="text-xs font-medium text-charcoal mb-2 flex items-center gap-1.5"><Database size={13} /> Lookups never used since the counts were last reset</p>
                 <ul className="text-xs text-charcoal-muted space-y-1">
                   {metrics.data.unused_indexes.map(i => <li key={i.index}>{i.table}.{i.index} — {bytes(i.size)}</li>)}
                 </ul>

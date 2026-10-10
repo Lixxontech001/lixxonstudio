@@ -35,7 +35,6 @@ const LOCAL_ONLY_IDENTIFIERS = new Set([
   "linkedin_client_id",
   "x_api_key",
   "tumblr_consumer_key",
-  "whatsapp_phone_number_id",
   "vapid_subject",
   "instagram_user_id",
   "facebook_page_id",
@@ -109,6 +108,17 @@ export function buildProviderCheckRequest(name: string, secret: string): Provide
         url: `https://api.telegram.org/bot${encodeURIComponent(secret).replace(/%3A/gi, ":")}/getMe`,
         init: guardedGet({}),
       };
+    // Phase A brains: one cheap read-only request each. Nothing is generated and nothing is published.
+    case "groq_api_key":
+      return { url: "https://api.groq.com/openai/v1/models", init: guardedGet(bearer) };
+    case "nvidia_api_key":
+      return { url: "https://integrate.api.nvidia.com/v1/models", init: guardedGet(bearer) };
+    case "cloudflare_api_token":
+      return { url: "https://api.cloudflare.com/client/v4/user/tokens/verify", init: guardedGet(bearer) };
+    case "openrouter_api_key":
+      return { url: "https://openrouter.ai/api/v1/key", init: guardedGet(bearer) };
+    case "huggingface_token":
+      return { url: "https://huggingface.co/api/whoami-v2", init: guardedGet(bearer) };
     default:
       return null;
   }

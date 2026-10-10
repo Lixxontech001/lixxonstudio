@@ -22,10 +22,10 @@ export default function VapidGenerator({
       <div>
         <div className="flex items-center gap-2 text-sky-900">
           <ShieldCheck size={18} aria-hidden="true" />
-          <h2 id="vapid-generation-title" className="font-medium">Generate VAPID keypair</h2>
+          <h2 id="vapid-generation-title" className="font-medium">Make phone alert keys</h2>
         </div>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-950">
-          The server generates the pair: the private key goes straight into Vault and is never returned; only the public key is shown for copying.
+          The server makes the pair. The private key is saved straight away and is never shown; only the public key is shown for copying.
         </p>
         <p className="mt-2 text-sm font-medium leading-6 text-sky-950">
           To turn push on: enter your VAPID values, then open /admin/settings on your phone and tap Register this device.
@@ -51,7 +51,7 @@ export default function VapidGenerator({
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-charcoal px-4 text-sm font-medium text-white hover:bg-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <KeyRound size={15} aria-hidden="true" />}
-          Generate VAPID keypair
+          Make phone alert keys
         </button>
       </div>
       {publicKey && (

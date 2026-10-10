@@ -22,7 +22,6 @@ describe('distribution provider adapters', () => {
       ['tiktok', { tiktok_access_token: TOKEN }],
       ['pinterest', { pinterest_access_token: TOKEN, pinterest_board_id: '987654321' }],
       ['linkedin', { linkedin_access_token: TOKEN, linkedin_organization_id: '123456' }],
-      ['whatsapp', { whatsapp_access_token: TOKEN, whatsapp_phone_number_id: '123456789' }],
       ['newsletter', { resend_api_key: TOKEN }],
     ] as const;
 

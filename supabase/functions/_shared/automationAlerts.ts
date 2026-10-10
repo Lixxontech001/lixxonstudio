@@ -220,7 +220,7 @@ export interface DistributionFailureAlertDelivery {
 const DISTRIBUTION_CHANNEL_LABELS: Record<string, string> = {
   instagram: 'Instagram', facebook: 'Facebook Pages', youtube_shorts: 'YouTube Shorts',
   tiktok: 'TikTok', pinterest: 'Pinterest', telegram: 'Telegram', threads: 'Threads',
-  linkedin: 'LinkedIn', x: 'X', tumblr: 'Tumblr', whatsapp: 'WhatsApp',
+  linkedin: 'LinkedIn', x: 'X', tumblr: 'Tumblr',
   newsletter: 'Email test', site_widget: 'Site widget',
 };
 const DISTRIBUTION_FAILURE_CLASSES = new Set<DistributionFailureClass>([

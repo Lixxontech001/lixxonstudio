@@ -1,6 +1,6 @@
 export type DistributionAdapterChannel =
   | 'instagram' | 'facebook' | 'youtube_shorts' | 'tiktok' | 'pinterest' | 'telegram'
-  | 'threads' | 'linkedin' | 'x' | 'tumblr' | 'whatsapp' | 'newsletter' | 'site_widget';
+  | 'threads' | 'linkedin' | 'x' | 'tumblr' | 'newsletter' | 'site_widget';
 
 export interface DistributionCredentials {
   [name: string]: string | undefined;
@@ -101,15 +101,6 @@ export function buildDistributionReadback(
         init: { ...GUARDED_GET, headers: { ...bearer(token), 'X-Restli-Protocol-Version': '2.0.0' } },
       } : null;
     }
-    case 'whatsapp': {
-      const token = credential(credentials, 'whatsapp_access_token');
-      const phoneId = credential(credentials, 'whatsapp_phone_number_id');
-      return token && phoneId ? {
-        url: `https://graph.facebook.com/v23.0/${encodeURIComponent(phoneId)}?fields=id,verified_name,display_phone_number`,
-        expectedResourceId: phoneId,
-        init: { ...GUARDED_GET, headers: bearer(token) },
-      } : null;
-    }
     case 'newsletter': {
       const token = credential(credentials, 'resend_api_key');
       return token ? { url: 'https://api.resend.com/domains', init: { ...GUARDED_GET, headers: bearer(token) } } : null;
@@ -196,7 +187,7 @@ export async function parseDistributionReadback(
         ))
       : channel === 'tiktok'
         ? tiktokOk && typeof user?.open_id === 'string' && user.open_id.length > 0
-        : ['instagram', 'facebook', 'threads', 'pinterest', 'linkedin', 'whatsapp'].includes(channel) && idMatches;
+        : ['instagram', 'facebook', 'threads', 'pinterest', 'linkedin'].includes(channel) && idMatches;
     if (channel === 'newsletter' && !confirmed) {
       return { status: 'blocked_by_provider_review', code: 'PROVIDER_REVIEW_REQUIRED' };
     }

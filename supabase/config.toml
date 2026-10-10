@@ -37,3 +37,25 @@ verify_jwt = true
 # Owner-only Web Push config + explicitly confirmed test notification; identity is verified again in the handler.
 [functions.automation-push]
 verify_jwt = true
+
+# Owner-only Buddy thinking, through the brain chain (Gemini first, then the free brains). The handler re-checks the owner through the Automation keys catalogue.
+[functions.buddy-think]
+verify_jwt = true
+
+# The owner's Run today (from Buddy or the Minds page). Owner session only; the default JWT check is kept on purpose.
+[functions.minds-run-placement]
+verify_jwt = true
+
+# Admin Connections "Test" button. Read-only checks; owner session only.
+[functions.door-connection-test]
+verify_jwt = true
+
+# Owner-only: attempts the owner push for a Takeover or Kill saved in the Minds screen. The handler reads the caller from the JWT.
+[functions.minds-control-notify]
+verify_jwt = true
+
+[functions.buddy-night-report]
+verify_jwt = true
+# Internal pg_cron invocation: the night report clock checks x-internal-secret itself, not the owner session.
+[functions.buddy-night-clock]
+verify_jwt = false

@@ -33,7 +33,7 @@ vi.mock('../context/AuthContext', () => ({
 vi.mock('../admin/MfaGate', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 
 import PushNotificationsPanel from '../components/automation-push-panel';
-import BuddyPwaApp from '../buddy/BuddyPwaApp';
+import BuddyChat from '../buddy/BuddyChat';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -79,7 +79,7 @@ describe('Phase 5 surfaces meet WCAG AA contrast', () => {
   it('does not use the low-contrast bronze pairing for any text or button label', async () => {
     // bronze on white is 2.89:1 and white on bronze is 2.89:1 — both fail AA, so
     // bronze may only remain as a decorative accent or a border.
-    for (const source of ['../components/automation-push-panel.tsx', '../buddy/BuddyPwaApp.tsx']) {
+    for (const source of ['../components/automation-push-panel.tsx', '../buddy/BuddyChat.tsx', '../buddy/BuddyAccessGate.tsx']) {
       const file = await import('node:fs').then((fs) => fs.readFileSync(new URL(source, import.meta.url), 'utf8'));
       const offenders = file
         .split('\n')
@@ -143,12 +143,14 @@ function auditSurface(scope: HTMLElement, name: string) {
   // 4. 44px targets on the primary actions
   const buttons = Array.from(scope.querySelectorAll('button'));
   for (const button of buttons) {
-    expect(button.className, `${name}: button needs a 44px minimum height`).toContain('min-h-11');
+    // Buddy's own .buddy-button class sets min-height: 44px in buddy.css.
+    expect(button.className, `${name}: button needs a 44px minimum height`).toMatch(/min-h-11|buddy-button/);
   }
 
   // 5. visible focus styling on every control
   for (const control of controls) {
-    expect(control.className, `${name}: control needs visible focus styling`).toContain('focus-visible:outline');
+    // Buddy's stylesheet gives every control a visible focus outline (.buddy-app :focus-visible).
+    if (!control.closest('.buddy-app')) expect(control.className, `${name}: control needs visible focus styling`).toContain('focus-visible:outline');
   }
 
   // 6. status changes are announced politely
@@ -182,8 +184,18 @@ describe('Phase 5 surfaces are keyboard and mobile accessible', () => {
     auditSurface(page, 'push panel');
   });
 
-  it('audits the Buddy surface', async () => {
-    const page = await renderSurface(<BuddyPwaApp />);
-    auditSurface(page, 'Buddy');
+  it('audits the Buddy surface after the greeting', async () => {
+    // With reduced motion the greeting's Continue button shows at once, so the audit sees the chat.
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    try {
+      const page = await renderSurface(<BuddyChat />);
+      const continueButton = Array.from(page.querySelectorAll('button')).find((button) => button.textContent === 'Continue');
+      if (continueButton) await act(async () => { continueButton.click(); });
+      await settle();
+      auditSurface(page, 'Buddy');
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });

@@ -1,0 +1,19 @@
+-- Buddy's night report schedule. NOT APPLIED. Do not run any line below in production until the owner says so.
+-- Nothing in this file is active. It is a note for later: once the owner agrees, one line would call the
+-- buddy-night-report function each night for the owner's day. The owner's clock is one hour ahead of UTC,
+-- so 22:30 UTC is 23:30 on the owner's clock. The day sent is the owner's day, not UTC.
+--
+-- Example for later (kept as a comment on purpose):
+-- SELECT cron.schedule(
+--   'buddy-night-report',
+--   '30 22 * * *',
+--   $cron$ SELECT net.http_post(
+--     url := '<project url>/functions/v1/buddy-night-report',
+--     headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer <owner session token>'),
+--     body := jsonb_build_object('local_day', to_char((now() + interval '1 hour')::date, 'YYYY-MM-DD'))
+--   ) $cron$
+-- );
+--
+-- Update (Phase 9 slice 2): the schedule now lives in supabase/migrations/20261016000000_buddy_night_clock.sql, which calls
+-- buddy-night-clock with the Vault internal secret, not the owner session. That migration is NOT applied either.
+-- Until the owner merges and applies it, the report is written only when the owner asks for it.

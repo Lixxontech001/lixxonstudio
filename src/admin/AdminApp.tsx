@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 import AdminLayout from './AdminLayout';
@@ -46,19 +46,35 @@ import { canAccess } from './permissions';
 import { resolveAutomationAdminRoute } from './automationRoutes';
 import { ShieldAlert } from 'lucide-react';
 
-const AdminAI = lazy(() => import('./pages/AdminAI'));
+const AdminMinds = lazy(() => import('./pages/AdminMinds'));
+const AdminConnections = lazy(() => import('./pages/AdminConnections'));
 const AdminArticleEditor = lazy(() => import('./pages/AdminArticleEditor'));
 const AdminProductEditor = lazy(() => import('./pages/AdminProductEditor'));
 const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor'));
 const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
+const AutomationBrains = lazy(() => import('./pages/AutomationBrains'));
 const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
 const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));
 const AutomationRuns = lazy(() => import('./pages/AutomationRuns'));
-const AutomationDistribution = lazy(() => import('./pages/AutomationDistribution'));
+const AutomationVideoLook = lazy(() => import('./pages/AutomationVideoLook'));
+// The old Distribution screen is retired as a product. Its address now opens Minds (Buddy is the door).
+// The page file stays in the repository, but nothing in the app opens it.
 
 const LazyPage = ({ children }: { children: ReactNode }) => (
   <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading editor...</div>}>{children}</Suspense>
 );
+
+/** The retired Distribution address goes to Minds once. It never shows the old screen. */
+function RetiredDistributionRedirect() {
+  const { navigate } = useNavigation();
+  const sent = useRef(false);
+  useEffect(() => {
+    if (sent.current) return;
+    sent.current = true;
+    navigate({ name: 'admin-ai' });
+  }, [navigate]);
+  return <div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Opening Minds…</div>;
+}
 
 export default function AdminApp() {
   const { route, navigate } = useNavigation();
@@ -123,7 +139,7 @@ export default function AdminApp() {
           <ShieldAlert size={28} className="mx-auto text-amber-500 mb-4" />
           <h1 className="font-serif text-2xl text-charcoal mb-2">Not available to your role</h1>
           <p className="text-sm text-gray-500">
-            {routeName === 'admin-automation-keys'
+            {routeName === 'admin-automation-keys' || routeName === 'admin-automation-brains'
               ? <>Only an active owner or founder can manage automation credentials.</>
               : <>Your role is <strong>{adminAccess?.role_label || adminAccess?.role}</strong>. This section needs a permission it does not have — an owner can grant it under Team &amp; access.</>}
           </p>
@@ -135,15 +151,19 @@ export default function AdminApp() {
   const renderPage = () => {
     switch (routeName) {
       case 'admin-automation-keys':
-        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation keys…</div>}><AutomationKeys /></Suspense>;
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading Keys…</div>}><AutomationKeys /></Suspense>;
+      case 'admin-automation-brains':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading brains…</div>}><AutomationBrains /></Suspense>;
       case 'admin-automation-check':
-        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading System Check…</div>}><AutomationCheck /></Suspense>;
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading Check…</div>}><AutomationCheck /></Suspense>;
       case 'admin-automation-articles':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading article queue…</div>}><ArticleQueueCalendar /></Suspense>;
       case 'admin-automation-runs':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation runs…</div>}><AutomationRuns /></Suspense>;
+      case 'admin-automation-video-look':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading video look…</div>}><AutomationVideoLook /></Suspense>;
       case 'admin-automation-distribution':
-        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading the Distribution Kit…</div>}><AutomationDistribution /></Suspense>;
+        return <RetiredDistributionRedirect />;
       case 'admin-dashboard': return <AdminDashboard />;
       case 'admin-articles': return <AdminArticles />;
       case 'admin-article-new': return <LazyPage><AdminArticleEditor isNew /></LazyPage>;
@@ -186,7 +206,8 @@ export default function AdminApp() {
       case 'admin-health': return <AdminHealth />;
       case 'admin-growth': return <AdminGrowth />;
       case 'admin-advisor': return <AdminAdvisor />;
-      case 'admin-ai': return <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading Admin AI...</div>}><AdminAI /></Suspense>;
+      case 'admin-ai': return <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading Minds...</div>}><AdminMinds /></Suspense>;
+      case 'admin-connections': return <Suspense fallback={<div className="py-12 text-center text-sm text-gray-400">Loading Connections...</div>}><AdminConnections /></Suspense>;
       case 'admin-frontend': return <AdminFrontend />;
       case 'admin-backups': return <AdminBackups />;
       case 'admin-security': return <AdminSecurity />;

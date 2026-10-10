@@ -1,0 +1,721 @@
+/*
+ * Buddy's look. Scoped to .buddy-app so nothing leaks into the magazine or Admin.
+ * Four looks, each a [data-vibe] block that sets the same variables: Noir Gold (the default),
+ * Ivory Silk, Velvet Opera and Porcelain. The look is Buddy's own and never follows the magazine.
+ */
+
+/* The four looks. Each sets the same variables, and each is also used by the swatches in settings. */
+.buddy-app[data-vibe='noir-gold'],
+.buddy-swatch[data-vibe='noir-gold'] {
+  --buddy-bg: #0d0b09;
+  --buddy-surface: #17130f;
+  --buddy-raise: #1f1914;
+  --buddy-line: rgba(200, 162, 75, 0.24);
+  --buddy-gold: #c8a24b;
+  --buddy-gold-strong: #e2bf6e;
+  --buddy-gold-tint: rgba(200, 162, 75, 0.12);
+  --buddy-text: #f1e9da;
+  --buddy-muted: #a79b86;
+  --buddy-warn: #e7a08f;
+  --buddy-on-gold: #17120a;
+  --buddy-shimmer: rgba(226, 191, 110, 0.35);
+  color-scheme: dark;
+}
+
+.buddy-app[data-vibe='ivory-silk'],
+.buddy-swatch[data-vibe='ivory-silk'] {
+  --buddy-bg: #f7f2e8;
+  --buddy-surface: #fffdf8;
+  --buddy-raise: #f0e8d6;
+  --buddy-line: rgba(122, 90, 31, 0.26);
+  --buddy-gold: #9a7430;
+  --buddy-gold-strong: #7a5a1f;
+  --buddy-gold-tint: rgba(154, 116, 48, 0.10);
+  --buddy-text: #2a2118;
+  --buddy-muted: #6e6250;
+  --buddy-warn: #a2452f;
+  --buddy-on-gold: #fffdf8;
+  --buddy-shimmer: rgba(154, 116, 48, 0.28);
+  color-scheme: light;
+}
+
+.buddy-app[data-vibe='velvet-opera'],
+.buddy-swatch[data-vibe='velvet-opera'] {
+  --buddy-bg: #140a14;
+  --buddy-surface: #1d1020;
+  --buddy-raise: #281629;
+  --buddy-line: rgba(214, 166, 76, 0.26);
+  --buddy-gold: #d6a64c;
+  --buddy-gold-strong: #f0cd7a;
+  --buddy-gold-tint: rgba(214, 166, 76, 0.12);
+  --buddy-text: #f3e6ea;
+  --buddy-muted: #b3a0ab;
+  --buddy-warn: #f0a0a0;
+  --buddy-on-gold: #1d1020;
+  --buddy-shimmer: rgba(240, 205, 122, 0.32);
+  color-scheme: dark;
+}
+
+.buddy-app[data-vibe='porcelain'],
+.buddy-swatch[data-vibe='porcelain'] {
+  --buddy-bg: #f4f6f8;
+  --buddy-surface: #ffffff;
+  --buddy-raise: #e9eef3;
+  --buddy-line: rgba(60, 80, 110, 0.24);
+  --buddy-gold: #3c5a7a;
+  --buddy-gold-strong: #2a4563;
+  --buddy-gold-tint: rgba(60, 90, 122, 0.10);
+  --buddy-text: #1d2733;
+  --buddy-muted: #5d6b7a;
+  --buddy-warn: #b0463a;
+  --buddy-on-gold: #ffffff;
+  --buddy-shimmer: rgba(60, 90, 122, 0.26);
+  color-scheme: light;
+}
+
+.buddy-app {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  background: radial-gradient(120% 55% at 50% -8%, var(--buddy-gold-tint), transparent 70%), var(--buddy-bg);
+  color: var(--buddy-text);
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.buddy-app *,
+.buddy-app *::before,
+.buddy-app *::after {
+  box-sizing: border-box;
+}
+
+.buddy-app :focus-visible {
+  outline: 2px solid var(--buddy-gold-strong);
+  outline-offset: 2px;
+}
+
+/* Buddy keeps its own type and colours. The site's global rules (Inter body text, Playfair headings and the
+   magazine's selection colour) must not reach inside it, so Buddy never looks like the magazine or Admin. */
+.buddy-app h1,
+.buddy-app h2,
+.buddy-app h3,
+.buddy-app h4 {
+  font-family: inherit;
+}
+
+.buddy-app ::selection {
+  background: var(--buddy-gold);
+  color: var(--buddy-on-gold);
+}
+
+/* Top bar: one word and two quiet buttons. */
+.buddy-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--buddy-line);
+  background: var(--buddy-surface);
+}
+
+.buddy-name {
+  margin: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--buddy-gold-strong);
+}
+
+.buddy-top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.buddy-button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--buddy-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--buddy-text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.buddy-button:hover {
+  border-color: var(--buddy-gold);
+}
+
+.buddy-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.buddy-button--solid {
+  background: linear-gradient(180deg, var(--buddy-gold-strong), var(--buddy-gold));
+  border-color: var(--buddy-gold);
+  color: var(--buddy-on-gold);
+}
+
+.buddy-button--solid:hover {
+  background: var(--buddy-gold-strong);
+}
+
+/* Conversation. */
+.buddy-log {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.buddy-log-inner {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.buddy-empty {
+  margin: 28px auto 0;
+  max-width: 420px;
+  text-align: center;
+  color: var(--buddy-muted);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.buddy-empty strong {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 400;
+  font-size: 22px;
+  color: var(--buddy-text);
+}
+
+.buddy-msg {
+  max-width: 86%;
+  padding: 12px 15px;
+  border-radius: 14px;
+  font-size: 16px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  animation: buddy-rise 0.28s ease-out both;
+}
+
+.buddy-msg--owner {
+  align-self: flex-end;
+  background: var(--buddy-gold-tint);
+  border: 1px solid var(--buddy-line);
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.buddy-msg--buddy {
+  align-self: flex-start;
+  background: var(--buddy-raise);
+  border: 1px solid transparent;
+}
+
+.buddy-msg--notice {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px dashed var(--buddy-line);
+  color: var(--buddy-muted);
+  font-style: italic;
+  font-size: 15px;
+}
+
+.buddy-msg--pending {
+  opacity: 0.7;
+}
+
+.buddy-thinking {
+  align-self: flex-start;
+  display: inline-flex;
+  gap: 6px;
+  padding: 12px 14px;
+  color: var(--buddy-muted);
+  font-size: 14px;
+}
+
+.buddy-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--buddy-gold);
+  animation: buddy-pulse 1.1s ease-in-out infinite;
+}
+
+.buddy-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.buddy-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.buddy-banner {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 12px 14px;
+  border: 1px solid var(--buddy-line);
+  border-radius: 10px;
+  background: var(--buddy-surface);
+  color: var(--buddy-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.buddy-error {
+  color: var(--buddy-warn);
+}
+
+/* Composer. */
+.buddy-composer {
+  border-top: 1px solid var(--buddy-line);
+  background: var(--buddy-surface);
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+}
+
+.buddy-composer-inner {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.buddy-input {
+  flex: 1;
+  min-height: 44px;
+  max-height: 160px;
+  resize: none;
+  padding: 11px 14px;
+  border: 1px solid var(--buddy-line);
+  border-radius: 14px;
+  background: var(--buddy-bg);
+  color: var(--buddy-text);
+  font: inherit;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.buddy-input::placeholder {
+  color: var(--buddy-muted);
+}
+
+.buddy-count {
+  font-size: 12px;
+  color: var(--buddy-muted);
+  padding-top: 4px;
+}
+
+.buddy-input-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+}
+
+.buddy-send {
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+/* Past chats: a drawer that slides in from the left on every screen size. */
+.buddy-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+}
+
+.buddy-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.buddy-drawer-panel {
+  position: relative;
+  width: min(86vw, 340px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--buddy-surface);
+  border-right: 1px solid var(--buddy-line);
+  animation: buddy-slide 0.22s ease-out both;
+}
+
+.buddy-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--buddy-line);
+}
+
+.buddy-drawer-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--buddy-gold-strong);
+}
+
+.buddy-chat-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.buddy-chat-item {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--buddy-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.buddy-chat-item:hover,
+.buddy-chat-item[aria-current='true'] {
+  background: var(--buddy-raise);
+}
+
+.buddy-chat-title {
+  display: block;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buddy-chat-time {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--buddy-muted);
+}
+
+.buddy-drawer-foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--buddy-line);
+  font-size: 13px;
+  color: var(--buddy-muted);
+}
+
+.buddy-drawer-foot a {
+  color: var(--buddy-muted);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Greeting: one full-height column, a gold line that draws itself over about 9.5 seconds, then Continue. */
+.buddy-app--single {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.buddy-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.buddy-greeting-mark {
+  width: min(320px, 80vw);
+  height: 24px;
+  overflow: visible;
+}
+
+.buddy-greeting-line {
+  stroke: var(--buddy-gold);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: buddy-draw 9.5s ease-in-out forwards;
+}
+
+@keyframes buddy-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.buddy-greeting-line-text {
+  margin: 0;
+  font-family: inherit;
+  font-style: italic;
+  font-size: clamp(24px, 6vw, 34px);
+  color: var(--buddy-gold-strong);
+  animation: buddy-rise 0.9s ease-out 0.4s both, buddy-shimmer 3.2s ease-in-out 1.4s infinite;
+}
+
+/* A soft glow that drifts across the greeting line. CSS only, switched off by reduced motion. */
+@keyframes buddy-shimmer {
+  0%,
+  100% {
+    text-shadow: 0 0 0 var(--buddy-shimmer);
+  }
+  50% {
+    text-shadow: 0 0 18px var(--buddy-shimmer);
+  }
+}
+
+.buddy-greeting-sub {
+  margin: 0;
+  color: var(--buddy-muted);
+  font-size: 15px;
+  animation: buddy-rise 0.9s ease-out 1.2s both;
+}
+
+.buddy-greeting-continue {
+  margin-top: 12px;
+  animation: buddy-rise 0.6s ease-out both;
+}
+
+.buddy-greeting-wait {
+  margin: 12px 0 0;
+  min-height: 44px;
+}
+
+/* Briefing card: a titled block per section, in the chat log. */
+.buddy-msg--briefing {
+  align-self: stretch;
+  max-width: 100%;
+  background: var(--buddy-surface);
+  border: 1px solid var(--buddy-line);
+  white-space: normal;
+  display: grid;
+  gap: 14px;
+}
+
+.buddy-briefing-section {
+  display: grid;
+  gap: 4px;
+}
+
+.buddy-briefing-title {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--buddy-gold);
+  font-weight: 600;
+}
+
+.buddy-briefing-lines {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--buddy-text);
+}
+
+.buddy-briefing-quiet {
+  margin: 0;
+  font-style: italic;
+  color: var(--buddy-muted);
+}
+
+.buddy-report-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--buddy-line);
+}
+
+@keyframes buddy-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes buddy-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes buddy-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buddy-app *,
+  .buddy-app *::before,
+  .buddy-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Settings: the four looks as cards, each with a small swatch. */
+.buddy-settings-section {
+  display: grid;
+  gap: 10px;
+}
+
+.buddy-settings-title {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--buddy-gold);
+  font-weight: 600;
+}
+
+.buddy-vibe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.buddy-vibe-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  min-height: 44px;
+  text-align: left;
+  font: inherit;
+  color: var(--buddy-text);
+  background: var(--buddy-surface);
+  border: 1px solid var(--buddy-line);
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.buddy-vibe-card--on {
+  border-color: var(--buddy-gold);
+  box-shadow: 0 0 0 1px var(--buddy-gold) inset;
+}
+
+.buddy-vibe-name {
+  font-size: 16px;
+}
+
+.buddy-vibe-note {
+  font-size: 13px;
+  color: var(--buddy-muted);
+}
+
+.buddy-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--buddy-bg);
+  border: 1px solid var(--buddy-line);
+}
+
+.buddy-swatch-dot {
+  width: 42%;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--buddy-gold);
+}
+
+.buddy-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.buddy-switch-row input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--buddy-gold);
+}
+
+.buddy-hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--buddy-muted);
+}
+
+.buddy-settings-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+/* Slice 5: the Changes screen. One paragraph before and after, nothing more. */
+.buddy-change-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.buddy-change-text {
+  margin: 0;
+}
+.buddy-paragraph-pair {
+  width: 100%;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border-left: 3px solid currentColor;
+}
+.buddy-paragraph-label {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+.buddy-paragraph {
+  margin: 0 0 0.5rem;
+  white-space: pre-wrap;
+}

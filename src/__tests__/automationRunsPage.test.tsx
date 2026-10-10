@@ -93,23 +93,24 @@ describe('Automation Runs page', () => {
     const el = mount();
     await act(async () => { root.render(<AutomationRuns />); await Promise.resolve(); });
     await settle();
-    expect(el.textContent).toContain('08:00 Africa/Lagos');
-    expect(el.textContent).toContain('RUNNER STEP FAILED');
+    expect(el.textContent).toContain('08:00 on your studio clock');
+    expect(el.textContent).not.toMatch(/Africa\/Lagos|Lagos|WAT|Nigeria/);
+    expect(el.textContent).toContain('A step failed');
 
     const previewButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.includes('Read-only preview'));
     expect(previewButton).toBeDefined();
     await act(async () => { previewButton!.click(); await Promise.resolve(); });
     await settle();
     expect(el.textContent).toContain('Read-only preflight preview');
-    expect(el.textContent).toContain('No provider calls, emails, payments, publishing, or article writes were made.');
+    expect(el.textContent).toContain('No calls to services, emails, payments, publishing or article changes were made.');
 
     const retryButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.includes('Retry next tick'));
     expect(retryButton).toBeDefined();
     await act(async () => { retryButton!.click(); await Promise.resolve(); });
     await settle();
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('next 08:00 Lagos tick'));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('next 08:00 daily run'));
     expect(el.textContent).toContain('Run retry recorded: queued.');
-    expect(el.textContent).toContain('picked up by the next 08:00 Lagos schedule tick');
+    expect(el.textContent).toContain('picked up by the next 08:00 daily run');
     expect(el.textContent).not.toContain('Retry next tick');
     expect(mocks.rpc).toHaveBeenCalledWith('automation_control_run', { p_run_id: RUN_ID, p_action: 'retry' });
 
