@@ -105,7 +105,7 @@ describe('daily kit completeness helpers', () => {
         expect(steps.join(' ')).toContain('vertical video');
       } else if (['pinterest', 'threads', 'linkedin', 'x', 'tumblr'].includes(channel)) {
         // The image-first social channels, as opposed to the text/chat channels
-        // (telegram, whatsapp), the subscriber admin and the on-site widget.
+        // (telegram), the subscriber admin and the on-site widget.
         expect(steps.join(' ')).toContain('image');
       }
     }

@@ -1,6 +1,6 @@
 export const DISTRIBUTION_CHANNEL_KEYS = [
   'instagram', 'facebook', 'youtube_shorts', 'tiktok', 'pinterest', 'telegram',
-  'threads', 'linkedin', 'x', 'tumblr', 'whatsapp', 'newsletter', 'site_widget',
+  'threads', 'linkedin', 'x', 'tumblr', 'newsletter', 'site_widget',
 ] as const;
 export type DistributionChannelKey = (typeof DISTRIBUTION_CHANNEL_KEYS)[number];
 
@@ -173,11 +173,6 @@ export const DISTRIBUTION_CHANNELS: Record<DistributionChannelKey, {
     label: 'Tumblr', url: 'https://www.tumblr.com/new/text',
     instructions: 'Choose the correct blog, review the formatted text and destination link, then publish manually.',
     maxCaption: 5000, mode: 'share',
-  },
-  whatsapp: {
-    label: 'WhatsApp share / Business', url: 'https://wa.me/',
-    instructions: 'Share only with a recipient who has opted in. The manual link opens a user-selected chat; it does not broadcast or message contacts automatically.',
-    maxCaption: 4000, mode: 'share',
   },
   newsletter: {
     label: 'Email newsletter', url: '/admin/newsletter',
@@ -442,7 +437,6 @@ export function distributionShareUrl(channel: DistributionChannelKey, payload: D
     case 'linkedin': return `https://www.linkedin.com/sharing/share-offsite/?url=${encodedLink}`;
     case 'x': return `https://x.com/intent/post?text=${encodedCaption}`;
     case 'tumblr': return `https://www.tumblr.com/widgets/share/tool?canonicalUrl=${encodedLink}&caption=${encodedTitle}&tags=${encodeURIComponent(payload.hashtags.join(','))}`;
-    case 'whatsapp': return `https://wa.me/?text=${encodeURIComponent(`${payload.caption}\n${payload.link}`)}`;
     case 'newsletter': return '/admin/newsletter';
     case 'site_widget': return payload.link;
     default: return DISTRIBUTION_CHANNELS[channel].url;
@@ -510,7 +504,6 @@ export const DISTRIBUTION_DEEP_LINKS: Record<DistributionChannelKey, string | nu
   linkedin: 'linkedin://feed/',
   x: 'twitter://timeline',
   tumblr: 'tumblr://x-callback-url/dashboard',
-  whatsapp: 'whatsapp://send',
   newsletter: null,
   site_widget: null,
 };
@@ -545,13 +538,6 @@ export function distributionKitSteps(channel: DistributionChannelKey, hasVideo =
         'Copy the caption',
         'Open telegram app (or send the approved message directly)',
         'Paste and post in the private chat',
-        'Mark this channel as posted to record the day and slot',
-      ];
-    case 'whatsapp':
-      return [
-        'Copy the caption and the UTM link',
-        'Open whatsapp app',
-        'Send only to people who opted in',
         'Mark this channel as posted to record the day and slot',
       ];
     default:
