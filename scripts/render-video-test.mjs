@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+// TEST RENDER ONLY. This script makes the owner's daily-video TEST render: a fixture article, a TEST ONLY watermark, and
+// a silent MP4 (ffmpeg is run with -an, so the file has no audio track). It is never a reader video and never a pack.
+// The reader and pack videos are made by scripts/pack-video.mjs, which always keeps a voice track. A silent MP4 is refused
+// there: scripts/save-pack-media.mjs refuses a video with no audio track (no_audio), and pack-video.mjs makes no silent file.
+// The test fixture is validated as silent by scripts/video-asset-validation.mjs. Its fixture is in scripts/fixtures/README.md.
+// Its output is marked approval_eligible=false and publish_eligible=false, and it is never posted anywhere.
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { appendFile, access, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
