@@ -5,7 +5,7 @@
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
 import { brainHowToReply, howToReply } from "./buddyHowTo.ts";
 import { feedbackLine } from "./buddyFeedback.ts";
-import { REFUSAL_LINE, refusedRequest } from "./buddyOrderPolicy.ts";
+import { MODEL_FILEABLE_ORDER, NOT_ON_LIST_LINE, REFUSAL_LINE, closedOrderKind, refusedRequest, type AllowedOrder } from "./buddyOrderPolicy.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure, type BrainPorts } from "./brainChain.ts";
@@ -133,7 +133,8 @@ export interface BuddyThinkDeps {
 export const BUDDY_ANSWER_RULES = [
   'Reply with JSON only, in this exact shape: {"reply": "your answer to the owner", "order": null}.',
   'Put your whole answer in "reply". Be short, warm and practical. Plain English. No em dash.',
-  'If the owner asks for work to be done by a mind, set "order" to {"mind": "analyst" | "strategist" | "ceo" | "executioner" | "auditor" | null, "instruction": "the work, in the owner\'s words"}.',
+  'If the owner asks for work to be done by a mind, set "order" to {"mind": "analyst" | "strategist" | "ceo" | "executioner" | "auditor" | null, "kind": "mind_work", "instruction": "the work, in the owner\'s words"}.',
+  'Always set "kind" to "mind_work" for an order. Any other kind is refused, so do not use one.',
   'Use null for "mind" when the owner named no mind. Then ask in "reply" which mind should take it.',
   'Use null for "order" for questions, thanks, small talk, and anything that is not work for a mind.',
   "An order is only filed as waiting for the owner. Nothing runs because of your reply.",
@@ -144,7 +145,7 @@ export const BUDDY_ANSWER_RULES = [
 /** Buddy's answer, as the model wrote it. `order` is null unless the owner asked for work. */
 export interface BuddyAnswer {
   reply: string;
-  order: { mind: MindName | null; instruction: string } | null;
+  order: { mind: MindName | null; kind: AllowedOrder | null; instruction: string } | null;
 }
 
 /**
@@ -171,7 +172,7 @@ export function parseBuddyAnswer(text: string): BuddyAnswer | null {
       const mind = typeof parsed.order.mind === "string" && (MIND_KEYS as readonly string[]).includes(parsed.order.mind)
         ? (parsed.order.mind as MindName)
         : null;
-      order = { mind, instruction };
+      order = { mind, kind: closedOrderKind(parsed.order.kind), instruction };
     }
   }
   return { reply, order };
@@ -583,6 +584,9 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   if (answer.order && refusedRequest(answer.order.instruction)) {
     // The model proposed something outside the closed list. Nothing is filed; the owner gets the one refusal line.
     reply = REFUSAL_LINE;
+  } else if (answer.order && answer.order.kind !== MODEL_FILEABLE_ORDER) {
+    // No kind, or a kind that only the owner's own words can start. Nothing is filed.
+    reply = NOT_ON_LIST_LINE;
   } else if (answer.order) {
     if (answer.order.mind) {
       // A named mind: filed as waiting. Nothing runs from this reply.

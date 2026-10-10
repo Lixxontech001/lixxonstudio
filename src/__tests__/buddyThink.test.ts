@@ -283,14 +283,14 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
   it('reads a clear JSON answer, a plain sentence, and a fenced JSON answer', () => {
     expect(parseBuddyAnswer('{"reply":"Saved.","order":{"mind":"analyst","instruction":"Check the article"}}')).toEqual({
       reply: 'Saved.',
-      order: { mind: 'analyst', instruction: 'Check the article' },
+      order: { mind: 'analyst', kind: null, instruction: 'Check the article' },
     });
     expect(parseBuddyAnswer('Yes, Buddy can think.')).toEqual({ reply: 'Yes, Buddy can think.', order: null });
     expect(parseBuddyAnswer('```json\n{"reply":"Hi","order":null}\n```')).toEqual({ reply: 'Hi', order: null });
   });
 
   it('an unknown mind is kept as no mind, and an order with no words is dropped', () => {
-    expect(parseBuddyAnswer('{"reply":"Ok","order":{"mind":"bossman","instruction":"Check it"}}')?.order).toEqual({ mind: null, instruction: 'Check it' });
+    expect(parseBuddyAnswer('{"reply":"Ok","order":{"mind":"bossman","kind":"mind_work","instruction":"Check it"}}')?.order).toEqual({ mind: null, kind: 'mind_work', instruction: 'Check it' });
     expect(parseBuddyAnswer('{"reply":"Ok","order":{"mind":"ceo","instruction":"  "}}')?.order).toBeNull();
   });
 
@@ -308,7 +308,7 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
   it('a named-mind order the model finds is filed as waiting, and the reply says so', async () => {
     const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
       ok: true,
-      text: '{"reply":"Got it.","order":{"mind":"strategist","instruction":"Plan the spring push for the kit"}}',
+      text: '{"reply":"Got it.","order":{"mind":"strategist","kind":"mind_work","instruction":"Plan the spring push for the kit"}}',
     }));
     const { deps: d, saved } = deps({ askGemini });
     const saveOrder = vi.fn(async () => true);
@@ -322,7 +322,7 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
   it('an order with no mind is kept as pending, so the next message can name the mind', async () => {
     const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
       ok: true,
-      text: '{"reply":"Which mind should take it?","order":{"mind":null,"instruction":"Plan the spring push for the kit"}}',
+      text: '{"reply":"Which mind should take it?","order":{"mind":null,"kind":"mind_work","instruction":"Plan the spring push for the kit"}}',
     }));
     const saveMessage = vi.fn(async () => true);
     const saveOrder = vi.fn(async () => true);

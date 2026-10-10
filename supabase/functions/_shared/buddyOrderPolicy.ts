@@ -12,8 +12,20 @@ export const ALLOWED_ORDERS = [
 ] as const;
 export type AllowedOrder = (typeof ALLOWED_ORDERS)[number];
 
+/** The one kind of order a model may file: a named mind asked to do work. The other kinds come only from owner rules. */
+export const MODEL_FILEABLE_ORDER: AllowedOrder = "mind_work";
+
+/** Reads a kind from a model answer. Anything not on the closed list is null, so it is never filed. */
+export function closedOrderKind(value: unknown): AllowedOrder | null {
+  return typeof value === "string" && (ALLOWED_ORDERS as readonly string[]).includes(value) ? (value as AllowedOrder) : null;
+}
+
 export const REFUSAL_LINE =
   "Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, price changes, and posting or publishing stay with you. Nothing was filed or changed.";
+
+/** A model order with no kind, or a kind only the owner's own words can start. Nothing is filed. */
+export const NOT_ON_LIST_LINE =
+  "Buddy can only file work for a named mind from here. Nothing was filed or changed. Name the mind and say what you want done.";
 
 /** A question about one of these is answered as a question. Only a request is refused. */
 const QUESTION_OPENER = /^\s*(please\s+)?(what|which|how|why|who|when|where|did|does|is|are|was|were|tell me|show me)\b/i;
