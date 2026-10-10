@@ -567,3 +567,12 @@ What is still not done, or not verified:
 - The router returns a `refused` route before the mind and order rules. Run-today requests are never refused. The chat path also refuses a model-proposed order that asks for one of these things.
 - `supabase/functions/_shared/buddyFeedback.ts`: one line each for waiting (Takeover on, off, or unreadable), done, and blocked. Filed orders now say whether Takeover is on or off.
 - Tests: `src/__tests__/buddyOrderPolicy.test.ts`, plus handler tests in `buddyThink.test.ts`.
+
+## Phase B slice 2: the briefing reads every notable kind
+
+- The Auditor's block now sits under Problems, with door failures and mind failures. Blocked orders stay under Your jobs.
+- Takeover and Kill switch changes show under Since you left, and count as news, so the day is not quiet.
+- Every notable kind the minds write (door posted, door failed, mind failed, Auditor blocked, order blocked, sale, product click, new traffic source, Takeover, Kill) reaches the briefing. A test checks each one.
+- Summary kinds (night report) and the article-change kinds are not read as briefing lines. The article changes already show from the database read.
+- RSS: a posted RSS row says the feed was updated and pinged. A failed one says the hub did not take the ping. Flipboard appears nowhere.
+- Tests: `src/__tests__/buddyBriefingSlice2.test.ts`. The Auditor line in `buddyNotables.test.ts` now expects Problems.

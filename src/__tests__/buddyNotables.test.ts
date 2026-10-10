@@ -60,16 +60,15 @@ describe('briefing reads the Phase 8 notables', () => {
     expect(sectionLines(result, 'went_out')).toContain('2 free doors posted today.');
   });
 
-  it('a blocked placement or order shows under Your jobs', () => {
+  it('an Auditor block shows under Problems, and a blocked order under Your jobs', () => {
     const result = buildBriefing(
       facts({ notables: { ok: true, rows: [note('auditor_blocked', 'The Auditor held a placement'), note('order_blocked', 'An order was blocked')] } }),
       NOW,
       SINCE,
       false,
     );
-    const jobs = sectionLines(result, 'jobs');
-    expect(jobs).toContain('The Auditor held a placement.');
-    expect(jobs).toContain('An order was blocked.');
+    expect(sectionLines(result, 'problems')).toContain('The Auditor held a placement.');
+    expect(sectionLines(result, 'jobs')).toContain('An order was blocked.');
   });
 
   it('a failed door shows under Problems in its own sentence, and the next move says to look at the problems', () => {

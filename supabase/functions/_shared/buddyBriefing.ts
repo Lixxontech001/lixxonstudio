@@ -50,6 +50,8 @@ export interface BriefingNotable {
 
 /** The notable kinds the briefing reads. Summary kinds written for later reading are never listed, so they cannot become the morning briefing. */
 export const BRIEFING_NOTABLE_KINDS: readonly string[] = [
+  "takeover_changed",
+  "kill_changed",
   "door_posted",
   "sale",
   "product_click",
@@ -62,8 +64,11 @@ export const BRIEFING_NOTABLE_KINDS: readonly string[] = [
 ];
 const WENT_OUT_NOTABLE_KINDS = ["door_posted"];
 const MONEY_NOTABLE_KINDS = ["sale", "product_click", "traffic_new_kind"];
-const JOB_NOTABLE_KINDS = ["auditor_blocked", "order_blocked"];
-const PROBLEM_NOTABLE_KINDS = ["door_failed", "mind_failed"];
+const JOB_NOTABLE_KINDS = ["order_blocked"];
+// The Auditor holding a change, a door that failed and a mind that failed all belong under Problems.
+const PROBLEM_NOTABLE_KINDS = ["auditor_blocked", "door_failed", "mind_failed"];
+// Takeover and Kill switch changes are part of what happened since you left.
+const SINCE_NOTABLE_KINDS = ["takeover_changed", "kill_changed"];
 export const NOTABLE_LINE_LIMIT = 3;
 
 /** One door post the owner can see. `status` is the send log's own word: queued, posted or failed. */
@@ -404,7 +409,7 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
     {
       id: "since",
       title: "Since you left",
-      lines: [firstVisit ? `First visit here. Buddy looks back ${FIRST_VISIT_WINDOW_HOURS} hours.` : `You were away for ${describeAway(awayMs)}.`],
+      lines: [firstVisit ? `First visit here. Buddy looks back ${FIRST_VISIT_WINDOW_HOURS} hours.` : `You were away for ${describeAway(awayMs)}.`, ...notableLines(facts.notables, SINCE_NOTABLE_KINDS)],
     },
     { id: "went_out", title: "What went out", lines: went },
     { id: "money", title: "Money & readers", lines: [...moneyLines(facts), ...messageLines(facts.messages), ...notableLines(facts.notables, MONEY_NOTABLE_KINDS)] },
