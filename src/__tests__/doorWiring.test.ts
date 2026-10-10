@@ -16,7 +16,7 @@ describe('the free doors step is part of the day run, behind the same gates', ()
 
   it('the paused-door list is read only after the gate, and a missing column never stops the run', () => {
     const gate = RUN.indexOf('blockedDetail(takeover, killScope)');
-    const pausedRead = RUN.indexOf('select(\"paused_doors\")');
+    const pausedRead = RUN.indexOf('select("paused_doors")');
     expect(pausedRead).toBeGreaterThan(gate);
     expect(RUN).toContain('pausedRow.error ||');
   });

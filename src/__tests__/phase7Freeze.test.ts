@@ -167,7 +167,9 @@ describe('Phase 7 freeze: notable events buzz only the kinds the owner asked for
   });
 
   it('the day run records and buzzes through the one helper, and never calls the push sender itself', () => {
-    expect(RUN).toContain('notifyOwnerDevices(');
+    // Phase E: the day run records through attemptRow, the one path that calls the shared helper.
+    expect(RUN).toContain('attemptRow(');
+    expect(read('supabase/functions/_shared/notablePushServer.ts')).toContain('notifyOwnerDevices(');
     expect(RUN).not.toMatch(/sendPushNotification\(/);
   });
 });

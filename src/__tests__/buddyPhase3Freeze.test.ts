@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import buddyThinkSource from '../../supabase/functions/_shared/buddyThink.ts?raw';
 import functionSource from '../../supabase/functions/minds-run-placement/index.ts?raw';
+import pushServerSource from '../../supabase/functions/_shared/notablePushServer.ts?raw';
 import placementSource from '../../supabase/functions/_shared/productPlacement.ts?raw';
 import runSource from '../../supabase/functions/_shared/placementRun.ts?raw';
 import briefingSource from '../../supabase/functions/_shared/buddyBriefing.ts?raw';
@@ -341,7 +342,9 @@ describe('Buddy, not the minds, is the voice; the owner cannot chat with a mind'
   it('the Strategist, Executioner and Auditor send no email and no text of their own; a buzz goes out only through the shared notification helper, titled Buddy', () => {
     expect(runSource).not.toMatch(/sendEmail|sendMessage|sendPushNotification/);
     expect(functionSource).not.toMatch(/sendEmail|distributionAdapters|sendPushNotification/);
-    expect(functionSource).toContain('notifyOwnerDevices(');
+    // Phase E: the day run records through attemptRow, and attemptRow is the one path that calls the shared helper.
+    expect(functionSource).toContain('attemptRow(');
+    expect(pushServerSource).toContain('notifyOwnerDevices(');
   });
 });
 

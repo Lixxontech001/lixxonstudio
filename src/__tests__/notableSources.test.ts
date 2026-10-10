@@ -32,7 +32,7 @@ function fakePorts(overrides: Partial<NotablePorts> = {}) {
     written.push(plan);
     return true;
   });
-  const logLine = vi.fn(async (_plan: NotablePlan) => {});
+  const logLine = vi.fn(async (plan: NotablePlan) => { void plan; });
   const ports: NotablePorts = {
     readPaidOrders: async () => [],
     readClicks: async () => [],

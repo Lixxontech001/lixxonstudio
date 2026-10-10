@@ -4,7 +4,6 @@ import {
   answerFromLog,
   NEVER_LIST_LINES,
   neverListLine,
-  isQuestionLike,
   isRestricted,
   namedMind,
   routeMessage,
