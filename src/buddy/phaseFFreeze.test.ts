@@ -565,9 +565,12 @@ describe('Phase F freeze: nothing shipped that should not be', () => {
     expect(read('src/components/PwaInstallPanel.tsx')).toContain("href: '/buddy'");
   });
 
-  it('there is no Phase G: no later phase report or freeze is in the tree', () => {
-    expect(exists('PHASE_G_REPORT.md')).toBe(false);
-    expect(exists('src/buddy/phaseGFreeze.test.ts')).toBe(false);
+  // Phase G is the phase that comes after F. Its report and freeze are the only later artifacts, and no Phase H is in the tree.
+  it('Phase G is the only later phase: its report and freeze exist, and there is no Phase H', () => {
+    expect(exists('PHASE_G_REPORT.md')).toBe(true);
+    expect(exists('src/buddy/phaseGFreeze.test.ts')).toBe(true);
+    expect(exists('PHASE_H_REPORT.md')).toBe(false);
+    expect(exists('src/buddy/phaseHFreeze.test.ts')).toBe(false);
   });
 
   it('the go-live checklist exists and says the agent does not merge or deploy', () => {
