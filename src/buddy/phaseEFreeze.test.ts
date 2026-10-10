@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_ORDERS, MODEL_FILEABLE_ORDER, refusedRequest } from '../../supabase/functions/_shared/buddyOrderPolicy';
+import { ALLOWED_ORDERS, MODEL_FILEABLE_ORDER, gateOrder, refusedRequest } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import { tryableBrains } from '../../supabase/functions/_shared/brains';
 import { LOOK_NOT_USED_YET } from '../lib/videoLook';
 
@@ -95,10 +95,11 @@ describe('Phase E freeze, slice 2: a swap with no mind named goes to Executioner
     expect(MODEL_FILEABLE_ORDER).toBe('mind_work');
   });
 
-  it('the open narrow spot is pinned and recorded: "Delete the old one" on its own is not refused', () => {
-    // Known gap. The delete pattern needs a listed object noun (article, post, page, comment...). If this changes, update PHASE_E_REPORT.md.
+  it('FINDING, reported and not fixed: "Delete the old one" is not refused and is filed as mind_work', () => {
+    // Real result of the gate today, checked by running it. Deletes are outside the closed list, so this is a known gap.
+    // It is pinned so that any change shows up. Fixing it is a Phase D gate change, which this phase does not reopen.
     expect(refusedRequest('Delete the old one')).toBe(false);
-    expect(read('PHASE_E_REPORT.md')).toMatch(/Delete the old one/);
+    expect(gateOrder('mind_work', 'Delete the old one')).toEqual({ ok: true, kind: 'mind_work' });
   });
 });
 

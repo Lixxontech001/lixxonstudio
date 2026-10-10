@@ -13,9 +13,10 @@ Base for this phase: Phase D close-out `7fc9f37`. Freeze: `src/buddy/phaseEFreez
 | 4 | `5abd549` | Video look screen with three bounded, saved values |
 | 5 | `b272ba7` | Carts policy migration file (not applied); dead costume checked; test |
 | fix | `5c713ff` | Flush reads no claim column before the pending migration (see below) |
-| 6 | this commit | Freeze and this report |
+| 6 | `2a293b3` | Freeze and this report |
+| 6b | next commit on the branch (see `git log`) | Freeze: the delete gap is pinned as a behaviour check; this report corrected with the final numbers |
 
-HEAD sha is recorded in the chat summary, since a commit cannot name itself.
+HEAD when this report was written was `2a293b3`. A report cannot name the commit that contains it, so the final HEAD is the last commit on `arena/1d438dc4-lixxonstudio` (`git rev-parse HEAD`).
 
 ## Decisions
 
@@ -50,13 +51,15 @@ Slice 1 selected `push_claimed_at` in every notable read. Before the migration i
 - `src/__tests__/notablePushOwner.test.ts` and `notablePushWiring.test.ts` read the shared module for the same reason.
 - `src/__tests__/buddyPhase3Freeze.test.ts` and `src/__tests__/phase7Freeze.test.ts` expected `notifyOwnerDevices(` in the day run file. They now expect the day run to call `attemptRow(`, and the shared server file to call `notifyOwnerDevices(`. The full suite found these two; they were fixed in this phase.
 
-## Open narrow spot in the refusal list
+## Finding: a delete request is filed as an order (not fixed)
 
-"Delete the old one" on its own is **not refused**. The delete pattern needs a listed object noun (article, post, page, product, comment, draft, image, video, order). "Old one" is not on the list. A swap-led message with "and" or a comma before the outside action is refused (`REQUEST_CLAUSE`). The standalone case is not. The freeze pins this current behaviour, so a change will show up.
+Checked by running the gate, not by reading it. `gateOrder('mind_work', 'Delete the old one')` returns `{ ok: true, kind: 'mind_work' }`. So the message is **filed as a mind order**. `refusedRequest` returns `false` for it, because the delete pattern needs a listed object noun (article, post, page, product, comment, draft, image, video, order) and "old one" is not on the list. "Delete that post" is refused, as it should be.
+
+Deletes are outside the closed list, so this is a real gap in the Phase D order gate. Phase E does not reopen Phase D code, so it is **reported, not fixed**. The freeze test pins the current result (`src/buddy/phaseEFreeze.test.ts`), so a fix will show up as a test change. This is an owner decision: fix the gate, or accept it.
 
 ## Lint
 
-ESLint on every TypeScript file this branch has changed since `main` (238 files) exits 0. Three older test files from earlier phases had errors (`buddyRouter.test.ts` unused import, `doorWiring.test.ts` useless escapes, `notableSources.test.ts` unused parameter). They are fixed in this phase. The Phase D close-out did not catch them, because its lint list was narrower.
+ESLint on the 243 TypeScript and JavaScript files changed since the branch base `a128521` (the `main` commit this branch was cut from) exits 0: 0 errors, 5 warnings. The warnings are react-refresh warnings in `AdminConnections.tsx` and `NavigationContext.tsx`, which Phase E did not change. Three older test files from earlier phases had errors (`buddyRouter.test.ts` unused import, `doorWiring.test.ts` useless escapes, `notableSources.test.ts` unused parameter). They are fixed in this phase. The Phase D close-out did not catch them, because its lint list was narrower.
 
 ## Carts (slice 5)
 
@@ -71,19 +74,26 @@ ESLint on every TypeScript file this branch has changed since `main` (238 files)
 
 ## Video look is not read by the daily video
 
-The saved look is stored only. The daily video (`scripts/pack-video.mjs`) and the test render workflow (`.github/workflows/video-render-test.yml`) do not read it. The test render takes a template only from dispatch input `template_json`. The screen says this on the page.
+The saved look is stored only. The daily video, the pack video (`scripts/pack-video.mjs`) and the test render workflow (`.github/workflows/video-render-test.yml`) do not read it. The test render takes a template only from dispatch input `template_json`. The screen says this on the page.
+
+An earlier, uncommitted attempt to make the pack video read the look was reverted by owner decision. It is not in this branch.
 
 ## Verification
 
-Final tree, before the slice 6 commit:
+Run on the tree of this report:
 
-- Full vitest: 168 files, 2220 passed, 6 skipped, 0 failed (second run).
-- The first full run had 2 failures: `buddyPhase3Freeze` and `phase7Freeze`. Both were source checks that still looked for `notifyOwnerDevices(` in `minds-run-placement/index.ts`. They now read the shared path (`attemptRow` in the run, `notifyOwnerDevices` in `notablePushServer.ts`). Both files passed alone (63 tests) before the fix, and the second full run passed. The first run's messages match the old assertion text. The working tree now has the updated checks, and the second full run passed. I did not establish when the edits were made relative to the first run, so the first failure is not fully explained.
-- Test-only edits in this phase: the two source checks above, one unused import removed (`buddyRouter.test.ts`), one unused parameter (`notableSources.test.ts`), one quoting fix (`doorWiring.test.ts`). The five files pass alone (154 tests with the two new suites) and lint clean.
-- Focused: `phaseEFreeze` 28 passed. `phaseESlice5` 8 passed. `notablePushAdapter` 6 passed. `notablePushServer` passing. `videoLook` 18 and `videoLookScreen` 6 passed (slice 4).
-- App typecheck `tsc --noEmit -p tsconfig.app.json`: exit 0.
-- Edge typecheck `tsc --noEmit -p supabase/functions/tsconfig.json`: exit 0.
-- ESLint on the changed Phase E files: exit 0.
+- Full vitest, `npx vitest run`: 168 files passed, 2220 tests passed, 6 skipped, 0 failed.
+- A separate export of `2a293b3` (`git archive`), run the same way: 168 files, 2220 passed, 6 skipped. The committed slice 6 is green on its own.
+- App typecheck `npx tsc --noEmit -p tsconfig.app.json`: exit 0.
+- Edge typecheck `npx tsc --noEmit -p supabase/functions/tsconfig.json`: exit 0.
+- ESLint on the 243 changed files: exit 0, 0 errors, 5 warnings (see Lint).
+- Focused: `phaseEFreeze` 28 passed. `phaseESlice5` 8 passed. `notablePushAdapter` 6 passed. `videoLook` 18 and `videoLookScreen` 6 passed (slice 4).
+
+Earlier in this phase, a full run had 2 failures (`buddyPhase3Freeze` and `phase7Freeze`). Both were source checks that still looked at the old call site. They were re-pointed (see Freeze re-pointing). I did not establish the exact cause of that first run.
+
+### Uncommitted work found and reverted
+
+Before the final checks, the workspace held uncommitted changes from an earlier pass that were not in the commits above. They removed the old Distribution channel model from `src/lib/automationDistribution.ts` and its test, made the pack video read the saved look, added a REVOKE to the carts migration, and rewrote the freeze test. Four tests failed in that tree. The owner decided: keep the library and its test, revert the pack wiring, and drop the REVOKE. The tree was reverted to HEAD. A backup is kept outside the repository at `/home/user/backup-phase-e/`. None of that work is on the branch.
 
 Checks are source and fixture only. No live brain, door, push, Telegram, YouTube, Graph, or Web Push call was made. No database was touched. No real MP4 was probed (no FFmpeg in the sandbox). The pending migration is not applied, so the one-send guarantee is not yet proven against the live database.
 
@@ -98,7 +108,7 @@ Checks are source and fixture only. No live brain, door, push, Telegram, YouTube
 - Living steps on real rows.
 - Silent test-fixture render and a real MP4 audio probe (FFmpeg).
 - Decide whether "Which mind?" should stay for non-swap unnamed orders (decision 2).
-- Decide whether to close the "Delete the old one" gap (open narrow spot).
+- Owner decision on the delete gap: `gateOrder` files "Delete the old one" as `mind_work` (see the finding above). Fix it in the Phase D gate, or accept it.
 - Decide whether the saved video look should reach the daily video (a later phase, not this one).
 - Confirm Gemini TTS free-tier terms on Google's pricing page before telling the owner.
 
