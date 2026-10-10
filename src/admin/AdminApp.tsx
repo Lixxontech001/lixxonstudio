@@ -56,6 +56,7 @@ const AutomationBrains = lazy(() => import('./pages/AutomationBrains'));
 const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
 const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));
 const AutomationRuns = lazy(() => import('./pages/AutomationRuns'));
+const AutomationVideoLook = lazy(() => import('./pages/AutomationVideoLook'));
 // The old Distribution screen is retired as a product. Its address now opens Minds (Buddy is the door).
 // The page file stays in the repository, but nothing in the app opens it.
 
@@ -159,6 +160,8 @@ export default function AdminApp() {
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading article queue…</div>}><ArticleQueueCalendar /></Suspense>;
       case 'admin-automation-runs':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation runs…</div>}><AutomationRuns /></Suspense>;
+      case 'admin-automation-video-look':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading video look…</div>}><AutomationVideoLook /></Suspense>;
       case 'admin-automation-distribution':
         return <RetiredDistributionRedirect />;
       case 'admin-dashboard': return <AdminDashboard />;

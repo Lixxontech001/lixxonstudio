@@ -64,6 +64,7 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   'admin-automation-articles': 'content.read',
   'admin-automation-runs': 'automation.check',
   'admin-automation-distribution': 'automation.check',
+  'admin-automation-video-look': 'automation.check',
   // 'admin-security' (own 2FA), 'admin', 'admin-login' need no capability
 };
 

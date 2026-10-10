@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 import {
-  LayoutDashboard, FileText, FolderTree, Users, MessageSquare,
+  LayoutDashboard, FileText, FolderTree, Users, MessageSquare, Film,
   Image, Star, Settings, LogOut, PenLine, ExternalLink,
   ShoppingBag, Package, UserCircle, FolderHeart, Mail,
   BarChart3, ShieldCheck, ChevronDown, ChevronRight, Inbox,
@@ -42,6 +42,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Brains', route: { name: 'admin-automation-brains' }, href: '/admin/automation/brains', icon: Cpu },
       { label: 'System Check', route: { name: 'admin-automation-check' }, href: '/admin/automation/check', icon: HeartPulse },
       { label: 'Run monitor', route: { name: 'admin-automation-runs' }, href: '/admin/automation/runs', icon: Activity },
+      { label: 'Video look', route: { name: 'admin-automation-video-look' }, href: '/admin/automation/video-look', icon: Film },
     ],
   },
   {
