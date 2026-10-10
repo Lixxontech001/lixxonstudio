@@ -152,7 +152,6 @@ describe('owner-only newsletter test delivery handler', () => {
       { channel: 'linkedin', credentials: { linkedin_access_token: 'FAKE_LINKEDIN_TOKEN', linkedin_organization_id: '123456' }, providerBody: { id: '123456', localizedName: privateProviderDetail }, expectedState: 'connected', expectedRequests: 1 },
       { channel: 'x', credentials: { x_api_key: 'FAKE_X_KEY', x_api_secret: 'FAKE_X_SECRET', x_access_token: 'FAKE_X_ACCESS', x_access_token_secret: 'FAKE_X_TOKEN_SECRET' }, expectedState: 'manual_kit', expectedRequests: 0 },
       { channel: 'tumblr', credentials: { tumblr_consumer_key: 'FAKE_TUMBLR_KEY', tumblr_consumer_secret: 'FAKE_TUMBLR_SECRET', tumblr_access_token: 'FAKE_TUMBLR_ACCESS', tumblr_token_secret: 'FAKE_TUMBLR_TOKEN_SECRET', tumblr_blog_identifier: 'lixxon.tumblr.com' }, expectedState: 'manual_kit', expectedRequests: 0 },
-      { channel: 'whatsapp', credentials: { whatsapp_access_token: 'FAKE_WHATSAPP_TOKEN', whatsapp_phone_number_id: '123456789' }, providerBody: { id: '123456789', verified_name: privateProviderDetail, display_phone_number: '+10000000000' }, expectedState: 'connected', expectedRequests: 1 },
       { channel: 'newsletter', credentials: { resend_api_key: 'FAKE_RESEND_TOKEN' }, providerBody: { data: [{ name: 'lixxonstudio.com', status: 'verified', id: privateProviderDetail }] }, expectedState: 'connected', expectedRequests: 1 },
       { channel: 'site_widget', credentials: {}, expectedState: 'manual_kit', expectedRequests: 0 },
     ];
@@ -201,5 +200,22 @@ describe('owner-only newsletter test delivery handler', () => {
         expect(rpc).not.toHaveBeenCalledWith('automation_record_channel_readback', expect.anything());
       }
     }
+  });
+});
+
+describe('WhatsApp is not a channel', () => {
+  it('a check for WhatsApp is refused, and no provider is called', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({}));
+    const service = createService();
+    const response = await handleAutomationDistribution(request({ action: 'check', channel: 'whatsapp' }), {
+      caller: mocks.caller,
+      service: (() => service) as never,
+      fetcher: fetcher as typeof fetch,
+      siteOrigin: origin => origin === 'https://lixxonstudio.com',
+      ownerCheck: mocks.ownerCheck,
+    });
+    expect(response.status).not.toBe(200);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(JSON.stringify(await response.json())).not.toMatch(/whatsapp_access_token|graph\.facebook/);
   });
 });
