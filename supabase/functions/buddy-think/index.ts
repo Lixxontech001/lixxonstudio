@@ -237,6 +237,12 @@ function chatStore(userClient: SupabaseClient) {
       const weekPaid = (from: string, to: string) =>
         userClient.from("orders").select("id", { count: "exact", head: true }).eq("payment_status", "paid").gte("created_at", from).lt("created_at", to);
       const [tv, lv, tp, lp] = await Promise.all([weekViews(w.thisStart, w.end), weekViews(w.lastStart, w.thisStart), weekPaid(w.thisStart, w.end), weekPaid(w.lastStart, w.thisStart)]);
+      // Three queues, counted only (head). Owner session, so row-level security applies. Never a name, an address or a body.
+      const [commentsQueue, refundsQueue, cartsQueue] = await Promise.all([
+        userClient.from("comments").select("id", { count: "exact", head: true }).eq("is_approved", false),
+        userClient.from("refund_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+        userClient.from("abandoned_carts").select("id", { count: "exact", head: true }).eq("recovered", false),
+      ]);
       const weeks: WeekFacts = {
         ok: !tv.error && !lv.error && !tp.error && !lp.error,
         thisWeek: { views: tv.count ?? 0, paid: tp.count ?? 0 },
@@ -267,6 +273,9 @@ function chatStore(userClient: SupabaseClient) {
         doors: { ok: !doorRead.error, rows: briefingDoors(doorRows, postTitles) },
         notables: { ok: !notableRead.error, rows: briefingNotables(Array.isArray(notableRead.data) ? notableRead.data : []) },
         messages: { ok: !messageRead.error, count: messageRead.count ?? 0 },
+        commentsWaiting: { ok: !commentsQueue.error, count: commentsQueue.count ?? 0 },
+        refundsOpen: { ok: !refundsQueue.error, count: refundsQueue.count ?? 0 },
+        cartsAbandoned: { ok: !cartsQueue.error, count: cartsQueue.count ?? 0 },
       };
     },
     // The "which mind?" order waiting on the last message of this chat. Owner session, so row-level security applies.

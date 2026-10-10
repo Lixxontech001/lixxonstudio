@@ -42,6 +42,43 @@ export interface BriefingFacts {
   messages?: { ok: boolean; count: number };
   /** This week (last 7 days) against last week: paid orders and article views. Counts only. */
   weeks?: WeekFacts;
+  /** Comments waiting for the owner's approval right now. A count only: never a name, an email or the text. */
+  commentsWaiting?: { ok: boolean; count: number };
+  /** Refund requests still pending right now. A count only: never a name, an email or the reason. */
+  refundsOpen?: { ok: boolean; count: number };
+  /** Abandoned carts not yet recovered right now. A count only: never a name, an email or the items. */
+  cartsAbandoned?: { ok: boolean; count: number };
+}
+
+/** The wording for one count-only queue. Quiet when zero; says so plainly when the read failed. */
+export interface QueueWording {
+  unread: string;
+  one: string;
+  many: (count: number) => string;
+}
+
+export const COMMENTS_WORDING: QueueWording = {
+  unread: "I cannot read the comments waiting for approval yet.",
+  one: "One comment is waiting for your approval.",
+  many: (count) => `${count} comments are waiting for your approval.`,
+};
+export const REFUNDS_WORDING: QueueWording = {
+  unread: "I cannot read the refund requests yet.",
+  one: "One refund request is waiting for you in Admin.",
+  many: (count) => `${count} refund requests are waiting for you in Admin.`,
+};
+export const CARTS_WORDING: QueueWording = {
+  unread: "I cannot read the abandoned carts yet.",
+  one: "One abandoned cart has not been recovered yet.",
+  many: (count) => `${count} abandoned carts have not been recovered yet.`,
+};
+
+/** Count-only lines for one queue. Nothing when the count is zero, and only the count otherwise. */
+export function queueLines(queue: { ok: boolean; count: number } | undefined, wording: QueueWording): string[] {
+  if (!queue) return [];
+  if (!queue.ok) return [wording.unread];
+  if (queue.count <= 0) return [];
+  return [queue.count === 1 ? wording.one : wording.many(queue.count)];
 }
 
 /** One notable event the briefing can show. Plain fields only: its kind, its title and its detail. */
@@ -387,7 +424,8 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const notablesRead = facts.notables ? facts.notables.ok : true;
   const messagesRead = facts.messages ? facts.messages.ok : true;
   const weeksRead = facts.weeks ? facts.weeks.ok : true;
-  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead && notablesRead && messagesRead && weeksRead;
+  const queuesRead = [facts.commentsWaiting, facts.refundsOpen, facts.cartsAbandoned].every((queue) => (queue ? queue.ok : true));
+  const allRead = facts.articles.ok && facts.orders.ok && facts.views.ok && facts.failures.ok && mindsRead && waitingRead && appliedRead && gapsRead && packsRead && doorsRead && notablesRead && messagesRead && weeksRead && queuesRead;
   // A door post that went out, failed or is still saving is news, so the day is not quiet.
   const doorsReal = (facts.doors?.rows.length ?? 0) > 0;
   // An honest skip or a closed door is a problem the owner should see, so it also keeps the day from being quiet.
@@ -402,8 +440,10 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   const notablesReal = (facts.notables?.rows ?? []).some((row) => BRIEFING_NOTABLE_KINDS.includes(row.kind));
   // A reader's form message is something the owner should read, so it is not quiet either.
   const messagesReal = (facts.messages?.count ?? 0) > 0;
+  // A comment waiting for approval, a refund still pending, or an abandoned cart not recovered is a count the owner acts on.
+  const queuesReal = [facts.commentsWaiting, facts.refundsOpen, facts.cartsAbandoned].some((queue) => !!queue && queue.ok && queue.count > 0);
   const nothingReal =
-    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal && !doorsReal && !notablesReal && !messagesReal;
+    facts.articles.count === 0 && facts.orders.paidCount === 0 && facts.failures.count === 0 && !mindsReal && !ordersWaiting && !changesReal && !packsReal && !doorsReal && !notablesReal && !messagesReal && !queuesReal;
   if (allRead && nothingReal) return { quiet: true, sections: [], text: QUIET_LINE };
 
   const awayMs = now.getTime() - Date.parse(sinceIso);
@@ -421,7 +461,7 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
       lines: [firstVisit ? `First visit here. Buddy looks back ${FIRST_VISIT_WINDOW_HOURS} hours.` : `You were away for ${describeAway(awayMs)}.`, ...notableLines(facts.notables, SINCE_NOTABLE_KINDS)],
     },
     { id: "went_out", title: "What went out", lines: went },
-    { id: "money", title: "Money & readers", lines: [...moneyLines(facts), ...messageLines(facts.messages), ...notableLines(facts.notables, MONEY_NOTABLE_KINDS)] },
+    { id: "money", title: "Money & readers", lines: [...moneyLines(facts), ...messageLines(facts.messages), ...queueLines(facts.refundsOpen, REFUNDS_WORDING), ...queueLines(facts.cartsAbandoned, CARTS_WORDING), ...queueLines(facts.commentsWaiting, COMMENTS_WORDING), ...notableLines(facts.notables, MONEY_NOTABLE_KINDS)] },
     { id: "minds", title: "The five minds", lines: mindLines(facts.minds) },
     { id: "problems", title: "Problems", lines: problemLines(facts.failures, facts.minds?.rows ?? [], facts.packs?.rows ?? [], facts.notables) },
     { id: "jobs", title: "Your jobs", lines: jobLines(facts.waiting, facts.gaps, facts.packs, facts.notables) },

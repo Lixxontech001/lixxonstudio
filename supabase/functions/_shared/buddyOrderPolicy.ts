@@ -74,6 +74,15 @@ export function gateOrder(kind: unknown, instruction: string): FilingGate {
   return { ok: true, kind: closed };
 }
 
+/**
+ * A swap, or a placement of a shop product onto an article, is the product_line_apply kind. Anything else a mind is
+ * asked to do is mind_work. The lane (buddyOrders) still decides whether the run may take it.
+ */
+const PRODUCT_LINE_APPLY = /\b(swap|replace|put|place|add)\b[^.?!]*\b(onto|on to|into|in|on|to)\b[^.?!]*\b(article|articles|post|guide|blog|page)\b/i;
+export function filingKindFor(instruction: string): AllowedOrder {
+  return PRODUCT_LINE_APPLY.test(instruction) ? "product_line_apply" : MODEL_FILEABLE_ORDER;
+}
+
 /** A model may file only mind_work. The other four kinds come from the owner's own words, never from a model reply. */
 export function gateModelOrder(kind: unknown, instruction: string): FilingGate {
   const gate = gateOrder(kind, instruction);

@@ -11,6 +11,14 @@ function sentence(text: string): string {
   return /[.!?]$/.test(clean) ? clean : `${clean}.`;
 }
 
+/**
+ * The owner-facing line for an order the day run reports. An applied change reads "Done." with the names
+ * (the placement detail names the product and the article). Any other status keeps its plain detail.
+ */
+export function orderOutcomeLine(status: string, detail: string): string {
+  return status === "applied" ? feedbackLine({ state: "done", what: detail }) : detail;
+}
+
 export function feedbackLine(feedback: OrderFeedback): string {
   if (feedback.state === "done") return `Done. ${sentence(feedback.what)}`;
   if (feedback.state === "blocked") return `Blocked. ${sentence(feedback.reason)} Nothing on the site changed.`;

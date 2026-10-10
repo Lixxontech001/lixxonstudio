@@ -20,6 +20,8 @@ import type { PushTarget, VapidCredentials } from "../_shared/webPush.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
 import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
 import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
+import { orderOutcomeLine } from "../_shared/buddyFeedback.ts";
+import { LIVING_MINDS, runLivingMinds, type LivingMindPorts } from "../_shared/buddyLivingMinds.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
 import { isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
@@ -235,12 +237,22 @@ export async function handleRun(req: Request): Promise<Response> {
   }
   const job = planJobNotable(outcome.status, outcome.orderId);
   if (job) await recordNotable(sb, owner, localDay, job.mind, job.kind, job.title, job.detail, job.key);
+  // The day's thinking steps: the Analyst, the Strategist and the CEO. They run on the day run only (no order named),
+  // once per local day, and only when Takeover is on and Kill does not stop them (checked above, and again per mind).
+  // Each writes its own daily-log row. Nothing here can fail the run.
+  if (orderId === null) {
+    try {
+      await runLivingMindsForDay(sb, owner, localDay, takeover, killScope, think, waiting.orders);
+    } catch {
+      // The thinking steps are extra. Nothing else in the run depends on them.
+    }
+  }
   const doorsReply = { status: doors.status, posted: doors.posted };
   if (outcome.status === "cannot_think") {
     return reply(req, { status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
   }
   const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think);
-  const detail = clip(`${outcome.detail} ${packs.detail} ${doors.detail}`, 800);
+  const detail = clip(`${orderOutcomeLine(outcome.status, outcome.detail)} ${packs.detail} ${doors.detail}`, 800);
   return reply(req, {
     status: outcome.status,
     detail,
@@ -598,6 +610,48 @@ async function runDoorsForDay(
  * Reads the owner's measured successful posts over the lookback (packs marked "I posted this", and door sends that really went out,
  * RSS pings excluded) and ranks the posting windows. Any failed read keeps the current windows.
  */
+/**
+ * The three thinking steps for one local day. Skipped when today already has their rows (once a day), and skipped
+ * when the check itself cannot be read, so a flaky read never runs them twice. Facts are read here, never by a mind.
+ */
+async function runLivingMindsForDay(
+  sb: SupabaseClient,
+  owner: string,
+  localDay: string,
+  takeover: boolean,
+  killScope: KillScope,
+  think: ReturnType<typeof makeMindThink>,
+  orders: Array<{ instruction: string }>,
+): Promise<void> {
+  const today = await sb.from("minds_daily_log").select("id").eq("owner_id", owner).eq("day", localDay).in("mind", [...LIVING_MINDS]).limit(1);
+  if (today.error || (today.data ?? []).length > 0) return;
+  const ports: LivingMindPorts = {
+    think: (request) => think(request),
+    log: async (entry) => {
+      await sb.from("minds_daily_log").insert({
+        owner_id: owner,
+        day: localDay,
+        mind: entry.mind,
+        action: clip(entry.action, 120),
+        outcome: entry.outcome,
+        detail: clip(entry.detail, 500),
+        order_id: null,
+      });
+    },
+  };
+  await runLivingMinds(ports, { takeover, killScope, facts: await readMindFacts(sb), orders: orders.map((order) => order.instruction) });
+}
+
+/** This week and last week, as counts only: article views and paid orders. A failed read says so, and is never a guess. */
+async function readMindFacts(sb: SupabaseClient): Promise<string> {
+  const w = weekWindows(new Date());
+  const views = (from: string, to: string) => sb.from("article_views").select("id", { count: "exact", head: true }).gte("created_at", from).lt("created_at", to);
+  const paid = (from: string, to: string) => sb.from("orders").select("id", { count: "exact", head: true }).eq("payment_status", "paid").gte("created_at", from).lt("created_at", to);
+  const [tv, lv, tp, lp] = await Promise.all([views(w.thisStart, w.end), views(w.lastStart, w.thisStart), paid(w.thisStart, w.end), paid(w.lastStart, w.thisStart)]);
+  if (tv.error || lv.error || tp.error || lp.error) return "The site numbers could not be read this run.";
+  return `Last 7 days: ${tv.count ?? 0} article views and ${tp.count ?? 0} paid orders. The 7 days before: ${lv.count ?? 0} article views and ${lp.count ?? 0} paid orders.`;
+}
+
 async function readWindowLearning(sb: SupabaseClient, owner: string, now: Date): Promise<WindowLearning> {
   const since = new Date(now.getTime() - LEARN_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const [packs, doors] = await Promise.all([

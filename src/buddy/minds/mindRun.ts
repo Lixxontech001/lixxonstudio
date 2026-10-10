@@ -7,7 +7,9 @@ import type { MindContext, MindPorts, MindRun } from './mindTypes';
 /**
  * One pass over the four minds that do the day's thinking, in a fixed order.
  * The Auditor is not run on its own here: it checks the Executioner's plans inside that run.
- * Nothing calls this yet. There is no schedule and no button that starts it.
+ * The server day run does not call this function. It runs the Analyst, the Strategist and the CEO through its own
+ * copy (_shared/buddyLivingMinds.ts, in the functions folder), checked word for word by livingMindSteps.test.ts.
+ * This aggregate, with the Executioner too, is not wired to a button or a schedule yet.
  */
 export async function runAllMinds(ports: MindPorts, context: MindContext): Promise<MindRun[]> {
   const runs: MindRun[] = [];
