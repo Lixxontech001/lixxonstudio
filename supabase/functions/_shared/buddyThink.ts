@@ -4,6 +4,7 @@
 
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
 import { howToReply } from "./buddyHowTo.ts";
+import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import { stateFactsBlock, type BuddyStateFacts } from "./buddyStateFacts.ts";
 import {
@@ -28,6 +29,8 @@ export const RUN_DAY_ON_LINE = "Filed for today's run. Takeover is on, so I am s
 export const RUN_DAY_UNREADABLE_LINE = "Filed for today's run. I could not read Takeover just now, so it waits until I can.";
 
 /** Current stable Flash model on the Gemini API (Google's model list, Oct 2026). Change here only. */
+export const CONTROL_FAILED_LINE = "I could not make that change just now, so nothing has changed. Try again in a moment.";
+
 export const BUDDY_GEMINI_MODEL = "gemini-3.8-flash";
 export const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 export const GEMINI_TIMEOUT_MS = 15_000;
@@ -110,6 +113,11 @@ export interface BuddyThinkDeps {
   readTakeover(): Promise<boolean | null>;
   /** Read-only view of Takeover, the kill switch, waiting orders, recent mind steps and notable events. */
   readStateFacts(): Promise<BuddyStateFacts>;
+  /**
+   * Makes one pause, stop or start change, and writes one daily-log line for it. Only called when Takeover is on.
+   * Returns false when the change or the log line could not be saved. Nothing else reads or writes the switches.
+   */
+  applyControl(action: ControlAction): Promise<boolean>;
 }
 
 /** How Buddy answers: plain English, inside one JSON object. Filing an order only puts it in the waiting list. */
@@ -313,6 +321,15 @@ async function answerRouted(
     const filed = await deps.saveOrder(chatId, route.instruction, route.mind);
     if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
   }
+  // A pause, stop or start request runs only when Takeover is on. Otherwise it is filed as waiting, like a run.
+  let controlTakeover: boolean | null = null;
+  if (route.kind === "control") {
+    controlTakeover = await deps.readTakeover();
+    if (controlTakeover !== true) {
+      const filed = await deps.saveOrder(chatId, route.instruction, null);
+      if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
+    }
+  }
   if (route.kind === "run_day") {
     // Today's run is filed with no mind. It waits unless Takeover is on, and then Buddy starts it.
     const filed = await deps.saveOrder(chatId, route.instruction, null);
@@ -333,6 +350,15 @@ async function answerRouted(
       reply = RUN_DAY_ON_LINE;
       runStart = true;
     } else reply = RUN_DAY_OFF_LINE;
+  } else if (route.kind === "control") {
+    if (controlTakeover === null) reply = CONTROL_UNREADABLE_LINE;
+    else if (controlTakeover === false) reply = WAIT_LINE;
+    else {
+      const changed = await deps.applyControl(route.action);
+      reply = changed ? controlDoneLine(route.action) : CONTROL_FAILED_LINE;
+    }
+  } else if (route.kind === "control_refused") {
+    reply = route.line;
   } else if (route.kind === "how_to") {
     reply = howToReply(route.door);
   } else if (route.kind === "ask_which_mind") {

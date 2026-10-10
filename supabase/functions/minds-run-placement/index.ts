@@ -201,7 +201,11 @@ export async function handleRun(req: Request): Promise<Response> {
   // Gated packs follow the placement step, then the free doors. Takeover is on and Kill is off here (checked above).
   // The doors need no Gemini, so they run even when placement could not think. The packs step is skipped then,
   // because placement has already said so.
-  const doors = await runDoorsSafely(sb, owner, localDay, takeover, killScope);
+  // Only reached when Takeover and Kill allow the run. Doors the owner paused in chat. Read on its own, so a missing column never stops the run. A failed read pauses nothing.
+  const pausedRow = await sb.from("minds_controls").select("paused_doors").eq("id", 1).maybeSingle();
+  const pausedRaw = asRecord(pausedRow.data)?.paused_doors;
+  const pausedDoors = pausedRow.error || !Array.isArray(pausedRaw) ? [] : pausedRaw.filter((item): item is string => typeof item === "string");
+  const doors = await runDoorsSafely(sb, owner, localDay, takeover, killScope, pausedDoors);
   if (doors.posted > 0) {
     await recordNotable(
       sb,
@@ -320,9 +324,10 @@ async function runDoorsSafely(
   localDay: string,
   takeover: boolean,
   killScope: KillScope,
+  pausedDoors: string[],
 ): Promise<DoorRunResult> {
   try {
-    return await runDoorsForDay(sb, owner, localDay, takeover, killScope);
+    return await runDoorsForDay(sb, owner, localDay, takeover, killScope, pausedDoors);
   } catch {
     await recordNotable(sb, owner, localDay, "executioner", "mind_failed", "The free doors could not run", "Nothing was posted. Check the log.");
     return { status: "held", detail: "The free doors could not be read or written. Nothing was posted.", posted: 0, outcomes: [] };
@@ -335,12 +340,13 @@ async function runDoorsForDay(
   localDay: string,
   takeover: boolean,
   killScope: KillScope,
+  pausedDoors: string[],
 ): Promise<DoorRunResult> {
   const siteOrigin = env("SITE_URL") || null;
   const nowMs = Date.now();
   const since = new Date(nowMs - DOOR_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
   return runDoors(
-    { localDay, takeover, killScope, nowMs, siteOrigin },
+    { localDay, takeover, killScope, nowMs, siteOrigin, pausedDoors },
     {
       readArticles: async () => {
         const { data, error } = await sb

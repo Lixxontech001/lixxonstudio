@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runDoors, DOORS_NOTHING_CONNECTED_DETAIL, type AudioLoad, type DoorRunPorts, type DoorSendExtra, type ReserveResult, type VideoLoad } from '../../supabase/functions/_shared/runDoors';
+import { runDoors, ALL_DOORS_PAUSED_DETAIL, DOORS_NOTHING_CONNECTED_DETAIL, type AudioLoad, type DoorRunPorts, type DoorSendExtra, type ReserveResult, type VideoLoad } from '../../supabase/functions/_shared/runDoors';
 import { KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from '../../supabase/functions/_shared/runDay';
 import type { DoorArticle } from '../../supabase/functions/_shared/doorPosts';
 import type { DoorSendResult } from '../../supabase/functions/_shared/doorAdapters';
@@ -764,5 +764,33 @@ describe('Phase 7 slice 5: honest skips are logged, and a closed door is said pl
     });
     const result = await runDoors(DAY_INPUT, h.ports);
     expect(result.outcomes.find((item) => item.door === 'medium')?.detail).toBe('Medium did not take it: Medium did not take the story.');
+  });
+});
+
+describe('a door the owner paused in chat is skipped', () => {
+  it('Telegram paused: nothing is reserved or sent there, Discord still posts, and the detail says it is paused', async () => {
+    const h = harness();
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: ['telegram'] }, h.ports);
+    expect(h.sent.some((item) => item.door === 'telegram')).toBe(false);
+    expect(h.reserved.some((item) => item.startsWith('telegram:'))).toBe(false);
+    expect(h.sent.some((item) => item.door === 'discord')).toBe(true);
+    expect(result.detail).toContain('Paused by you: Telegram.');
+  });
+
+  it('two connected doors paused: neither gets a send', async () => {
+    const h = harness();
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: ['telegram', 'discord'] }, h.ports);
+    // The other ten doors are not connected in this fixture, so the run has nothing to send either way.
+    expect(result.status).toBe('nothing_to_do');
+    expect(h.sent.some((item) => item.door === 'telegram' || item.door === 'discord')).toBe(false);
+  });
+
+  it('a pause list that pauses every open door: nothing to do, with the plain message', async () => {
+    const h = harness();
+    const all = ['telegram', 'discord', 'bluesky', 'mastodon', 'tumblr', 'blogger', 'medium', 'pixelfed', 'wordpress_com', 'youtube', 'vimeo', 'podcast'];
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: all }, h.ports);
+    expect(result).toEqual({ status: 'nothing_to_do', detail: ALL_DOORS_PAUSED_DETAIL, posted: 0, outcomes: [] });
+    expect(h.sent).toHaveLength(0);
+    expect(h.reserved).toHaveLength(0);
   });
 });

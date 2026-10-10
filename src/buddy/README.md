@@ -382,3 +382,13 @@ What is still not done, or not verified:
 - **Where it runs.** Only in the owner-started day run (`minds-run-placement`), after the free doors. It runs only when Takeover is on and Kill allows it. Nothing schedules it. A failed read is named in the result, and the rest still runs. A failure never fails the day run.
 - **Limits, stated plainly.** The click count is as of the first day run that sees that day. A sale older than 48 hours is not announced. Sales only buzz on days the day run runs.
 - **Tests.** `notableSources.test.ts` (rules, fake reads and writes), `notableSourcesWiring.test.ts` (reads never write; key sent only when present), `notableSourcesDb.test.ts` (the unique index in PGlite). No live push is sent.
+
+## Phase 8 slice 3: chat can run the switches when Takeover is on
+
+- Chat understands one pause, stop, or start request: a free door ("Pause the Telegram door"), one mind ("Stop the Analyst"), everything ("Stop everything"), or clearing the kill ("Start the CEO again"). Rules live in `supabase/functions/_shared/buddyControls.ts`.
+- Takeover on: the change is made now, and one line is written to the daily log (mind `buddy`). Takeover off or unreadable: the request is saved as waiting and nothing changes. The held order never runs as an article change; the lane check holds every control request.
+- Refused in chat: the Auditor (it stays on), a Takeover switch (the owner does that), and a mix of minds in one sentence.
+- "Make the packs" is the same run-today request as "run today".
+- A paused door is skipped by the day run's door step, and the run says "Paused by you: ...". The pause list is one new column, `minds_controls.paused_doors`, in `20261013000000_minds_paused_doors.sql` (NOT applied). Until that migration is applied, chat pause requests fail honestly, and the day run pauses nothing.
+- Known copy gap: a kill set from chat shows the existing trigger line "Set by the owner in Minds." in the notable events. The daily-log line above it is the accurate record. Not changed here.
+- Freeze check for this slice: `src/__tests__/buddyControls.test.ts` and the paused-door block in `runDoors.test.ts`.

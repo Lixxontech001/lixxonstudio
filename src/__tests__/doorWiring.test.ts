@@ -8,10 +8,17 @@ const DOORS_STEP = RUN.slice(RUN.indexOf('async function runDoorsSafely'), RUN.i
 
 describe('the free doors step is part of the day run, behind the same gates', () => {
   it('the day run calls the door step after placement and packs', () => {
-    const doorsCall = RUN.indexOf('await runDoorsSafely(sb, owner, localDay, takeover, killScope)');
+    const doorsCall = RUN.indexOf('await runDoorsSafely(sb, owner, localDay, takeover, killScope, pausedDoors)');
     const packsCall = RUN.indexOf('await runPacksForDay(sb, owner, localDay, takeover, killScope, think)');
     expect(doorsCall).toBeGreaterThan(0);
     expect(packsCall).toBeGreaterThan(doorsCall);
+  });
+
+  it('the paused-door list is read only after the gate, and a missing column never stops the run', () => {
+    const gate = RUN.indexOf('blockedDetail(takeover, killScope)');
+    const pausedRead = RUN.indexOf('select(\"paused_doors\")');
+    expect(pausedRead).toBeGreaterThan(gate);
+    expect(RUN).toContain('pausedRow.error ||');
   });
 
   it('the run returns early with Takeover off or Kill on, before any door is read', () => {

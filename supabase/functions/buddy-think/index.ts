@@ -12,6 +12,8 @@ import {
 } from "../_shared/buddyThink.ts";
 import { briefingApplied, briefingDoors, briefingGaps, briefingPacks, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
 import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
+import { controlChange, controlDoneLine, type ControlAction } from "../_shared/buddyControls.ts";
+import { ownerClock } from "../_shared/mindsNightReport.ts";
 import { STATE_DOOR_LIMIT, STATE_LOG_LIMIT, STATE_NOTABLE_LIMIT, STATE_ORDER_LIMIT, type BuddyStateFacts } from "../_shared/buddyStateFacts.ts";
 import {
   SITE_ARTICLE_LIMIT,
@@ -453,6 +455,38 @@ Deno.serve(async (req: Request) => {
   const store = chatStore(userClient);
   const deps: BuddyThinkDeps = {
     keyConfigured: async () => keyConfigured,
+    // One pause, stop or start change, made in the owner's session (row-level security), then one daily-log line.
+    // Only called when Takeover is on. Returns false when the change or the log line could not be saved.
+    applyControl: async (action: ControlAction) => {
+      try {
+        const isDoor = action.kind === "pause_door" || action.kind === "resume_door";
+        const current = await userClient.from("minds_controls").select(isDoor ? "kill_scope,paused_doors" : "kill_scope").eq("id", 1).maybeSingle();
+        if (current.error || !current.data) return false;
+        const row = current.data as unknown as Record<string, unknown>;
+        const pausedDoors = Array.isArray(row.paused_doors) ? row.paused_doors.filter((item): item is string => typeof item === "string") : [];
+        const killScope = typeof row.kill_scope === "string" ? row.kill_scope : "none";
+        const change = controlChange(action, { killScope, pausedDoors });
+        const saved = await userClient
+          .from("minds_controls")
+          .update({ ...change, updated_by: user.id, updated_at: new Date().toISOString() })
+          .eq("id", 1)
+          .select("id");
+        if (saved.error || !Array.isArray(saved.data) || saved.data.length === 0) return false;
+        const now = new Date().toISOString();
+        const logged = await sb.from("minds_daily_log").insert({
+          owner_id: user.id,
+          day: ownerClock(now),
+          happened_at: now,
+          mind: "buddy",
+          action: "Owner changed a switch from chat",
+          outcome: "done",
+          detail: controlDoneLine(action).slice(0, 500),
+        });
+        return !logged.error;
+      } catch {
+        return false;
+      }
+    },
     readKey: async () => {
       try {
         const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: KEY_NAME });

@@ -8,6 +8,7 @@
 
 import { ownerClock } from "./mindsNightReport.ts";
 import { howToDoor, type HowToDoor } from "./buddyHowTo.ts";
+import { parseControlRequest, type ControlAction } from "./buddyControls.ts";
 
 export const MIND_KEYS = ["analyst", "strategist", "ceo", "executioner", "auditor"] as const;
 export type MindName = (typeof MIND_KEYS)[number];
@@ -47,14 +48,20 @@ const QUESTION_MARK = /\?\s*$/;
 const RUN_DAY =
   /^(please\s+|could you\s+|can you\s+|would you\s+)?((run|start|kick off)\s+(the\s+|today'?s\s+|todays\s+|my\s+|all\s+)?(products?|posts?|jobs?|orders?|day|run|today)\b|(run|start|kick off|make|do)\s+(today'?s\s+|todays\s+|the\s+)(posts?|jobs?|products?|packs?|run)\b|daily run\b)/i;
 
+/** "Make the packs" runs the same day run, so it is a run-today request too. */
+const PACKS = /^(please\s+|could you\s+|can you\s+|would you\s+)?(make|run|start|do)\s+(the\s+|today'?s\s+|my\s+)?packs?\b/i;
+
 export function isRunDayRequest(message: string): boolean {
-  return RUN_DAY.test(coreOf(message.trim()));
+  const core = coreOf(message.trim());
+  return RUN_DAY.test(core) || PACKS.test(core);
 }
 
 export type Route =
   | { kind: "mind_log"; mind: MindName }
   | { kind: "order"; mind: MindName; instruction: string; resolvesPending: boolean }
   | { kind: "run_day"; instruction: string }
+  | { kind: "control"; action: ControlAction; instruction: string }
+  | { kind: "control_refused"; line: string }
   | { kind: "ask_which_mind"; instruction: string }
   | { kind: "how_to"; door: HowToDoor }
   | { kind: "chat" };
@@ -135,6 +142,15 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
 
   if (pending && mind && words <= 5 && !imperative && !question) {
     return { kind: "order", mind, instruction: pending.instruction, resolvesPending: true };
+  }
+  // Pause, resume, stop or start a door or a mind. A question about one is left to the rules below.
+  if (!question) {
+    const control = parseControlRequest(text);
+    if (control) {
+      return control.ok
+        ? { kind: "control", action: control.action, instruction: cleanInstruction(text) }
+        : { kind: "control_refused", line: control.refusal };
+    }
   }
   if (mind && question && !imperative) return { kind: "mind_log", mind };
   // "How do I connect YouTube?" is answered with fixed steps. A mind named in the same message is left to the rules above.

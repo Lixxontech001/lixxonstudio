@@ -2,6 +2,7 @@
 // reason for every other order. Pure logic. The database read is passed in, so tests can use fake rows.
 
 import { MIND_KEYS, type MindName } from "./buddyRouter.ts";
+import { parseControlRequest } from "./buddyControls.ts";
 
 export const WAITING_READ_LIMIT = 50;
 
@@ -25,6 +26,7 @@ export const HELD_LATER_PHASE = "Posting to channels, video and email come in a 
 export const HELD_MONEY = "Minds do not change prices, spend money or refund. This order waits for you.";
 export const HELD_CREATE = "Creating a product is your job. Tell Buddy the angle and Buddy will say what to create.";
 export const HELD_UNKNOWN = "Buddy does not know yet how to run this kind of order. It waits for you.";
+export const HELD_CONTROL = "Pausing, stopping and starting doors and minds runs only when Takeover is on. It waits for you.";
 
 /** Channels, video, email and push: the later phases. Checked first, so "post it to instagram" waits. */
 const LATER_PHASE =
@@ -36,7 +38,7 @@ const MONEY = /\b(price|prices|pricing|discount|refund|spend|pay|ads?|advert|adv
  * "post it to instagram" never matches here. A run that also names a channel stays held (LATER_PHASE).
  */
 const DAILY_RUN =
-  /^(please\s+|could you\s+|can you\s+|would you\s+)?((run|start|kick off|make|do)\s+(the\s+|today'?s\s+|todays\s+|all\s+)?(products?|posts?|jobs?|day|run|today)\b|daily run\b)/i;
+  /^(please\s+|could you\s+|can you\s+|would you\s+)?((run|start|kick off|make|do)\s+(the\s+|today'?s\s+|todays\s+|all\s+)?(products?|posts?|jobs?|day|run|today|packs?)\b|daily run\b)/i;
 /** Creating a product is the owner's job. "Add a product to the guide" is a product line, not a create. */
 const CREATE_PRODUCT = /\b(create|build|make|set\s+up)\s+((a|an|the|new|another)\s+)*(product|kit|bundle|sku)s?\b/i;
 /** Work this phase can run: a product line on an article, or a swap of which products sit on it. */
@@ -44,6 +46,8 @@ const PRODUCT_LINE = /\b(article|articles|blog|guide|paragraph|sentence|product|
 
 /** Sorts one order into the lane it belongs to. Order of checks matters: money and channels are held first. */
 export function laneFor(instruction: string): OrderLane {
+  // A pause, stop or start request never runs as an article change, even when it names a product.
+  if (parseControlRequest(instruction)) return { lane: "held", reason: HELD_CONTROL };
   if (MONEY.test(instruction)) return { lane: "held", reason: HELD_MONEY };
   if (DAILY_RUN.test(instruction) && !LATER_PHASE.test(instruction)) return { lane: "daily_run" };
   if (LATER_PHASE.test(instruction)) return { lane: "held", reason: HELD_LATER_PHASE };

@@ -8,6 +8,7 @@
 // because some doors (Telegram, Discord, Bluesky, Tumblr, Blogger) cannot tell a repeat from a new post.
 
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
+import { DOOR_LABEL } from "./buddyControls.ts";
 import { DOOR_DAILY_LIMIT, DOOR_MEDIA, DOOR_TEXT_LIMIT, DOORS_NEED_PICTURE, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
 import { isHonestSkip } from "./honestSkips.ts";
 import type { DoorSendResult } from "./doorAdapters.ts";
@@ -37,12 +38,16 @@ export const DOORS_NOTHING_CONNECTED_DETAIL = "No free door is connected yet. Co
 export const FINISH_ATTEMPTS = 3;
 const FINISH_PAUSE_MS = [1000, 3000];
 
+export const ALL_DOORS_PAUSED_DETAIL = "Every free door is paused by you. Nothing was posted.";
+
 export interface DoorRunInput {
   localDay: string;
   takeover: boolean;
   killScope: KillScope;
   nowMs: number;
   siteOrigin: string | null;
+  /** Doors the owner paused in chat. A paused door is skipped and nothing is sent there. */
+  pausedDoors?: readonly string[];
 }
 
 export type ReserveResult = { ok: true; id: string } | { ok: false; reason: string };
@@ -350,6 +355,11 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
   const gate = blockedDetail(input.takeover, input.killScope);
   if (gate) return { status: "held", detail: gate, posted: 0, outcomes: [] };
 
+  const paused = new Set<string>(input.pausedDoors ?? []);
+  const doors = OPEN_DOORS.filter((door) => !paused.has(door));
+  const pausedNames = OPEN_DOORS.filter((door) => paused.has(door)).map((door) => DOOR_LABEL[door]);
+  if (doors.length === 0) return { status: "nothing_to_do", detail: ALL_DOORS_PAUSED_DETAIL, posted: 0, outcomes: [] };
+
   const outcomes: DoorOutcome[] = [];
   let articles: DoorArticle[] | null = null;
   const readArticles = async (): Promise<DoorArticle[]> => {
@@ -357,7 +367,7 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
     return articles;
   };
 
-  for (const door of OPEN_DOORS) {
+  for (const door of doors) {
     const posted = outcomes.filter((item) => item.outcome === "posted").length;
     const step = await postToDoor(input, ports, door, readArticles, posted);
     if ("held" in step) {
@@ -368,10 +378,11 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
 
   const posted = outcomes.filter((item) => item.outcome === "posted").length;
   const notConnected = outcomes.filter((item) => item.outcome === "not_connected").map((item) => item.detail);
-  if (notConnected.length === OPEN_DOORS.length) {
+  if (notConnected.length === doors.length) {
     return { status: "nothing_to_do", detail: DOORS_NOTHING_CONNECTED_DETAIL, posted, outcomes };
   }
   const lines = outcomes.filter((item) => item.outcome !== "not_connected").map((item) => item.detail);
   if (notConnected.length > 0) lines.push(`Not connected yet: ${notConnected.join(", ")}.`);
+  if (pausedNames.length > 0) lines.push(`Paused by you: ${pausedNames.join(", ")}.`);
   return { status: "done", detail: clip(lines.join(" ")), posted, outcomes };
 }
