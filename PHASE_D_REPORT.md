@@ -7,7 +7,7 @@ This report replaces the earlier Phase D report. That report was built from a le
 Takeover stays off by default. No brain, door, order kind or channel was added. No live LLM, live door or live push call was made. Every model reply, brain call, push send and database step in the tests is a fake.
 
 - HEAD before the gap-closing fix: `db48b15` (slice 6, first version of this report).
-- HEAD after the fix: the commit whose message is `Phase D: close the push, readKey and filing gaps; report corrected`. Its sha is given in the final message of this phase.
+- HEAD after the gap-closing fix: `4f0a315`. The closed-list test and the check numbers below were added after it, in the commit whose message is `Phase D: closed-list test for answerRouted; report checks corrected`. Its sha is in the final message of this phase.
 
 ## Slices (spec commit messages)
 
@@ -36,6 +36,7 @@ Takeover stays off by default. No brain, door, order kind or channel was added. 
    - **Limit:** the Minds screen push needs the browser to make the call. If the tab closes before the call, no push is attempted. The notable row still exists. Nothing is queued or retried.
 2. **Dead Gemini-only dep (spec item 7).** `readKey` was still in `BuddyThinkDeps` and wired in `buddy-think`, with no caller. It is removed from the interface and from the handler. Test fixtures keep a helper that feeds `readSecret` for the Gemini key. The handler has no `readKey` dep.
 3. **Two spec examples, by name** (`swapApplyPath.test.ts`): "put the sleep guide on the new article" is filed as `product_line_apply`. "refund the last customer" is refused by the model-order gate with `REFUSAL_LINE`.
+4. **answerRouted closed-list test (spec item 3).** The gate was already in `answerRouted`. There was no test that sent a set of outside requests through the pending-order route. `buddyFilingGate.test.ts` now has six: a refund, an email to readers, a reply to a comment, a publish, a price change and a delete. Each one is refused with `REFUSAL_LINE` and nothing is saved.
 
 ## Required answers
 
@@ -70,12 +71,12 @@ Takeover stays off by default. No brain, door, order kind or channel was added. 
 
 ## Checks run (final, on the code of this fix)
 
-- Full suite: **161 files passed. 2103 tests: 2097 passed, 6 skipped, 0 failed.** Read from the JSON reporter.
+- Full suite (`npx vitest run`, after the closed-list test): **161 files passed. 2109 tests: 2103 passed, 6 skipped, 0 failed.**
 - App typecheck (`npm run typecheck`): exit 0.
 - Edge-function typecheck (`npx tsc --noEmit -p supabase/functions/tsconfig.json`): exit 0.
 - ESLint on every changed or new source and test file: exit 0.
 - Slice 1 re-verified by its existing tests (`buddyProbeChain.test.ts`, `brainChain.test.ts`), which pass in the full run.
-- Video audio (spec lock): the production pack render keeps an AAC voice track. `packVideo.test.ts` asserts no `-an` and a voice track, and `buddyPhase4Freeze.test.ts` asserts the render source has no `-an`. The one silent render is the test fixture `scripts/render-video-test.mjs` (documented there as "intentionally silent", with alt text). It predates this branch and is used only by `videoAssetValidation.test.ts`. It is not a reader-facing video. Owner decision whether the fixture should also carry audio.
+- Video audio (spec lock): checked in source and on fake arguments only. The production pack render is `scripts/pack-video.mjs` (`renderPackVideo`). It always builds a voice track with AAC audio. `buildFfmpegArgs` throws when there is no voice, and a result with no audio stream is not kept. `packVideo.test.ts` and `buddyPhase4Freeze.test.ts` check this. **Not checked:** no real MP4 was rendered or probed here, because FFmpeg is not installed in this sandbox. The audio stream of a real file is a go-live check. The one silent render is the test-only script `scripts/render-video-test.mjs` (`-an`, titled TEST ONLY, approval and publish not eligible).
 
 ## Go-live leftovers (not this phase)
 
@@ -90,6 +91,7 @@ Takeover stays off by default. No brain, door, order kind or channel was added. 
 9. **`abandoned_carts` anonymous update policy.** `20261003120000_security_hardening.sql` (around line 391) allows anonymous `UPDATE` on `abandoned_carts`. This predates the phase and was not changed here. The later hardening drops the old anonymous select policy, so anonymous reads are closed. Review the update policy before go-live.
 10. **Video-template editor.** `src/lib/automationDistribution.ts` is kept until the owner decides.
 11. **Silent test-fixture render** (`scripts/render-video-test.mjs`). Owner decision whether to add audio to the fixture.
+12. **Real pack MP4 audio probe.** Render one pack video with FFmpeg and probe it for an audio stream. This sandbox has no FFmpeg, so it was not run.
 
 ## Eyes-only leftovers (the owner checks by looking)
 
