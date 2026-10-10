@@ -22,20 +22,20 @@ export interface LanedOrder extends BuddyOrder {
   lane: OrderLane;
 }
 
-export const HELD_LATER_PHASE = "Posting to channels, video and email come in a later phase. This order waits for you.";
+export const HELD_NOT_FROM_CHAT = "Buddy does not post to channels, make videos or email readers from chat. You post the four gated channels by hand. This order waits for you.";
 export const HELD_MONEY = "Minds do not change prices, spend money or refund. This order waits for you.";
 export const HELD_CREATE = "Creating a product is your job. Tell Buddy the angle and Buddy will say what to create.";
 export const HELD_UNKNOWN = "Buddy does not know yet how to run this kind of order. It waits for you.";
 export const HELD_CONTROL = "Pausing, stopping and starting doors and minds runs only when Takeover is on. It waits for you.";
 
-/** Channels, video, email and push: the later phases. Checked first, so "post it to instagram" waits. */
-const LATER_PHASE =
+/** Channels, video, email and push: orders Buddy does not take from chat. Checked first, so "post it to instagram" waits. */
+const CHANNEL_ORDER =
   /\b(instagram|tiktok|facebook|pinterest|telegram|bluesky|mastodon|tumblr|discord|blogger|medium|youtube|pixelfed|wordpress|podcast|vimeo|video|videos|reel|reels|email|e-mail|newsletter|push|whatsapp|channel|channels|social|tweet|post\s+(it\s+)?(to|on)|publish\s+(it\s+)?(to|on))\b/i;
 /** Prices, spending and refunds are never run by a mind. */
 const MONEY = /\b(price|prices|pricing|discount|refund|spend|pay|ads?|advert|advertising)\b/i;
 /**
  * The day's run: "run the products", "make today's posts", "daily run". Only the run words count, so
- * "post it to instagram" never matches here. A run that also names a channel stays held (LATER_PHASE).
+ * "post it to instagram" never matches here. A run that also names a channel stays held (CHANNEL_ORDER).
  */
 const DAILY_RUN =
   /^(please\s+|could you\s+|can you\s+|would you\s+)?((run|start|kick off|make|do)\s+(the\s+|today'?s\s+|todays\s+|all\s+)?(products?|posts?|jobs?|day|run|today|packs?)\b|daily run\b)/i;
@@ -49,8 +49,8 @@ export function laneFor(instruction: string): OrderLane {
   // A pause, stop or start request never runs as an article change, even when it names a product.
   if (parseControlRequest(instruction)) return { lane: "held", reason: HELD_CONTROL };
   if (MONEY.test(instruction)) return { lane: "held", reason: HELD_MONEY };
-  if (DAILY_RUN.test(instruction) && !LATER_PHASE.test(instruction)) return { lane: "daily_run" };
-  if (LATER_PHASE.test(instruction)) return { lane: "held", reason: HELD_LATER_PHASE };
+  if (DAILY_RUN.test(instruction) && !CHANNEL_ORDER.test(instruction)) return { lane: "daily_run" };
+  if (CHANNEL_ORDER.test(instruction)) return { lane: "held", reason: HELD_NOT_FROM_CHAT };
   if (CREATE_PRODUCT.test(instruction)) return { lane: "held", reason: HELD_CREATE };
   if (PRODUCT_LINE.test(instruction)) return { lane: "product_line" };
   return { lane: "held", reason: HELD_UNKNOWN };

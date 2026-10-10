@@ -49,9 +49,9 @@ Server side:
   - `analyst.ts`, `strategist.ts`, `ceo.ts`: one thinking call each.
   - `executioner.ts`: does nothing while Takeover is off. With Takeover on, each plan goes to the Auditor. An allowed plan is still held, because no site writer is connected.
   - `auditor.ts`: allow or block, with a plain fix. Blocks when stopped, when the kind is not allowed, when there is no key, and when unsure.
-  - `mindRun.ts`: one pass over the four thinking minds in order. Nothing calls it yet; there is no schedule.
+  - The day run is server-side (`supabase/functions/minds-run-placement`). The old client aggregate `mindRun.ts` was removed in Phase F; nothing called it.
   - `mindsLogStore.ts`: reads the newest log row per mind for the Minds cards.
-  - `supabase/functions/_shared/mindThink.ts`: the server's one door to Gemini. It uses the existing `callGemini` and key path, makes no call without a key, and never returns the key.
+  - `supabase/functions/_shared/mindThink.ts`: the server's one door for the minds' thinking. It walks the brain chain through `askBrains` (Gemini first), makes no call without a saved brain key, and never returns a key.
 - Phase 2 slice 5 teaches Buddy to take orders. `supabase/functions/_shared/buddyRouter.ts` sorts each message with plain rules, so no key is needed.
   - An order that names a mind (Analyst, Strategist, CEO, Executioner or Auditor) is saved to `buddy_orders` as waiting. It is never saved as done.
   - An order that names no mind gets one question: which mind. The next short reply that names one mind files the order. If the owner moves on instead, the order is saved as waiting with no mind.
@@ -419,7 +419,7 @@ What is still not done, or not verified:
 - Freeze: `src/__tests__/phase8Freeze.test.ts` (32 checks). It calls the real functions where it can and reads source only for wiring. It covers: Takeover off by default and never set on by a Phase 8 migration; a run request and a pause request wait when Takeover is off; the Auditor cannot be switched off; Gemini model `gemini-3.8-flash`; no-key line; never-list blocks; sixteen auto doors, all open, including the four RSS doors; four gated channels are not doors; the RSS ping (fake hub) logs "pinged", never "posted"; a sale fixture gives one USD sale notable; an empty day gives none; a heartbeat never buzzes; voiced MP4 has an audio track and a silent one is refused; Gemini is tried before the local program; the briefing keeps its seven sections; no Instagram, TikTok, Facebook, Pinterest or WhatsApp sender in the day run or in Buddy; no paid voice or scheduling service in owner code; forbidden owner-copy words absent; no Nigeria, Naira, Lagos or em dash in new public text; the key is not printed.
 - Known gaps, stated plainly:
   - A single door send failure does not write its own notable. The notable for doors counts real posts only (`door_posted`, RSS pings excluded). A whole door step that cannot run writes `mind_failed`.
-  - The older Admin distribution code (`supabase/functions/automation-distribution`, `src/admin/pages/AutomationDistribution.tsx`) still has WhatsApp, Facebook and Pinterest senders from before Phase 8. Buddy and the day run do not import it. It is left as it was, for the owner to decide.
+  - The old Admin distribution page (`src/admin/pages/AutomationDistribution.tsx`) was deleted in Phase C. The function `supabase/functions/automation-distribution` is still deployable. Its `check` action is read-only. Its `send_telegram` action is an owner-started Telegram send. Its `test_newsletter` action emails only the signed-in owner's confirmed address. Facebook and Pinterest have no send path there, and WhatsApp is not in it. Buddy and the day run do not import it.
   - `scripts/video-template.mjs` had a code default named "Lagos daylight (default)". Stale note: this was renamed to "Clear daylight (default)" in Phase 9 slice 1.
   - The briefing was not changed in Phase 8. Its seven sections were already in place.
 - Not proven live: Gemini text-to-speech and the Buddy Gemini call (the host is not on the sandbox allowlist, and no key was tested here); the RSS hub's 204 reply; migrations `20261013000000` and `20261014000000` (not applied); a local speech program on the runner (none installed here).
@@ -508,7 +508,7 @@ What is still not done, or not verified:
 - After an answer, one daily-log row (mind `buddy`, action "Buddy answered a question") says which brain answered, for example "Groq answered after Google Gemini did not." A failed log write does not stop the answer. The row never names a key.
 - The body of an ok answer now includes `brain`. `model` is that brain's model. For Google it is still `gemini-3.8-flash`.
 - New ports on `BuddyThinkDeps`: `readSecret` (any Vault name, through the same service RPC as the Google key), `fetchImpl` (optional), and `logBrain` (optional). The probe still tests the Google key only.
-- Still on Google only: the one-line proof call, the minds (`mindThink.ts`), and text to speech. Those are outside this slice.
+- (Later changed in Phase D: the minds and the proof call now walk the brain chain. Text to speech is still Gemini first, then espeak.)
 - Tests: `buddyThink.test.ts` (new block "the brain chain answers the owner") and `brainChain.test.ts` (accept option, anyBrainSaved, log line). Fake fetch and fake Vault only.
 - Not yet done: the Brains page and the Buddy how-to wording (slice 4). The two lies are not yet removed (slice 5).
 
@@ -520,7 +520,7 @@ What is still not done, or not verified:
 - Automation keys no longer lists brain entries. It shows a pointer to the Brains page.
 - The brain how-to: "how do I get a Groq key" gets fixed steps (Brains page, the key site, what is shown after saving). A question with no key words, or with two brain names, is not a how-to. Doors keep their own how-to.
 - Owner copy changed to name the Brains page: the no-key line in Buddy chat, the no-brain-key line from the chain, and the rejected-key notice.
-- The minds still use Google only (slice 3 left them alone), so their "no Google key" lines stay.
+- (Later changed in Phase D: the minds walk the brain chain, so the "no Google key" wording was replaced by "no brain key".)
 - The seven new Vault entries exist only in the catalogue migration `20261017000000_buddy_brain_slots.sql`, which is NOT applied. Until the owner applies it, Save on a new brain row is refused by the database. Nothing here applies it.
 - The provider endpoints for the pings are from each provider's public docs and are NOT verified live from the sandbox. Tests check the URL, method, redirect guard and header only.
 - Tests: `src/__tests__/brainsPage.test.ts` (16 checks).
@@ -558,7 +558,7 @@ What is still not done, or not verified:
   - Apply `20261017000000_buddy_brain_slots.sql` before Save works on the seven new brains. Until then the database refuses the new names.
   - The provider ping endpoints and the model names (Groq, NVIDIA, Cloudflare, OpenRouter, Hugging Face, and Gemini's `gemini-3.8-flash`) are from public docs. Nothing was called live from the sandbox. Test them once on the Brains page with a real key.
   - Cerebras and DeepSeek stay skipped: Cerebras needs a card for its trial, and DeepSeek is paid.
-  - The minds, the proof call and voice text-to-speech still use Google only, as the plan kept them out of scope.
+  - The minds, Buddy's chat and the proof call walk the brain chain (Phase D). Voice text-to-speech is Gemini first, then a local espeak.
   - Lagos appears in admin screens as a timezone label from earlier phases. None of it is in reader-facing folders.
 
 ## Phase B slice 1: closed order list, refusal line, feedback three ways

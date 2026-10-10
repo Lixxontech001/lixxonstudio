@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HELD_CREATE,
-  HELD_LATER_PHASE,
+  HELD_NOT_FROM_CHAT,
   HELD_MONEY,
   HELD_UNKNOWN,
   laneFor,
@@ -19,10 +19,10 @@ describe('which orders a mind can run in this phase', () => {
     expect(laneFor(instruction)).toEqual({ lane: 'product_line' });
   });
 
-  it('channels, video and email wait for a later phase', () => {
-    expect(laneFor('Post the spring guide to Instagram')).toEqual({ lane: 'held', reason: HELD_LATER_PHASE });
-    expect(laneFor('Make a video about the kit')).toEqual({ lane: 'held', reason: HELD_LATER_PHASE });
-    expect(laneFor('Email the list to readers')).toEqual({ lane: 'held', reason: HELD_LATER_PHASE });
+  it('channels, video and email are held, not run from chat', () => {
+    expect(laneFor('Post the spring guide to Instagram')).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
+    expect(laneFor('Make a video about the kit')).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
+    expect(laneFor('Email the list to readers')).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
   });
 
   it('prices, spending and refunds never run by a mind', () => {
@@ -69,7 +69,7 @@ describe('reading the waiting orders', () => {
     if (!result.ok) return;
     expect(result.orders.map((order) => order.id)).toEqual(['a', 'b']);
     expect(result.orders[0].lane).toEqual({ lane: 'product_line' });
-    expect(result.orders[1].lane).toEqual({ lane: 'held', reason: HELD_LATER_PHASE });
+    expect(result.orders[1].lane).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
   });
 
   it('drops a malformed row rather than guessing at it', async () => {

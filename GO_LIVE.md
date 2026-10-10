@@ -61,7 +61,7 @@ The repository marks these 38 files as **not applied** (their headers say so):
 37. `supabase/migrations/20261019000000_abandoned_carts_no_anon_update.sql`
 38. `supabase/migrations/20261019010000_push_note_pending.sql`
 
-Earlier files (before `20261009140000`) do not say "not applied" in their headers. The check above is the only way to know whether they are on production. Apply any that are not, in the same order.
+Earlier files (65 files, before `20261009140000`) do not say "not applied" in their headers. The check above is the only way to know whether they are on production. Apply any that are not, in the same order.
 
 Notes on the files above:
 
@@ -127,7 +127,7 @@ The functions the owner most needs: `buddy-think` (Buddy's chat and the brain ch
 ## 9. Flipboard, Google News, Microsoft Start and SmartNews
 
 - Buddy keeps your RSS feed current and pings a free hub for each new article. That ping is the product.
-- Add your feed address (your site's `/rss.xml`) in each of those services yourself, once.
+- If any of those services asks for a feed address, give it your site's `/rss.xml`. Buddy does not fill in those forms.
 - Any extra "submit to the hub" step is you, in a browser. Buddy does not submit anything.
 
 ## 10. Takeover stays off until you are ready
@@ -138,10 +138,10 @@ The functions the owner most needs: `buddy-think` (Buddy's chat and the brain ch
 
 ## Owner decisions (not code)
 
-These are your decisions. Each one has a code path that already works. None of them is a missing piece of code.
+These are your decisions. Each one is either a choice the code already supports, or a limit that the screen or the report states. None is an unfinished code path left for the agent.
 
 - **A. Daily run and the schedule.** The 08:00 Lagos pipeline is in code. The minds' daily run is queued by a cron line that is still a comment (`20261010090000_minds_daily_run.sql`). When that line is on, it queues today's order only. The run starts when you say "run today" in Buddy, or press Run in Minds. A fully automatic daily run is not built. Decide before you turn the schedule on.
-- **B. "Delete the old one".** Buddy files this as a mind order today. The closed list does not include deletes. The fix is one refusal rule in the Phase D gate. In Phase E you chose to report it, not fix it. Fix it, or accept it.
+- **B. "Delete the old one".** Fixed in Phase F: "Delete the old one" and "Erase it" are refused like other deletes, with the refusal line. Nothing for you to decide. Tell the agent if you want a different wording.
 - **C. "Which mind?" for unnamed orders.** Swaps go to the Executioner with no question. Other unnamed orders still ask which mind. Keep the question or drop it.
 - **D. The saved video look.** The Video look screen saves three values. The daily video and the pack video do not read them yet. Decide whether they should, in a later phase.
 - **E. Gemini TTS.** Confirm the free-tier terms on Google's pricing page before you tell anyone the voice is free.

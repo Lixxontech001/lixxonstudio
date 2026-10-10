@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { laneFor, HELD_LATER_PHASE, HELD_MONEY } from '../../supabase/functions/_shared/buddyOrders';
+import { laneFor, HELD_NOT_FROM_CHAT, HELD_MONEY } from '../../supabase/functions/_shared/buddyOrders';
 import { ASK_WHICH_MIND_LINE, isRunDayRequest, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
 
 describe('router: asking for today\'s run is an order with no mind to name', () => {
@@ -50,7 +50,7 @@ describe('lane: the day\'s run has its own lane', () => {
   );
 
   it('a run that names a channel stays held', () => {
-    expect(laneFor("Run today's posts and post them to Instagram")).toEqual({ lane: 'held', reason: HELD_LATER_PHASE });
+    expect(laneFor("Run today's posts and post them to Instagram")).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
   });
 
   it('a run that names money stays held', () => {
@@ -58,7 +58,7 @@ describe('lane: the day\'s run has its own lane', () => {
   });
 
   it('post it to instagram is still held', () => {
-    expect(laneFor('post it to instagram')).toEqual({ lane: 'held', reason: HELD_LATER_PHASE });
+    expect(laneFor('post it to instagram')).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
   });
 
   it('product lines are unchanged', () => {

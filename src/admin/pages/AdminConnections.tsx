@@ -5,9 +5,9 @@ import { Btn, Loading, Notice } from '../components/ui';
 import { DOOR_IDS, DOORS, doorStatus, type DoorField, type DoorId, type DoorState } from '../../../supabase/functions/_shared/doorRegistry';
 import { DOOR_TEST_MESSAGE, type DoorTestStatus } from '../../../supabase/functions/_shared/doorConnectionTests';
 
-// One simple page: the twelve auto doors, each with its details typed once. Values are saved to Vault by the owner-only
-// functions the Keys page already uses. Nothing here posts. Buddy only posts once a door is connected and the
-// posting step is built and turned on (later Phase 5 slices).
+// One simple page: the sixteen auto doors, each with its details typed once. Values are saved to Vault by the owner-only
+// functions the Keys page already uses. Nothing here posts. The day run posts to a connected door only when Takeover is
+// on (the Executioner, free doors only). The four gated channels are posted by the owner by hand.
 
 export const CONNECTIONS_INTRO = 'Connect the free places Buddy can post to. Saving here only stores the details. Nothing is posted from this page.';
 export const CONNECTIONS_MANUAL = 'Instagram, TikTok, Facebook and Pinterest stay manual. You post those by hand, and Buddy never presses Post on them.';

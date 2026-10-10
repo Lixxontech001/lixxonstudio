@@ -5,7 +5,6 @@ import ceoSource from '../buddy/minds/ceo.ts?raw';
 import executionerSource from '../buddy/minds/executioner.ts?raw';
 import auditorSource from '../buddy/minds/auditor.ts?raw';
 import mindCoreSource from '../buddy/minds/mindCore.ts?raw';
-import mindRunSource from '../buddy/minds/mindRun.ts?raw';
 import mindGuardsSource from '../buddy/minds/mindGuards.ts?raw';
 import mindTypesSource from '../buddy/minds/mindTypes.ts?raw';
 import { runAnalyst } from '../buddy/minds/analyst';
@@ -13,7 +12,16 @@ import { runStrategist } from '../buddy/minds/strategist';
 import { runCeo } from '../buddy/minds/ceo';
 import { runExecutioner, MAX_PLANS } from '../buddy/minds/executioner';
 import { runAuditor, AUDITOR_NO_KEY_FIX, AUDITOR_STOPPED_FIX, parseAuditReply } from '../buddy/minds/auditor';
-import { runAllMinds } from '../buddy/minds/mindRun';
+// The four day-run minds in their fixed order. Phase F removed the unwired client aggregate (mindRun.ts);
+// this test file is its only caller, so the order lives here, next to the tests that pin it.
+async function runAllMinds(ports: MindPorts, context: MindContext) {
+  return [
+    await runAnalyst(ports, context),
+    await runStrategist(ports, context),
+    await runCeo(ports, context),
+    await runExecutioner(ports, context),
+  ];
+}
 import {
   NO_KEY_ACTION,
   NO_WRITER_DETAIL,
@@ -279,7 +287,7 @@ describe('the Auditor cannot be disabled', () => {
 
 describe('posts.content and the site are never written', () => {
   it('no mind file talks to the database, the site, email or spending', () => {
-    const files = [analystSource, strategistSource, ceoSource, executionerSource, auditorSource, mindCoreSource, mindRunSource, mindGuardsSource, mindTypesSource];
+    const files = [analystSource, strategistSource, ceoSource, executionerSource, auditorSource, mindCoreSource, mindGuardsSource, mindTypesSource];
     for (const source of files) {
       expect(source).not.toMatch(/supabase/i);
       expect(source).not.toMatch(/\bfrom\(/);

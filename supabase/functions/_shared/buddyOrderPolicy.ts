@@ -36,6 +36,8 @@ export function isQuestionText(text: string): boolean {
 const REFUSED_REQUESTS: RegExp[] = [
   /\brefund(s|ed|ing)?\b/i,
   /\b(delete|erase|trash|remove)\b[^.?!]*\b(article|post|page|product|comment|comments|draft|image|picture|video|order)s?\b/i,
+  // Phase F: a delete with no noun ("Delete the old one", "Erase it"). Only delete, erase and trash: "remove" alone is not refused.
+  /\b(delete|erase|trash)\b\s+(the\s+|that\s+|this\s+|my\s+|our\s+)?(old\s+|last\s+|new\s+|first\s+)?(one|ones|it|that|this|them|those|everything|all)\b/i,
   /\b(email|e-mail|newsletter|blast|mail)\b[^.?!]*\b(list|subscribers?|readers?|customers?|everyone|followers?|members?)\b/i,
   /\b(reply|respond|answer|write back)\b[^.?!]*\b(comments?|reviews?|messages?|readers?|customers?|buyers?|subscribers?)\b/i,
   /\b(change|set|raise|lower|cut|drop|update|discount|reduce|increase)\b[^.?!]*\bprices?\b/i,

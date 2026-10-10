@@ -93,3 +93,25 @@ How to read the table:
 | X4 | Silent MP4 test render (`scripts/render-video-test.mjs`, `-an`) has no README next to its fixture. | `scripts/fixtures/`, `scripts/render-video-test.mjs` | 4 |
 | X5 | `runAllMinds` in `src/buddy/minds/mindRun.ts` is an unwired client mirror of the day run. It is not a day-run step and makes no network call. It is labelled as unwired already. | `src/buddy/minds/mindRun.ts` | 3 (documented, not deleted) |
 | X6 | No `not implemented`, `TODO` or stub day-run step was found in product code (grep, slice 1). | whole `src`, `supabase/functions`, `scripts` | 3 (confirmed) |
+
+## Re-audit after the first slice-6 report
+
+A second walk against the full spec. Each row says what changed. "Pass" rows are pinned in `src/buddy/phaseFFreeze.test.ts` unless another file is named.
+
+| # | Finding | Result |
+|---|---|---|
+| R1 | Lock B19 / Phase E delete finding: "Delete the old one" was filed as mind_work. The never-list has no deletes. | Fixed (tiny gate change in `buddyOrderPolicy.ts`: delete, erase or trash with no noun). The Phase E test that pinned the gap now expects a refusal. |
+| R2 | Lock A1: "1–2 sentence product lines". The first report called this a gap. It is enforced in `productPlacement.ts` (2 sentences, 60 words, 3 products, dashes, country, non-USD money, exact shop price, and no new product). | Correction: not a gap. Now pinned behaviourally. |
+| R3 | Code leftover: `src/buddy/minds/mindRun.ts` (`runAllMinds`), an unwired client aggregate used only by one test file. | Removed. The four-mind order now lives in `src/__tests__/mindsWorkers.test.ts`. |
+| R4 | Copy lie: `HELD_LATER_PHASE` told the owner that channel posting "come[s] in a later phase". There is no later phase. | Reworded and renamed to `HELD_NOT_FROM_CHAT`. Freeze fails on any owner-facing "later phase". |
+| R5 | Comment lie: `AdminConnections.tsx` said "twelve auto doors" and that posting was not built. | Corrected to sixteen doors and the true posting rule. |
+| R6 | README lies: `mindThink.ts` called "the one door to Gemini"; minds "still Google only"; the old distribution page "still has WhatsApp, Facebook and Pinterest senders". | Corrected (`src/buddy/README.md`). |
+| R7 | Legacy `supabase/functions/automation-distribution` (deployable, in GO_LIVE step 4). Checked: no WhatsApp; Facebook and Pinterest have no send path (`check` is read-only); `send_telegram` is owner-started; `test_newsletter` emails only the owner's own confirmed address. | Lock holds. Frozen. |
+| R8 | Lock: Buddy entry points. Buddy has no Admin sidebar item. It is reached from the Minds page link (`/buddy`) and from the install panel (`PwaInstallPanel.tsx`). | Judged present, not added. Frozen. |
+| R9 | Lock: Video look nav. Present in `AdminLayout.tsx` as "Video look". | Pass. |
+| R10 | Owner decision D: the saved Video look is not read by the daily or pack video. The screen says so (`LOOK_NOT_USED_YET`). | Owner decision, not a code leftover. Honest copy is in place. |
+| R11 | `buildBriefing` treats an omitted optional source as read. The one real caller (`buddy-think`, lines 269–279) passes every source. | Production path is safe. Frozen (the reader passes every source). Not changed: changing the default would move many existing tests. Future callers must pass every source. |
+| R12 | Lock: hear-Buddy off by default, with a switch in settings. | Pass. Frozen (`DEFAULT_SETTINGS` and the settings switch). |
+| R13 | Lock: gated pack fields (caption, time, image, video, link) and channel check. | Pass. Frozen against `20261010100000_minds_packs.sql`. |
+| R14 | Lock: connection test does not publish. Its only POSTs are a Bluesky sign-in and a Blogger token refresh. | Pass. Frozen (exactly two POSTs, no publish URL). |
+| R15 | Lock: how-to skipped brains say they are skipped. | Pass. Frozen for all eight brains. |
