@@ -12,6 +12,7 @@ import {
 } from "../_shared/buddyThink.ts";
 import { briefingApplied, briefingDoors, briefingGaps, briefingPacks, type BriefingFacts, type BriefingMindRow } from "../_shared/buddyBriefing.ts";
 import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
+import { STATE_DOOR_LIMIT, STATE_LOG_LIMIT, STATE_NOTABLE_LIMIT, STATE_ORDER_LIMIT, type BuddyStateFacts } from "../_shared/buddyStateFacts.ts";
 import {
   SITE_ARTICLE_LIMIT,
   SITE_PRODUCT_LIMIT,
@@ -272,6 +273,67 @@ function chatStore(userClient: SupabaseClient) {
       if (error) return null;
       return data?.takeover === true;
     },
+    // Read only, owner session (row-level security). Each part reports its own failure; nothing is guessed.
+    readStateFacts: async (): Promise<BuddyStateFacts> => {
+      const [controls, waiting, log, notable, doors] = await Promise.all([
+        userClient.from("minds_controls").select("takeover,kill_scope").eq("id", 1).maybeSingle(),
+        userClient
+          .from("buddy_orders")
+          .select("instruction,mind", { count: "exact" })
+          .eq("status", "waiting")
+          .order("created_at", { ascending: true })
+          .limit(STATE_ORDER_LIMIT),
+        userClient
+          .from("minds_daily_log")
+          .select("happened_at,day,mind,action,outcome,detail")
+          .order("happened_at", { ascending: false })
+          .limit(STATE_LOG_LIMIT),
+        userClient
+          .from("minds_notable_events")
+          .select("happened_at,title")
+          .order("happened_at", { ascending: false })
+          .limit(STATE_NOTABLE_LIMIT),
+        // Door sends, newest first. Owner session, so row-level security applies.
+        userClient
+          .from("minds_door_posts")
+          .select("created_at,door,status")
+          .order("created_at", { ascending: false })
+          .limit(STATE_DOOR_LIMIT),
+      ]);
+      const controlsOk = !controls.error;
+      const orderRows = (Array.isArray(waiting.data) ? waiting.data : []) as Array<{ instruction?: unknown; mind?: unknown }>;
+      const logRows = Array.isArray(log.data) ? (log.data as MindLogLine[]) : null;
+      const notableRows = (Array.isArray(notable.data) ? notable.data : []) as Array<{ happened_at?: unknown; title?: unknown }>;
+      const doorRows = (Array.isArray(doors.data) ? doors.data : []) as Array<{ created_at?: unknown; door?: unknown; status?: unknown }>;
+      return {
+        takeover: controlsOk ? (controls.data?.takeover === true) : null,
+        killScope: controlsOk ? String(controls.data?.kill_scope ?? "none") : null,
+        orders: {
+          ok: !waiting.error,
+          total: waiting.count ?? orderRows.length,
+          items: orderRows.map((row) => ({
+            instruction: typeof row.instruction === "string" ? row.instruction : "",
+            mind: typeof row.mind === "string" ? row.mind : null,
+          })),
+        },
+        log: { ok: !log.error && logRows !== null, rows: logRows ?? [] },
+        doors: {
+          ok: !doors.error,
+          rows: doorRows.map((row) => ({
+            happenedAt: typeof row.created_at === "string" ? row.created_at : "",
+            door: typeof row.door === "string" ? row.door : "",
+            status: typeof row.status === "string" ? row.status : "",
+          })),
+        },
+        notable: {
+          ok: !notable.error,
+          rows: notableRows.map((row) => ({
+            happenedAt: typeof row.happened_at === "string" ? row.happened_at : "",
+            title: typeof row.title === "string" ? row.title : "",
+          })),
+        },
+      };
+    },
     readMindLog: async (mind: MindName | null): Promise<MindLogLine[] | null> => {
       let query = userClient
         .from("minds_daily_log")
@@ -289,7 +351,7 @@ function chatStore(userClient: SupabaseClient) {
         const [articles, products] = await Promise.all([
           userClient
             .from("posts")
-            .select("title,slug,published_at", { count: "exact" })
+            .select("title,slug,published_at,excerpt", { count: "exact" })
             .eq("status", "published")
             .lte("published_at", nowIso)
             .order("published_at", { ascending: false })

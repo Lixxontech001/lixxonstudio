@@ -77,6 +77,28 @@ export function isRestricted(message: string): boolean {
   return RESTRICTED_WORDS.test(message);
 }
 
+/** Replies for requests a mind never does, whatever the model would say. Checked before any model call. */
+export const NEVER_LIST_LINES = {
+  reader: "Buddy does not reply to readers as you. Tell me and I will leave that message for you to answer yourself.",
+  spend: "Buddy does not spend money or buy ads. Nothing was bought, and nothing was changed.",
+  product: "Buddy does not create shop products. Make it in the shop yourself, then tell me and I can place it on an article.",
+  rewrite: "Buddy changes one or two sentences in an article at most, never the whole article. Nothing was changed.",
+} as const;
+
+const READER_REPLY = /\b(reply|respond|answer|dm|message|write back)\b[^.?!]*\b(reader|readers|customer|customers|buyer|buyers|commenter|commenters|subscriber|subscribers)\b|\bdm\b/i;
+const SPEND = /\b(spend|buy (an? )?ads?|buy advertising|pay for (an? )?ad|ad budget|boost (the |this |a )?post)\b/i;
+const CREATE_PRODUCT = /\b(create|add|make|set up|new)\s+(a\s+|an\s+|one\s+)?(new\s+)?(shop\s+)?product\b/i;
+const FULL_REWRITE = /\brewrite\b[^.?!]*\b(whole|entire|full|all of)\b|\brewrite (the |this |my |our )?(article|post)\b/i;
+
+/** The plain line for a never-list request, or null when the message is not one. */
+export function neverListLine(message: string): string | null {
+  if (READER_REPLY.test(message)) return NEVER_LIST_LINES.reader;
+  if (SPEND.test(message)) return NEVER_LIST_LINES.spend;
+  if (CREATE_PRODUCT.test(message)) return NEVER_LIST_LINES.product;
+  if (FULL_REWRITE.test(message)) return NEVER_LIST_LINES.rewrite;
+  return null;
+}
+
 export function cleanInstruction(message: string): string {
   return message.replace(/\s+/g, " ").trim().slice(0, MAX_ORDER_CHARS);
 }
@@ -96,18 +118,6 @@ export function coreOf(message: string): string {
 export function isQuestionLike(message: string): boolean {
   const text = message.trim();
   return QUESTION_MARK.test(text) || QUESTION_START.test(coreOf(text));
-}
-
-/**
- * True when the message is an order-like statement that a closer read (one Gemini call, when a key is saved) may judge.
- * Questions, and a short mind name that answers a pending order, are not candidates.
- */
-export function isOrderCandidate(message: string, pending: PendingOrder | null): boolean {
-  const text = message.trim();
-  if (!text || isQuestionLike(text)) return false;
-  const words = text.split(/\s+/).filter(Boolean).length;
-  if (pending && namedMind(text) && words <= 5) return false;
-  return true;
 }
 
 /**

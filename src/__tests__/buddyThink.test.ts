@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { NEVER_LIST_LINES, RESTRICTED_LINE } from '../../supabase/functions/_shared/buddyRouter';
+import type { BuddyStateFacts } from '../../supabase/functions/_shared/buddyStateFacts';
 import {
   BUDDY_GEMINI_MODEL,
   BUDDY_SYSTEM_INSTRUCTION,
   BUDDY_TEST_PROMPT,
-  ORDER_JUDGE_SYSTEM,
-  parseOrderJudgement,
+  BUDDY_ANSWER_RULES,
+  parseBuddyAnswer,
   callGemini,
   cleanMessage,
   extractReplyText,
@@ -25,9 +27,9 @@ const CHAT_ID = '6f1c2b7e-3d4a-4b8c-9e1f-0a2b3c4d5e6f';
 
 type Saved = { chatId: string; role: string; kind: string; content: string };
 
-/** Gemini calls that answer the owner in chat. The one-line order judgement is not a chat reply. */
+/** Every Gemini call in these tests is an answer to the owner in chat. */
 function chatCalls(askGemini: { mock: { calls: unknown[][] } }) {
-  return askGemini.mock.calls.filter((call) => (call[1] as { system: string }).system !== ORDER_JUDGE_SYSTEM);
+  return askGemini.mock.calls;
 }
 
 function deps(overrides: Partial<BuddyThinkDeps> = {}) {
@@ -62,6 +64,14 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
     saveOrder: async () => true,
     readMindLog: async () => [],
     readTakeover: async () => false,
+    readStateFacts: async () => ({
+      takeover: false,
+      killScope: 'none',
+      orders: { ok: true, total: 0, items: [] },
+      log: { ok: true, rows: [] },
+      notable: { ok: true, rows: [] },
+      doors: { ok: true, rows: [] },
+    }),
     readSiteFacts: async () => ({
       articles: { ok: true, total: 0, items: [] },
       products: { ok: true, total: 0, items: [] },
@@ -112,6 +122,7 @@ describe('Buddy think: chat replies', () => {
     expect(askGemini).toHaveBeenCalledWith(FAKE_KEY, {
       system: expect.stringContaining(BUDDY_SYSTEM_INSTRUCTION),
       turns: [...history, { role: 'user', text: 'What is on the shop?' }],
+      json: true,
     });
     expect(saved).toEqual([
       { chatId: CHAT_ID, role: 'owner', kind: 'reply', content: 'What is on the shop?' },
@@ -263,49 +274,113 @@ describe('Gemini call and reply parsing', () => {
   });
 });
 
-describe('Buddy think: judging a statement with one Gemini call', () => {
-  it('parses only a clear JSON answer, and anything else is left to the rules', () => {
-    expect(parseOrderJudgement('{"kind":"order","mind":"analyst"}')).toEqual({ kind: 'order', mind: 'analyst' });
-    expect(parseOrderJudgement('Sure: {"kind":"order","mind":"ceo"} done')).toEqual({ kind: 'order', mind: 'ceo' });
-    expect(parseOrderJudgement('{"kind":"order","mind":null}')).toEqual({ kind: 'ask_mind' });
-    expect(parseOrderJudgement('{"kind":"order","mind":"bossman"}')).toEqual({ kind: 'ask_mind' });
-    expect(parseOrderJudgement('{"kind":"chat","mind":null}')).toEqual({ kind: 'chat' });
-    expect(parseOrderJudgement('Yes, Buddy can think.')).toBeNull();
-    expect(parseOrderJudgement('{"kind":"delete_everything"}')).toBeNull();
-    expect(parseOrderJudgement('{not json}')).toBeNull();
+describe('Buddy think: Gemini writes the reply and says whether the owner asked for work', () => {
+  it('reads a clear JSON answer, a plain sentence, and a fenced JSON answer', () => {
+    expect(parseBuddyAnswer('{"reply":"Saved.","order":{"mind":"analyst","instruction":"Check the article"}}')).toEqual({
+      reply: 'Saved.',
+      order: { mind: 'analyst', instruction: 'Check the article' },
+    });
+    expect(parseBuddyAnswer('Yes, Buddy can think.')).toEqual({ reply: 'Yes, Buddy can think.', order: null });
+    expect(parseBuddyAnswer('```json\n{"reply":"Hi","order":null}\n```')).toEqual({ reply: 'Hi', order: null });
   });
 
-  it('a statement the rules cannot place becomes a waiting order when Gemini says it is one', async () => {
-    const askGemini = vi.fn(async (_key: string, input: { system: string }): Promise<GeminiResult> =>
-      input.system === ORDER_JUDGE_SYSTEM ? { ok: true, text: '{"kind":"order","mind":"strategist"}' } : { ok: true, text: 'unused' },
-    );
-    const { deps: d, saved } = deps({ askGemini, saveOrder: async () => true });
+  it('an unknown mind is kept as no mind, and an order with no words is dropped', () => {
+    expect(parseBuddyAnswer('{"reply":"Ok","order":{"mind":"bossman","instruction":"Check it"}}')?.order).toEqual({ mind: null, instruction: 'Check it' });
+    expect(parseBuddyAnswer('{"reply":"Ok","order":{"mind":"ceo","instruction":"  "}}')?.order).toBeNull();
+  });
+
+  it('nothing usable gives null: broken JSON, an empty reply, or no text', () => {
+    expect(parseBuddyAnswer('{not json}')).toBeNull();
+    expect(parseBuddyAnswer('{"reply":"  ","order":null}')).toBeNull();
+    expect(parseBuddyAnswer('   ')).toBeNull();
+  });
+
+  it('the answer rules ask for JSON only, in the agreed shape, and never mention readers as the owner', () => {
+    expect(BUDDY_ANSWER_RULES).toContain('{"reply": "your answer to the owner", "order": null}');
+    expect(BUDDY_ANSWER_RULES).toContain('Never reply to readers as the owner.');
+  });
+
+  it('a named-mind order the model finds is filed as waiting, and the reply says so', async () => {
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: '{"reply":"Got it.","order":{"mind":"strategist","instruction":"Plan the spring push for the kit"}}',
+    }));
+    const { deps: d, saved } = deps({ askGemini });
     const saveOrder = vi.fn(async () => true);
-    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Plan the spring push for the kit' }, { ...d, saveOrder });
-    expect(result.body).toMatchObject({ ok: true, route: 'order' });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'The spring kit plan needs work, and the Strategist is the one for it.' }, { ...d, saveOrder });
+    expect(result.body).toMatchObject({ ok: true, route: 'chat', filed: 'strategist' });
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Plan the spring push for the kit', 'strategist');
-    expect(chatCalls(askGemini)).toHaveLength(0);
-    expect(saved.at(-1)?.content).toBe('Saved for the Strategist. It is waiting.');
+    expect(saved.at(-1)?.content).toBe('Got it. Saved for the Strategist. It is waiting.');
+    expect(askGemini.mock.calls[0][1]).toMatchObject({ json: true });
   });
 
-  it('when Gemini says chat, the message gets an ordinary chat reply', async () => {
-    const askGemini = vi.fn(async (_key: string, input: { system: string }): Promise<GeminiResult> =>
-      input.system === ORDER_JUDGE_SYSTEM ? { ok: true, text: '{"kind":"chat","mind":null}' } : { ok: true, text: 'Hello.' },
-    );
-    const { deps: d } = deps({ askGemini });
-    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Thanks for that' }, d);
-    expect(result.body).toMatchObject({ ok: true, reply: 'Hello.' });
-    expect(chatCalls(askGemini)).toHaveLength(1);
+  it('an order with no mind is kept as pending, so the next message can name the mind', async () => {
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: '{"reply":"Which mind should take it?","order":{"mind":null,"instruction":"Plan the spring push for the kit"}}',
+    }));
+    const saveMessage = vi.fn(async () => true);
+    const saveOrder = vi.fn(async () => true);
+    const { deps: d } = deps({ askGemini, saveMessage });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'The spring kit plan needs work soon.' }, { ...d, saveOrder });
+    expect(result.body).toMatchObject({ ok: true, filed: 'no_mind' });
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(saveMessage).toHaveBeenCalledWith(CHAT_ID, 'buddy', 'reply', 'Which mind should take it?', { pending_order: 'Plan the spring push for the kit' });
   });
 
-  it('when the judgement is unclear, the rules decide and the chat still answers', async () => {
-    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: 'not json at all' }));
-    const { deps: d } = deps({ askGemini });
-    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Check the new article' }, d);
-    expect(result.body).toMatchObject({ route: 'ask_which_mind' });
+  it('an answer that cannot be read files nothing and says so in the chat', async () => {
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: '{"reply":' }));
+    const { deps: d, saved } = deps({ askGemini });
+    const saveOrder = vi.fn(async () => true);
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Something about the kit plan.' }, { ...d, saveOrder });
+    expect(result.body).toMatchObject({ ok: false, reason: 'unreadable' });
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(saved.at(-1)).toMatchObject({ role: 'buddy', kind: 'notice' });
   });
 
-  it('with no key, nothing is judged and no model call is made', async () => {
+  it('a restricted part of a model order is flagged as waiting for the owner', async () => {
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: '{"reply":"Okay.","order":{"mind":"executioner","instruction":"Publish the new article now"}}',
+    }));
+    const { deps: d, saved } = deps({ askGemini });
+    await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Thanks, the article looks good to me.' }, { ...d, saveOrder: async () => true });
+    expect(saved.at(-1)?.content).toContain(RESTRICTED_LINE);
+  });
+
+  it('the model is shown the live state: Takeover, kill switch, waiting orders and notable events', async () => {
+    const state: BuddyStateFacts = {
+      takeover: false,
+      killScope: 'none',
+      orders: { ok: true, total: 1, items: [{ instruction: 'Check the article', mind: 'analyst' }] },
+      log: { ok: true, rows: [] },
+      notable: { ok: true, rows: [] },
+      doors: { ok: true, rows: [] },
+    };
+    const { deps: d, askGemini } = deps({ readStateFacts: async () => state });
+    await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'How are things going?' }, d);
+    const system = askGemini.mock.calls[0][1].system;
+    expect(system).toContain('Takeover: off.');
+    expect(system).toContain('Kill switch: none. Nothing is stopped.');
+    expect(system).toContain('"Check the article" (for the Analyst)');
+  });
+
+  it('a request to reply to a reader is refused with no model call, even with a key', async () => {
+    const { deps: d, askGemini, saved } = deps();
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Reply to the customer who asked about the bag' }, d);
+    expect(result.body).toMatchObject({ ok: true, route: 'never_list', reply: NEVER_LIST_LINES.reader });
+    expect(askGemini).not.toHaveBeenCalled();
+    expect(saved.at(-1)).toEqual({ chatId: CHAT_ID, role: 'buddy', kind: 'reply', content: NEVER_LIST_LINES.reader });
+  });
+
+  it('a request to spend money is refused the same way', async () => {
+    const { deps: d, askGemini } = deps();
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Spend 50 dollars on ads for the summer post' }, d);
+    expect(result.body).toMatchObject({ route: 'never_list', reply: NEVER_LIST_LINES.spend });
+    expect(askGemini).not.toHaveBeenCalled();
+  });
+
+  it('with no key, a named-mind order is still filed by the rules, with no model call', async () => {
     const { deps: d, askGemini } = deps({ readKey: async () => null });
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Do the new article' }, d);
     expect(result.body).toMatchObject({ route: 'ask_which_mind' });
@@ -343,5 +418,25 @@ describe("Buddy think: asking for today's run", () => {
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Run the products' }, d);
     expect(result.status).toBe(503);
     expect(result.body).not.toHaveProperty('run_start');
+  });
+});
+
+describe('Buddy think: a messy question about the shop reaches Gemini with real names', () => {
+  it('sends the real product name and price with the question, and keeps the model reply as written', async () => {
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: 'The Linen Bath Sheet is a good fit for that.' }));
+    const { deps: d, saved } = deps({
+      askGemini,
+      readSiteFacts: async () => ({
+        articles: { ok: true, total: 0, items: [] },
+        products: { ok: true, total: 1, items: [{ name: 'Linen Bath Sheet', priceUsd: 34 }] },
+      }),
+    });
+    const message = 'my sister is always cold after her shower, what in your shop would help her?';
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message }, d);
+    expect(result.body).toMatchObject({ ok: true, route: 'chat', reply: 'The Linen Bath Sheet is a good fit for that.' });
+    expect(askGemini).toHaveBeenCalledTimes(1);
+    expect(askGemini.mock.calls[0][1].system).toContain('Linen Bath Sheet');
+    expect(askGemini.mock.calls[0][1].turns.at(-1)).toEqual({ role: 'user', text: message });
+    expect(saved.at(-1)?.content).toBe('The Linen Bath Sheet is a good fit for that.');
   });
 });

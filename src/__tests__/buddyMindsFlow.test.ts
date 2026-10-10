@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BUDDY_SYSTEM_INSTRUCTION,
-  ORDER_JUDGE_SYSTEM,
   handleBuddyThink,
   type BuddyThinkDeps,
   type GeminiResult,
@@ -52,6 +51,14 @@ function setup(options: { key?: string | null; pending?: string | null; pendingO
     loadPendingOrder,
     saveOrder,
     readMindLog,
+    readStateFacts: async () => ({
+      takeover: false,
+      killScope: 'none',
+      orders: { ok: true, total: 0, items: [] },
+      log: { ok: true, rows: [] },
+      notable: { ok: true, rows: [] },
+      doors: { ok: true, rows: [] },
+    }),
     readSiteFacts: async () => ({
       articles: { ok: true, total: 0, items: [] },
       products: { ok: true, total: 0, items: [] },
@@ -108,10 +115,9 @@ describe('orders from ordinary language', () => {
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', null);
     expect(t.saved.some((row) => row.kind === 'notice' && row.content === PENDING_FLUSH_LINE)).toBe(true);
     expect(result.body).toMatchObject({ ok: true, model: 'gemini-3.8-flash' });
-    // One judgement call, then the ordinary chat reply. The chat reply is the last call.
-    expect(t.askGemini.mock.calls[0][1].system).toBe(ORDER_JUDGE_SYSTEM);
-    expect(t.askGemini.mock.calls.at(-1)?.[1].system.startsWith(BUDDY_SYSTEM_INSTRUCTION)).toBe(true);
-    expect(t.askGemini).toHaveBeenCalledTimes(2);
+    // One ordinary chat call: Gemini writes the reply, with the answer rules in its instructions.
+    expect(t.askGemini).toHaveBeenCalledTimes(1);
+    expect(t.askGemini.mock.calls[0][1].system.startsWith(BUDDY_SYSTEM_INSTRUCTION)).toBe(true);
   });
 
   it('never loses a waiting order when a question about a mind comes next', async () => {

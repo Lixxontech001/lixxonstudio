@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ASK_WHICH_MIND_LINE,
   answerFromLog,
-  isOrderCandidate,
+  NEVER_LIST_LINES,
+  neverListLine,
   isQuestionLike,
   isRestricted,
   namedMind,
@@ -190,19 +191,29 @@ describe('ordinary action words become orders, with no magic phrase', () => {
   });
 });
 
-describe('which messages are sent to Gemini for a judgement', () => {
-  it('questions are never judged', () => {
-    expect(isQuestionLike('What did the Analyst do?')).toBe(true);
-    expect(isOrderCandidate('What did the Analyst do?', null)).toBe(false);
-    expect(isOrderCandidate('Can you check the article for me?', null)).toBe(false);
+describe('requests a mind never does are refused before any model call', () => {
+  it('a reply to a reader, as the owner, is refused', () => {
+    expect(neverListLine('Reply to the customer who asked about the bag')).toBe(NEVER_LIST_LINES.reader);
+    expect(neverListLine('Can you DM the reader who commented?')).toBe(NEVER_LIST_LINES.reader);
   });
 
-  it('a statement the rules do not place is a candidate', () => {
-    expect(isOrderCandidate('Plan the spring push for the kit', null)).toBe(true);
-    expect(isOrderCandidate('Thanks for that', null)).toBe(true);
+  it('spending money or buying ads is refused', () => {
+    expect(neverListLine('Spend 50 dollars on ads for the summer post')).toBe(NEVER_LIST_LINES.spend);
+    expect(neverListLine('Buy an ad for the new article')).toBe(NEVER_LIST_LINES.spend);
   });
 
-  it('a short mind name that answers a pending order is not a candidate', () => {
-    expect(isOrderCandidate('the analyst', { instruction: 'Check the article' })).toBe(false);
+  it('creating a shop product is refused, but placing an existing one is not', () => {
+    expect(neverListLine('Create a new product for the linen bag')).toBe(NEVER_LIST_LINES.product);
+    expect(neverListLine('Add the Oat Bath Soak product to the article')).toBeNull();
+  });
+
+  it('rewriting a whole article is refused, but a sentence change is not', () => {
+    expect(neverListLine('Rewrite the whole article in a warmer voice')).toBe(NEVER_LIST_LINES.rewrite);
+    expect(neverListLine('Change one sentence in the second paragraph')).toBeNull();
+  });
+
+  it('ordinary messages are not refused', () => {
+    expect(neverListLine('What did the Analyst do?')).toBeNull();
+    expect(neverListLine('Thanks, that helps')).toBeNull();
   });
 });

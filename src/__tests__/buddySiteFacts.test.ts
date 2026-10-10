@@ -49,8 +49,21 @@ describe('Buddy site list: from the database rows', () => {
       },
       { data: [{ name: 'Lamp', price_cents: 1250 }], error: null, count: 1 },
     );
-    expect(facts.articles.items).toEqual([{ title: 'Hello', slug: 'hello', publishedAt: '2026-10-01T00:00:00Z' }]);
+    expect(facts.articles.items).toEqual([{ title: 'Hello', slug: 'hello', publishedAt: '2026-10-01T00:00:00Z', excerpt: null }]);
     expect(facts.products.items).toEqual([{ name: 'Lamp', priceUsd: 12.5 }]);
+    expect(JSON.stringify(facts)).not.toContain('SECRET BODY TEXT');
+  });
+
+  it('shows the stored summary of an article, and never its body', () => {
+    const facts = siteFactsFromReads(
+      {
+        data: [{ title: 'Hello', slug: 'hello', published_at: null, excerpt: 'A calm note on linen.', content: 'SECRET BODY TEXT' }],
+        error: null,
+        count: 1,
+      },
+      { data: [], error: null, count: 0 },
+    );
+    expect(facts.articles.items[0].excerpt).toBe('A calm note on linen.');
     expect(JSON.stringify(facts)).not.toContain('SECRET BODY TEXT');
   });
 
@@ -112,6 +125,14 @@ describe('Buddy question flow with the site list', () => {
         failures: { ok: true, count: 0, codes: [] },
       }),
       readSiteFacts,
+      readStateFacts: async () => ({
+        takeover: false,
+        killScope: 'none',
+        orders: { ok: true, total: 0, items: [] },
+        log: { ok: true, rows: [] },
+        notable: { ok: true, rows: [] },
+        doors: { ok: true, rows: [] },
+      }),
       findOrCreateBriefing: async () => null,
     loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
     saveOrder: async () => true,
@@ -151,7 +172,7 @@ describe('Buddy site list: the read never touches article bodies or writes', () 
   });
 
   it('selects only the safe columns from articles and products', () => {
-    expect(body).toContain('.select("title,slug,published_at"');
+    expect(body).toContain('.select("title,slug,published_at,excerpt"');
     expect(body).toContain('.select("name,price_cents"');
   });
 

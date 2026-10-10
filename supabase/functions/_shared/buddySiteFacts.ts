@@ -9,6 +9,8 @@ export interface SiteArticle {
   title: string;
   slug: string | null;
   publishedAt: string | null;
+  /** The stored one-line summary. Never the article body. */
+  excerpt: string | null;
 }
 
 export interface SiteProduct {
@@ -64,6 +66,7 @@ export function siteFactsFromReads(articles: ReadResult, products: ReadResult): 
       title,
       slug: cleanLine(row.slug, 120),
       publishedAt: typeof row.published_at === "string" ? row.published_at : null,
+      excerpt: cleanLine(row.excerpt, 200),
     });
   }
   const productItems: SiteProduct[] = [];
@@ -93,7 +96,9 @@ export function siteFactsBlock(facts: SiteFacts): string {
     lines.push("Published articles: none yet.");
   } else {
     lines.push(`Published articles: ${facts.articles.total} in total. Latest first:`);
-    for (const article of facts.articles.items) lines.push(`- "${article.title}"`);
+    for (const article of facts.articles.items) {
+      lines.push(article.excerpt ? `- "${article.title}". Summary: ${article.excerpt}` : `- "${article.title}"`);
+    }
     if (facts.articles.total > facts.articles.items.length) {
       lines.push(`(and ${facts.articles.total - facts.articles.items.length} more not listed here)`);
     }
