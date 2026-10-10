@@ -101,11 +101,16 @@ export function controlDoneLine(action: ControlAction): string {
     case "clear_kill":
       return "Started the minds again. Nothing is stopped now.";
     case "pause_door":
+      // An RSS door only pings the hub for the feed. It never posts, so the line says ping.
+      if (RSS_DOOR_IDS.has(action.door)) return `Paused the ${DOOR_LABEL[action.door]} door. Buddy will not ping your feed there until you resume it.`;
       return `Paused the ${DOOR_LABEL[action.door]} door. Buddy will not post there until you resume it.`;
     case "resume_door":
       return `Resumed the ${DOOR_LABEL[action.door]} door.`;
   }
 }
+
+// The four RSS doors (same ids as RSS_DOORS in rssHub.ts; a Phase C freeze check keeps them equal).
+const RSS_DOOR_IDS: ReadonlySet<string> = new Set(["flipboard", "google_news", "microsoft_start", "smartnews"]);
 
 export const MIND_LABEL: Record<ControlMind, string> = {
   analyst: "Analyst",
