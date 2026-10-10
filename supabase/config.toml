@@ -42,6 +42,14 @@ verify_jwt = true
 [functions.buddy-think]
 verify_jwt = true
 
+# The owner's Run today (from Buddy or the Minds page). Owner session only; the default JWT check is kept on purpose.
+[functions.minds-run-placement]
+verify_jwt = true
+
+# Admin Connections "Test" button. Read-only checks; owner session only.
+[functions.door-connection-test]
+verify_jwt = true
+
 # Owner-only: attempts the owner push for a Takeover or Kill saved in the Minds screen. The handler reads the caller from the JWT.
 [functions.minds-control-notify]
 verify_jwt = true
