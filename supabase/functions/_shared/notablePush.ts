@@ -3,19 +3,15 @@
 // Heartbeat is not a buzz kind, so it never buzzes. Nothing here logs or returns a key, an endpoint or a device detail.
 // A push problem never fails the day run: every failure becomes a status, and the caller keeps going.
 
+import { BRIEFING_NOTABLE_KINDS } from "./buddyBriefing.ts";
 import { sendPushNotification, type PushSendResult, type PushTarget, type VapidCredentials } from "./webPush.ts";
 
-/** The events that buzz. Anything else is still written to the notable list, but it does not buzz. */
-export const BUZZ_KINDS: readonly string[] = Object.freeze([
-  "door_posted",
-  "pack_ready",
-  "sale",
-  "product_click",
-  "traffic_new_kind",
-  "auditor_blocked",
-  "mind_failed",
-  "job_finished",
-]);
+/**
+ * The events that buzz the owner's phone: every briefing kind (what the owner reads in the morning), plus
+ * finished jobs, which the placement job writes and the owner has always been told about. Anything else is still
+ * written to the notable list, but it does not buzz.
+ */
+export const BUZZ_KINDS: readonly string[] = Object.freeze([...new Set([...BRIEFING_NOTABLE_KINDS, "job_finished"])]);
 
 export function shouldBuzz(kind: string): boolean {
   return BUZZ_KINDS.includes(kind);

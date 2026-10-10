@@ -8,6 +8,7 @@ import { ALLOWED_ORDERS, MODEL_FILEABLE_ORDER, REFUSAL_LINE } from '../../supaba
 import { NOT_OFFERED_KEY_NAMES } from '../../supabase/functions/_shared/notOfferedKeys';
 import { NO_KEY_ACTION, NO_KEY_DETAIL } from '../../src/buddy/minds/mindGuards';
 import { BUZZ_KINDS } from '../../supabase/functions/_shared/notablePush';
+import { BRIEFING_NOTABLE_KINDS } from '../../supabase/functions/_shared/buddyBriefing';
 
 const ROOT = process.cwd();
 const read = (file: string) => readFileSync(join(ROOT, file), 'utf8');
@@ -55,9 +56,11 @@ describe('Phase D freeze 3: notifications fire from the day run', () => {
     expect(push).toMatch(/await deps\.markSent\?\.\(target\);\s*\} catch/);
   });
 
-  it('the buzz list is unchanged', () => {
+  it('the buzz list follows the briefing kinds, plus finished jobs (Phase D slice 4)', () => {
     expect(BUZZ_KINDS).toContain('door_posted');
     expect(BUZZ_KINDS).toContain('auditor_blocked');
+    for (const kind of BRIEFING_NOTABLE_KINDS) expect(BUZZ_KINDS).toContain(kind);
+    expect(BUZZ_KINDS).toContain('job_finished');
   });
 
   it('the placement step returns a held outcome on a site-read failure, never reply(req) without req', () => {

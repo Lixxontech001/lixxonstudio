@@ -162,7 +162,7 @@ describe('Phase 7 freeze: notable events buzz only the kinds the owner asked for
 
   it('a quiet kind sends nothing', async () => {
     const sends: string[] = [];
-    expect((await notifyOwnerDevices('takeover_changed', 'Takeover changed', fakeDeps(sends))).status).toBe('not_buzzing');
+    expect((await notifyOwnerDevices('article_changed', 'An article changed', fakeDeps(sends))).status).toBe('not_buzzing');
     expect(sends).toHaveLength(0);
   });
 

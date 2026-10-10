@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { BRIEFING_NOTABLE_KINDS } from '../../supabase/functions/_shared/buddyBriefing';
 import {
   BUZZ_KINDS,
   NO_DEVICE_COPY,
@@ -52,16 +53,17 @@ function deps(options: {
 }
 
 describe('which events buzz the owner', () => {
-  it('the buzz list is the agreed one: doors, packs, sales and clicks, traffic, the Auditor, breakage, and finished jobs', () => {
+  it('the buzz list is every briefing kind, plus finished jobs (Phase D slice 4)', () => {
     expect([...BUZZ_KINDS].sort()).toEqual(
-      ['auditor_blocked', 'door_posted', 'job_finished', 'mind_failed', 'pack_ready', 'product_click', 'sale', 'traffic_new_kind'].sort(),
+      [...new Set([...BRIEFING_NOTABLE_KINDS, 'job_finished'])].sort(),
     );
+    for (const kind of ['takeover_changed', 'kill_changed', 'week_up', 'week_down', 'door_failed', 'order_blocked']) {
+      expect(BUZZ_KINDS).toContain(kind);
+    }
   });
 
   it('a heartbeat never buzzes, and neither do the quiet kinds', () => {
     expect(shouldBuzz('heartbeat')).toBe(false);
-    expect(shouldBuzz('takeover_changed')).toBe(false);
-    expect(shouldBuzz('kill_changed')).toBe(false);
     expect(shouldBuzz('article_changed')).toBe(false);
     expect(shouldBuzz('night_report_written')).toBe(false);
     expect(shouldBuzz('auditor_blocked')).toBe(true);
