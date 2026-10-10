@@ -15,6 +15,7 @@ import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import { controlChange, controlDoneLine, type ControlAction } from "../_shared/buddyControls.ts";
 import { ownerClock } from "../_shared/mindsNightReport.ts";
+import { anyTryableBrainConfigured } from "../_shared/brains.ts";
 import { STATE_DOOR_LIMIT, STATE_LOG_LIMIT, STATE_NOTABLE_LIMIT, STATE_ORDER_LIMIT, type BuddyStateFacts } from "../_shared/buddyStateFacts.ts";
 import {
   SITE_ARTICLE_LIMIT,
@@ -23,9 +24,11 @@ import {
   type SiteFacts,
 } from "../_shared/buddySiteFacts.ts";
 
+// The Google key's Vault name. Only the probe's stored Google status and the legacy readKey use it.
+// The status action reads every tryable brain (anyTryableBrainConfigured), so it no longer uses this name.
+const GOOGLE_KEY_NAME = "gemini_api_key";
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const MAX_BODY_BYTES = 4096;
-const KEY_NAME = "gemini_api_key";
 const LIMITS = { probe: { limit: 5, window: 600 }, ask: { limit: 30, window: 600 } } as const;
 
 function corsFor(req: Request): Record<string, string> | null {
@@ -459,7 +462,7 @@ Deno.serve(async (req: Request) => {
   if (!supabaseUrl || !anonKey) return reply(req, { error: "Buddy is not configured." }, 503);
 
   // Owner check: the same owner-only catalogue read the Automation keys page uses. Its
-  // answer also tells us whether the Google key is saved, without reading the key itself.
+  // answer also tells us whether any tryable brain is saved, from the flags alone. No key value is read here.
   let keyConfigured = false;
   let userClient: SupabaseClient;
   try {
@@ -469,8 +472,12 @@ Deno.serve(async (req: Request) => {
     });
     const { data, error } = await userClient.rpc("automation_list_secrets");
     if (error || !Array.isArray(data)) return reply(req, { error: "Owner-only access is required." }, 403);
-    const row = (data as Array<{ name?: unknown; configured?: unknown }>).find((entry) => entry?.name === KEY_NAME);
-    keyConfigured = row?.configured === true;
+    const savedNames = new Set(
+      (data as Array<{ name?: unknown; configured?: unknown }>)
+        .filter((entry) => entry?.configured === true && typeof entry?.name === "string")
+        .map((entry) => String(entry.name)),
+    );
+    keyConfigured = anyTryableBrainConfigured(savedNames);
   } catch {
     return reply(req, { error: "Owner-only access is required." }, 403);
   }
@@ -526,7 +533,7 @@ Deno.serve(async (req: Request) => {
         return false;
       }
     },
-    readKey: () => readSecret(KEY_NAME),
+    readKey: () => readSecret(GOOGLE_KEY_NAME),
     readSecret,
     // One plain-words line per answered question: which brain answered. Never names a key.
     logBrain: async (line: string) => {
@@ -561,7 +568,7 @@ Deno.serve(async (req: Request) => {
     askGemini: (apiKey, input) => callGemini(apiKey, input),
     recordProbe: async (status) => {
       try {
-        await sb.rpc("test_automation_secret", { p_secret_name: KEY_NAME, p_result: status });
+        await sb.rpc("test_automation_secret", { p_secret_name: GOOGLE_KEY_NAME, p_result: status });
       } catch {
         // The probe answer is still returned to the owner; only the stored status is lost.
       }

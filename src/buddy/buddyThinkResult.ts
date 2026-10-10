@@ -8,7 +8,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** The status action answers whether a Google key is saved. It never contains the key. */
+/** The status action answers whether any tryable brain has its key saved. It never contains a key. */
 export function parseKeyStatus(value: unknown): boolean | null {
   if (!isRecord(value) || value.ok !== true || typeof value.configured !== 'boolean') return null;
   return value.configured;

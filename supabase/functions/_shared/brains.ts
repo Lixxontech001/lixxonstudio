@@ -155,6 +155,14 @@ export function brainSecretNames(): string[] {
   return BRAIN_SLOTS.flatMap((slot) => [slot.secretName, ...slot.extraSecretNames]);
 }
 
+/**
+ * True when at least one tryable brain has all of its Vault entries saved: its main key, and any extra it needs
+ * (Cloudflare needs its account ID too). Takes the names the Vault reports as saved. Never sees a key value.
+ */
+export function anyTryableBrainConfigured(savedNames: ReadonlySet<string>): boolean {
+  return tryableBrains().some((slot) => savedNames.has(slot.secretName) && slot.extraSecretNames.every((name) => savedNames.has(name)));
+}
+
 /** The brains Buddy may try, in order. Skipped brains are left out. */
 export function tryableBrains(): BrainSlot[] {
   return BRAIN_SLOTS.filter((slot) => slot.access === "free_no_card");

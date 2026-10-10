@@ -78,7 +78,7 @@ export interface ThinkResponse {
 }
 
 export interface BuddyThinkDeps {
-  /** True when the Vault entry for the Google key exists. Never returns the key itself. */
+  /** True when at least one tryable brain (the same chain as ask) has its Vault entries saved. Never returns a key. */
   keyConfigured(): Promise<boolean>;
   /** Reads the key from Vault on the server. Only called for ask/probe. */
   readKey(): Promise<string | null>;
