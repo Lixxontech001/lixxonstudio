@@ -194,7 +194,9 @@ export function ownerPushDeps(sb: SupabaseClient, owner: string, send?: PushNoti
   };
 }
 
-const ROW_COLUMNS = "id,owner_id,mind,kind,title,happened_at,push_note,push_claimed_at";
+// push_claimed_at is NOT selected here: it exists only after 20261019010000 is applied, and a select on a missing
+// column would fail every read. Claim times are read only for rows already marked pending (see loadClaimTimes).
+const ROW_COLUMNS = "id,owner_id,mind,kind,title,happened_at,push_note";
 
 function rowFrom(data: Record<string, unknown>): NotableRow {
   return {
@@ -207,6 +209,24 @@ function rowFrom(data: Record<string, unknown>): NotableRow {
     pushNote: typeof data.push_note === "string" ? data.push_note : null,
     claimedAt: typeof data.push_claimed_at === "string" ? data.push_claimed_at : null,
   };
+}
+
+/**
+ * Reads push_claimed_at for rows already marked pending. A failed read counts as fresh (claimed now), so the row is
+ * skipped this time. It is never sent twice.
+ */
+async function loadClaimTimes(sb: SupabaseClient, rows: NotableRow[]): Promise<NotableRow[]> {
+  const pending = rows.filter((row) => row.pushNote === "pending");
+  if (pending.length === 0) return rows;
+  const nowIso = new Date().toISOString();
+  const { data, error } = await sb.from("minds_notable_events").select("id,push_claimed_at").in("id", pending.map((row) => row.id));
+  const times = new Map<string, string | null>();
+  if (!error && Array.isArray(data)) {
+    for (const item of data as Record<string, unknown>[]) {
+      times.set(String(item.id), typeof item.push_claimed_at === "string" ? item.push_claimed_at : null);
+    }
+  }
+  return rows.map((row) => (row.pushNote === "pending" ? { ...row, claimedAt: error ? nowIso : (times.get(row.id) ?? nowIso) } : row));
 }
 
 /**
@@ -239,10 +259,13 @@ export function servicePushPorts(sb: SupabaseClient, send?: PushNotifyDeps["send
       if (owner) query = query.eq("owner_id", owner);
       const { data, error } = await query.order("happened_at", { ascending: true }).limit(100);
       if (error) throw new Error("notable list");
-      return Array.isArray(data) ? data.map((item) => rowFrom(item as Record<string, unknown>)) : [];
+      const rows = Array.isArray(data) ? data.map((item) => rowFrom(item as Record<string, unknown>)) : [];
+      return loadClaimTimes(sb, rows);
     },
     claim: async (row, from, nowIso) => {
       let query = sb.from("minds_notable_events").update({ push_note: "pending", push_claimed_at: nowIso }).eq("id", row.id).eq("owner_id", row.owner);
+      // A stale pending row is taken over only if its claim time is still the one we read (compare-and-set).
+      if (row.pushNote === "pending" && row.claimedAt !== null) query = query.eq("push_claimed_at", row.claimedAt);
       const named = from.filter((item): item is string => item !== null);
       if (from.includes(null)) {
         query = named.length === 0 ? query.is("push_note", null) : query.or(`push_note.is.null,push_note.in.(${named.join(",")})`);
