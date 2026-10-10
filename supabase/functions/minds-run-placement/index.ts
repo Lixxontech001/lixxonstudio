@@ -17,6 +17,8 @@ import { runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "..
 import { NO_DEVICE_COPY, PUSH_HELP_COPY, notifyOwnerDevices, shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
 import type { PushTarget, VapidCredentials } from "../_shared/webPush.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
+import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
+import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
@@ -211,6 +213,15 @@ export async function handleRun(req: Request): Promise<Response> {
       "The Executioner sent these. Each one is in the log.",
     );
   }
+  // Shop facts the owner should hear about, then a placement job that really changed an article.
+  // Each is written once (source keys). Neither can fail the day run.
+  try {
+    await scanShopNotables(sb, owner, localDay);
+  } catch {
+    // The shop scan is extra. Nothing else in the run depends on it.
+  }
+  const job = planJobNotable(outcome.status, outcome.orderId);
+  if (job) await recordNotable(sb, owner, localDay, job.mind, job.kind, job.title, job.detail, job.key);
   const doorsReply = { status: doors.status, posted: doors.posted };
   if (outcome.status === "cannot_think") {
     return reply(req, { status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
@@ -254,11 +265,14 @@ async function recordNotable(
   kind: string,
   title: string,
   detail: string,
+  sourceKey: string | null = null,
 ): Promise<PushStatus | null> {
   try {
+    // A source key is sent only when there is one, so the run works before the source-key migration is applied.
+    // A second row with the same key is refused by the database, so it is not written and does not buzz.
     const { data, error } = await sb
       .from("minds_notable_events")
-      .insert({ owner_id: owner, mind, kind, title: clip(title, 160), detail: clip(detail, 500) })
+      .insert({ owner_id: owner, mind, kind, title: clip(title, 160), detail: clip(detail, 500), ...(sourceKey ? { source_key: sourceKey } : {}) })
       .select("id")
       .single();
     if (error || !data) return null;
@@ -643,6 +657,61 @@ async function runPacksForDay(
     );
   }
   return result;
+}
+
+/**
+ * Reads the shop's paid orders, today's product clicks and sources, and writes what is new as notable events.
+ * Only the day run calls this, so Takeover and Kill already allowed the run. Reads only; writes are notable rows.
+ */
+async function scanShopNotables(sb: SupabaseClient, owner: string, localDay: string): Promise<ScanResult> {
+  const window = ownerDayWindow(localDay);
+  const ports: NotablePorts = {
+    readPaidOrders: async (sinceIso: string): Promise<OrderRow[] | null> => {
+      const { data, error } = await sb
+        .from("orders")
+        .select("id,amount,currency")
+        .eq("payment_status", "paid")
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error || !Array.isArray(data)) return null;
+      return data.map((row: Record<string, unknown>) => ({
+        id: String(row.id ?? ""),
+        amount: typeof row.amount === "number" ? row.amount : null,
+        currency: typeof row.currency === "string" ? row.currency : null,
+      }));
+    },
+    readClicks: async (startIso: string, endIso: string): Promise<ClickRow[] | null> => {
+      const { data, error } = await sb
+        .from("product_clicks")
+        .select("source")
+        .gte("created_at", startIso)
+        .lt("created_at", endIso)
+        .limit(2000);
+      if (error || !Array.isArray(data)) return null;
+      return data.map((row: Record<string, unknown>) => ({ source: typeof row.source === "string" ? row.source : null }));
+    },
+    readEarlierSources: async (sources: string[], beforeIso: string): Promise<string[] | null> => {
+      const { data, error } = await sb
+        .from("product_clicks")
+        .select("source")
+        .in("source", sources)
+        .lt("created_at", beforeIso)
+        .limit(2000);
+      if (error || !Array.isArray(data)) return null;
+      return data.map((row: Record<string, unknown>) => String(row.source ?? "")).filter((item) => item.length > 0);
+    },
+    record: async (plan: NotablePlan): Promise<boolean> => {
+      const status = await recordNotable(sb, owner, localDay, plan.mind, plan.kind, plan.title, plan.detail, plan.key);
+      return status !== null;
+    },
+  };
+  return scanNotableSources(ports, {
+    now: new Date(),
+    localDay,
+    dayStartIso: window.start,
+    dayEndIso: window.end,
+  });
 }
 
 /** Reads the site for one order, runs the placement, and writes through the database doors. */
