@@ -14,6 +14,13 @@ import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node
 import { fileURLToPath } from 'node:url';
 
 export const PACK_VIDEO = Object.freeze({ width: 1080, height: 1920, fps: 30, seconds: 10, maxChunks: 3, maxChunkChars: 60 });
+/**
+ * The three values of the saved Video look that the pack video reads (see src/lib/videoLook.ts). A value that is
+ * missing or outside its range keeps the built-in default here, so a pack is never made from a bad look.
+ * Limits match the database check on the saved look (duration 8 to 60, caption size 24 to 72, 0xRRGGBB).
+ */
+export const PACK_LOOK_DEFAULT = Object.freeze({ durationSeconds: PACK_VIDEO.seconds, captionFontSize: 64, captionColor: '0xFFFFFF' });
+export const PACK_LOOK_LIMITS = Object.freeze({ durationSeconds: [8, 60], captionFontSize: [24, 72] });
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FONT_NAME = 'DejaVu Sans';
 const RENDER_TIMEOUT_MS = 120_000;
@@ -31,6 +38,25 @@ export function ffmpegCommand(value) {
 function isInside(root, path) {
   const rel = relative(resolve(root), resolve(path));
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+/** Picks the look's values that are in range; anything else keeps the default. Pure. */
+export function resolvePackLook(look) {
+  const whole = (value, [min, max], fallback) => (Number.isInteger(value) && value >= min && value <= max ? value : fallback);
+  const colour = typeof look?.captionColor === 'string' && /^0x[0-9A-Fa-f]{6}$/.test(look.captionColor)
+    ? `0x${look.captionColor.slice(2).toUpperCase()}`
+    : PACK_LOOK_DEFAULT.captionColor;
+  return {
+    durationSeconds: whole(look?.durationSeconds, PACK_LOOK_LIMITS.durationSeconds, PACK_LOOK_DEFAULT.durationSeconds),
+    captionFontSize: whole(look?.captionFontSize, PACK_LOOK_LIMITS.captionFontSize, PACK_LOOK_DEFAULT.captionFontSize),
+    captionColor: colour,
+  };
+}
+
+/** A look colour written 0xRRGGBB becomes the subtitle colour &H00BBGGRR (ASS stores blue first). Pure. */
+export function assColour(hex) {
+  const rgb = /^0x([0-9A-Fa-f]{6})$/.test(hex) ? hex.slice(2).toUpperCase() : PACK_LOOK_DEFAULT.captionColor.slice(2);
+  return `&H00${rgb.slice(4, 6)}${rgb.slice(2, 4)}${rgb.slice(0, 2)}`;
 }
 
 /** Text that is safe inside an ASS subtitle line: no braces, no backslashes, line breaks as \N. */
@@ -51,7 +77,7 @@ function assTime(seconds) {
 }
 
 /** The ASS file: one caption on screen at a time, shared evenly across the video. Pure text. */
-export function buildAssText(chunks, { width = PACK_VIDEO.width, height = PACK_VIDEO.height, seconds = PACK_VIDEO.seconds } = {}) {
+export function buildAssText(chunks, { width = PACK_VIDEO.width, height = PACK_VIDEO.height, seconds = PACK_VIDEO.seconds, fontSize = PACK_LOOK_DEFAULT.captionFontSize, colour = PACK_LOOK_DEFAULT.captionColor } = {}) {
   const slot = seconds / chunks.length;
   const header = [
     '[Script Info]',
@@ -63,7 +89,7 @@ export function buildAssText(chunks, { width = PACK_VIDEO.width, height = PACK_V
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    `Style: Caption,${FONT_NAME},64,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,4,1,2,80,80,260,1`,
+    `Style: Caption,${FONT_NAME},${fontSize},${assColour(colour)},&H000000FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,4,1,2,80,80,260,1`,
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
@@ -180,7 +206,8 @@ export function refusalFor({ imagePath, chunks, outputPath }) {
  * narration is passed in. Returns the file's size and probe on success. On any failure, a plain reason and nothing
  * left behind. A video with no voice, a voice too long to fit, or no audio in the result is never kept.
  */
-export async function renderPackVideo({ imagePath, chunks, outputPath, ffmpeg, narration, voiceOptions = {} }) {
+export async function renderPackVideo({ imagePath, chunks, outputPath, ffmpeg, narration, voiceOptions = {}, look }) {
+  const packLook = resolvePackLook(look);
   const refused = refusalFor({ imagePath, chunks, outputPath });
   if (refused) return { ok: false, reason: refused };
   try {
@@ -200,9 +227,9 @@ export async function renderPackVideo({ imagePath, chunks, outputPath, ffmpeg, n
     if (voiceSeconds > MAX_VOICE_SECONDS) return { ok: false, reason: 'voice_too_long' };
 
     const assPath = join(workDir, 'captions.ass');
-    await writeFile(assPath, buildAssText(chunks), { encoding: 'utf8', mode: 0o600 });
+    await writeFile(assPath, buildAssText(chunks, { seconds: packLook.durationSeconds, fontSize: packLook.captionFontSize, colour: packLook.captionColor }), { encoding: 'utf8', mode: 0o600 });
     await mkdir(dirname(outputPath), { recursive: true });
-    const args = buildFfmpegArgs({ imagePath, assPath, outputPath, voicePath: voice.path, voiceSeconds });
+    const args = buildFfmpegArgs({ imagePath, assPath, outputPath, voicePath: voice.path, voiceSeconds, seconds: packLook.durationSeconds });
     const result = await run(ffmpegCommand(ffmpeg), args, { cwd: workDir, timeoutMs: RENDER_TIMEOUT_MS });
     if (result.timedOut) {
       await rm(outputPath, { force: true });

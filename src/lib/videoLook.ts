@@ -87,5 +87,8 @@ export function lookSummary(look: VideoTemplateDocument): Array<{ label: string;
   ];
 }
 
-/** Shown on the screen after every save. The saved look is not used by the daily video yet (see PHASE_E_REPORT.md). */
-export const LOOK_NOT_USED_YET = 'The daily video does not use this look yet. The render still uses its built-in look. Saving only keeps this look for later.';
+/**
+ * Shown on the screen. The pack video (scripts/pack-video.mjs) reads three values of the saved look: length, caption
+ * size and caption colour. Anything else in the look is not used by the pack video.
+ */
+export const LOOK_SCOPE_NOTE = "The pack video uses this look's length, caption size and caption colour. The title, movement, end card and watermark are not used by the pack video.";

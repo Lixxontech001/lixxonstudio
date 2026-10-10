@@ -68,12 +68,32 @@ export function checkVideo(bytes) {
 }
 
 /**
+ * The active saved Video look's three values for the pack video, read with the service role. Null when no look is
+ * saved or it cannot be read, so the pack keeps its built-in look (pack-video.mjs resolves the defaults).
+ */
+export async function loadActiveLook(sb) {
+  try {
+    const { data, error } = await sb
+      .from('video_templates')
+      .select('duration_seconds,caption_font_size,caption_color')
+      .eq('is_active', true)
+      .maybeSingle();
+    if (error || !data) return null;
+    return { durationSeconds: data.duration_seconds, captionFontSize: data.caption_font_size, captionColor: data.caption_color };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Saves what a day's packs still need. deps is injected, so the same code runs in tests and on the real runner:
  *  loadPacks(day), loadArticle(postId), fetchImpl, siteOrigin, upload(bucket, path, bytes, type), attach(input),
- *  ffmpegReady(), narrate({ chunks, outPath }), renderVideo({ imagePath, chunks, outputPath, narration }), workDir.
+ *  ffmpegReady(), narrate({ chunks, outPath }), renderVideo({ imagePath, chunks, outputPath, narration, look }), workDir,
+ *  and optionally loadLook() for the active Video look (null means the built-in look).
  * Returns one line per article: what was saved, and the plain reason for anything skipped.
  */
 export async function saveDayMedia(day, deps) {
+  const look = deps.loadLook ? await deps.loadLook() : null;
   const rows = (await deps.loadPacks(day)).filter((row) => row.posted_at == null && (row.status === 'ready' || row.status === 'blocked'));
   const groups = new Map();
   for (const row of rows) {
@@ -116,7 +136,7 @@ export async function saveDayMedia(day, deps) {
     }
 
     if (needVideo) {
-      line.video = await makeVideo(deps, { group, day, first, picture });
+      line.video = await makeVideo(deps, { group, day, first, picture, look });
     }
     report.push(line);
   }
@@ -128,7 +148,7 @@ async function articleCover(deps, postId) {
   return article ? article.cover_image : null;
 }
 
-async function makeVideo(deps, { group, day, first, picture }) {
+async function makeVideo(deps, { group, day, first, picture, look }) {
   const chunks = captionChunks(first.caption ?? first.pin_description ?? '');
   if (chunks.length === 0) return NO_CAPTION_NOTE;
   if (!deps.ffmpegReady()) return NO_FFMPEG_NOTE;
@@ -139,7 +159,7 @@ async function makeVideo(deps, { group, day, first, picture }) {
   await writeFile(imagePath, new Uint8Array(picture.data));
   const narration = await deps.narrate({ chunks, outPath: join(deps.workDir, `${group.postId}.wav`) });
   if (!narration.ok) return VIDEO_NO_SOUND_NOTE;
-  const rendered = await deps.renderVideo({ imagePath, chunks, outputPath, narration });
+  const rendered = await deps.renderVideo({ imagePath, chunks, outputPath, narration, look });
   if (!rendered.ok) return NO_SOUND_REASONS.includes(rendered.reason) ? VIDEO_NO_SOUND_NOTE : VIDEO_FAILED_NOTE;
 
   const bytes = new Uint8Array(await readFile(outputPath));
@@ -185,6 +205,8 @@ async function main() {
       // The owner's existing Gemini key is read from the same secret store Buddy uses. It is never printed.
       narrate: async (input) => narrate({ ...input, geminiKey: await loadGeminiKey(sb), fetchImpl: fetch, espeak: process.env.LIXXON_ESPEAK || undefined }),
       renderVideo: (input) => renderPackVideo({ ...input, ffmpeg }),
+      // The owner's saved Video look (three values). Read with the service role; never printed.
+      loadLook: () => loadActiveLook(sb),
       async loadPacks(localDay) {
         const { data, error } = await sb
           .from('minds_packs')

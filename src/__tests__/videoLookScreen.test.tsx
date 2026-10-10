@@ -69,7 +69,7 @@ describe('the Video look screen', () => {
     expect(mocks.rpc).toHaveBeenCalledWith('automation_video_templates');
     expect(host.textContent).toContain('12 seconds');
     expect(host.textContent).toContain('0xFFFFFF');
-    expect(host.textContent).toContain('The daily video does not use this look yet');
+    expect(host.textContent).toContain("The pack video uses this look's length, caption size and caption colour.");
   });
 
   it('a bad value shows the reason and makes no save call', async () => {
@@ -82,7 +82,7 @@ describe('the Video look screen', () => {
     expect(mocks.rpc.mock.calls.some((call) => call[0] === 'automation_save_video_template')).toBe(false);
   });
 
-  it('a good value saves through the existing save call, activates it, and says the daily video does not use it yet', async () => {
+  it('a good value saves through the existing save call, activates it, and says what the pack video uses', async () => {
     mocks.rpc.mockImplementation(async (name: string) => {
       if (name === 'automation_save_video_template') return { data: savedList({ ...BUILT_IN_LOOK, duration_seconds: 20 }), error: null };
       return { data: savedList(), error: null };
@@ -95,7 +95,7 @@ describe('the Video look screen', () => {
     expect(save).toBeTruthy();
     expect(save?.[1]).toMatchObject({ p_activate: true, p_document: { duration_seconds: 20, name: BUILT_IN_LOOK.name } });
     expect(host.textContent).toContain('Saved.');
-    expect(host.textContent).toContain('The daily video does not use this look yet.');
+    expect(host.textContent).toContain("The pack video uses this look's length, caption size and caption colour.");
   });
 
   it('a failed save says so in plain words and never shows the raw error', async () => {

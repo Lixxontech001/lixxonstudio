@@ -302,10 +302,10 @@ describe('Phase F freeze: Minds and Admin', () => {
     expect(read('src/admin/AdminApp.tsx')).toContain("case 'admin-automation-distribution':\n        return <RetiredDistributionRedirect />;");
   });
 
-  it('Video look is a small screen: linked in the nav, three bounded values, and honest that the daily video does not use it yet', () => {
+  it('Video look is a small screen: linked in the nav, three bounded values, and honest about what the pack video uses', () => {
     expect(exists('src/admin/pages/AutomationVideoLook.tsx')).toBe(true);
     expect(read('src/admin/AdminLayout.tsx')).toContain("route: { name: 'admin-automation-video-look' }");
-    expect(read('src/lib/videoLook.ts')).toMatch(/LOOK_NOT_USED_YET/);
+    expect(read('src/lib/videoLook.ts')).toMatch(/LOOK_SCOPE_NOTE/);
   });
 
   it('the daily log table and writer exist; the writer is the run path', () => {

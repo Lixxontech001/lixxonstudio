@@ -143,7 +143,7 @@ These are your decisions. Each one is either a choice the code already supports,
 - **A. Daily run and the schedule.** The 08:00 Lagos pipeline is in code. The minds' daily run is queued by a cron line that is still a comment (`20261010090000_minds_daily_run.sql`). When that line is on, it queues today's order only. The run starts when you ask Buddy to run today, with Takeover on. A fully automatic daily run is not built. Decide before you turn the schedule on.
 - **B. "Delete the old one".** Fixed in Phase F: "Delete the old one" and "Erase it" are refused like other deletes, with the refusal line. Nothing for you to decide. Tell the agent if you want a different wording.
 - **C. "Which mind?" for unnamed orders.** Swaps go to the Executioner with no question. Other unnamed orders still ask which mind. Keep the question or drop it.
-- **D. The saved video look.** The Video look screen saves three values. The daily video and the pack video do not read them yet. Decide whether they should, in a later phase.
+- **D. The saved video look.** The pack video reads three saved values: length, caption size and caption colour. The title, movement, end card and watermark are not used by the pack video. The test render workflow does not read the saved look. Nothing to decide unless you want more values wired.
 - **E. Gemini TTS.** Confirm the free-tier terms on Google's pricing page before you tell anyone the voice is free.
 - **F. Medium.** Only an existing integration token works. Medium no longer issues new tokens.
 

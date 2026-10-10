@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_VIDEO_TEMPLATE } from '../../scripts/video-template.mjs';
 import { ROUTE_PERMISSIONS } from '../admin/permissions';
 import { parseVideoTemplateDocument } from '../lib/automationDistribution';
-import { BUILT_IN_LOOK, LOOK_NOT_USED_YET, applyLookEdits, lookSummary } from '../lib/videoLook';
+import { BUILT_IN_LOOK, LOOK_SCOPE_NOTE, applyLookEdits, lookSummary } from '../lib/videoLook';
 import { resolveAutomationAdminRoute } from '../admin/automationRoutes';
 
 // Phase E slice 4: the Video look. Three bounded values, saved through the existing template save call.
@@ -93,8 +93,9 @@ describe('the screen wording', () => {
     expect(lines.find((line) => line.label === 'Length')?.value).toBe('12 seconds');
   });
 
-  it('after a save the screen says the daily video does not use the look yet', () => {
-    expect(LOOK_NOT_USED_YET).toMatch(/does not use this look yet/);
+  it('the screen says what the pack video uses from the look, and what it does not', () => {
+    expect(LOOK_SCOPE_NOTE).toMatch(/The pack video uses this look's length, caption size and caption colour/);
+    expect(LOOK_SCOPE_NOTE).toMatch(/not used by the pack video/);
   });
 
   it('no Nigeria, Naira or Lagos on the new screen or in the look helper', () => {

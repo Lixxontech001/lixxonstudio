@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ALLOWED_ORDERS, MODEL_FILEABLE_ORDER, REFUSAL_LINE, gateOrder, refusedRequest } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import { tryableBrains } from '../../supabase/functions/_shared/brains';
-import { LOOK_NOT_USED_YET } from '../lib/videoLook';
+import { LOOK_SCOPE_NOTE } from '../lib/videoLook';
 
 const ROOT = process.cwd();
 const read = (file: string) => readFileSync(join(ROOT, file), 'utf8');
@@ -120,10 +120,11 @@ describe('Phase E freeze, slice 3: a failed or empty living-mind day may retry, 
   });
 });
 
-describe('Phase E freeze, slice 4: the Video look screen is small, saved, and not read by the daily video', () => {
-  it('the look screen says the daily video does not use the saved look yet, under the heading', () => {
-    expect(LOOK_NOT_USED_YET).toMatch(/does not use this look yet/);
-    expect(read('src/admin/pages/AutomationVideoLook.tsx')).toContain('LOOK_NOT_USED_YET');
+describe('Phase E freeze, slice 4: the Video look screen is small, saved, and says what the pack video reads', () => {
+  it('the look screen says what the pack video uses from the saved look, under the heading', () => {
+    // Phase G wired three values into the pack video. The old "does not use it yet" line was true in Phase E only.
+    expect(LOOK_SCOPE_NOTE).toMatch(/The pack video uses this look's length, caption size and caption colour/);
+    expect(read('src/admin/pages/AutomationVideoLook.tsx')).toContain('LOOK_SCOPE_NOTE');
   });
 
   it('saving goes through the template RPC with activate, and reads through the template table', () => {
@@ -133,8 +134,11 @@ describe('Phase E freeze, slice 4: the Video look screen is small, saved, and no
     expect(page).toContain('automation_video_templates');
   });
 
-  it('the daily video and its test render do not read the saved look (the test render takes only dispatch input)', () => {
-    expect(read('scripts/pack-video.mjs')).not.toMatch(/automation_video_templates|automation_save_video_template/);
+  it('the pack video reads the look only as three values passed in; only the saver reads the table; the test render reads nothing', () => {
+    // Phase G: pack-video.mjs takes the look as plain values (no database call). save-pack-media.mjs reads the active row.
+    expect(read('scripts/pack-video.mjs')).not.toMatch(/automation_video_templates|automation_save_video_template|video_templates/);
+    expect(read('scripts/pack-video.mjs')).toMatch(/resolvePackLook\(look\)/);
+    expect(read('scripts/save-pack-media.mjs')).toMatch(/from\('video_templates'\)/);
     expect(read('.github/workflows/video-render-test.yml')).not.toMatch(/automation_video_templates|automation_save_video_template/);
   });
 

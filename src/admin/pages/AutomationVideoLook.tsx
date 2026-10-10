@@ -3,7 +3,7 @@ import { Loader2, RefreshCw, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { parseVideoTemplates, type VideoTemplateDocument, type VideoTemplateList } from '../../lib/automationDistribution';
 import {
-  BUILT_IN_LOOK, LOOK_LIMITS, LOOK_NOT_USED_YET, applyLookEdits, lookSummary, type LookEdits,
+  BUILT_IN_LOOK, LOOK_LIMITS, LOOK_SCOPE_NOTE, applyLookEdits, lookSummary, type LookEdits,
 } from '../../lib/videoLook';
 
 // Phase E slice 4: the Video look. A small screen: three bounded values, saved through the existing template save call.
@@ -73,7 +73,7 @@ export default function AutomationVideoLook() {
       } else {
         setList(parsed);
         setEdits(editsFrom(parsed.activeDocument ?? result.document));
-        setSaveMessage(`Saved. "${result.document.name}" is the active look. ${LOOK_NOT_USED_YET}`);
+        setSaveMessage(`Saved. "${result.document.name}" is the active look. ${LOOK_SCOPE_NOTE}`);
       }
     } catch {
       setSaveFailed(true);
@@ -103,7 +103,7 @@ export default function AutomationVideoLook() {
         </button>
       </header>
 
-      <p role="note" className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{LOOK_NOT_USED_YET}</p>
+      <p role="note" className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{LOOK_SCOPE_NOTE}</p>
 
       {loading && (
         <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-gray-600">
