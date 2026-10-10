@@ -129,7 +129,7 @@ export default function AutomationBrains() {
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="font-serif text-2xl text-charcoal">Brains</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-charcoal-muted mt-1">
             Buddy tries these brains in this order and skips any with no saved key. Paste a key once. It is never shown again.
             Test makes one read-only request and publishes nothing.
           </p>
@@ -138,7 +138,7 @@ export default function AutomationBrains() {
           type="button"
           onClick={() => void refresh(true)}
           disabled={refreshing}
-          className="inline-flex items-center gap-2 border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="inline-flex items-center gap-2 border border-taupe/50 rounded px-3 py-2 text-sm text-charcoal hover:border-bronze disabled:opacity-50"
         >
           {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           Refresh
@@ -151,7 +151,7 @@ export default function AutomationBrains() {
         </div>
       )}
 
-      {loading && <p role="status" className="text-sm text-gray-400 py-8 text-center">Loading brains…</p>}
+      {loading && <p role="status" className="text-sm text-charcoal-muted py-8 text-center">Loading brains…</p>}
 
       {!loading && loadFailed && (
         <div className="flex items-center gap-2 border border-red-200 bg-red-50 text-red-700 rounded px-3 py-2 text-sm">
@@ -167,20 +167,20 @@ export default function AutomationBrains() {
             const busy = busyName === row.keyName;
             const skipped = row.slot.access === 'skip';
             return (
-              <li key={row.slot.id} className="border border-gray-200 rounded-lg bg-white p-4">
+              <li key={row.slot.id} className="border border-taupe/40 rounded-sm bg-white p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="font-medium text-charcoal">{row.slot.order}. {row.slot.label}</h2>
-                    <p className="text-sm text-gray-600 mt-1">{row.slot.purpose}</p>
+                    <p className="text-sm text-charcoal-muted mt-1">{row.slot.purpose}</p>
                   </div>
-                  <span className={`shrink-0 inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded ${saved ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`shrink-0 inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded ${saved ? 'bg-green-50 text-green-800' : 'bg-taupe/20 text-charcoal-muted'}`}>
                     {saved && <CheckCircle2 size={12} />}
                     {saved ? 'Saved' : 'Not saved'}
                   </span>
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="text-sm text-gray-700">
+                  <label className="text-sm text-charcoal">
                     {row.keyLabel}
                     <input
                       type="password"
@@ -189,11 +189,11 @@ export default function AutomationBrains() {
                       value={drafts[row.keyName] || ''}
                       onChange={(event) => setDraft(row.keyName, event.target.value)}
                       placeholder={saved ? 'Saved. Paste a new one to replace it.' : `Paste the ${row.keyLabel.toLowerCase()}`}
-                      className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                      className="mt-1 w-full border border-taupe/50 rounded px-3 py-2 text-sm"
                     />
                   </label>
                   {row.identifier && (
-                    <label className="text-sm text-gray-700">
+                    <label className="text-sm text-charcoal">
                       {row.identifier.label}
                       <input
                         type="text"
@@ -202,7 +202,7 @@ export default function AutomationBrains() {
                         value={drafts[row.identifier.name] || ''}
                         onChange={(event) => setDraft(row.identifier!.name, event.target.value)}
                         placeholder={isSaved(row.identifier.name) ? 'Saved. Paste a new one to replace it.' : 'Paste the account ID'}
-                        className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                        className="mt-1 w-full border border-taupe/50 rounded px-3 py-2 text-sm"
                       />
                     </label>
                   )}
@@ -222,13 +222,13 @@ export default function AutomationBrains() {
                     type="button"
                     onClick={() => void test(row)}
                     disabled={busy || !saved || !row.testable}
-                    className="inline-flex items-center gap-2 border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 border border-taupe/50 rounded px-3 py-2 text-sm text-charcoal hover:border-bronze disabled:opacity-50"
                   >
                     <FlaskConical size={14} />
                     Test
                   </button>
                   {skipped && (
-                    <span className="text-xs text-gray-500">Buddy skips this brain for now, so Test is off.</span>
+                    <span className="text-xs text-charcoal-muted">Buddy skips this brain for now, so Test is off.</span>
                   )}
                 </div>
               </li>

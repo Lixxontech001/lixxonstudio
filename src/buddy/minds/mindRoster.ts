@@ -14,7 +14,7 @@ export const MINDS: readonly MindInfo[] = [
   { key: 'analyst', name: 'Analyst', job: 'Reads the site numbers and says what changed.' },
   { key: 'strategist', name: 'Strategist', job: 'Suggests what to do next, and why.' },
   { key: 'ceo', name: 'CEO', job: 'Sorts the plans and puts them in order.' },
-  { key: 'executioner', name: 'Executioner', job: 'Prepares the work once you say go. Publishes nothing on its own.' },
+  { key: 'executioner', name: 'Executioner', job: 'Prepares packs and the free-door send. Publishes nothing while Takeover is off. Never posts the four you post by hand.' },
   { key: 'auditor', name: 'Auditor', job: 'Checks every plan before it moves. Only you can switch it off.' },
 ];
 
