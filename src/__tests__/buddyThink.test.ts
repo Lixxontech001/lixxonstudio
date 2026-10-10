@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ALL_FAILED_LINE } from '../../supabase/functions/_shared/brainChain';
-import { NEVER_LIST_LINES, RESTRICTED_LINE } from '../../supabase/functions/_shared/buddyRouter';
+import { NEVER_LIST_LINES } from '../../supabase/functions/_shared/buddyRouter';
+import { REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import type { BuddyStateFacts } from '../../supabase/functions/_shared/buddyStateFacts';
 import {
   BUDDY_GEMINI_MODEL,
@@ -314,7 +315,7 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'The spring kit plan needs work, and the Strategist is the one for it.' }, { ...d, saveOrder });
     expect(result.body).toMatchObject({ ok: true, route: 'chat', filed: 'strategist' });
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Plan the spring push for the kit', 'strategist');
-    expect(saved.at(-1)?.content).toBe('Got it. Saved for the Strategist. It is waiting.');
+    expect(saved.at(-1)?.content).toBe('Got it. Saved for the Strategist. It is waiting. Takeover is off, so nothing has changed.');
     expect(askGemini.mock.calls[0][1]).toMatchObject({ json: true });
   });
 
@@ -342,14 +343,16 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     expect(saved.at(-1)).toMatchObject({ role: 'buddy', kind: 'notice' });
   });
 
-  it('a restricted part of a model order is flagged as waiting for the owner', async () => {
+  it('a model order that asks to publish is refused, not filed, so no waiting order is left behind', async () => {
     const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
       ok: true,
       text: '{"reply":"Okay.","order":{"mind":"executioner","instruction":"Publish the new article now"}}',
     }));
     const { deps: d, saved } = deps({ askGemini });
-    await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Thanks, the article looks good to me.' }, { ...d, saveOrder: async () => true });
-    expect(saved.at(-1)?.content).toContain(RESTRICTED_LINE);
+    const saveOrder = vi.fn(async () => true);
+    await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Thanks, the article looks good to me.' }, { ...d, saveOrder });
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
   });
 
   it('the model is shown the live state: Takeover, kill switch, waiting orders and notable events', async () => {
@@ -533,5 +536,61 @@ describe('Buddy think: the brain chain answers the owner', () => {
     const { deps: d } = deps({ askGemini: vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: '{"reply":"Hi.","order":null}' })) });
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: QUESTION }, d);
     expect(result.body).toMatchObject({ ok: true, brain: 'gemini', model: BUDDY_GEMINI_MODEL });
+  });
+});
+
+describe('Buddy think: the closed list of orders', () => {
+  it('a refused owner request is not filed, and the reply is the one refusal line', async () => {
+    const { deps: d, askGemini, saved } = deps();
+    const saveOrder = vi.fn(async () => true);
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'Refund order 1042 to Jane' },
+      { ...d, saveOrder },
+    );
+    expect(result.body).toMatchObject({ ok: true, route: 'refused' });
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(askGemini).not.toHaveBeenCalled();
+    expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
+  });
+
+  it('a model order that asks for a refund is refused: nothing is filed and the model text is not kept', async () => {
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: '{"reply":"Done, I refunded her.","order":{"mind":"ceo","instruction":"Refund order 1042 to Jane"}}',
+    }));
+    const { deps: d, saved } = deps({ askGemini });
+    const saveOrder = vi.fn(async () => true);
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'The Jane order needs sorting out, and the refund is the hard part.' },
+      { ...d, saveOrder },
+    );
+    expect(result.body).toMatchObject({ ok: true, route: 'chat' });
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
+    expect(saved.at(-1)?.content).not.toContain('refunded');
+  });
+
+  it('a waiting order with Takeover on says it runs on the next run', async () => {
+    const { deps: d, saved } = deps({ readTakeover: async () => true });
+    const saveOrder = vi.fn(async () => true);
+    await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'Plan the spring push for the kit with the Strategist.' },
+      { ...d, saveOrder },
+    );
+    expect(saveOrder).toHaveBeenCalled();
+    expect(saved.at(-1)?.content).toBe(
+      'Saved for the Strategist. It is waiting. Takeover is on, so it runs on the next run.',
+    );
+  });
+
+  it('an unreadable Takeover on a waiting order says so, and nothing has changed', async () => {
+    const { deps: d, saved } = deps({ readTakeover: async () => { throw new Error('down'); } });
+    await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'Plan the spring push for the kit with the Strategist.' },
+      { ...d, saveOrder: async () => true },
+    );
+    expect(saved.at(-1)?.content).toBe(
+      'Saved for the Strategist. It is waiting. I could not read Takeover just now, so nothing has changed.',
+    );
   });
 });

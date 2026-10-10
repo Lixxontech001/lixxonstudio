@@ -10,6 +10,7 @@ import { ownerClock } from "./mindsNightReport.ts";
 import { brainHowTo, howToDoor, type HowToDoor } from "./buddyHowTo.ts";
 import type { BrainId } from "./brains.ts";
 import { parseControlRequest, type ControlAction } from "./buddyControls.ts";
+import { REFUSAL_LINE, refusedRequest } from "./buddyOrderPolicy.ts";
 
 export const MIND_KEYS = ["analyst", "strategist", "ceo", "executioner", "auditor"] as const;
 export type MindName = (typeof MIND_KEYS)[number];
@@ -63,6 +64,7 @@ export type Route =
   | { kind: "run_day"; instruction: string }
   | { kind: "control"; action: ControlAction; instruction: string }
   | { kind: "control_refused"; line: string }
+  | { kind: "refused"; line: string }
   | { kind: "ask_which_mind"; instruction: string }
   | { kind: "how_to"; door: HowToDoor }
   | { kind: "brain_how_to"; brain: BrainId }
@@ -154,6 +156,9 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
         : { kind: "control_refused", line: control.refusal };
     }
   }
+  // Outside the closed list (refunds, deletes, email to the list, reader replies, price changes, posting): one line,
+  // nothing filed. Today's run is never refused here, and a question is never refused.
+  if (!isRunDayRequest(text) && refusedRequest(text)) return { kind: "refused", line: REFUSAL_LINE };
   if (mind && question && !imperative) return { kind: "mind_log", mind };
   // "How do I connect YouTube?" is answered with fixed steps. A mind named in the same message is left to the rules above.
   if (!mind) {

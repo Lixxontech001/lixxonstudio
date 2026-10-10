@@ -560,3 +560,10 @@ What is still not done, or not verified:
   - Cerebras and DeepSeek stay skipped: Cerebras needs a card for its trial, and DeepSeek is paid.
   - The minds, the proof call and voice text-to-speech still use Google only, as the plan kept them out of scope.
   - Lagos appears in admin screens as a timezone label from earlier phases. None of it is in reader-facing folders.
+
+## Phase B slice 1: closed order list, refusal line, feedback three ways
+
+- `supabase/functions/_shared/buddyOrderPolicy.ts`: the closed list of five allowed order kinds (run today, pause or resume a free door, stop or start a mind except the Auditor, product-line apply, mind work), `refusedRequest`, and `REFUSAL_LINE`. A request for a refund, delete, email to the list, reader reply, price change, or posting gets one refusal line and is filed as nothing. Questions and plain statements are never refused.
+- The router returns a `refused` route before the mind and order rules. Run-today requests are never refused. The chat path also refuses a model-proposed order that asks for one of these things.
+- `supabase/functions/_shared/buddyFeedback.ts`: one line each for waiting (Takeover on, off, or unreadable), done, and blocked. Filed orders now say whether Takeover is on or off.
+- Tests: `src/__tests__/buddyOrderPolicy.test.ts`, plus handler tests in `buddyThink.test.ts`.

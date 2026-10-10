@@ -4,6 +4,8 @@
 
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
 import { brainHowToReply, howToReply } from "./buddyHowTo.ts";
+import { feedbackLine } from "./buddyFeedback.ts";
+import { REFUSAL_LINE, refusedRequest } from "./buddyOrderPolicy.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure } from "./brainChain.ts";
@@ -315,6 +317,15 @@ function probeStatusFor(outcome: ThinkOutcome): "invalid" | "rate_limited" | "un
  * checked, then the owner's message is saved, Gemini answers with the chat so far, and the
  * answer is saved. A missing key still saves the question and an honest notice in the chat.
  */
+/** The Takeover switch for a reply line. A failed read is null (the line then says it could not be read). */
+async function readTakeoverSafe(deps: BuddyThinkDeps): Promise<boolean | null> {
+  try {
+    return await deps.readTakeover();
+  } catch {
+    return null;
+  }
+}
+
 /** Answers a routed message: a log answer, a question about which mind, or an order filed as waiting. */
 async function answerRouted(
   chatId: string,
@@ -370,11 +381,14 @@ async function answerRouted(
     reply = howToReply(route.door);
   } else if (route.kind === "brain_how_to") {
     reply = brainHowToReply(route.brain);
+  } else if (route.kind === "refused") {
+    reply = route.line;
   } else if (route.kind === "ask_which_mind") {
     reply = ASK_WHICH_MIND_LINE;
     payload = { pending_order: cleanInstruction(route.instruction) };
   } else {
-    reply = `Saved for the ${MIND_LABELS[route.mind]}. It is waiting.${isRestricted(route.instruction) ? ` ${RESTRICTED_LINE}` : ""}`;
+    const takeover = await readTakeoverSafe(deps);
+    reply = `${feedbackLine({ state: "waiting", takeover, mind: MIND_LABELS[route.mind] })}${isRestricted(route.instruction) ? ` ${RESTRICTED_LINE}` : ""}`;
   }
   const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, payload);
   await deps.touchChat(chatId, title);
@@ -551,13 +565,17 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   let reply = answer.reply;
   let replyPayload: Record<string, unknown> | null = null;
   let filedAs: string | null = null;
-  if (answer.order) {
+  if (answer.order && refusedRequest(answer.order.instruction)) {
+    // The model proposed something outside the closed list. Nothing is filed; the owner gets the one refusal line.
+    reply = REFUSAL_LINE;
+  } else if (answer.order) {
     if (answer.order.mind) {
       // A named mind: filed as waiting. Nothing runs from this reply.
       const filed = await deps.saveOrder(chatId, answer.order.instruction, answer.order.mind);
       if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
       filedAs = answer.order.mind;
-      reply = `${reply} Saved for the ${MIND_LABELS[answer.order.mind]}. It is waiting.`;
+      const takeover = await readTakeoverSafe(deps);
+      reply = `${reply} ${feedbackLine({ state: "waiting", takeover, mind: MIND_LABELS[answer.order.mind] })}`;
     } else {
       // No mind yet: the owner's words wait on this reply, so the next message can name one.
       filedAs = "no_mind";

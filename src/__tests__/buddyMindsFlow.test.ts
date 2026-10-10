@@ -78,7 +78,7 @@ describe('orders from ordinary language', () => {
     expect(result.status).toBe(200);
     expect(result.body).toMatchObject({ ok: true, route: 'order' });
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Tell the Analyst to check the spring guide', 'analyst');
-    expect(lastSaved(t.saved)?.content).toBe('Saved for the Analyst. It is waiting.');
+    expect(lastSaved(t.saved)?.content).toBe('Saved for the Analyst. It is waiting. I could not read Takeover just now, so nothing has changed.');
     expect(t.askGemini).not.toHaveBeenCalled();
     expect(t.readKey).not.toHaveBeenCalled();
   });
@@ -106,7 +106,7 @@ describe('orders from ordinary language', () => {
     await handleBuddyThink(ask('the analyst'), t.deps);
     expect(t.saveOrder).toHaveBeenCalledTimes(1);
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', 'analyst');
-    expect(lastSaved(t.saved)?.content).toBe('Saved for the Analyst. It is waiting.');
+    expect(lastSaved(t.saved)?.content).toBe('Saved for the Analyst. It is waiting. I could not read Takeover just now, so nothing has changed.');
     expect(t.askGemini).not.toHaveBeenCalled();
   });
 
