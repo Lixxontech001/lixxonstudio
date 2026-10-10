@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Saves the day's pack pictures and videos to storage, and attaches their paths to the pack rows.
-// A still is a copy of the article's own cover image. A video is a real MP4 made from that picture by scripts/pack-video.mjs.
+// A still is a copy of the article's own cover image. A video is a real MP4 made from that picture by scripts/pack-video.mjs,
+// with a voice track from scripts/pack-voice.mjs. A video with no sound is never saved (no silent upload).
 // Nothing here posts anything, and nothing runs on a schedule. A missing piece is skipped with a plain note, never faked.
 // Usage: node --experimental-strip-types scripts/save-pack-media.mjs --day 2026-10-09 [--ffmpeg <path>] [--site <https origin>]
 // Needs LIXXON_SUPABASE_URL and LIXXON_SERVICE_ROLE_KEY in the environment. Those values are never printed.
@@ -11,7 +12,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchArticleImage, imageProblemNote } from '../supabase/functions/_shared/articleImage.ts';
 import { captionChunks } from '../supabase/functions/_shared/packMedia.ts';
-import { ffmpegAvailable, renderPackVideo } from './pack-video.mjs';
+import { ffmpegAvailable, mp4HasAudioTrack, NO_SOUND_REASONS, renderPackVideo } from './pack-video.mjs';
+import { narrate } from './pack-voice.mjs';
 
 export const STILL_BUCKET = 'pack-stills';
 export const VIDEO_BUCKET = 'pack-videos';
@@ -24,7 +26,18 @@ export const NO_CAPTION_NOTE = 'The caption has no text to put on the video. No 
 export const NO_FFMPEG_NOTE = 'FFmpeg is not installed on this machine. No video was made.';
 export const VIDEO_FAILED_NOTE = 'The video could not be made. No video was saved.';
 export const VIDEO_NOT_VALID_NOTE = 'The video file was not valid. No video was saved.';
+export const VIDEO_NO_SOUND_NOTE = 'The video has no sound yet. No video was saved.';
 export const STORE_FAILED_NOTE = 'The file could not be saved to storage. Nothing was attached.';
+
+/** The Gemini key the owner already saved for Buddy, read through the service role. Null when none is saved. */
+export async function loadGeminiKey(sb) {
+  try {
+    const { data, error } = await sb.rpc('automation_secret_get_internal', { p_secret_name: 'gemini_api_key' });
+    return !error && typeof data === 'string' && data.length > 0 ? data : null;
+  } catch {
+    return null;
+  }
+}
 
 /** The storage path for one owner, day and article: owner/day/article.ext. Null when any part is not in the expected form. */
 export function storagePathFor({ owner, day, postId, extension }) {
@@ -41,19 +54,23 @@ export function checkStill(contentType, byteLength) {
   return { ok: true, extension };
 }
 
-/** A video is kept only when it is a real MP4: not empty, not too big, and an MP4 box header at the start. */
+/**
+ * A video is kept only when it is a real MP4 (not empty, not too big, an MP4 box header at the start) AND it has a
+ * sound track. A silent MP4 is refused: the owner has not asked for one, and none is made.
+ */
 export function checkVideo(bytes) {
   if (!bytes || bytes.byteLength === 0) return { ok: false, reason: 'empty' };
   if (bytes.byteLength > VIDEO_MAX_BYTES) return { ok: false, reason: 'too_large' };
   const header = Buffer.from(bytes.buffer, bytes.byteOffset, Math.min(bytes.byteLength, 12)).toString('latin1', 4, 8);
   if (header !== 'ftyp') return { ok: false, reason: 'not_mp4' };
+  if (!mp4HasAudioTrack(bytes)) return { ok: false, reason: 'no_audio' };
   return { ok: true };
 }
 
 /**
  * Saves what a day's packs still need. deps is injected, so the same code runs in tests and on the real runner:
  *  loadPacks(day), loadArticle(postId), fetchImpl, siteOrigin, upload(bucket, path, bytes, type), attach(input),
- *  ffmpegReady(), renderVideo({ imagePath, chunks, outputPath }), workDir.
+ *  ffmpegReady(), narrate({ chunks, outPath }), renderVideo({ imagePath, chunks, outputPath, narration }), workDir.
  * Returns one line per article: what was saved, and the plain reason for anything skipped.
  */
 export async function saveDayMedia(day, deps) {
@@ -120,8 +137,10 @@ async function makeVideo(deps, { group, day, first, picture }) {
   const imagePath = join(deps.workDir, `${group.postId}.${extension}`);
   const outputPath = join(deps.workDir, `${group.postId}.mp4`);
   await writeFile(imagePath, new Uint8Array(picture.data));
-  const rendered = await deps.renderVideo({ imagePath, chunks, outputPath });
-  if (!rendered.ok) return VIDEO_FAILED_NOTE;
+  const narration = await deps.narrate({ chunks, outPath: join(deps.workDir, `${group.postId}.wav`) });
+  if (!narration.ok) return VIDEO_NO_SOUND_NOTE;
+  const rendered = await deps.renderVideo({ imagePath, chunks, outputPath, narration });
+  if (!rendered.ok) return NO_SOUND_REASONS.includes(rendered.reason) ? VIDEO_NO_SOUND_NOTE : VIDEO_FAILED_NOTE;
 
   const bytes = new Uint8Array(await readFile(outputPath));
   const check = checkVideo(bytes);
@@ -163,6 +182,8 @@ async function main() {
       workDir,
       fetchImpl: (target, init) => fetch(target, init),
       ffmpegReady: () => ffmpegAvailable(ffmpeg),
+      // The owner's existing Gemini key is read from the same secret store Buddy uses. It is never printed.
+      narrate: async (input) => narrate({ ...input, geminiKey: await loadGeminiKey(sb), fetchImpl: fetch, espeak: process.env.LIXXON_ESPEAK || undefined }),
       renderVideo: (input) => renderPackVideo({ ...input, ffmpeg }),
       async loadPacks(localDay) {
         const { data, error } = await sb

@@ -67,11 +67,13 @@ describe('Phase 7 freeze: pack video and episode audio come from saved files', (
   it('the local fixtures exist and are small', () => {
     expect(readBytes('src/__tests__/fixtures/pack-media/cover.png').byteLength).toBeLessThan(2048);
     expect(readBytes('src/__tests__/fixtures/pack-media/tiny.mp4').byteLength).toBeLessThan(4096);
+    expect(readBytes('src/__tests__/fixtures/pack-media/tiny-voiced.mp4').byteLength).toBeLessThan(32768);
     expect(readBytes('src/__tests__/fixtures/podcast/episode.mp3').byteLength).toBeLessThan(8192);
   });
 
   it('a saved video passes the real MP4 check, and an empty or non-MP4 file is refused', () => {
-    expect(checkVideo(readBytes('src/__tests__/fixtures/pack-media/tiny.mp4'))).toEqual({ ok: true });
+    expect(checkVideo(readBytes('src/__tests__/fixtures/pack-media/tiny-voiced.mp4'))).toEqual({ ok: true });
+    expect(checkVideo(readBytes('src/__tests__/fixtures/pack-media/tiny.mp4'))).toEqual({ ok: false, reason: 'no_audio' });
     expect(checkVideo(new Uint8Array(0)).ok).toBe(false);
     expect(checkVideo(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])).ok).toBe(false);
   });

@@ -199,10 +199,11 @@ describe('video: a real MP4 or an honest block, never a fake address', () => {
     for (const chunk of chunks) expect(chunk.replace(/\n/g, ' ').length).toBeLessThanOrEqual(60);
   });
 
-  it('the renderer carries no test watermark, no country name, and no audio', () => {
+  it('the renderer carries no test watermark, no country name, and a voice track (never silent)', () => {
     expect(renderSource).not.toMatch(/TEST ONLY|NOT FOR POSTING/);
     expect(renderSource).not.toMatch(/nigeria|lagos|naira/i);
-    expect(renderSource).toContain("'-an'");
+    expect(renderSource).not.toContain("'-an'");
+    expect(renderSource).toContain("'-c:a', 'aac'");
     expect(renderSource).toMatch(/PACK_VIDEO = Object\.freeze\(\{ width: 1080, height: 1920, fps: 30, seconds: 10/);
   });
 });

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ffmpegAvailable, probeMp4, renderPackVideo } from '../../scripts/pack-video.mjs';
+import { fakeNarration } from './support/wav';
 import {
   NO_CAPTION_NOTE,
   NO_FFMPEG_NOTE,
@@ -16,6 +17,7 @@ import {
   VIDEO_FAILED_NOTE,
   VIDEO_MAX_BYTES,
   VIDEO_NOT_VALID_NOTE,
+  VIDEO_NO_SOUND_NOTE,
   checkStill,
   checkVideo,
   saveDayMedia,
@@ -30,6 +32,7 @@ const COVER_URL = `${SITE}/images/cover.png`;
 const FIXTURES = join(process.cwd(), 'src/__tests__/fixtures/pack-media');
 const COVER = new Uint8Array(readFileSync(join(FIXTURES, 'cover.png')));
 const TINY = new Uint8Array(readFileSync(join(FIXTURES, 'tiny.mp4')));
+const VOICED = new Uint8Array(readFileSync(join(FIXTURES, 'tiny-voiced.mp4')));
 const FFMPEG = process.env.LIXXON_FFMPEG || '';
 const HAS_FFMPEG = Boolean(FFMPEG) && ffmpegAvailable(FFMPEG);
 
@@ -68,7 +71,8 @@ interface Harness {
   renders: number;
 }
 
-type Render = (input: { imagePath: string; chunks: string[]; outputPath: string }) => Promise<{ ok: boolean }>;
+type Render = (input: { imagePath: string; chunks: string[]; outputPath: string }) => Promise<{ ok: boolean; reason?: string }>;
+type Narrate = (input: { chunks: string[]; outPath: string }) => Promise<{ ok: boolean; reason?: string }>;
 
 function run(
   options: {
@@ -79,6 +83,7 @@ function run(
     ffmpegReady?: boolean;
     renderVideo?: Render;
     renderReal?: boolean;
+    narrate?: Narrate;
   } = {},
 ) {
   const h: Harness = { uploads: [], attaches: [], fetches: [], renders: 0 };
@@ -87,7 +92,7 @@ function run(
   const runDir = join(workDir, `run-${runCount}`);
   mkdirSync(runDir, { recursive: true });
   const fixtureRender: Render = async ({ outputPath }) => {
-    await writeFile(outputPath, TINY);
+    await writeFile(outputPath, VOICED);
     return { ok: true };
   };
   const realRender: Render = (input) => renderPackVideo({ ...input, ffmpeg: FFMPEG });
@@ -100,6 +105,7 @@ function run(
       return options.fetchImpl ? options.fetchImpl(url) : picture(COVER);
     },
     ffmpegReady: () => options.ffmpegReady ?? true,
+    narrate: async (input: { chunks: string[]; outPath: string }) => (options.narrate ? options.narrate(input) : fakeNarration(input.outPath)),
     renderVideo: async (input: { imagePath: string; chunks: string[]; outputPath: string }) => {
       h.renders += 1;
       return render(input);
@@ -212,6 +218,24 @@ describe('a video is a real MP4 made from the picture, saved under the owner', (
     expect(h.attaches.find((item) => item.videoPath)).toBeUndefined();
   });
 
+  it('a video with no sound is never uploaded, and the owner is told the video has no sound yet', async () => {
+    const { h, deps } = run({ renderVideo: async () => ({ ok: false, reason: 'no_audio' }) });
+    const report = await saveDayMedia(DAY, deps);
+    expect(report[0].video).toBe(VIDEO_NO_SOUND_NOTE);
+    expect(VIDEO_NO_SOUND_NOTE).toContain('video has no sound yet');
+    expect(h.uploads.find((item) => item.bucket === VIDEO_BUCKET)).toBeUndefined();
+    expect(h.attaches.find((item) => item.videoPath)).toBeUndefined();
+  });
+
+  it('with no voice, no video is rendered, and nothing is uploaded or attached', async () => {
+    const { h, deps } = run({ narrate: async () => ({ ok: false, reason: 'no_voice' }) });
+    const report = await saveDayMedia(DAY, deps);
+    expect(report[0].video).toBe(VIDEO_NO_SOUND_NOTE);
+    expect(h.renders).toBe(0);
+    expect(h.uploads.find((item) => item.bucket === VIDEO_BUCKET)).toBeUndefined();
+    expect(h.attaches.find((item) => item.videoPath)).toBeUndefined();
+  });
+
   it('a file that is not an MP4 is never uploaded', async () => {
     const { h, deps } = run({
       renderVideo: async ({ outputPath }) => {
@@ -263,7 +287,8 @@ describe('the path and file rules', () => {
   });
 
   it('a video needs an MP4 header, some bytes, and a size under the limit', () => {
-    expect(checkVideo(TINY)).toEqual({ ok: true });
+    expect(checkVideo(VOICED)).toEqual({ ok: true });
+    expect(checkVideo(TINY)).toEqual({ ok: false, reason: 'no_audio' });
     expect(checkVideo(new Uint8Array(0))).toEqual({ ok: false, reason: 'empty' });
     expect(checkVideo(new TextEncoder().encode('not a video file'))).toEqual({ ok: false, reason: 'not_mp4' });
     expect(checkVideo({ byteLength: VIDEO_MAX_BYTES + 1 } as unknown as Uint8Array)).toEqual({ ok: false, reason: 'too_large' });
@@ -271,17 +296,18 @@ describe('the path and file rules', () => {
 });
 
 describe.skipIf(!HAS_FFMPEG)('a real render from the fixture (needs LIXXON_FFMPEG)', () => {
-  it('the renderer makes a vertical MP4 with no audio from the fixture picture', async () => {
+  it('the renderer makes a vertical MP4 with a voice track from the fixture picture', async () => {
     const outputPath = join(workDir, 'real-render.mp4');
     const rendered = await renderPackVideo({
       imagePath: join(FIXTURES, 'cover.png'),
       chunks: ['Start with one step tonight.'],
       outputPath,
       ffmpeg: FFMPEG,
+      narration: fakeNarration(join(workDir, 'real-voice.wav'), 3),
     });
     expect(rendered.ok).toBe(true);
     const probe = await probeMp4(FFMPEG, outputPath);
-    expect(probe).toMatchObject({ width: 1080, height: 1920, hasAudio: false });
+    expect(probe).toMatchObject({ width: 1080, height: 1920, hasAudio: true });
     expect((await stat(outputPath)).size).toBeGreaterThan(0);
   });
 

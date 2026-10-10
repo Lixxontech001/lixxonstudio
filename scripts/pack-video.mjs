@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// The daily pack's video renderer. Makes one vertical MP4 (1080 x 1920, no audio, no watermark) from one local image
-// and up to three short caption lines, burned in with an ASS subtitle file through FFmpeg.
+// The daily pack's video renderer. Makes one vertical MP4 (1080 x 1920, with a voice track, no watermark) from one
+// local image and up to three short caption lines, burned in with an ASS subtitle file through FFmpeg. The voice comes
+// from scripts/pack-voice.mjs (Gemini first, then a local espeak). With no voice, nothing is made: no silent MP4.
 // It never writes into the repository or the site, never fetches a URL, and never invents a public address.
 // The renderer only makes the file. Saving it, and any public address for it, is a later step.
 // Usage: node scripts/pack-video.mjs --image <local png or jpg> --chunks '["line one","line two"]' --output <temp .mp4> [--ffmpeg <path>]
 
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { narrate, wavSeconds } from './pack-voice.mjs';
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +19,10 @@ const FONT_NAME = 'DejaVu Sans';
 const RENDER_TIMEOUT_MS = 120_000;
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg'];
+// A voice longer than this cannot fit the video even at the fastest allowed tempo, so the video is refused.
+export const MAX_VOICE_SECONDS = 12;
+/** Reasons that mean the video has no usable sound. The saver reports these as "video has no sound yet". */
+export const NO_SOUND_REASONS = Object.freeze(['no_voice', 'voice_too_long', 'no_audio']);
 
 export function ffmpegCommand(value) {
   return value || process.env.LIXXON_FFMPEG || 'ffmpeg';
@@ -73,8 +79,34 @@ function filterPath(path) {
   return path.replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\\'");
 }
 
-/** The FFmpeg arguments: scale and crop to 1080 x 1920, burn the subtitles, H.264, no audio, faststart. */
-export function buildFfmpegArgs({ imagePath, assPath, outputPath, seconds = PACK_VIDEO.seconds, width = PACK_VIDEO.width, height = PACK_VIDEO.height, fps = PACK_VIDEO.fps }) {
+/** The speed-up that fits a voice into the video's length: never slower, never past MAX_VOICE_SECONDS. */
+export function voiceTempo(voiceSeconds, seconds = PACK_VIDEO.seconds) {
+  if (!(voiceSeconds > seconds)) return 1;
+  return Math.min(voiceSeconds / seconds, MAX_VOICE_SECONDS / seconds);
+}
+
+/**
+ * Whether an MP4 has an audio track. Reads the handler type of each hdlr box: 'soun' is an audio track. Pure bytes.
+ */
+export function mp4HasAudioTrack(bytes) {
+  if (!bytes || bytes.byteLength < 12) return false;
+  const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let at = b.indexOf('hdlr', 0, 'latin1');
+  while (at >= 0) {
+    if (at + 16 <= b.length && b.toString('latin1', at + 12, at + 16) === 'soun') return true;
+    at = b.indexOf('hdlr', at + 4, 'latin1');
+  }
+  return false;
+}
+
+/**
+ * The FFmpeg arguments: scale and crop to 1080 x 1920, burn the subtitles, H.264, the voice track as AAC (padded or
+ * sped up to exactly the video's length), faststart. A voice track is required: there is no silent output.
+ */
+export function buildFfmpegArgs({ imagePath, assPath, outputPath, voicePath, voiceSeconds, seconds = PACK_VIDEO.seconds, width = PACK_VIDEO.width, height = PACK_VIDEO.height, fps = PACK_VIDEO.fps }) {
+  if (typeof voicePath !== 'string' || !voicePath) throw new Error('A voice track is required. No silent video is made.');
+  const tempo = voiceTempo(voiceSeconds ?? seconds, seconds);
+  const audioFilter = [tempo > 1 ? `atempo=${tempo.toFixed(4)}` : null, 'apad'].filter(Boolean).join(',');
   const filter = [
     `scale=${width}:${height}:force_original_aspect_ratio=increase`,
     `crop=${width}:${height}`,
@@ -85,11 +117,15 @@ export function buildFfmpegArgs({ imagePath, assPath, outputPath, seconds = PACK
   return [
     '-hide_banner', '-nostdin', '-y',
     '-loop', '1', '-framerate', String(fps), '-i', imagePath,
+    '-i', voicePath,
     '-t', String(seconds),
     '-vf', filter,
+    '-af', audioFilter,
+    '-map', '0:v:0', '-map', '1:a:0',
     '-r', String(fps),
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
-    '-movflags', '+faststart', '-an',
+    '-c:a', 'aac', '-b:a', '96k', '-ar', '44100', '-ac', '1',
+    '-movflags', '+faststart',
     '-f', 'mp4', outputPath,
   ];
 }
@@ -140,9 +176,11 @@ export function refusalFor({ imagePath, chunks, outputPath }) {
 }
 
 /**
- * Makes the MP4. Returns the file's size and probe on success. On any failure, a plain reason and nothing left behind.
+ * Makes the MP4 with its voice track. The voice is narration (from pack-voice.mjs, using voiceOptions) unless a
+ * narration is passed in. Returns the file's size and probe on success. On any failure, a plain reason and nothing
+ * left behind. A video with no voice, a voice too long to fit, or no audio in the result is never kept.
  */
-export async function renderPackVideo({ imagePath, chunks, outputPath, ffmpeg }) {
+export async function renderPackVideo({ imagePath, chunks, outputPath, ffmpeg, narration, voiceOptions = {} }) {
   const refused = refusalFor({ imagePath, chunks, outputPath });
   if (refused) return { ok: false, reason: refused };
   try {
@@ -155,10 +193,16 @@ export async function renderPackVideo({ imagePath, chunks, outputPath, ffmpeg })
 
   const workDir = await mkdtemp(join(tmpdir(), 'pack-video-'));
   try {
+    const voice = narration ?? (await narrate({ chunks, outPath: join(workDir, 'voice.wav'), ...voiceOptions }));
+    if (!voice || !voice.ok || !voice.path) return { ok: false, reason: 'no_voice' };
+    const voiceSeconds = voice.seconds ?? wavSeconds(new Uint8Array(await readFile(voice.path)));
+    if (!(voiceSeconds > 0)) return { ok: false, reason: 'no_voice' };
+    if (voiceSeconds > MAX_VOICE_SECONDS) return { ok: false, reason: 'voice_too_long' };
+
     const assPath = join(workDir, 'captions.ass');
     await writeFile(assPath, buildAssText(chunks), { encoding: 'utf8', mode: 0o600 });
     await mkdir(dirname(outputPath), { recursive: true });
-    const args = buildFfmpegArgs({ imagePath, assPath, outputPath });
+    const args = buildFfmpegArgs({ imagePath, assPath, outputPath, voicePath: voice.path, voiceSeconds });
     const result = await run(ffmpegCommand(ffmpeg), args, { cwd: workDir, timeoutMs: RENDER_TIMEOUT_MS });
     if (result.timedOut) {
       await rm(outputPath, { force: true });
@@ -179,7 +223,11 @@ export async function renderPackVideo({ imagePath, chunks, outputPath, ffmpeg })
       await rm(outputPath, { force: true });
       return { ok: false, reason: 'probe_failed' };
     }
-    return { ok: true, path: outputPath, bytes: info.size, probe };
+    if (!probe.hasAudio) {
+      await rm(outputPath, { force: true });
+      return { ok: false, reason: 'no_audio' };
+    }
+    return { ok: true, path: outputPath, bytes: info.size, probe, voice: voice.voice };
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }
@@ -203,6 +251,7 @@ async function main() {
     chunks,
     outputPath: argValue(args, '--output'),
     ffmpeg: argValue(args, '--ffmpeg'),
+    voiceOptions: { geminiKey: process.env.LIXXON_GEMINI_KEY ?? null, espeak: argValue(args, '--espeak') ?? (process.env.LIXXON_ESPEAK || undefined) },
   });
   process.stdout.write(`${JSON.stringify(result)}\n`);
   process.exitCode = result.ok ? 0 : 1;
