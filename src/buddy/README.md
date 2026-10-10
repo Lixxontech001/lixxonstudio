@@ -482,3 +482,11 @@ What is still not done, or not verified:
 - `src/__tests__/phase9Freeze.test.ts` (16 checks) proves the Phase 9 promises with real functions and fixtures: Takeover off by default, a paid order fixture in Money & readers, a failed door send under Problems, the night writer callable and never read by the morning briefing, a reader message as a count with no reply, sixteen auto and four gated doors, the video template name with no city, the fixture MP4 with audio, no owner route to the old senders, and every Phase 9 migration marked not applied.
 - Nothing is merged, deployed or applied to production. Phase 9 adds four migrations, each marked not applied.
 - The sidebar's "Social Shares" page is a read-only count of reader shares. It sends nothing, so it stays.
+
+## Phase A slice 1: the eight brains (catalogue only)
+
+- `supabase/functions/_shared/brains.ts` lists Buddy's eight brains in try order: Gemini, Groq, NVIDIA NIM, Cloudflare Workers AI, OpenRouter (free models only), Cerebras, Hugging Face, DeepSeek. Gemini stays first.
+- Cerebras and DeepSeek keep their slots but are marked skip, because the provider now asks for a card or is paid. Buddy does not try a skipped brain.
+- GitHub Models and Bytez are not brains. Mistral is not a workhorse.
+- Each brain's key uses the same Vault catalogue as the Connections keys. The migration `20261017000000_buddy_brain_slots.sql` adds seven catalogue rows and is NOT applied. Gemini keeps its existing row.
+- No key is shown, stored in chat, or logged. No UI yet (slice 4). No thinking change yet (slice 2).
