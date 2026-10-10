@@ -119,8 +119,8 @@ describe('Phase C freeze 8: Buddy does not say Google is the only brain', () => 
     expect(think).toMatch(/rejected: "Gemini, Buddy's first brain, rejected the saved key\./);
   });
 
-  it('the probe says which brain it checked', () => {
-    expect(think).toMatch(/action, brain: "gemini", model: BUDDY_GEMINI_MODEL/);
+  it('the probe says which brain answered (the chain walks every saved brain)', () => {
+    expect(think).toMatch(/action, brain: answer\.brain, model: answer\.model/);
   });
 
   it('the stale "Gemini below" comment is gone, and the ask path goes through the brain chain', () => {

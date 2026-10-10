@@ -8,7 +8,7 @@ import { feedbackLine } from "./buddyFeedback.ts";
 import { REFUSAL_LINE, refusedRequest } from "./buddyOrderPolicy.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
-import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure } from "./brainChain.ts";
+import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure, type BrainPorts } from "./brainChain.ts";
 import { stateFactsBlock, type BuddyStateFacts } from "./buddyStateFacts.ts";
 import {
   ASK_WHICH_MIND_LINE,
@@ -303,7 +303,7 @@ async function discardBody(response: Response): Promise<void> {
   }
 }
 
-function probeStatusFor(outcome: ThinkOutcome): "invalid" | "rate_limited" | "unavailable" {
+function probeStatusFor(outcome: BrainFailure): "invalid" | "rate_limited" | "unavailable" {
   if (outcome === "rejected") return "invalid";
   if (outcome === "rate_limited") return "rate_limited";
   return "unavailable";
@@ -395,6 +395,11 @@ async function answerRouted(
   return { status: 200, body: { ok: true, action, route: route.kind, reply, saved, ...(runStart ? { run_start: true } : {}) } };
 }
 
+/** The ports the brain chain needs, from the deps. One place, so the probe and chat read keys the same way. */
+function brainPortsFrom(deps: Pick<BuddyThinkDeps, "readSecret" | "fetchImpl" | "askGemini">): BrainPorts {
+  return { readSecret: deps.readSecret, fetchImpl: deps.fetchImpl, askGemini: deps.askGemini };
+}
+
 export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): Promise<ThinkResponse> {
   if (!isRecord(payload) || Object.keys(payload).some((key) => !ALLOWED_KEYS.includes(key))) {
     return fail(400, "invalid_request", "Only an action, a message and a chat id are accepted.");
@@ -409,8 +414,9 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   }
 
   if (action === "probe") {
-    const key = await deps.readKey();
-    if (!key) {
+    // The probe walks the same brain chain as a chat answer. Any brain with a saved key is enough.
+    const ports = brainPortsFrom(deps);
+    if (!(await anyBrainSaved(ports))) {
       return { status: 200, body: { ok: false, action, reason: "no_key", message: NO_KEY_MESSAGE, can_think: false } };
     }
     const allowed = await deps.allowCall("probe");
@@ -421,13 +427,21 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
         : "You have asked Buddy a lot in a short time. Wait a few minutes and try again.";
       return { status: 200, body: { ok: false, action, reason, message, can_think: false } };
     }
-    // The probe checks Gemini only (Buddy's first brain). It says so in the answer.
-    const result = await deps.askGemini(key, { system: BUDDY_SYSTEM_INSTRUCTION, turns: [{ role: "user", text: BUDDY_TEST_PROMPT }] });
-    await deps.recordProbe(result.ok ? "ok" : probeStatusFor(result.outcome));
-    if (result.ok) {
-      return { status: 200, body: { ok: true, action, brain: "gemini", model: BUDDY_GEMINI_MODEL, reply: result.text, can_think: true } };
+    const answer = await askBrains({ system: BUDDY_SYSTEM_INSTRUCTION, turns: [{ role: "user", text: BUDDY_TEST_PROMPT }] }, ports);
+    // The stored probe status belongs to the Google key only. Other brains do not write it.
+    const probedGoogle = answer.ok ? answer.brain === "gemini" : answer.tried.length === 1 && answer.tried[0] === "gemini";
+    if (answer.ok) {
+      if (probedGoogle) await deps.recordProbe("ok");
+      return { status: 200, body: { ok: true, action, brain: answer.brain, model: answer.model, reply: answer.text, can_think: true } };
     }
-    return { status: 200, body: { ok: false, action, brain: "gemini", reason: result.outcome, message: OUTCOME_MESSAGES[result.outcome], can_think: false } };
+    if (answer.reason === "none_saved") {
+      return { status: 200, body: { ok: false, action, reason: "no_key", message: NO_KEY_MESSAGE, can_think: false } };
+    }
+    if (probedGoogle && answer.lastOutcome !== "unreadable" && answer.lastOutcome !== "none_saved") {
+      await deps.recordProbe(probeStatusFor(answer.lastOutcome));
+    }
+    const failure = failureNotice(answer.lastOutcome, answer.tried);
+    return { status: 200, body: { ok: false, action, reason: failure.reason, message: failure.message, can_think: false } };
   }
 
   if (action === "briefing") {
@@ -511,7 +525,7 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   if (route.kind !== "chat") return answerRouted(chatId, title, message, route, action, deps);
 
   // Any saved brain is enough. The chain below walks them in order and skips the empty ones.
-  const brainPorts = { readSecret: deps.readSecret, fetchImpl: deps.fetchImpl, askGemini: deps.askGemini };
+  const brainPorts = brainPortsFrom(deps);
   if (!(await anyBrainSaved(brainPorts))) {
     const saved = await deps.saveMessage(chatId, "owner", "reply", message);
     if (!saved) return fail(503, "not_saved", SAVE_FAILED_MESSAGE);
