@@ -467,3 +467,12 @@ What is still not done, or not verified:
 - No tabs, no chat rebuild, no TSX changes.
 - Not done here: the sign-in notice (`BuddyAccessGate.tsx`) still uses the site's shared Tailwind classes, which look like the Admin sign-in. Changing it needs a class edit in TSX, so it was left for the owner to decide.
 - Not proven by eye: no browser was available in the sandbox, so the look was checked through the stylesheet and its tests, not a screenshot.
+
+## Phase 9 slice 5: learning times
+
+- The Strategist now reads what worked. The day run ranks each channel's offered posting windows by measured successful posts over the last 90 days. A measured post is a pack the owner marked "I posted this" or a door send that really went out. RSS pings are never counted.
+- Only windows that reach a top country count: US, UK, Canada, Australia, Ireland, New Zealand, Singapore.
+- Fewer than 10 measured posts, or a failed read, keeps the current windows. The day's log says so in plain words.
+- The ranking only reorders the windows a channel already offers. It never adds one, so the Auditor's offered-window check is unchanged. Packs still say "ready to post by hand".
+- The reader is `readWindowLearning` in `minds-run-placement/index.ts`. The pure rules are in `packCopy.ts` (`learnWindows`, `windowForTime`). Tests: `src/__tests__/windowLearning.test.ts`.
+- The video toolchain workflow now installs `espeak-ng` and checks its version. A video job already exists in `video-render-test.yml`, so the install stays in that workflow.

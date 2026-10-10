@@ -48,15 +48,24 @@ export interface TimeWindow {
   id: string;
   label: string;
   utcHour: number;
+  /** The top countries this window reaches. A window counts for learning only when it reaches one of TOP_COUNTRIES. */
+  countries: readonly string[];
 }
 
+/** The countries the learning is measured for. Plain names, no city. */
+export const TOP_COUNTRIES: readonly string[] = ["US", "UK", "Canada", "Australia", "Ireland", "New Zealand", "Singapore"];
+/** Fewer measured posts than this, and the current windows stay as they are. */
+export const LEARN_MIN_POSTS = 10;
+/** How far back the measured posts are read. */
+export const LEARN_LOOKBACK_DAYS = 90;
+
 export const TIME_WINDOWS: readonly TimeWindow[] = [
-  { id: "us-east-morning", label: "Morning, US Eastern", utcHour: 13 },
-  { id: "uk-lunchtime", label: "Lunchtime, UK and Ireland", utcHour: 12 },
-  { id: "us-pacific-evening", label: "Evening, US Pacific", utcHour: 1 },
-  { id: "sg-evening", label: "Evening, Singapore", utcHour: 11 },
-  { id: "au-morning", label: "Morning, Australia Eastern", utcHour: 22 },
-  { id: "nz-morning", label: "Morning, New Zealand", utcHour: 21 },
+  { id: "us-east-morning", label: "Morning, US Eastern", utcHour: 13, countries: ["US", "Canada"] },
+  { id: "uk-lunchtime", label: "Lunchtime, UK and Ireland", utcHour: 12, countries: ["UK", "Ireland"] },
+  { id: "us-pacific-evening", label: "Evening, US Pacific", utcHour: 1, countries: ["US"] },
+  { id: "sg-evening", label: "Evening, Singapore", utcHour: 11, countries: ["Singapore"] },
+  { id: "au-morning", label: "Morning, Australia Eastern", utcHour: 22, countries: ["Australia"] },
+  { id: "nz-morning", label: "Morning, New Zealand", utcHour: 21, countries: ["New Zealand"] },
 ];
 
 /** The windows the picker offers for each channel. The first one is the suggestion. */
@@ -73,12 +82,23 @@ export interface TimeOption {
   utcHour: number;
 }
 
-export function timeOptionsFor(channel: PackChannel): TimeOption[] {
-  return CHANNEL_WINDOWS[channel].map((id) => TIME_WINDOWS.find((window) => window.id === id)!).map((window) => ({
-    id: window.id,
-    label: window.label,
-    utcHour: window.utcHour,
-  }));
+/**
+ * The windows a channel offers, best first. `ranked` (from learnWindows) only reorders them. It never adds a window,
+ * so the Auditor's offered-window check is the same as before. With no ranking, the current order is kept.
+ */
+export function timeOptionsFor(channel: PackChannel, ranked: readonly string[] = []): TimeOption[] {
+  const rank = (id: string) => {
+    const index = ranked.indexOf(id);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  return [...CHANNEL_WINDOWS[channel]]
+    .sort((a, b) => rank(a) - rank(b))
+    .map((id) => TIME_WINDOWS.find((window) => window.id === id)!)
+    .map((window) => ({
+      id: window.id,
+      label: window.label,
+      utcHour: window.utcHour,
+    }));
 }
 
 /** The suggested publishing time for one local day and channel, as UTC plus the plain label. Null for a bad day. */
@@ -86,9 +106,11 @@ export function suggestedTimeFor(
   channel: PackChannel,
   localDay: string,
   windowId?: string,
+  ranked: readonly string[] = [],
 ): { atUtc: string; label: string; windowId: string } | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(localDay)) return null;
-  const option = timeOptionsFor(channel).find((item) => item.id === (windowId ?? CHANNEL_WINDOWS[channel][0]));
+  const offered = timeOptionsFor(channel, ranked);
+  const option = offered.find((item) => item.id === (windowId ?? offered[0]?.id));
   if (!option) return null;
   const [year, month, day] = localDay.split("-").map(Number);
   const at = new Date(Date.UTC(year, month - 1, day, option.utcHour, 0, 0));
@@ -269,4 +291,62 @@ export async function planPackCopy(
   const verdict = auditCopy(copy, products);
   if (verdict.verdict === "block") return { status: "blocked", detail: verdict.fix, copy, verdict };
   return { status: "planned", detail: verdict.fix, copy, verdict };
+}
+
+/**
+ * The window a posting time belongs to: the one whose UTC hour it is within half an hour of (a time from :30 counts for the next hour).
+ * Null for a time that is not a real date, or that is not near any window.
+ */
+export function windowForTime(atUtc: string): TimeWindow | null {
+  const at = new Date(atUtc);
+  if (Number.isNaN(at.getTime())) return null;
+  const hour = (at.getUTCHours() + (at.getUTCMinutes() >= 30 ? 1 : 0)) % 24;
+  return TIME_WINDOWS.find((window) => window.utcHour === hour) ?? null;
+}
+
+export interface WindowLearning {
+  /** True only when enough measured posts were read. */
+  learned: boolean;
+  /** Measured posts that landed in a window that reaches a top country. */
+  measured: number;
+  /** Window ids, best first. Empty when nothing was learned. */
+  ranked: string[];
+  /** One plain sentence for the owner's log. */
+  note: string;
+}
+
+/**
+ * Ranks the windows by measured successful posts (the owner's "I posted this" and door sends that really went out).
+ * Thin data, or a failed read, keeps the current windows, and the note says so. Pure: the times come in already read.
+ */
+export function learnWindows(successTimesUtc: readonly string[], readOk: boolean): WindowLearning {
+  if (!readOk) {
+    return { learned: false, measured: 0, ranked: [], note: "The measured posts could not be read. Keeping the current posting windows." };
+  }
+  const eligible = TIME_WINDOWS.filter((window) => window.countries.some((country) => TOP_COUNTRIES.includes(country)));
+  const counts = new Map<string, number>(eligible.map((window) => [window.id, 0]));
+  let measured = 0;
+  for (const at of successTimesUtc) {
+    const window = windowForTime(at);
+    if (!window || !counts.has(window.id)) continue;
+    counts.set(window.id, (counts.get(window.id) ?? 0) + 1);
+    measured += 1;
+  }
+  if (measured < LEARN_MIN_POSTS) {
+    const noun = measured === 1 ? "post" : "posts";
+    return {
+      learned: false,
+      measured,
+      ranked: [],
+      note: `Only ${measured} measured ${noun} so far, and ${LEARN_MIN_POSTS} are needed. Keeping the current posting windows.`,
+    };
+  }
+  const ranked = eligible.map((window) => window.id).sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
+  const top = eligible.find((window) => window.id === ranked[0]);
+  return {
+    learned: true,
+    measured,
+    ranked,
+    note: `Ranked ${measured} measured posts. Best window so far: ${top ? top.label : "none"}.`,
+  };
 }

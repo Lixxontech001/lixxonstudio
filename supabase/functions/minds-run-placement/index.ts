@@ -13,6 +13,7 @@ import { makeMindThink } from "../_shared/mindThink.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
+import { LEARN_LOOKBACK_DAYS, learnWindows, type WindowLearning } from "../_shared/packCopy.ts";
 import { doorFailNotices, runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
 import { NO_DEVICE_COPY, PUSH_HELP_COPY, notifyOwnerDevices, shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
 import type { PushTarget, VapidCredentials } from "../_shared/webPush.ts";
@@ -585,6 +586,27 @@ async function runDoorsForDay(
 }
 
 /** Makes today's gated packs for one article, through the pack door. Reads the site first; nothing is read when Takeover is off. */
+/**
+ * Reads the owner's measured successful posts over the lookback (packs marked "I posted this", and door sends that really went out,
+ * RSS pings excluded) and ranks the posting windows. Any failed read keeps the current windows.
+ */
+async function readWindowLearning(sb: SupabaseClient, owner: string, now: Date): Promise<WindowLearning> {
+  const since = new Date(now.getTime() - LEARN_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const [packs, doors] = await Promise.all([
+    sb.from("minds_packs").select("posted_at").eq("owner_id", owner).eq("status", "posted_by_owner").gte("posted_at", since).limit(5000),
+    sb.from("minds_door_posts").select("door,posted_at").eq("owner_id", owner).eq("status", "posted").gte("posted_at", since).limit(5000),
+  ]);
+  if (packs.error || doors.error) return learnWindows([], false);
+  const times: string[] = [];
+  for (const row of packs.data ?? []) if (typeof row.posted_at === "string") times.push(row.posted_at);
+  for (const row of doors.data ?? []) {
+    const name = row.door;
+    if (typeof name !== "string" || isRssDoor(name) || typeof row.posted_at !== "string") continue;
+    times.push(row.posted_at);
+  }
+  return learnWindows(times, true);
+}
+
 async function runPacksForDay(
   sb: SupabaseClient,
   owner: string,
@@ -622,8 +644,9 @@ async function runPacksForDay(
     priceUsd: typeof row.price_cents === "number" ? row.price_cents / 100 : null,
   }));
   let readyPacks = 0;
+  const learning = await readWindowLearning(sb, owner, new Date());
   const result = await runDayPacks(
-    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0 },
+    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0, learning },
     {
       think,
       checkImage: (cover, origin) => checkArticleImage(cover, origin),

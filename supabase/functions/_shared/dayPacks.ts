@@ -36,6 +36,8 @@ export interface DayPacksInput {
   siteOrigin: string | null;
   /** True when this day already has packs. The run then does nothing, so it is safe to repeat. */
   alreadyMade: boolean;
+  /** Learned window order from measured posts. Absent or not learned: the current windows are kept. */
+  learning?: { learned: boolean; ranked: string[]; note: string } | null;
 }
 
 /** One pack row, as the database's pack door takes it. */
@@ -133,7 +135,7 @@ export async function runDayPacks(input: DayPacksInput, ports: DayPacksPorts): P
   let saved = 0;
   const rows: PackRow[] = [];
   for (const channel of PACK_CHANNELS) {
-    const time = suggestedTimeFor(channel, input.localDay);
+    const time = suggestedTimeFor(channel, input.localDay, undefined, input.learning?.learned ? input.learning.ranked : []);
     if (!time) return { status: "failed", detail: "The day is not valid. Nothing was saved.", saved, postId: source.id };
     const auditorBlocked = verdict.blockedChannels.includes(channel);
     const text = textFor(channel, copy);
@@ -175,7 +177,8 @@ export async function runDayPacks(input: DayPacksInput, ports: DayPacksPorts): P
   const ready = rows.filter((row) => row.status === "ready").length;
   const reasons = [...new Set(rows.map((row) => row.blockedReason).filter((reason): reason is string => Boolean(reason)))];
   const blockedText = rows.length - ready > 0 ? ` Blocked: ${reasons.join("; ")}.` : "";
-  const detail = clip(`Made today's packs for "${source.title}": ${saved} saved, ${ready} ready to post by hand.${blockedText}`, 500);
+  const learnText = input.learning ? ` ${input.learning.note}` : "";
+  const detail = clip(`Made today's packs for "${source.title}": ${saved} saved, ${ready} ready to post by hand.${blockedText}${learnText}`, 500);
   await ports.log({ mind: "executioner", action: "Made today's packs", outcome: "done", detail });
   return { status: "done", detail, saved, postId: source.id };
 }
