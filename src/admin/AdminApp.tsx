@@ -151,11 +151,11 @@ export default function AdminApp() {
   const renderPage = () => {
     switch (routeName) {
       case 'admin-automation-keys':
-        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading automation keys…</div>}><AutomationKeys /></Suspense>;
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading Keys…</div>}><AutomationKeys /></Suspense>;
       case 'admin-automation-brains':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading brains…</div>}><AutomationBrains /></Suspense>;
       case 'admin-automation-check':
-        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading System Check…</div>}><AutomationCheck /></Suspense>;
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading Check…</div>}><AutomationCheck /></Suspense>;
       case 'admin-automation-articles':
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading article queue…</div>}><ArticleQueueCalendar /></Suspense>;
       case 'admin-automation-runs':

@@ -35,7 +35,7 @@ export default function AdminLogin() {
             <Lock size={22} strokeWidth={1.5} className="text-bronze" />
           </div>
           <h1 className="font-serif text-2xl text-white">Lixxon Studio</h1>
-          <p className="text-gray-500 text-sm mt-1 tracking-wider uppercase">Editorial CMS</p>
+          <p className="text-gray-500 text-sm mt-1 tracking-wider uppercase">Admin</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -352,7 +352,7 @@ export default function AutomationRuns() {
               <div className="flex items-center gap-2"><AlertTriangle size={17} className="text-bronze" aria-hidden="true" /><h2 className="font-semibold text-charcoal">Failure-alert delivery</h2></div>
               <p className="mt-2 text-sm text-gray-700">Email via Resend: <strong>{monitor.notifications.emailConfigured ? 'Configured' : 'Not configured'}</strong> · Telegram fallback: <strong>{monitor.notifications.telegramConfigured ? 'Configured' : 'Not configured'}</strong></p>
               {!monitor.notifications.emailConfigured && !monitor.notifications.telegramConfigured && (
-                <p className="mt-1 text-xs leading-5 text-amber-900">No alert destination is ready. Add a Resend API key for owner email or configure both Telegram bot token and chat ID in Automation Keys. Alerts contain only the run ID and safe failure code.</p>
+                <p className="mt-1 text-xs leading-5 text-amber-900">No alert destination is ready. Add a Resend API key for owner email or configure both Telegram bot token and chat ID in Keys. Alerts contain only the run ID and safe failure code.</p>
               )}
             </div>
           </section>
@@ -384,7 +384,7 @@ export default function AutomationRuns() {
                             <p><strong>Dispatch retries:</strong> {run.dispatchRetries} · Attempt {run.workflowAttempt ?? '—'}</p>
                           </div>
                           {errorLabel && <p className="mt-3 inline-flex items-center gap-2 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-900"><AlertTriangle size={14} aria-hidden="true" />Safe failure: {errorLabel}</p>}
-                          {run.workflowUrl && <p className="mt-2"><a href={run.workflowUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm text-bronze underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze">View GitHub Actions run</a></p>}
+                          {run.workflowUrl && <p className="mt-2"><a href={run.workflowUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm text-bronze underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze">View the run on GitHub</a></p>}
                           {run.finalUrls.map(url => <p key={url}><a href={url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm text-bronze underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze">Open published article</a></p>)}
                         </div>
                         <div className="flex flex-wrap gap-2 sm:justify-end">

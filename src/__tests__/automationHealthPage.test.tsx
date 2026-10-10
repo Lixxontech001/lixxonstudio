@@ -48,7 +48,7 @@ describe('Automation System Check page', () => {
     await act(async () => { root.render(<AutomationCheck />); await Promise.resolve(); });
     await settle();
 
-    expect(el.textContent).toContain('System Check');
+    expect(el.textContent).toContain('Check');
     expect(el.textContent).toContain('Database & migrations');
     expect(el.textContent).toContain('No AI provider keys are stored.');
     expect(el.textContent).toContain('Distribution is off; channel connectivity is not yet configured.');

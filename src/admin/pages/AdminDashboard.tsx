@@ -58,7 +58,7 @@ export default function AdminDashboard() {
     can('ops.health') && { label: 'Health & issues', hint: `${issues.length} open`, route: 'admin-health', icon: HeartPulse },
     can('analytics.read') && { label: 'Advisor', hint: `${(advisor.data as Suggestion[] | null)?.length || 0} suggestions`, route: 'admin-advisor', icon: Lightbulb },
     can('analytics.read') && { label: 'Growth & SEO', hint: 'traffic, search, revenue', route: 'admin-growth', icon: TrendingUp },
-    can('data.explore') && { label: 'Data explorer', hint: metrics.data ? `${metrics.data.database_pretty} used` : 'browse tables', route: 'admin-data', icon: Database },
+    can('data.explore') && { label: 'Data', hint: metrics.data ? `${metrics.data.database_pretty} used` : 'browse tables', route: 'admin-data', icon: Database },
     can('settings.frontend') && { label: 'Front end', hint: 'nav, theme, SEO', route: 'admin-frontend', icon: Palette },
   ].filter(Boolean) as { label: string; hint: string; route: string; icon: typeof FileText }[];
 

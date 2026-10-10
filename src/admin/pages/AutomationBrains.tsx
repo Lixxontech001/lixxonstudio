@@ -71,7 +71,7 @@ export default function AutomationBrains() {
       setNotice({ tone: 'warning', message: `Paste the ${row.keyLabel.toLowerCase()} for ${row.slot.label} before saving. The value is never shown again after a save attempt.` });
       return;
     }
-    if (isSaved(row.keyName) && !window.confirm(`Replace the stored ${row.slot.label} key? The current Vault value will be permanently replaced.`)) return;
+    if (isSaved(row.keyName) && !window.confirm(`Replace the saved ${row.slot.label} key? The current value will be permanently replaced.`)) return;
 
     // Clear the boxes before the RPC runs, so a failed save never leaves the value in the form.
     setDrafts((current) => {
@@ -85,11 +85,11 @@ export default function AutomationBrains() {
       for (const entry of pending) {
         const { error } = await supabase.rpc('automation_secret_save', { p_secret_name: entry.name, p_secret_value: entry.value });
         if (error) {
-          setNotice({ tone: 'error', message: `Could not save the ${row.slot.label} entry. Confirm owner access and Vault availability, then paste it again.` });
+          setNotice({ tone: 'error', message: `Could not save the ${row.slot.label} key. Confirm owner access, then paste it again.` });
           return;
         }
       }
-      setNotice({ tone: 'success', message: `${row.slot.label} saved in Supabase Vault. The saved value cannot be viewed here.` });
+      setNotice({ tone: 'success', message: `${row.slot.label} saved. It cannot be shown again.` });
       await refresh();
     } catch {
       setNotice({ tone: 'error', message: `Could not save the ${row.slot.label} entry. No value was kept in the form; check the connection and paste it again.` });

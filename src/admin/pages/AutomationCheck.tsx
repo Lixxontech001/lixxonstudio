@@ -128,7 +128,7 @@ export default function AutomationCheck() {
             <ShieldCheck size={18} aria-hidden="true" />
             <span className="text-xs font-semibold uppercase tracking-[0.18em]">Automation diagnostics</span>
           </div>
-          <h1 className="font-serif text-3xl text-charcoal">System Check</h1>
+          <h1 className="font-serif text-3xl text-charcoal">Check</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
             Read-only evidence from the database and recorded job metadata. This page does not contact providers,
             enable switches, dispatch jobs, publish content, or expose credential values.
@@ -166,7 +166,7 @@ export default function AutomationCheck() {
         </div>
       ) : snapshot && (
         <>
-          <section aria-label="System check summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <section aria-label="Check summary" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {DISPLAY_STATUSES.map(status => (
               <div key={status} className={`rounded-sm border p-3 ${STATUS_CLASSES[status]}`}>
                 <p className="text-xs uppercase tracking-wide">{STATUS_LABELS[status]}</p>
