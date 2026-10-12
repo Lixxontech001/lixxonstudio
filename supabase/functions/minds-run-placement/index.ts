@@ -995,15 +995,16 @@ async function runCompetitorsForDay(sb: SupabaseClient, owner: string, localDay:
       },
     },
   );
-  if (result.status === "held" || result.read === 0) return;
-  // One row for the day's read, then one row for each page that really changed.
+  if (result.status !== "done") return;
+  // One row for the day's read, then one row for each page that really changed. A day where no page could be read is
+  // told as a skip, with the step's own reasons, so a rival step that did nothing is never silent about it.
   await sb.from("minds_daily_log").insert({
     owner_id: owner,
     day: localDay,
     mind: "executioner",
     action: "Read the rival pages",
-    outcome: "done",
-    detail: clip(result.detail, 500),
+    outcome: result.read > 0 ? "done" : "skipped",
+    detail: clip(result.read > 0 ? result.detail : lines.join(" ") || result.detail, 500),
     order_id: null,
   });
   for (const change of result.changes) {

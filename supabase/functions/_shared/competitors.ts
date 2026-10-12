@@ -103,7 +103,7 @@ export interface CompetitorRunPorts {
 }
 
 export interface CompetitorRunResult {
-  status: "held" | "nothing_to_do" | "done";
+  status: "held" | "nothing_to_do" | "done" | "failed";
   detail: string;
   read: number;
   changes: CompetitorChange[];
@@ -279,7 +279,13 @@ export async function runCompetitorReads(input: CompetitorRunInput, ports: Compe
   try {
     readToday = await ports.readReadToday();
   } catch {
-    readToday = new Set();
+    // Today's reads could not be read. Nothing is guessed and no page is read twice: the step stops and says so.
+    return {
+      status: "failed",
+      detail: "The pages already read today could not be read, so no page was read this run. Nothing is claimed about any of them.",
+      read: 0,
+      changes: [],
+    };
   }
   const planned = planCompetitorReads(saved, readToday);
   if (planned.length === 0) return { status: "nothing_to_do", detail: WATCH_NOTHING_TODAY, read: 0, changes: [] };
