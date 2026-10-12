@@ -9,7 +9,8 @@ const DOORS_STEP = RUN.slice(RUN.indexOf('async function runDoorsSafely'), RUN.i
 describe('the free doors step is part of the day run, behind the same gates', () => {
   it('the day run calls the door step after placement and packs', () => {
     const doorsCall = RUN.indexOf('await runDoorsSafely(sb, owner, localDay, takeover, killScope, pausedDoors)');
-    const packsCall = RUN.indexOf('await runPacksForDay(sb, owner, localDay, takeover, killScope, think)');
+    // Phase I slice 4: the packs step is also handed the captions the owner drafted in the chat today.
+    const packsCall = RUN.indexOf('await runPacksForDay(sb, owner, localDay, takeover, killScope, think,');
     expect(doorsCall).toBeGreaterThan(0);
     expect(packsCall).toBeGreaterThan(doorsCall);
   });

@@ -666,3 +666,28 @@ One daily-log row, one notable event (which buzzes the phone), one briefing line
 - Missing VAPID or no device: the push helper writes its skip row as before, the briefing now shows
   `pushSkipLine(detail)` under Problems, and a skipped buzz keeps the day from being "Quiet". Nothing claims sent.
 - Migration `20261022000000_minds_act_kinds.sql` (not applied) allows the four new kinds in the table check.
+
+## Phase I slice 4: memory, the four captions, and a product that looks dead
+
+**Memory.** A mind remembers three things, and nothing else: the facts (the site numbers read for this run), the last
+thing the owner was told (with the day it was told), and the owner's own chat. `supabase/functions/_shared/mindMemory.ts`
+builds the one block the Monday clock hands the minds, and `runMindPipeline` puts it in front of every thinking mind
+with the facts. The rule that comes with memory: the same telling is never made twice. The shop scan and the run's own
+acts pass every plan through `freshTellings`, so a spike, a drop or a dead product the owner has already heard writes
+nothing, buzzes nothing, and does not read as news in the briefing or the night report. When everything to tell was
+already told, the day is `Quiet since you left.` The briefing also prints the same telling only once.
+
+**The four captions.** An order about captions ("Write the captions for the pack") is filed for the Executioner as
+before, and Buddy also drafts the four captions **in the chat, at any time**, with Takeover on or off: a draft is
+talk, not a change. `supabase/functions/_shared/chatCaptions.ts` uses the pack's own prompt and the pack's own Auditor,
+and the four stay four (Instagram, TikTok, Facebook, Pinterest, each with words, no two the same). The draft is saved
+into the chat with its day. The day's pack step reads today's draft and uses it for its own article instead of writing
+new captions, and that step runs only while Takeover is on, so a draft reaches a pack only when Takeover is on. The
+four rows of a pack stay four, and nothing is ever posted for the owner.
+
+**A product that looks dead.** `supabase/functions/_shared/deadProducts.ts` says a product looks dead only when it had
+no paid order this week and none the 7 days before, and only when it has been on sale through both weeks: never day
+one, never on a date that cannot be read. The day run counts paid order items per product for the two windows, reports
+each finding through the act list (`product_looks_dead`), and names at most two in a day. Buddy never deletes a
+product: the words say so, and the owner decides to write an article that fits it or make a new product himself. The
+finding is told once, and the owner's memory is what stops the repeat.

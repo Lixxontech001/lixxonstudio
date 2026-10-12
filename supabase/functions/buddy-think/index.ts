@@ -16,6 +16,9 @@ import { type MindLogLine, type MindName } from "../_shared/buddyRouter.ts";
 import { controlChange, controlDoneLine, type ControlAction } from "../_shared/buddyControls.ts";
 import { ownerClock } from "../_shared/mindsNightReport.ts";
 import { anyTryableBrainConfigured } from "../_shared/brains.ts";
+import { makeMindThink } from "../_shared/mindThink.ts";
+import { draftCaptionsInChat, pickCaptionSource, type CaptionArticle, type CaptionDraftResult } from "../_shared/chatCaptions.ts";
+import type { ShopProduct } from "../_shared/productPlacement.ts";
 import { ownerNotablePorts, pushNewestNotable } from "../_shared/notablePushServer.ts";
 import { STATE_DOOR_LIMIT, STATE_LOG_LIMIT, STATE_NOTABLE_LIMIT, STATE_ORDER_LIMIT, type BuddyStateFacts } from "../_shared/buddyStateFacts.ts";
 import {
@@ -510,6 +513,59 @@ Deno.serve(async (req: Request) => {
       return null;
     }
   };
+  // The minds' own door to the brains, used for the chat's caption draft: the same prompt and the same Auditor as
+  // the day's packs. A brain with no saved key is skipped, exactly as it is in the run.
+  const captionThink = makeMindThink(readSecret);
+
+  /**
+   * The article and the products a caption draft is written for: the newest published article with a live product and
+   * a clean address, and the pack's own first three products. Read-only, in the owner's own session. Null when no
+   * article is ready yet, and then Buddy says so rather than drafting.
+   */
+  const readCaptionSource = async () => {
+    try {
+      const [articles, slots, products] = await Promise.all([
+        userClient
+          .from("posts")
+          .select("id,title,slug")
+          .eq("status", "published")
+          .order("published_at", { ascending: false })
+          .limit(SITE_ARTICLE_LIMIT),
+        userClient
+          .from("post_product_slots")
+          .select("post_id,product_id")
+          .eq("owner_id", user.id)
+          .is("removed_at", null),
+        userClient
+          .from("products")
+          .select("id,name,is_digital,price_cents")
+          .eq("is_active", true)
+          .or("currency.eq.USD,currency.is.null")
+          .limit(SITE_PRODUCT_LIMIT),
+      ]);
+      if (articles.error || slots.error || products.error) return null;
+      const articleRows = (Array.isArray(articles.data) ? articles.data : []) as Array<Record<string, unknown>>;
+      const shop: ShopProduct[] = (Array.isArray(products.data) ? products.data : []).map((row: Record<string, unknown>) => ({
+        id: String(row.id),
+        name: String(row.name ?? ""),
+        isDigital: row.is_digital === true,
+        priceUsd: typeof row.price_cents === "number" ? row.price_cents / 100 : null,
+      }));
+      const articleList: CaptionArticle[] = articleRows.map((row) => ({
+        id: String(row.id),
+        title: String(row.title ?? ""),
+        slug: typeof row.slug === "string" ? row.slug : null,
+      }));
+      const slotList = (Array.isArray(slots.data) ? slots.data : []).map((row: Record<string, unknown>) => ({
+        postId: String(row.post_id),
+        productId: String(row.product_id),
+      }));
+      return pickCaptionSource(articleList, slotList, shop);
+    } catch {
+      return null;
+    }
+  };
+
   const deps: BuddyThinkDeps = {
     keyConfigured: async () => keyConfigured,
     // One pause, stop or start change, made in the owner's session (row-level security), then one daily-log line.
@@ -547,6 +603,12 @@ Deno.serve(async (req: Request) => {
       }
     },
     readSecret,
+    // The four captions, drafted in this chat at any time (Phase I slice 4). Talk only: it reads the site and the
+    // brain, and writes nothing but the chat. Takeover decides what the tell line says, never whether it may draft.
+    draftCaptions: async ({ takeover }): Promise<CaptionDraftResult> => {
+      const source = await readCaptionSource();
+      return draftCaptionsInChat(source, captionThink, takeover);
+    },
     // One plain-words line per answered question: which brain answered. Never names a key.
     logBrain: async (line: string) => {
       const now = new Date().toISOString();

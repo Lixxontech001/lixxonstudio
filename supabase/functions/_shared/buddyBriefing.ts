@@ -6,6 +6,7 @@ import { DOORS, isDoorId } from "./doorRegistry.ts";
 import { HONEST_SKIP_LINE_LIMIT, isHonestSkip } from "./honestSkips.ts";
 import { isRssDoor } from "./rssHub.ts";
 import { weekSentence, type WeekFacts } from "./buddyWeek.ts";
+import { sayKey } from "./mindMemory.ts";
 
 export const QUIET_LINE = "Quiet since you left.";
 /** A first visit has no earlier "left" time, so Buddy looks back this far. */
@@ -283,14 +284,22 @@ export function briefingNotables(rows: Array<{ kind?: unknown; title?: unknown; 
 /** One plain line per notable of the given kinds, newest first. A door failure shows its own sentence, which names the door. */
 function notableLines(notables: BriefingFacts["notables"], kinds: string[]): string[] {
   if (!notables || !notables.ok) return [];
-  return notables.rows
-    .filter((row) => kinds.includes(row.kind))
-    .slice(0, NOTABLE_LINE_LIMIT)
-    .map((row) => {
-      const detail = row.detail.trim();
-      if (detail && NOTABLE_DETAIL_LINE_KINDS.includes(row.kind)) return detail.slice(0, DOOR_NOTE_LIMIT);
-      return `${clipTitle(row.title).replace(/[.!?]+$/, "")}.`;
-    });
+  const lines: string[] = [];
+  const said = new Set<string>();
+  for (const row of notables.rows) {
+    if (!kinds.includes(row.kind)) continue;
+    const detail = row.detail.trim();
+    const line = detail && NOTABLE_DETAIL_LINE_KINDS.includes(row.kind)
+      ? detail.slice(0, DOOR_NOTE_LIMIT)
+      : `${clipTitle(row.title).replace(/[.!?]+$/, "")}.`;
+    // Memory: the same telling is shown once, however many rows say it. The owner is never told the same thing twice.
+    const key = sayKey(line);
+    if (key && said.has(key)) continue;
+    if (key) said.add(key);
+    lines.push(line);
+    if (lines.length >= NOTABLE_LINE_LIMIT) break;
+  }
+  return lines;
 }
 
 function problemLines(failures: BriefingFacts["failures"], minds: BriefingMindRow[], packs: BriefingPack[], notables: BriefingFacts["notables"]): string[] {

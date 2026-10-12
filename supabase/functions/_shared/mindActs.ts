@@ -102,7 +102,7 @@ export function productLooksDeadAct(productName: string, thisWeek: number, lastW
     mind: "strategist",
     action: `"${clip(productName, 60)}" looks dead`,
     title: `Looks dead: "${clip(productName, 60)}"`,
-    detail: `Paid orders: ${thisWeek} this week and ${lastWeek} last week. Nothing was deleted. You decide: refresh it, or write an article that fits it.`,
+    detail: `Paid orders: ${thisWeek} this week and ${lastWeek} last week. Nothing was deleted. You decide: write an article that fits it, or make a new product yourself.`,
     outcome: "done",
     key: `product_looks_dead:${productName}:${day}`,
   };

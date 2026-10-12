@@ -5,6 +5,7 @@
 
 import { cleanLine } from "./buddySiteFacts.ts";
 import { planWeekNotables, type WeekFacts } from "./buddyWeek.ts";
+import { freshTellings, wasTold, type ToldTelling } from "./mindMemory.ts";
 
 export const SALES_LOOKBACK_HOURS = 48;
 export const ORDER_READ_LIMIT = 200;
@@ -54,11 +55,18 @@ export interface NotablePorts {
   logLine?(plan: NotablePlan): Promise<void>;
   /** This week (last 7 days) against last week (the 7 days before), paid orders and article views. Optional. */
   readWeekCounts?(now: Date): Promise<WeekFacts | null>;
+  /**
+   * The tellings the owner has already heard, newest first (Phase I slice 4). Optional: with it, the same thing is
+   * never told twice. A failed read leaves every plan fresh, so nothing is lost by a memory that cannot be read.
+   */
+  readTold?(): Promise<ToldTelling[] | null>;
 }
 
 export interface ScanResult {
   written: number;
   skipped: number;
+  /** Tellings that were left out because the owner had already heard the same words. Memory, not silence. */
+  retold: number;
   /** Which reads could not be made. Those parts were not written; the rest still was. */
   unreadable: string[];
 }
@@ -174,9 +182,23 @@ export async function scanNotableSources(ports: NotablePorts, window: ScanWindow
     else plans.push(...planWeekNotables(week, window.localDay));
   }
 
+  // Memory first: the same telling is never made twice, so a spike the owner has already heard writes nothing,
+  // buzzes nothing and does not read as news in the briefing or the night report.
+  let retold = 0;
+  let fresh = plans;
+  if (ports.readTold) {
+    const told = await safely(() => ports.readTold!());
+    if (told === null) unreadable.push("told");
+    else {
+      const remembered = freshTellings(plans, told);
+      fresh = remembered.fresh;
+      retold = remembered.retold;
+    }
+  }
+
   let written = 0;
   let skipped = 0;
-  for (const plan of plans) {
+  for (const plan of fresh) {
     try {
       if (await ports.record(plan)) {
         written += 1;
@@ -192,5 +214,10 @@ export async function scanNotableSources(ports: NotablePorts, window: ScanWindow
       skipped += 1;
     }
   }
-  return { written, skipped, unreadable };
+  return { written, skipped, retold, unreadable };
+}
+
+/** True when this telling was already made. Used by the day run for the acts it reports itself. */
+export function alreadyToldThis(title: string, told: readonly ToldTelling[]): boolean {
+  return wasTold(title, told);
 }

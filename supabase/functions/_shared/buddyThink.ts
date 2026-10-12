@@ -8,6 +8,8 @@ import { feedbackLine } from "./buddyFeedback.ts";
 import { closedOrderKind, gateModelOrder, type AllowedOrder } from "./buddyOrderPolicy.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
+import { captionAsk, draftPayload, type CaptionDraftResult } from "./chatCaptions.ts";
+import { ownerDayOf } from "./mindsNightReport.ts";
 import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure, type BrainPorts } from "./brainChain.ts";
 import { stateFactsBlock, type BuddyStateFacts } from "./buddyStateFacts.ts";
 import {
@@ -118,6 +120,11 @@ export interface BuddyThinkDeps {
   saveOrder(chatId: string, instruction: string, mind: MindName | null): Promise<boolean>;
   /** The newest log rows, optionally for one mind. Null when they cannot be read. */
   readMindLog(mind: MindName | null): Promise<MindLogLine[] | null>;
+  /**
+   * Drafts the four captions in this chat for a caption order (Phase I slice 4). Optional. It is talk, not a change,
+   * so it runs with Takeover on or off; it reads the site and the brain, and writes nothing but the chat.
+   */
+  draftCaptions?(input: { takeover: boolean | null; day: string }): Promise<CaptionDraftResult>;
   /** The Takeover switch as saved. Null when it cannot be read. Read only; a run never turns it on. */
   readTakeover(): Promise<boolean | null>;
   /** Read-only view of Takeover, the kill switch, waiting orders, recent mind steps and notable events. */
@@ -370,6 +377,8 @@ async function answerRouted(
 
   let reply: string;
   let runStart = false;
+  // A caption draft, when this order asked for one. Saved with the reply so today's pack step can use it.
+  let captionPayload: Record<string, unknown> | null = null;
   if (route.kind === "mind_log") {
     reply = answerFromLog(route.mind, await deps.readMindLog(route.mind));
   } else if (route.kind === "run_day") {
@@ -399,10 +408,27 @@ async function answerRouted(
     // An order the rules placed says so first, with the fit table when a second mind also fitted. Nothing is asked.
     const placed = route.routed ? `${routedOrderLine(route.mind, route.others ?? [])}\n` : "";
     reply = `${placed}${feedbackLine({ state: "waiting", takeover, mind: MIND_LABELS[route.mind] })}${isRestricted(route.instruction) ? ` ${RESTRICTED_LINE}` : ""}`;
+    // A caption order also gets the four captions drafted here and now. A draft is talk, so it works with Takeover
+    // off; it is stored in this chat only, and today's pack step may use it, and that step runs only while Takeover
+    // is on. Four captions stay four: the pack's own Auditor checks them before they are shown.
+    if (deps.draftCaptions && captionAsk(route.instruction)) {
+      try {
+        const day = ownerDayOf(deps.now().toISOString());
+        const draft = await deps.draftCaptions({ takeover, day });
+        if (draft.ok) {
+          reply = `${reply}\n\n${draft.lines.join("\n")}`;
+          captionPayload = draftPayload(day, draft.articleTitle, draft.copy);
+        } else {
+          reply = `${reply}\n\n${draft.line}`;
+        }
+      } catch {
+        // The draft is extra. A draft that could not be made never changes the order's own reply.
+      }
+    }
   }
-  const saved = await deps.saveMessage(chatId, "buddy", "reply", reply);
+  const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, captionPayload);
   await deps.touchChat(chatId, title);
-  return { status: 200, body: { ok: true, action, route: route.kind, reply, saved, ...(runStart ? { run_start: true } : {}) } };
+  return { status: 200, body: { ok: true, action, route: route.kind, reply, saved, ...(captionPayload ? { drafted: true } : {}), ...(runStart ? { run_start: true } : {}) } };
 }
 
 /** The ports the brain chain needs, from the deps. One place, so the probe and chat read keys the same way. */

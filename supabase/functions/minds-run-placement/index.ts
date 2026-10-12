@@ -16,16 +16,19 @@ import { makeMindThink } from "../_shared/mindThink.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
-import { LEARN_LOOKBACK_DAYS, learnWindows, type WindowLearning } from "../_shared/packCopy.ts";
+import { LEARN_LOOKBACK_DAYS, learnWindows, type PackCopy, type WindowLearning } from "../_shared/packCopy.ts";
 import { doorFailNotices, runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
 import { shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
-import { attemptRow, flushUnpushedNotables, ownerNotablePorts, pushNewestNotable, servicePushPorts, type NotableRow } from "../_shared/notablePushServer.ts";
+import { attemptRow, flushUnpushedNotables, ownerDayOf, ownerNotablePorts, pushNewestNotable, servicePushPorts, type NotableRow } from "../_shared/notablePushServer.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
-import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
+import { ORDER_READ_LIMIT, planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
 import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { orderOutcomeLine } from "../_shared/buddyFeedback.ts";
 import { LIVING_MINDS, STOPPED_ACTION, runLivingMinds, type LivingMindPorts } from "../_shared/buddyLivingMinds.ts";
-import { doorPostedAct, doorSkippedAct, packSavedAct, reportAct, type ActPorts } from "../_shared/mindActs.ts";
+import { doorPostedAct, doorSkippedAct, packSavedAct, reportAct, type ActPorts, type ActWords } from "../_shared/mindActs.ts";
+import { freshTellings, TOLD_LIMIT, type ToldTelling } from "../_shared/mindMemory.ts";
+import { deadProductWindows, planDeadProductActs, salesByProduct, type PaidItem, type ProductSales } from "../_shared/deadProducts.ts";
+import { draftFromPayload } from "../_shared/chatCaptions.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
 import { doorLogAction, isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
 import { DOOR_LABEL } from "../_shared/buddyControls.ts";
@@ -290,12 +293,24 @@ export async function handleRun(req: Request): Promise<Response> {
   for (const item of quiet) {
     await reportAct(doorSkippedAct(DOORS[item.door].label, item.detail, localDay), acts);
   }
+  // What the owner has already been told (Phase I slice 4). Read once, so the shop scan and the run's own acts
+  // agree on what is news: the same telling is never made twice, and a day with nothing new stays Quiet.
+  const told = await readToldTellings(sb, owner);
   // Shop facts the owner should hear about, then a placement job that really changed an article.
   // Each is written once (source keys). Neither can fail the day run.
   try {
-    await scanShopNotables(sb, owner, localDay);
+    await scanShopNotables(sb, owner, localDay, told);
   } catch {
     // The shop scan is extra. Nothing else in the run depends on it.
+  }
+  // A product that sold nothing this week and nothing last week: told through the act list, never deleted, and only
+  // once. Extra like the shop scan: a failure here never changes the day.
+  try {
+    for (const act of await scanDeadProducts(sb, localDay, told)) {
+      await reportAct(act, acts);
+    }
+  } catch {
+    // The dead-product check is extra. Nothing else in the run depends on it.
   }
   const job = planJobNotable(outcome.status, outcome.orderId);
   if (job) await recordNotable(sb, owner, localDay, job.mind, job.kind, job.title, job.detail, job.key);
@@ -314,7 +329,7 @@ export async function handleRun(req: Request): Promise<Response> {
   if (outcome.status === "cannot_think") {
     return out({ status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
   }
-  const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think);
+  const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think, await readCaptionDraft(sb, owner, localDay));
   const detail = clip(`${orderOutcomeLine(outcome.status, outcome.detail)} ${packs.detail} ${doors.detail}`, 800);
   return out({
     status: outcome.status,
@@ -323,6 +338,107 @@ export async function handleRun(req: Request): Promise<Response> {
     packs: { status: packs.status, saved: packs.saved },
     doors: doorsReply,
   });
+}
+
+/**
+ * Phase I slice 4: the tellings the owner has already heard, newest first. One read for the whole run, used by the
+ * shop scan and by the acts the run reports itself. A failed read returns an empty list: memory that cannot be read
+ * never silences a real telling.
+ */
+async function readToldTellings(sb: SupabaseClient, owner: string): Promise<ToldTelling[]> {
+  try {
+    const { data, error } = await sb
+      .from("minds_notable_events")
+      .select("title,detail,happened_at")
+      .eq("owner_id", owner)
+      .order("happened_at", { ascending: false })
+      .limit(TOLD_LIMIT);
+    if (error || !Array.isArray(data)) return [];
+    return (data as Array<Record<string, unknown>>)
+      .map((row) => ({
+        day: typeof row.happened_at === "string" ? ownerDayOf(row.happened_at) : "",
+        text: [typeof row.title === "string" ? row.title : "", typeof row.detail === "string" ? row.detail : ""].filter(Boolean).join(" "),
+      }))
+      .filter((item) => item.text.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Phase I slice 4: a product that sold nothing this week and nothing the 7 days before, and that has been on sale
+ * through both weeks. Buddy never deletes a product. Each finding is told through the act list, so it is logged and
+ * buzzed, and a finding the owner has already heard is not repeated. Never fails the run.
+ */
+async function scanDeadProducts(sb: SupabaseClient, localDay: string, told: readonly ToldTelling[]): Promise<ActWords[]> {
+  try {
+    const windows = deadProductWindows(new Date());
+    const [productRead, orderRead] = await Promise.all([
+      sb.from("products").select("id,name,created_at").eq("is_active", true).or("currency.eq.USD,currency.is.null").limit(SHOP_LIMIT),
+      sb
+        .from("orders")
+        .select("id,created_at")
+        .eq("payment_status", "paid")
+        .gte("created_at", windows.lastStart)
+        .order("created_at", { ascending: false })
+        .limit(ORDER_READ_LIMIT),
+    ]);
+    if (productRead.error || orderRead.error) return [];
+    const orderIds = (orderRead.data ?? []).map((row: Record<string, unknown>) => String(row.id ?? "")).filter(Boolean);
+    const orderAt = new Map<string, string>();
+    for (const row of orderRead.data ?? []) orderAt.set(String((row as Record<string, unknown>).id ?? ""), String((row as Record<string, unknown>).created_at ?? ""));
+    const items: PaidItem[] = [];
+    if (orderIds.length > 0) {
+      const { data, error } = await sb.from("order_items").select("order_id,product_id").in("order_id", orderIds).limit(2000);
+      if (error) return [];
+      for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+        items.push({ productId: typeof row.product_id === "string" ? row.product_id : null, at: orderAt.get(String(row.order_id ?? "")) ?? "" });
+      }
+    }
+    const sales = salesByProduct(items, windows);
+    const products: ProductSales[] = ((productRead.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+      const counted = sales.get(String(row.id));
+      return {
+        id: String(row.id),
+        name: String(row.name ?? ""),
+        createdAt: typeof row.created_at === "string" ? row.created_at : null,
+        paidThisWeek: counted?.thisWeek ?? 0,
+        paidLastWeek: counted?.lastWeek ?? 0,
+      };
+    });
+    // The same finding is never retold: memory holds what the owner has already heard, and only the new ones speak.
+    return freshTellings(planDeadProductActs(products, windows, localDay), told).fresh;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Phase I slice 4: the captions the owner drafted in the chat today, for today's pack. Read-only. Takeover is decided
+ * by the pack step's own rule; this only finds the draft. Null when there is none, or when it cannot be read.
+ */
+async function readCaptionDraft(sb: SupabaseClient, owner: string, localDay: string): Promise<{ articleTitle: string; copy: PackCopy } | null> {
+  try {
+    const { data: chats, error: chatError } = await sb.from("buddy_chats").select("id").eq("owner_id", owner).order("updated_at", { ascending: false }).limit(5);
+    if (chatError || !Array.isArray(chats) || chats.length === 0) return null;
+    const chatIds = (chats as Array<Record<string, unknown>>).map((row) => String(row.id ?? "")).filter(Boolean);
+    if (chatIds.length === 0) return null;
+    const { data, error } = await sb
+      .from("buddy_messages")
+      .select("payload,created_at")
+      .in("chat_id", chatIds)
+      .eq("payload->>kind", "caption_draft")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    if (error || !Array.isArray(data)) return null;
+    for (const row of data as Array<Record<string, unknown>>) {
+      const draft = draftFromPayload(row.payload);
+      if (draft && draft.day === localDay) return { articleTitle: draft.articleTitle, copy: draft.copy };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -726,6 +842,7 @@ async function runPacksForDay(
   takeover: boolean,
   killScope: KillScope,
   think: ReturnType<typeof makeMindThink>,
+  drafted: { articleTitle: string; copy: PackCopy } | null = null,
 ): Promise<DayPacksResult> {
   const siteOrigin = env("SITE_URL") || null;
   const [existing, articleRows, slotRows, productRows] = await Promise.all([
@@ -759,7 +876,7 @@ async function runPacksForDay(
   let blockedPacks = 0;
   const learning = await readWindowLearning(sb, owner, new Date());
   const result = await runDayPacks(
-    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0, learning },
+    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0, learning, draftedCopy: drafted },
     {
       think,
       checkImage: (cover, origin) => checkArticleImage(cover, origin),
@@ -812,9 +929,11 @@ async function runPacksForDay(
  * Reads the shop's paid orders, today's product clicks and sources, and writes what is new as notable events.
  * Only the day run calls this, so Takeover and Kill already allowed the run. Reads only; writes are notable rows.
  */
-async function scanShopNotables(sb: SupabaseClient, owner: string, localDay: string): Promise<ScanResult> {
+async function scanShopNotables(sb: SupabaseClient, owner: string, localDay: string, told: readonly ToldTelling[]): Promise<ScanResult> {
   const window = ownerDayWindow(localDay);
   const ports: NotablePorts = {
+    // Memory: a telling the owner has already heard is not written again (Phase I slice 4).
+    readTold: async (): Promise<ToldTelling[]> => [...told],
     readPaidOrders: async (sinceIso: string): Promise<OrderRow[] | null> => {
       const { data, error } = await sb
         .from("orders")

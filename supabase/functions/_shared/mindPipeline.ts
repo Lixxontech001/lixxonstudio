@@ -8,6 +8,8 @@
 // - A mind with a done row today is not run again today, so a second tick in the same morning thinks once.
 // - The three minds hand their work forward as one brief. The brief goes to the Executioner, which is told the day's
 //   plans in the minds' own words, not as a canned line.
+// - Every mind is given the facts and the memory (the last telling and the owner's own chat) as one block, and a
+//   telling the owner already heard is never made again: that rule lives in mindMemory.ts.
 // - Every live change the Executioner makes goes through the Auditor first. That check lives with the change
 //   (placementRun.ts for a product placement; the door send for a door post); the pipeline never skips it and never
 //   applies anything itself.
@@ -24,6 +26,7 @@ import {
   type LivingThinkResult,
 } from "./buddyLivingMinds.ts";
 import type { KillScope } from "./placementRun.ts";
+import { factsWithMemory } from "./mindMemory.ts";
 import { blockedDetail, TAKEOVER_OFF_DETAIL } from "./runDay.ts";
 
 /** The order the day runs in. The Executioner is last, because it acts. */
@@ -71,6 +74,11 @@ export interface PipelineInput {
   killScope: KillScope;
   /** Read-only site facts, already read by the caller. */
   facts: string;
+  /**
+   * What the minds remember, as one plain block: the facts, the last thing the owner was told, and the owner's own
+   * chat (Phase I slice 4). Optional, so a caller without memory still works; the minds then get the facts alone.
+   */
+  memory?: string | null;
   /** The owner's waiting orders, in the owner's words. */
   orders: string[];
   doneToday?: readonly LivingMind[];
@@ -124,7 +132,8 @@ export async function runMindPipeline(input: PipelineInput, ports: PipelinePorts
   const runs = await runLivingMinds(thinkingPorts, {
     takeover: input.takeover,
     killScope: input.killScope,
-    facts: input.facts,
+    // Every mind reads the facts and the memory in one block, so a mind cannot be run without remembering.
+    facts: factsWithMemory(input.facts, input.memory),
     orders: input.orders,
     doneToday: input.doneToday,
     stoppedToday: input.stoppedToday,
