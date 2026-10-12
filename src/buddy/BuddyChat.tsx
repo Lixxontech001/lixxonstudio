@@ -15,6 +15,7 @@ import { parseKeyStatus } from './buddyThinkResult';
 import { localDateString } from './buddyDate';
 import BuddyBriefingCard from './BuddyBriefingCard';
 import BuddyGreeting from './BuddyGreeting';
+import BuddyGuideLink from './BuddyGuideLink';
 import BuddyChanges from './BuddyChanges';
 import BuddyReports from './BuddyReports';
 import BuddySettingsPanel from './BuddySettings';
@@ -242,6 +243,7 @@ export default function BuddyChat() {
             <div className="buddy-empty">
               <strong>Ask Buddy anything.</strong>
               Buddy can read your published article titles and shop products, and what you tell it. This chat cannot change any of them. Takeover in Minds decides what the minds may change.
+              <BuddyGuideLink section="buddy-chat" />
             </div>
           )}
           {messages.map((message) =>

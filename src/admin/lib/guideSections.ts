@@ -43,6 +43,37 @@ const STEPS: Readonly<Record<string, readonly string[]>> = {
     'Pick All to stop every mind, one name to stop that mind, or None to let them work again.',
     'Nothing runs while a mind is stopped.',
   ],
+  minds: [
+    'Open Minds from the left menu under Operations.',
+    'Takeover decides whether the minds may make the changes they are allowed to make.',
+    'Kill stops one mind or all of them. Each act is written to the daily log.',
+  ],
+  'video-look': [
+    'Open Video look from the left menu under Operations.',
+    'Set the length in seconds, the caption size and the caption colour, then press Save this look.',
+    'The pack video uses only those three. The title, movement, end card and watermark stay as they are.',
+  ],
+  packs: [
+    'Ask Buddy for the day: type "run today" or "make the packs".',
+    'See them in Buddy, under Changes, in Your jobs.',
+    'Each pack holds at most three products, and every one of them is already on the article. Buddy never posts a pack.',
+  ],
+  'i-posted-this': [
+    'Post the pack by hand on the channel.',
+    'Open Buddy, then Changes, then Your jobs, and press I posted this on that pack.',
+    'The pack then says it is posted by you, and Buddy stops asking about it.',
+  ],
+  'buddy-chat': [
+    'Type what you want in plain words, for example "how are sales" or "run today".',
+    'Buddy can read your published article titles, your shop products and what you told it.',
+    'Takeover on the Minds page decides what the minds may change. With it off, nothing on the site changes.',
+  ],
+  'product-slots': [
+    'Make the product in the shop first. Buddy does not create products.',
+    'Ask Buddy to put one on an article: "Swap the Calm Skin Routine Guide onto the skin guide".',
+    'The swap takes one product off and puts another on. An article keeps at most three.',
+    'Readers see them at the end of the article, under Shop this article.',
+  ],
   connections: [
     'Open Connections from the Minds page, or type /admin/ai/connections.',
     'Find the place, type its details and press Save once for each detail.',
@@ -54,7 +85,10 @@ const STEPS: Readonly<Record<string, readonly string[]>> = {
 const GROUP_OF: Readonly<Record<string, string>> = {
   keys: 'Start here', 'save-key': 'Start here', 'test-key': 'Start here', 'delete-key': 'Start here',
   vapid: 'Phone alerts',
-  takeover: 'Minds', kill: 'Minds',
+  minds: 'Minds', takeover: 'Minds', kill: 'Minds',
+  'video-look': 'Video and packs', packs: 'Video and packs', 'i-posted-this': 'Video and packs',
+  'product-slots': 'Your articles',
+  'buddy-chat': 'Buddy',
   connections: 'Connections',
 };
 
@@ -64,8 +98,14 @@ const TITLE_OF: Readonly<Record<string, string>> = {
   'test-key': 'Test a key',
   'delete-key': 'Delete a saved key',
   vapid: 'Phone alerts',
+  minds: 'The Minds page',
   takeover: 'Takeover',
   kill: 'Kill (stop the minds)',
+  'video-look': 'Video look (length and captions)',
+  packs: 'Packs (the day run)',
+  'i-posted-this': 'I posted this',
+  'buddy-chat': 'Talking to Buddy',
+  'product-slots': 'Products on an article',
   connections: 'Connect a free place',
 };
 
@@ -132,7 +172,7 @@ function handWritten(id: string): GuideSection {
 export const GUIDE_SECTIONS: readonly GuideSection[] = [
   ...['keys', 'save-key', 'test-key', 'delete-key'].map(handWritten),
   ...BRAIN_SLOTS.map(brainSection),
-  ...['vapid', 'takeover', 'kill', 'connections'].map(handWritten),
+  ...['vapid', 'minds', 'takeover', 'kill', 'video-look', 'packs', 'i-posted-this', 'product-slots', 'buddy-chat', 'connections'].map(handWritten),
   ...DOOR_IDS.map(doorSection),
 ];
 

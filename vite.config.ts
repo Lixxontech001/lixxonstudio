@@ -130,6 +130,8 @@ export default defineConfig(({ mode }) => {
             if (id.includes('/src/admin/lib/guideSections')) return 'admin-guide';
             if (id.includes('/src/lib/automationDistribution.ts')) return 'automation-distribution';
             if (id.includes('/src/admin/pages/AutomationCheck.tsx')) return 'automation-check';
+            // The Video look is a route-level owner screen, like Check: its own small chunk, hard-limited below.
+            if (id.includes('/src/admin/pages/AutomationVideoLook.tsx')) return 'video-look';
             if (id.includes('/src/admin/pages/ArticleQueueCalendar.tsx')) return 'article-intake';
             if (id.includes('/src/admin/components/VapidGenerator.tsx')) return 'vapid-generator';
             if (id.includes('/src/admin/')) return 'admin-pages';

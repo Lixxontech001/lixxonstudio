@@ -17,10 +17,16 @@ import {
   AutosaveBadge, SideSection, LinkDialog, MediaPicker, ScoreRing, EDITOR_SHORTCUTS,
   type QualityReport, type QualityIssue, type RevisionRow,
 } from '../components/AdminEditorKit';
+import GuideLink from '../components/GuideLink';
 
 interface AdminArticleEditorProps {
   postId?: string;
   isNew?: boolean;
+}
+
+/** Where the guide returns to: this article when it is saved, the list otherwise. */
+function guideBackFor(postId?: string): string {
+  return postId ? `/admin/articles/edit/${postId}#article-product-slots` : '/admin/articles';
 }
 
 type Workflow = 'draft' | 'in_review' | 'approved' | 'scheduled' | 'published' | 'archived';
@@ -829,6 +835,9 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
                     <label htmlFor="series-order" className="block text-xs text-gray-500 mb-1">Part</label>
                     <input id="series-order" type="number" min={1} value={state.series_order} onChange={e => update('series_order', e.target.value)} className="w-full border border-gray-200 px-3 py-2 rounded text-sm" />
                   </div>
+                </div>
+                <div id="article-product-slots">
+                  <GuideLink section="product-slots" back={guideBackFor(postId)} />
                 </div>
               </div>
             </SideSection>

@@ -37,8 +37,14 @@ export const GUIDE_SHORTS: Readonly<Record<string, string>> = {
   'test-key': 'Test makes one read-only request. It never posts, sends, charges or changes anything.',
   'delete-key': 'Delete removes the saved key for good. Nothing else on the site changes.',
   vapid: 'Make the phone alert keys on Keys, then open /admin/settings on your phone and tap Register this device.',
+  minds: 'The five minds work behind the scenes, and Buddy is the only voice you hear.',
   takeover: 'Takeover is off by default. While it is off the minds cannot change the site.',
   kill: 'Kill stops nothing, one mind, or all of them. The choice is saved until you change it.',
+  'video-look': 'Length, caption size and caption colour are the only things the pack video takes from here.',
+  packs: 'A pack is one article with its products, its voice and its vertical video, made for one day.',
+  'i-posted-this': 'The mark writes your own record only. Buddy never posts for you.',
+  'buddy-chat': 'Type to Buddy in plain words. Nothing in this chat changes the site by itself.',
+  'product-slots': 'Up to three live products sit on one article. You make the product, and Buddy places it.',
   connections: 'The details for the free places Buddy can post to. Saving stores the details only.',
   // One line per brain, in the fixed try order, from the same slot data the Brains page shows.
   ...Object.fromEntries(BRAIN_SLOTS.map((slot) => [slot.id, slot.id === 'gemini'
@@ -46,9 +52,9 @@ export const GUIDE_SHORTS: Readonly<Record<string, string>> = {
     ? 'Get a free key at aistudio.google.com. Paste once. It is never shown again. Test does not publish.'
     : slot.access === 'skip'
       ? 'You do not need a key for this brain yet. Buddy skips it, so Test is off.'
-      : `Make the key at ${slot.keySite}. Paste once. Test does not publish.`])),
+      : `Make the key at ${slot.keySite}. Paste once.`])),
   // One line per place Buddy can post to, from the same door data the Connections page shows.
-  ...Object.fromEntries(DOOR_IDS.map((id) => [`door-${id}`, `${DOORS[id].summary} Saving stores the details only.`])),
+  ...Object.fromEntries(DOOR_IDS.map((id) => [`door-${id}`, DOORS[id].summary])),
 };
 
 /** Every anchor that has a line and a section: the page anchors first, then the brains and the places. */
@@ -64,17 +70,18 @@ export function hasGuideSection(id: string): boolean {
   return id in GUIDE_SHORTS;
 }
 
-const SAFE_BACK = /^\/admin\/[A-Za-z0-9\-._~/%!$&'()*+,;=:@?#]*$/;
+const SAFE_BACK_ADMIN = /^\/admin\/[A-Za-z0-9\-._~/%!$&'()*+,;=:@?#]*$/;
+const SAFE_BACK_BUDDY = /^\/buddy(?:\/controls)?(?:#[A-Za-z][A-Za-z0-9_:.-]{0,80})?$/;
 
 /**
- * A page to return to, or null. Only a path inside the admin area is allowed, so a crafted link can never
- * send the owner somewhere else: no scheme, no host, no double slash, no parent step, no spaces.
+ * A page to return to, or null. Only a path inside the admin area, or Buddy's own page, is allowed, so a crafted
+ * link can never send the owner somewhere else: no scheme, no host, no double slash, no parent step, no spaces.
  */
 export function safeGuideBack(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > 300) return null;
-  if (!SAFE_BACK.test(trimmed)) return null;
+  if (!SAFE_BACK_ADMIN.test(trimmed) && !SAFE_BACK_BUDDY.test(trimmed)) return null;
   if (trimmed.includes('//')) return null;
   if (/(^|\/)\.\.(\/|$)/.test(trimmed)) return null;
   return trimmed;

@@ -128,7 +128,7 @@ describe('guide content: one section per owner action, in plain English', () => 
   it('the guide is grouped, in reading order, with every section in exactly one group', () => {
     const groups = guideGroups();
     expect(groups.map((group) => group.group)).toEqual([
-      'Start here', 'Brains', 'Phone alerts', 'Minds', 'Connections',
+      'Start here', 'Brains', 'Phone alerts', 'Minds', 'Video and packs', 'Your articles', 'Buddy', 'Connections',
     ]);
     expect(groups.flatMap((group) => group.sections)).toHaveLength(GUIDE_SECTIONS.length);
   });
@@ -156,10 +156,14 @@ describe('the link into the guide and the way back', () => {
     expect(safeGuideBack('/admin/automation/keys#automation-key-gemini_api_key'))
       .toBe('/admin/automation/keys#automation-key-gemini_api_key');
     expect(safeGuideBack('/admin/ai/connections')).toBe('/admin/ai/connections');
+    expect(safeGuideBack('/buddy')).toBe('/buddy');
+    expect(safeGuideBack('/buddy#packs')).toBe('/buddy#packs');
+    expect(safeGuideBack('/buddy/controls')).toBe('/buddy/controls');
     for (const bad of [
       'https://example.com/admin', '//example.com/admin', 'javascript:alert(1)', '/account',
       '/admin/../etc', '/admin/keys with a space', 'admin/keys', '', '   ', null, undefined,
       '/admin/keys\u0000', '/admin/keys\\x', `/admin/${'a'.repeat(400)}`,
+      '/buddy/../admin/keys', '/buddy?x=1', '/buddyx', '/buddy/admin',
     ]) {
       expect(safeGuideBack(bad as string | null | undefined)).toBeNull();
     }

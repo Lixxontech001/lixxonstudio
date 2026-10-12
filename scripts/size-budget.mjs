@@ -93,6 +93,8 @@ const ADMIN_ROUTE_LIMITS = new Map([
   ['automation-push-panel-', 8 * 1024],
   // The owner guide's steps: loaded only when /admin/guide opens, never part of a reader download.
   ['admin-guide-', 8 * 1024],
+  // The Video look screen: owner only, loaded only on its own address, never part of a reader download.
+  ['video-look-', 4 * 1024],
 ]);
 const adminRouteFiles = jsFiles.filter((f) => [...ADMIN_ROUTE_LIMITS.keys()].some((prefix) => f.startsWith(prefix)));
 const publicJsFiles = jsFiles.filter((f) => !adminJsFiles.includes(f) && !adminRouteFiles.includes(f));
