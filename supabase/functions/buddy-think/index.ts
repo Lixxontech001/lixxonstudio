@@ -98,9 +98,13 @@ async function readBoundedBody(req: Request, limit: number): Promise<string | nu
 function chatStore(userClient: SupabaseClient) {
   return {
     loadChat: async (chatId: string) => {
-      const { data, error } = await userClient.from("buddy_chats").select("id,title").eq("id", chatId).maybeSingle();
+      const { data, error } = await userClient.from("buddy_chats").select("id,title,kind").eq("id", chatId).maybeSingle();
       if (error || !data) return null;
-      return { id: String(data.id), title: typeof data.title === "string" ? data.title : null };
+      return {
+        id: String(data.id),
+        title: typeof data.title === "string" ? data.title : null,
+        kind: data.kind === "briefing" ? "briefing" as const : "chat" as const,
+      };
     },
     loadHistory: async (chatId: string): Promise<GeminiTurn[] | null> => {
       const { data, error } = await userClient
@@ -117,6 +121,18 @@ function chatStore(userClient: SupabaseClient) {
           role: row.role === "owner" ? "user" : "model",
           text: row.content,
         }) as GeminiTurn);
+    },
+    loadBriefingContext: async (chatId: string) => {
+      // The saved owner-visible briefing is the source for follow-up questions, even after it falls outside recent turns.
+      const { data, error } = await userClient
+        .from("buddy_messages")
+        .select("content")
+        .eq("chat_id", chatId)
+        .eq("kind", "briefing")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return { ok: !error, text: !error && typeof data?.content === "string" ? data.content : null };
     },
     saveMessage: async (chatId: string, role: ChatRole, kind: ChatKind, content: string, payload: Record<string, unknown> | null = null) => {
       const row: Record<string, unknown> = { chat_id: chatId, role, kind, content };
