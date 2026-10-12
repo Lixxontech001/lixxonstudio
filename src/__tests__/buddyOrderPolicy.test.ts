@@ -14,7 +14,7 @@ describe('Buddy order policy: the closed list', () => {
     ]);
   });
 
-  it('refuses the owner-listed requests: refunds, deletes, email to the list, reader replies, price changes, posting', () => {
+  it('refuses the owner-listed requests: refunds, deletes, email to the list, reader replies, posting', () => {
     const refused = [
       'Refund order 1042 to Jane',
       'Can you refund this customer?',
@@ -24,13 +24,18 @@ describe('Buddy order policy: the closed list', () => {
       'Blast the subscribers with the new kit',
       'Reply to that comment for me',
       'Answer the reader who asked about sizes',
-      'Change the price of the linen sheet to $20',
-      'Lower prices on all the kits',
       'Publish this article now',
       'Post it to Facebook right away',
       'Send this to the Pinterest board now',
     ];
     for (const message of refused) expect(refusedRequest(message), message).toBe(true);
+  });
+
+  it('a price ask is not refused any more: it waits with the real rule, US dollars only', () => {
+    // Phase I slice 5: one price a day may change on the day's run, with the Auditor's check first and a telling
+    // every time. The chat itself never changes a price, and buddyOrders gives the owner that plain reason.
+    expect(refusedRequest('Change the price of the linen sheet to $20')).toBe(false);
+    expect(refusedRequest('Lower prices on all the kits')).toBe(false);
   });
 
   it('does not refuse questions, run requests, or ordinary mind work', () => {

@@ -7,12 +7,14 @@
 //   priority to the CEO, packs, doors and captions to the Executioner, checks to the Auditor. Two fits: the
 //   first takes the order, and the reply shows both in a table.
 // - Ordinary action words are orders. "Do the new article" is an order. Only question forms are questions.
-// - Minds cannot publish, send, spend or change prices. Buddy says so when an order touches those.
+// - Minds cannot publish, send or spend. A US dollar price changes only on the day's run, with Takeover on and the
+//   Auditor's check first, and the owner is told every time. Buddy says so when an order touches those.
 
 import { ownerClock } from "./mindsNightReport.ts";
 import { brainHowTo, howToDoor, type HowToDoor } from "./buddyHowTo.ts";
 import type { BrainId } from "./brains.ts";
 import { parseControlRequest, type ControlAction } from "./buddyControls.ts";
+import { watchAsk, type RefusedUrl } from "./competitors.ts";
 import { REFUSAL_LINE, filingKindFor, gateOrder, refusedRequest, type FilingGate } from "./buddyOrderPolicy.ts";
 
 export const MIND_KEYS = ["analyst", "strategist", "ceo", "executioner", "auditor"] as const;
@@ -97,11 +99,11 @@ export function routedOrderLine(mind: MindName, others: MindName[]): string {
   return `Two minds fit this:\n${mindFitTable([mind, ...others])}`;
 }
 export const RESTRICTED_LINE =
-  "Minds will not publish, send, spend or change prices, so any part like that waits for you.";
+  "Minds will not publish, send or spend, so any part like that waits for you. A US dollar price changes only on a day's run, with Takeover on and the Auditor's check first, and you are told every time.";
 export const MAX_ORDER_CHARS = 1000;
 export const LOG_ANSWER_ROWS = 10;
 
-/** Words that mean the owner wants something a mind is never allowed to do by itself. */
+/** Words that mean the owner wants something a mind does not do from the chat, so the reply says the rule. */
 const RESTRICTED_WORDS = /\b(publish|send|email|e-mail|spend|pay|refund|price|prices|pricing|discount|delete|post)\b/i;
 /** Action words that start an order. "do" is one of them, so "Do the new article" is an order.
  *  The words the routing rules below watch for (audit, verify, inspect, rank, prioritise, triage) are here too,
@@ -140,6 +142,8 @@ export type Route =
   | { kind: "control"; action: ControlAction; instruction: string }
   | { kind: "control_refused"; line: string }
   | { kind: "refused"; line: string }
+  // The rival pages the owner asked to watch. The links are saved as they arrive; the day run reads at most ten a day.
+  | { kind: "competitors"; wanted: string[]; refused: RefusedUrl[] }
   | { kind: "how_to"; door: HowToDoor }
   | { kind: "brain_how_to"; brain: BrainId }
   | { kind: "chat" };
@@ -234,6 +238,12 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
   // Outside the closed list (refunds, deletes, email to the list, reader replies, price changes, posting): one line,
   // nothing filed. Today's run is never refused here, and a question is never refused.
   if (!isRunDayRequest(text) && refusedRequest(text)) return { kind: "refused", line: REFUSAL_LINE };
+  // The owner's rival links are saved as they arrive, in his own words. A named mind keeps its order, and a question
+  // saves nothing. Nothing on the site changes, so it works whether Takeover is on or off.
+  if (!mind && !question) {
+    const watch = watchAsk(text);
+    if (watch) return { kind: "competitors", wanted: watch.wanted, refused: watch.refused };
+  }
   if (mind && question && !imperative) return { kind: "mind_log", mind };
   // "How do I connect YouTube?" is answered with fixed steps. A mind named in the same message is left to the rules above.
   if (!mind) {

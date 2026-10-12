@@ -157,6 +157,8 @@ describe('Phase F freeze: Buddy', () => {
       'takeover_changed', 'kill_changed', 'week_up', 'week_down', 'door_posted', 'sale', 'product_click',
       'traffic_new_kind', 'auditor_blocked', 'order_blocked', 'pack_ready', 'door_failed', 'mind_failed',
       'door_skipped', 'price_changed', 'pack_saved', 'product_looks_dead',
+      // Phase I slice 5: a rival page the owner asked Buddy to watch really changed.
+      'competitor_changed',
     ]);
   });
 
@@ -189,7 +191,7 @@ describe('Phase F freeze: Buddy', () => {
 
   it('Buddy never replies to readers; the refusal line names the never-list', () => {
     expect(REFUSAL_LINE).toBe(
-      'Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, price changes, and posting or publishing stay with you. Nothing was filed or changed.',
+      'Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, and posting or publishing stay with you. Nothing was filed or changed.',
     );
   });
 
@@ -208,7 +210,8 @@ describe('Phase F freeze: Buddy', () => {
     expect(refusedRequest('Delete that post')).toBe(true);
     expect(refusedRequest('Email my readers the new guide')).toBe(true);
     expect(refusedRequest('Reply to the reader who wrote in')).toBe(true);
-    expect(refusedRequest('Change the price of the kit')).toBe(true);
+    // Phase I slice 5: a price ask left this list. It is answered with the day's price rule instead of a refusal.
+    expect(refusedRequest('Change the price of the kit')).toBe(false);
   });
 
   // Phase F slice 6: the Phase E report left this open (owner decision B). It is now refused. It is a tiny gate fix.

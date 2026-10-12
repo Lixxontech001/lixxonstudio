@@ -38,14 +38,21 @@ export function usd(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
-/** A door posted the day's article. */
-export function doorPostedAct(doorLabel: string, articleTitle: string, day: string): ActWords {
+/**
+ * A door posted the day's article. `fromArchive` is true when the article is older than the seven-day window:
+ * it went out because nothing new was published, and the telling says so rather than calling it new.
+ */
+export function doorPostedAct(doorLabel: string, articleTitle: string, day: string, fromArchive = false): ActWords {
+  const archive = fromArchive ? " from the archive" : "";
+  const detail = fromArchive
+    ? "This one is older than a week. Nothing new was published in the last 7 days, so an older article went out. The post is live and it is in the log with the day it went out."
+    : "The post is live. It is in the log with the day it went out.";
   return {
     kind: "door_posted",
     mind: "executioner",
     action: `Posted to ${doorLabel}`,
-    title: `${doorLabel}: posted "${clip(articleTitle, 80)}"`,
-    detail: "The post is live. It is in the log with the day it went out.",
+    title: `${doorLabel}: posted "${clip(articleTitle, 80)}"${archive}`,
+    detail,
     outcome: "done",
     key: `door_posted:${doorLabel}:${day}`,
   };

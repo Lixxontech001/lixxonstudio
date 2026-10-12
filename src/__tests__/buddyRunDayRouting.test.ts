@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { laneFor, HELD_NOT_FROM_CHAT, HELD_MONEY } from '../../supabase/functions/_shared/buddyOrders';
+import { laneFor, HELD_NOT_FROM_CHAT, HELD_MONEY, HELD_PRICE } from '../../supabase/functions/_shared/buddyOrders';
 import { isRunDayRequest, routeFilingGate, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
 
 describe('router: asking for today\'s run is an order with no mind to name', () => {
@@ -65,8 +65,20 @@ describe('lane: the day\'s run has its own lane', () => {
     expect(laneFor("Run today's posts and post them to Instagram")).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
   });
 
+  it('a run that mentions a price is still the day\'s run', () => {
+    // Phase I slice 5: the day's run is where a US dollar price changes, so a run word keeps the run. The Auditor is
+    // checked before the price is written, and the owner is told every time.
+    expect(laneFor('Run the products at a lower price')).toEqual({ lane: 'daily_run' });
+    expect(laneFor('Run the products and change the price of the kit')).toEqual({ lane: 'daily_run' });
+  });
+
   it('a run that names money stays held', () => {
-    expect(laneFor('Run the products at a lower price')).toEqual({ lane: 'held', reason: HELD_MONEY });
+    expect(laneFor('Run the products and spend on ads')).toEqual({ lane: 'held', reason: HELD_MONEY });
+    expect(laneFor('Run the products and refund Jane')).toEqual({ lane: 'held', reason: HELD_MONEY });
+  });
+
+  it('a price ask with no run words is held with the price rule', () => {
+    expect(laneFor('Change the price of the kit to 20 dollars')).toEqual({ lane: 'held', reason: HELD_PRICE });
   });
 
   it('post it to instagram is still held', () => {

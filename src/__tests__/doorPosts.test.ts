@@ -6,8 +6,11 @@ import {
   DOOR_TEXT_LIMIT,
   DOOR_WINDOW_DAYS,
   OPEN_DOORS,
+  DRIP_PREFIX,
   doorArticleUrl,
   doorText,
+  pickDoorArticleForDay,
+  pickDripArticle,
   isOpenDoor,
   pickDoorArticle,
   type DoorArticle,
@@ -162,5 +165,59 @@ describe('which article goes to a door', () => {
       limit: 60,
     });
     expect(result).toEqual({ ok: false, reason: 'too_long' });
+  });
+});
+
+
+// Phase I slice 5: when nothing new is inside the seven-day window, the newest older article this door has never had
+// goes out instead, marked as an archive one. Nothing is ever called new when it is not.
+describe('the archive drip pick', () => {
+  const OLD = article('old', { publishedAt: new Date(NOW - 30 * DAY).toISOString() });
+  const OLDER = article('older', { publishedAt: new Date(NOW - 60 * DAY).toISOString() });
+
+  it('a fresh article wins, and is never marked as an archive one', () => {
+    const result = pickDoorArticleForDay({
+      articles: [OLD, article('new')],
+      postedIds: new Set(),
+      nowMs: NOW,
+      siteOrigin: SITE,
+      limit: LIMIT,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.drip).toBe(false);
+    expect(result.article.id).toBe('new');
+    expect(result.text).not.toContain(DRIP_PREFIX);
+  });
+
+  it('nothing fresh: the newest article older than the window, and the text says where it came from', () => {
+    const result = pickDoorArticleForDay({ articles: [OLD, OLDER], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE, limit: LIMIT });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.drip).toBe(true);
+    expect(result.article.id).toBe('old');
+    expect(result.text).toContain(`${DRIP_PREFIX}${OLD.title}`);
+    expect(result.text).toContain(doorArticleUrl('article-old', SITE));
+  });
+
+  it('an older article this door already had is skipped, and a door with nothing left has nothing to post', () => {
+    expect(pickDripArticle({ articles: [OLD, OLDER], postedIds: new Set(['old']), nowMs: NOW, siteOrigin: SITE, limit: LIMIT })).toMatchObject({ ok: true, article: { id: 'older' } });
+    expect(pickDoorArticleForDay({ articles: [OLD], postedIds: new Set(['old']), nowMs: NOW, siteOrigin: SITE, limit: LIMIT })).toEqual({ ok: false, reason: 'nothing_new' });
+  });
+
+  it('a title that cannot be posted keeps its own reason, so no older article is slipped in beside it', () => {
+    const dirty = article('dirty', { title: 'Routine — easy' });
+    expect(pickDoorArticleForDay({ articles: [dirty, OLD], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE, limit: LIMIT })).toEqual({ ok: false, reason: 'copy_not_clean' });
+  });
+
+  it('a door that needs a picture takes an older article only when that article has its own cover', () => {
+    const noCover = article('old-plain', { publishedAt: new Date(NOW - 30 * DAY).toISOString(), coverImage: null });
+    const withCover = article('old-picture', { publishedAt: new Date(NOW - 40 * DAY).toISOString(), coverImage: '/assets/covers/old.jpg' });
+    expect(pickDripArticle({ articles: [noCover], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE, limit: LIMIT, needPicture: true })).toEqual({ ok: false, reason: 'nothing_new' });
+    expect(pickDripArticle({ articles: [noCover, withCover], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE, limit: LIMIT, needPicture: true })).toMatchObject({ ok: true, article: { id: 'old-picture' } });
+  });
+
+  it('an article published inside the window is never taken as an archive one', () => {
+    expect(pickDripArticle({ articles: [article('fresh')], postedIds: new Set(), nowMs: NOW, siteOrigin: SITE, limit: LIMIT })).toEqual({ ok: false, reason: 'nothing_new' });
   });
 });

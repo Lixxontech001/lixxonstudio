@@ -140,6 +140,8 @@ def main():
         "queue-reschedule-assertions.sql",
         "daily-kit-assertions.sql",
         "video-template-assertions.sql",
+        # Phase I slice 5: the archive drip, the watched rival pages, and the one US dollar price change.
+        "minds-autonomy-assertions.sql",
     ):
         assertions = os.path.join(ROOT, "scripts", name)
         if os.path.exists(assertions):

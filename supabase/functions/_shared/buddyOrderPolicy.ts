@@ -1,6 +1,9 @@
 // Buddy's closed list of orders, and the one refusal line for everything else.
 // Pure rules: no database, no model. The router uses it for the owner's words, and the chat path uses it for an
 // order the model proposes. A refused request is never filed, so it can never sit as a silent maybe.
+// Phase I slice 5: a US dollar price change is no longer refused here. It is not filed from the chat either: the
+// day's run changes one price at most, with the Auditor's check first, and the owner is told every time. The words
+// the owner gets for a price ask are in buddyOrders (HELD_PRICE).
 
 /** The only kinds of order Buddy may run or file. Anything else is refused. */
 export const ALLOWED_ORDERS = [
@@ -21,7 +24,7 @@ export function closedOrderKind(value: unknown): AllowedOrder | null {
 }
 
 export const REFUSAL_LINE =
-  "Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, price changes, and posting or publishing stay with you. Nothing was filed or changed.";
+  "Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, and posting or publishing stay with you. Nothing was filed or changed.";
 
 /** A question about one of these is answered as a question. Only a request is refused. */
 const QUESTION_OPENER = /^\s*(please\s+)?(what|which|how|why|who|when|where|did|does|is|are|was|were|tell me|show me)\b/i;
@@ -40,8 +43,6 @@ const REFUSED_REQUESTS: RegExp[] = [
   /\b(delete|erase|trash)\b\s+(the\s+|that\s+|this\s+|my\s+|our\s+)?(old\s+|last\s+|new\s+|first\s+)?(one|ones|it|that|this|them|those|everything|all)\b/i,
   /\b(email|e-mail|newsletter|blast|mail)\b[^.?!]*\b(list|subscribers?|readers?|customers?|everyone|followers?|members?)\b/i,
   /\b(reply|respond|answer|write back)\b[^.?!]*\b(comments?|reviews?|messages?|readers?|customers?|buyers?|subscribers?)\b/i,
-  /\b(change|set|raise|lower|cut|drop|update|discount|reduce|increase)\b[^.?!]*\bprices?\b/i,
-  /\bprices?\b[^.?!]*\b(change|set|raise|lower|cut|drop|update|discount|reduce|increase)\b/i,
   /\b(publish|post|send|share|tweet)\b[^.?!]*\b(now|right away|immediately|this|it|article|post)\b/i,
 ];
 

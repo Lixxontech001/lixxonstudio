@@ -23,7 +23,9 @@ export interface LanedOrder extends BuddyOrder {
 }
 
 export const HELD_NOT_FROM_CHAT = "Buddy does not post to channels, make videos or email readers from chat. You post the four gated channels by hand. This order waits for you.";
-export const HELD_MONEY = "Minds do not change prices, spend money or refund. This order waits for you.";
+export const HELD_MONEY = "Minds do not spend money or refund. This order waits for you.";
+/** A price ask is answered with the real rule: the day's run may change one US dollar price, and never quietly. */
+export const HELD_PRICE = "A US dollar price changes only on a day's run, with Takeover on and the Auditor's check first, and you are told every time. Nothing changed now.";
 export const HELD_CREATE = "Creating a product is your job. Tell Buddy the angle and Buddy will say what to create.";
 export const HELD_UNKNOWN = "Buddy does not know yet how to run this kind of order. It waits for you.";
 export const HELD_CONTROL = "Pausing, stopping and starting doors and minds runs only when Takeover is on. It waits for you.";
@@ -31,8 +33,10 @@ export const HELD_CONTROL = "Pausing, stopping and starting doors and minds runs
 /** Channels, video, email and push: orders Buddy does not take from chat. Checked first, so "post it to instagram" waits. */
 const CHANNEL_ORDER =
   /\b(instagram|tiktok|facebook|pinterest|telegram|bluesky|mastodon|tumblr|discord|blogger|medium|youtube|pixelfed|wordpress|podcast|vimeo|video|videos|reel|reels|email|e-mail|newsletter|push|whatsapp|channel|channels|social|tweet|post\s+(it\s+)?(to|on)|publish\s+(it\s+)?(to|on))\b/i;
-/** Prices, spending and refunds are never run by a mind. */
-const MONEY = /\b(price|prices|pricing|discount|refund|spend|pay|ads?|advert|advertising)\b/i;
+/** Spending, refunds and ads are never run by a mind. */
+const MONEY = /\b(refund|refunds|spend|spending|pay|ads?|advert|advertising)\b/i;
+/** Prices are the day's own work, one at a time, so a price ask waits with the plain rule. */
+const PRICE = /\b(price|prices|priced|pricing|discount|discounts)\b/i;
 /**
  * The day's run: "run the products", "make today's posts", "daily run". Only the run words count, so
  * "post it to instagram" never matches here. A run that also names a channel stays held (CHANNEL_ORDER).
@@ -44,13 +48,17 @@ const CREATE_PRODUCT = /\b(create|build|make|set\s+up)\s+((a|an|the|new|another)
 /** Work this phase can run: a product line on an article, or a swap of which products sit on it. */
 const PRODUCT_LINE = /\b(article|articles|blog|guide|paragraph|sentence|product|products|shop|affiliate|digital|swap|replace)\b/i;
 
-/** Sorts one order into the lane it belongs to. Order of checks matters: money and channels are held first. */
+/** Sorts one order into the lane it belongs to. Order of checks matters: money, prices and channels are held first. */
 export function laneFor(instruction: string): OrderLane {
   // A pause, stop or start request never runs as an article change, even when it names a product.
   if (parseControlRequest(instruction)) return { lane: "held", reason: HELD_CONTROL };
   if (MONEY.test(instruction)) return { lane: "held", reason: HELD_MONEY };
+  // A real run is taken even when it mentions prices: the run is what changes one US dollar price, with the Auditor's
+  // check first, and the owner is told. A run that also names a channel stays held (the channel reason), and a price
+  // ask with no run words is held with the price rule.
   if (DAILY_RUN.test(instruction) && !CHANNEL_ORDER.test(instruction)) return { lane: "daily_run" };
   if (CHANNEL_ORDER.test(instruction)) return { lane: "held", reason: HELD_NOT_FROM_CHAT };
+  if (PRICE.test(instruction)) return { lane: "held", reason: HELD_PRICE };
   if (CREATE_PRODUCT.test(instruction)) return { lane: "held", reason: HELD_CREATE };
   if (PRODUCT_LINE.test(instruction)) return { lane: "product_line" };
   return { lane: "held", reason: HELD_UNKNOWN };

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { REFUSAL_LINE, gateModelOrder, gateOrder } from '../../supabase/functions/_shared/buddyOrderPolicy';
+import { REFUSAL_LINE, gateModelOrder, gateOrder, refusedRequest } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import { routeFilingGate, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
 import {
   BUDDY_ANSWER_RULES,
@@ -137,7 +137,6 @@ describe('the closed-list gate on the chat paths', () => {
     'Email the spring list to all readers',
     'Reply to the comment from Sam about shipping',
     'Publish the new post now',
-    'Change the price of the kit to 5 dollars',
     'Delete the old article',
   ])('answerRouted never files an order outside the closed list: %s', async (outside) => {
     const { deps, saveOrder, saved } = chatDeps('unused', outside);
@@ -145,6 +144,12 @@ describe('the closed-list gate on the chat paths', () => {
     expect(saveOrder).not.toHaveBeenCalled();
     expect(result.body).toMatchObject({ ok: true, route: 'refused' });
     expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
+  });
+
+  it('a price ask is no longer an outside request, so nothing about it is refused here', () => {
+    // Phase I slice 5: the day's run changes one US dollar price, with the Auditor first. The chat never does it,
+    // and its own words for a price ask are in buddyOrders (a plain rule, not a refusal).
+    expect(refusedRequest('Change the price of the kit to 5 dollars')).toBe(false);
   });
 
   it('answerRouted: a pending order with a plain request is still filed for the named mind', async () => {

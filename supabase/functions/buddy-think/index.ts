@@ -18,6 +18,7 @@ import { ownerClock } from "../_shared/mindsNightReport.ts";
 import { anyTryableBrainConfigured } from "../_shared/brains.ts";
 import { makeMindThink } from "../_shared/mindThink.ts";
 import { draftCaptionsInChat, pickCaptionSource, type CaptionArticle, type CaptionDraftResult } from "../_shared/chatCaptions.ts";
+import { competitorLabel, type RefusedUrl, type UrlProblem } from "../_shared/competitors.ts";
 import type { ShopProduct } from "../_shared/productPlacement.ts";
 import { ownerNotablePorts, pushNewestNotable } from "../_shared/notablePushServer.ts";
 import { STATE_DOOR_LIMIT, STATE_LOG_LIMIT, STATE_NOTABLE_LIMIT, STATE_ORDER_LIMIT, type BuddyStateFacts } from "../_shared/buddyStateFacts.ts";
@@ -34,6 +35,16 @@ const GOOGLE_KEY_NAME = "gemini_api_key";
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const MAX_BODY_BYTES = 4096;
 const LIMITS = { probe: { limit: 5, window: 600 }, ask: { limit: 30, window: 600 } } as const;
+
+/** The database's own refusal for a watched link, as the plain reason the owner reads. Unknown means it did not save. */
+function competitorProblem(message: string): UrlProblem {
+  if (/competitor_not_secure/.test(message)) return "not_secure";
+  if (/competitor_has_sign_in/.test(message)) return "has_sign_in";
+  if (/competitor_too_long/.test(message)) return "too_long";
+  if (/competitor_list_full/.test(message)) return "list_full";
+  if (/competitor_not_public/.test(message)) return "not_public";
+  return "save_failed";
+}
 
 function corsFor(req: Request): Record<string, string> | null {
   const origin = req.headers.get("Origin");
@@ -608,6 +619,20 @@ Deno.serve(async (req: Request) => {
     draftCaptions: async ({ takeover }): Promise<CaptionDraftResult> => {
       const source = await readCaptionSource();
       return draftCaptionsInChat(source, captionThink, takeover);
+    },
+    // The rival pages the owner asks to watch (Phase I slice 5). Saving a link is the owner's own list, so it works
+    // whether Takeover is on or off, and it puts nothing on the site. A link that is not a public https page is
+    // refused with a plain reason and never saved.
+    saveCompetitors: async (urls): Promise<{ saved: string[]; refused: RefusedUrl[] }> => {
+      const saved: string[] = [];
+      const refused: RefusedUrl[] = [];
+      for (const url of urls) {
+        const label = competitorLabel(url);
+        const { error } = await sb.rpc("minds_save_competitor", { p_owner_id: user.id, p_url: url, p_label: label });
+        if (error) refused.push({ url, problem: competitorProblem(error.message) });
+        else saved.push(label);
+      }
+      return { saved, refused };
     },
     // One plain-words line per answered question: which brain answered. Never names a key.
     logBrain: async (line: string) => {

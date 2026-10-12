@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  HELD_CREATE,
-  HELD_NOT_FROM_CHAT,
-  HELD_MONEY,
-  HELD_UNKNOWN,
-  laneFor,
-  parseWaitingRow,
-  readWaitingOrders,
-} from '../../supabase/functions/_shared/buddyOrders';
+import { HELD_CREATE, HELD_MONEY, HELD_NOT_FROM_CHAT, HELD_PRICE, HELD_UNKNOWN, laneFor, parseWaitingRow, readWaitingOrders } from '../../supabase/functions/_shared/buddyOrders';
 
 describe('which orders a mind can run in this phase', () => {
   it.each([
@@ -25,8 +17,9 @@ describe('which orders a mind can run in this phase', () => {
     expect(laneFor('Email the list to readers')).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
   });
 
-  it('prices, spending and refunds never run by a mind', () => {
-    expect(laneFor('Lower the kit price to 9 dollars')).toEqual({ lane: 'held', reason: HELD_MONEY });
+  it('spending and refunds stay with the owner, and a price ask waits with the real rule', () => {
+    // Phase I slice 5: a US dollar price changes on the day's run, with the Auditor first, never from the chat.
+    expect(laneFor('Lower the kit price to 9 dollars')).toEqual({ lane: 'held', reason: HELD_PRICE });
     expect(laneFor('Refund the buyer')).toEqual({ lane: 'held', reason: HELD_MONEY });
   });
 
@@ -35,7 +28,7 @@ describe('which orders a mind can run in this phase', () => {
   });
 
   it('a clear money or channel word is held even inside a product sentence', () => {
-    expect(laneFor('Post the sale price for the kit to Instagram')).toEqual({ lane: 'held', reason: HELD_MONEY });
+    expect(laneFor('Post the sale price for the kit to Instagram')).toEqual({ lane: 'held', reason: HELD_NOT_FROM_CHAT });
   });
 
   it('anything Buddy does not know how to run waits, with an honest reason', () => {

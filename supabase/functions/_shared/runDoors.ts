@@ -10,7 +10,19 @@
 import { DOORS, doorStatus, type DoorId } from "./doorRegistry.ts";
 import { DOOR_LABEL } from "./buddyControls.ts";
 import { nothingNewNote, notSentNote, sentLead, sentVerb } from "./rssHub.ts";
-import { DOOR_DAILY_LIMIT, DOOR_MEDIA, DOOR_TEXT_LIMIT, DOORS_NEED_PICTURE, OPEN_DOORS, pickDoorArticle, type DoorArticle } from "./doorPosts.ts";
+import {
+  ARCHIVE_NOTE,
+  DOOR_DAILY_LIMIT,
+  DOOR_MEDIA,
+  DOOR_TEXT_LIMIT,
+  DOORS_NEED_PICTURE,
+  DRIP_FULL_NOTE,
+  DRIP_UNREADABLE_NOTE,
+  OPEN_DOORS,
+  pickDoorArticleForDay,
+  type DoorArticle,
+} from "./doorPosts.ts";
+import { dripAllows } from "./postEdits.ts";
 import { isHonestSkip } from "./honestSkips.ts";
 import type { DoorSendResult } from "./doorAdapters.ts";
 import { imageProblemNote, type ArticleImageLoad } from "./articleImage.ts";
@@ -30,6 +42,8 @@ export interface DoorSendExtra {
   title: string;
   articleUrl: string;
   localDay: string;
+  /** True when the text says "From the archive": an old article, because nothing new was published. */
+  drip?: boolean;
 }
 
 export type VideoLoad = { ok: true; data: ArrayBuffer; contentType: string; bytes: number } | { ok: false; reason: "no_video" | "not_readable" };
@@ -84,8 +98,18 @@ export interface DoorRunPorts {
   /** Keeps what a queued row needs to be saved later: whether it posted (or failed), its reference and its note. Never sends. */
   markPending: (id: string, status: "posted" | "failed", externalRef: string | null, errorNote: string | null) => Promise<void>;
   log: (entry: { door: DoorId; outcome: "done" | "failed" | "skipped"; detail: string }) => Promise<void>;
+  /** How many articles are already stamped for the day (the drip rows). Null when it cannot be read. */
+  countDripsToday: (localDay: string) => Promise<number | null>;
+  /** Stamps one older article as today's drip. False when the day's three are used up. Never touches a door. */
+  recordDrip: (articleId: string, localDay: string) => Promise<boolean>;
   /** Waits between save retries. Tests pass a no-op. */
   pause?: (ms: number) => Promise<void>;
+}
+
+/** Today's drip budget: the rows already stamped, plus the ones this run has stamped since it read them. */
+interface DripState {
+  used: number | null;
+  stamped: number;
 }
 
 export type DoorOutcomeKind = "posted" | "failed" | "skipped" | "not_connected";
@@ -94,6 +118,10 @@ export interface DoorOutcome {
   door: DoorId;
   outcome: DoorOutcomeKind;
   detail: string;
+  /** The article that posted, when one did. The act line names it instead of repeating the whole detail. */
+  articleTitle?: string;
+  /** True when the article came from the archive, because no new article was published in the window. */
+  drip?: boolean;
 }
 
 export interface DoorRunResult {
@@ -200,7 +228,14 @@ async function savePendingPosts(input: DoorRunInput, ports: DoorRunPorts, door: 
 }
 
 /** One door, start to finish. Only a held gate (Takeover off, Kill) stops the whole step. */
-async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId, readArticles: () => Promise<DoorArticle[]>, postedSoFar: number): Promise<DoorStep> {
+async function postToDoor(
+  input: DoorRunInput,
+  ports: DoorRunPorts,
+  door: DoorId,
+  readArticles: () => Promise<DoorArticle[]>,
+  postedSoFar: number,
+  drip: DripState,
+): Promise<DoorStep> {
   const label = DOORS[door].label;
 
   // Reading the saved values is the first step. A failure here means nothing was sent.
@@ -231,9 +266,9 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   // A read of the articles that fails propagates. It happens before any door has sent, so nothing was posted.
   const articles = await readArticles();
 
-  let pick: ReturnType<typeof pickDoorArticle>;
+  let pick: ReturnType<typeof pickDoorArticleForDay>;
   try {
-    pick = pickDoorArticle({
+    pick = pickDoorArticleForDay({
       articles,
       postedIds: await ports.readPostedIds(door),
       nowMs: input.nowMs,
@@ -302,6 +337,30 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
     media = { kind: "audio", path: loaded.path, bytes: loaded.bytes, contentType: loaded.contentType };
   }
 
+  // An older article, because nothing new is inside the seven-day window. The day's three are a database rule
+  // (post_drip_days). The stamp is written before the send, so a later run the same day cannot slip past the cap:
+  // an attempt counts as a touch. Nothing is stamped when the count itself cannot be read.
+  if (pick.drip) {
+    const used = drip.used === null ? null : drip.used + drip.stamped;
+    const room = used !== null && dripAllows(used, false);
+    let stamped = false;
+    if (room) {
+      try {
+        stamped = await ports.recordDrip(pick.article.id, input.localDay);
+      } catch {
+        stamped = false;
+      }
+    }
+    if (!stamped) {
+      // The count could not be read: nothing is stamped blind. Otherwise the day's three are used up, whether the
+      // count said so or the database refused the stamp itself.
+      const detail = `${label}: ${used === null ? DRIP_UNREADABLE_NOTE : DRIP_FULL_NOTE}`;
+      await logSafely(ports, { door, outcome: "skipped", detail });
+      return { door, outcome: "skipped", detail };
+    }
+    drip.stamped += 1;
+  }
+
   let reserved: ReserveResult;
   try {
     reserved = await ports.reserve(door, pick.article.id, input.localDay, pick.articleUrl);
@@ -325,6 +384,7 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
       title: pick.article.title,
       articleUrl: pick.articleUrl,
       localDay: input.localDay,
+      drip: pick.drip,
     });
   } catch {
     sent = { ok: false, reason: "Could not reach the door." };
@@ -333,15 +393,16 @@ async function postToDoor(input: DoorRunInput, ports: DoorRunPorts, door: DoorId
   if (sent.ok) {
     const saved = await finishWithRetry(ports, reserved.id, "posted", sent.externalRef, null);
     if (saved) {
-      const detail = `${sentLead(door, label)}: "${pick.article.title}".${sent.note ? ` ${sent.note}` : ""}`;
+      const archive = pick.drip ? ` ${ARCHIVE_NOTE}` : "";
+      const detail = `${sentLead(door, label)}: "${pick.article.title}".${archive}${sent.note ? ` ${sent.note}` : ""}`;
       await logSafely(ports, { door, outcome: "done", detail });
-      return { door, outcome: "posted", detail };
+      return { door, outcome: "posted", detail, articleTitle: pick.article.title, drip: pick.drip };
     }
     // The post went out, but its record could not be saved. The row stays queued, marked as posted, and a later run today saves it again. Nothing is sent again.
     await keepPendingSafely(ports, reserved.id, "posted", sent.externalRef, null);
     const detail = `${label}: ${sentVerb(door)}, but the record could not be saved. Check the log.`;
     await logSafely(ports, { door, outcome: "failed", detail });
-    return { door, outcome: "posted", detail };
+    return { door, outcome: "posted", detail, articleTitle: pick.article.title, drip: pick.drip };
   }
 
   const recorded = await finishWithRetry(ports, reserved.id, "failed", null, sent.reason);
@@ -386,6 +447,15 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
   const pausedNames = OPEN_DOORS.filter((door) => paused.has(door)).map((door) => DOOR_LABEL[door]);
   if (doors.length === 0) return { status: "nothing_to_do", detail: ALL_DOORS_PAUSED_DETAIL, posted: 0, outcomes: [] };
 
+  // The drip budget for the day, read once. A read that fails leaves it null: nothing older is stamped blind.
+  let used: number | null = null;
+  try {
+    used = await ports.countDripsToday(input.localDay);
+  } catch {
+    used = null;
+  }
+  const drip: DripState = { used, stamped: 0 };
+
   const outcomes: DoorOutcome[] = [];
   let articles: DoorArticle[] | null = null;
   const readArticles = async (): Promise<DoorArticle[]> => {
@@ -395,7 +465,7 @@ export async function runDoors(input: DoorRunInput, ports: DoorRunPorts): Promis
 
   for (const door of doors) {
     const posted = outcomes.filter((item) => item.outcome === "posted").length;
-    const step = await postToDoor(input, ports, door, readArticles, posted);
+    const step = await postToDoor(input, ports, door, readArticles, posted, drip);
     if ("held" in step) {
       return { status: "held", detail: step.held, posted, outcomes };
     }

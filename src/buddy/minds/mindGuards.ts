@@ -3,7 +3,8 @@ import type { MindKey } from './mindRoster';
 /**
  * The only kinds of step a mind may propose. Anything else is refused.
  * Minds may never publish, edit articles, write post content, send email or messages,
- * create products, change prices, spend money, switch off another mind, or speak as the owner.
+ * create products, spend money, switch off another mind, or speak as the owner.
+ * A US dollar price moves only on a day's run, with Takeover on and the Auditor's check first.
  * None of those kinds is on this list, so none can be proposed.
  */
 export const PROPOSAL_KINDS = ['note', 'suggest', 'sort', 'prepare'] as const;

@@ -691,3 +691,40 @@ one, never on a date that cannot be read. The day run counts paid order items pe
 each finding through the act list (`product_looks_dead`), and names at most two in a day. Buddy never deletes a
 product: the words say so, and the owner decides to write an article that fits it or make a new product himself. The
 finding is told once, and the owner's memory is what stops the repeat.
+
+## Phase I slice 5: the archive drip, the rival pages, and one US dollar price change
+
+Three more things the day run does on its own, all inside the same gates (Takeover on, no Kill), all of them extra:
+each step sits in its own `try`/`catch`, so a rival page that cannot be reached or a shop that refuses never changes
+the rest of the day.
+
+**The archive drip.** When no new article was published in the window, a free door may post an older one instead of
+saying "nothing new". `doorPosts.ts` picks it in one pass: a fresh article first, and only when there is nothing fresh
+at all does `pickDripArticle` look past the window — never beside a fresh article that broke a rule, because the
+`From the archive: ` note has to be true. An older article keeps the door's own daily and weekly caps, is stamped once
+per door, and the day's three come from the same `post_drip_days` rule the placement step already uses:
+`countDripsToday` is read once, and `minds_record_drip` (migration `20261023000000_minds_door_drip.sql`, **not
+applied**) writes nothing without `minds_assert_can_act()`, nothing for a draft, and nothing for anyone who is not the
+owner. The stamp is kept before the send, so a later attempt the same day cannot slip past the day's three. The door
+telling says which article went out and that it came from the archive.
+
+**The rival pages the owner asks to watch.** The owner saves the links himself, in his own words: `competitors.ts`
+accepts only a public https page (never a local or private address, never a sign-in in the address, at most 300
+characters) and refuses the rest with a plain reason. The list holds up to a hundred pages. The day run reads at most
+**ten a day**, oldest read first, and records each read through `minds_record_competitor_read` (one row per page per
+owner day, an eleventh refused by the table's own cap, `minds_assert_can_act()` first) so a second run the same day
+cannot read twenty. A page that cannot be reached is not recorded at all, and the owner is told so. When a page really
+changed, the owner gets one honest line — the new headline, or that the page text changed — through the notable list
+(`competitor_changed`), which is what buzzes the phone and reaches the briefing and the night report. Nothing else is
+ever claimed about a page.
+
+**One US dollar price change, with the Auditor first.** An owner's price ask is no longer refused in the chat, and it
+is not run from the chat either: the reply carries the rule, and the order lane holds it (`HELD_PRICE`). The day's run
+does the work, once a day: `priceChanges.ts` asks the brain for one product and one US dollar price with a reason,
+`auditPriceChange` checks it before anything is written (never nothing, free or under a dollar, never over the
+ceiling, never a step bigger than a quarter, never another currency, never a country or another money in the words),
+and a blocked change gets exactly one repair ask before it is stopped and told as `auditor_blocked`. An allowed change
+goes through `minds_apply_price_change` (migration `20261025000000_minds_price_changes.sql`, **not applied**), which
+re-checks every one of those rules in the database, writes both `products.price` and `price_cents`, records the old and
+the new price with the day, and refuses a second change on the same product the same day. The owner is told every
+time, in dollars, through `priceChangedAct`.

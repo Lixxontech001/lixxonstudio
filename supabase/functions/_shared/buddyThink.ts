@@ -9,6 +9,7 @@ import { closedOrderKind, gateModelOrder, type AllowedOrder } from "./buddyOrder
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import { captionAsk, draftPayload, type CaptionDraftResult } from "./chatCaptions.ts";
+import { WATCH_NONE_LINE, WATCH_SAVE_FAILED_LINE, watchRefusedLine, watchSavedLine, type RefusedUrl } from "./competitors.ts";
 import { ownerDayOf } from "./mindsNightReport.ts";
 import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure, type BrainPorts } from "./brainChain.ts";
 import { stateFactsBlock, type BuddyStateFacts } from "./buddyStateFacts.ts";
@@ -51,7 +52,7 @@ export const BUDDY_SYSTEM_INSTRUCTION = [
   "You talk only to the owner. Be short, clear and human. Plain English, no jargon, no hype.",
   "You do not write marketing copy. You do not post, send, publish, edit or change anything yourself.",
   "You can read the website's published article titles and the active shop products. Their current list comes with each question, under THE SITE RIGHT NOW. Use only that list. Never guess or invent article titles, product names, prices or numbers. Money is always in USD.",
-  "Takeover decides what the site can change. Takeover off: nothing on the site changes, and you say so. Takeover on: the minds may do the work they are already allowed to do, and you must tell the owner whenever you report such a change. You never publish, edit articles, change products or prices, or spend money yourself.",
+  "Takeover decides what the site can change. Takeover off: nothing on the site changes, and you say so. Takeover on: the minds may do the work they are already allowed to do, and you must tell the owner whenever you report such a change. You never publish or edit articles, never create products and never spend money yourself. A US dollar price changes only on a day's run, with Takeover on and the Auditor's check first, and the owner is told every time.",
   "You only know what the owner tells you in this conversation, the briefings Buddy has written in it, and the site list.",
 ].join("\n");
 
@@ -120,6 +121,12 @@ export interface BuddyThinkDeps {
   saveOrder(chatId: string, instruction: string, mind: MindName | null): Promise<boolean>;
   /** The newest log rows, optionally for one mind. Null when they cannot be read. */
   readMindLog(mind: MindName | null): Promise<MindLogLine[] | null>;
+  /**
+   * Saves the rival links the owner asked Buddy to watch (Phase I slice 5). Optional. This is the owner's own list,
+   * so it works whether Takeover is on or off, and it writes nothing on the site. Every link that is not a public
+   * https page comes back refused with a plain reason.
+   */
+  saveCompetitors?(urls: readonly string[]): Promise<{ saved: string[]; refused: RefusedUrl[] }>;
   /**
    * Drafts the four captions in this chat for a caption order (Phase I slice 4). Optional. It is talk, not a change,
    * so it runs with Takeover on or off; it reads the site and the brain, and writes nothing but the chat.
@@ -377,6 +384,8 @@ async function answerRouted(
 
   let reply: string;
   let runStart = false;
+  // How many rival links this message really saved (Phase I slice 5). Zero for every other route.
+  let savedLinks = 0;
   // A caption draft, when this order asked for one. Saved with the reply so today's pack step can use it.
   let captionPayload: Record<string, unknown> | null = null;
   if (route.kind === "mind_log") {
@@ -403,6 +412,30 @@ async function answerRouted(
     reply = brainHowToReply(route.brain);
   } else if (route.kind === "refused") {
     reply = route.line;
+  } else if (route.kind === "competitors") {
+    // The links are saved now, in the owner's own list. A link the app or the database will not take is named with
+    // its plain reason, so the owner always knows which pages are being watched. Nothing is filed, and nothing on
+    // the site changes.
+    let refused = [...route.refused];
+    let savedFacts: string[] = [];
+    let failed = deps.saveCompetitors === undefined && route.wanted.length > 0;
+    if (deps.saveCompetitors) {
+      try {
+        const outcome = await deps.saveCompetitors(route.wanted);
+        savedFacts = outcome.saved;
+        savedLinks = outcome.saved.length;
+        refused = [...refused, ...outcome.refused];
+      } catch {
+        failed = true;
+      }
+    }
+    if (failed) reply = WATCH_SAVE_FAILED_LINE;
+    else {
+      const lines = [savedLinks > 0 ? watchSavedLine(savedFacts) : WATCH_NONE_LINE];
+      const refusedLine = watchRefusedLine(refused);
+      if (refusedLine) lines.push(refusedLine);
+      reply = lines.join("\n");
+    }
   } else {
     const takeover = await readTakeoverSafe(deps);
     // An order the rules placed says so first, with the fit table when a second mind also fitted. Nothing is asked.
@@ -428,7 +461,19 @@ async function answerRouted(
   }
   const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, captionPayload);
   await deps.touchChat(chatId, title);
-  return { status: 200, body: { ok: true, action, route: route.kind, reply, saved, ...(captionPayload ? { drafted: true } : {}), ...(runStart ? { run_start: true } : {}) } };
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      action,
+      route: route.kind,
+      reply,
+      saved,
+      ...(captionPayload ? { drafted: true } : {}),
+      ...(route.kind === "competitors" ? { saved_links: savedLinks } : {}),
+      ...(runStart ? { run_start: true } : {}),
+    },
+  };
 }
 
 /** The ports the brain chain needs, from the deps. One place, so the probe and chat read keys the same way. */

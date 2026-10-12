@@ -51,8 +51,16 @@ export const DOOR_TEXT_LIMIT: Readonly<Record<DoorId, number>> = {
   smartnews: 1000,
 };
 
-/** Only articles published this recently are posted. Old articles are never sent to a door. */
+/** Only articles published this recently are posted as new. Anything older is the archive. */
 export const DOOR_WINDOW_DAYS = 7;
+/** The line an archive post opens with. It never says "new", because the article is not new. */
+export const DRIP_PREFIX = "From the archive: ";
+/** How an archive post is described in the log and in the owner's telling. */
+export const ARCHIVE_NOTE = "No new article was published in the last 7 days, so an older one went out.";
+/** The day's three older articles are used up: nothing older goes out again today. */
+export const DRIP_FULL_NOTE = "The archive has had its three articles today, so nothing older was posted.";
+/** The day's archive count could not be read. Nothing is stamped blind, so no older article went out. */
+export const DRIP_UNREADABLE_NOTE = "The archive count could not be read, so nothing older was posted.";
 /** One post per open door per local day. */
 export const DOOR_DAILY_LIMIT = 1;
 const TITLE_MAX = 200;
@@ -87,15 +95,15 @@ export function doorArticleUrl(slug: string, siteOrigin: string | null): string 
  * The post text: one plain line, then the link. The title is clipped so the whole text fits the door's limit.
  * Returns null when even the link does not fit.
  */
-export function doorText(title: string, articleUrl: string, limit: number): string | null {
+export function doorText(title: string, articleUrl: string, limit: number, prefix: string = PREFIX): string | null {
   const suffix = `\n${articleUrl}`;
-  const room = limit - Array.from(PREFIX + suffix).length;
+  const room = limit - Array.from(prefix + suffix).length;
   if (room < 1) return null;
   const flat = title.replace(/\s+/g, " ").trim();
   const chars = Array.from(flat);
   const max = Math.min(TITLE_MAX, room);
   const clipped = chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : flat;
-  return `${PREFIX}${clipped}${suffix}`;
+  return `${prefix}${clipped}${suffix}`;
 }
 
 /**
@@ -125,4 +133,58 @@ export function pickDoorArticle(input: {
   const text = doorText(article.title, articleUrl, input.limit);
   if (text === null) return { ok: false, reason: "too_long" };
   return { ok: true, article, articleUrl, text };
+}
+
+/** The newest article from the archive (older than the window) that this door has never had. */
+export function pickDripArticle(input: {
+  articles: DoorArticle[];
+  postedIds: ReadonlySet<string>;
+  nowMs: number;
+  siteOrigin: string | null;
+  limit: number;
+  /** When true, only an article with its own cover picture is picked (Pixelfed). */
+  needPicture?: boolean;
+}): DoorPick {
+  const since = input.nowMs - DOOR_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const old = input.articles
+    .filter((article) => article.slug && SAFE_SLUG.test(article.slug))
+    .filter((article) => !input.needPicture || (typeof article.coverImage === "string" && article.coverImage.trim() !== ""))
+    .filter((article) => article.publishedAt !== null && Date.parse(article.publishedAt) < since)
+    .filter((article) => !input.postedIds.has(article.id))
+    .sort((a, b) => Date.parse(b.publishedAt as string) - Date.parse(a.publishedAt as string));
+  const article = old[0];
+  if (!article || !article.slug) return { ok: false, reason: "nothing_new" };
+  if (copyProblem(article.title)) return { ok: false, reason: "copy_not_clean" };
+  const articleUrl = doorArticleUrl(article.slug, input.siteOrigin);
+  const text = doorText(article.title, articleUrl, input.limit, DRIP_PREFIX);
+  if (text === null) return { ok: false, reason: "too_long" };
+  return { ok: true, article, articleUrl, text };
+}
+
+export type DoorDayPick =
+  | { ok: true; drip: boolean; article: DoorArticle; articleUrl: string; text: string }
+  | { ok: false; reason: "nothing_new" | "copy_not_clean" | "too_long" };
+
+/**
+ * What this door posts today: a fresh article when there is one, and otherwise the newest archive article the door
+ * has never had (the drip). An article that broke a rule keeps its own reason, so the owner is told the truth rather
+ * than a made-up one. Nothing is posted twice to the same door: `postedIds` holds every article it already had.
+ */
+export function pickDoorArticleForDay(input: {
+  articles: DoorArticle[];
+  postedIds: ReadonlySet<string>;
+  nowMs: number;
+  siteOrigin: string | null;
+  limit: number;
+  needPicture?: boolean;
+}): DoorDayPick {
+  const fresh = pickDoorArticle(input);
+  if (fresh.ok) return { drip: false, article: fresh.article, articleUrl: fresh.articleUrl, text: fresh.text, ok: true };
+  // A fresh article that broke a rule keeps its own reason: an older one is not slipped in beside it, because the
+  // archive note would then be untrue. The archive is used only when there is no fresh article at all.
+  if (fresh.reason !== "nothing_new") return fresh;
+  const drip = pickDripArticle(input);
+  if (drip.ok) return { drip: true, article: drip.article, articleUrl: drip.articleUrl, text: drip.text, ok: true };
+  // Nothing postable at all: no fresh article, and nothing left in the archive for this door.
+  return { ok: false, reason: "nothing_new" };
 }

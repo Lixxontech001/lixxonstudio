@@ -30,6 +30,9 @@ import { factsWithMemory, freshTellings, TOLD_LIMIT, type ToldTelling } from "..
 import { readMemoryBlock } from "../_shared/mindMemoryServer.ts";
 import { deadProductWindows, planDeadProductActs, salesByProduct, type PaidItem, type ProductSales } from "../_shared/deadProducts.ts";
 import { draftFromPayload } from "../_shared/chatCaptions.ts";
+import { COMPETITOR_CHANGE_KIND, COMPETITOR_SAVE_LIMIT, competitorLabel, publicPageProblem, runCompetitorReads, type CompetitorFetch, type SavedCompetitor } from "../_shared/competitors.ts";
+import { runPriceChange } from "../_shared/priceRun.ts";
+import type { PriceProduct } from "../_shared/priceChanges.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
 import { doorLogAction, isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
 import { DOOR_LABEL } from "../_shared/buddyControls.ts";
@@ -55,6 +58,9 @@ const SHOP_LIMIT = 200;
 const EDIT_LIMIT = 500;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KILL_SCOPES = ["none", "all", "analyst", "strategist", "ceo", "executioner", "auditor"] as const;
+/** How long one rival page may take, and how much of it is read. Both keep the run small. */
+const COMPETITOR_TIMEOUT_MS = 12000;
+const COMPETITOR_MAX_BYTES = 600000;
 /** Database rule messages, mapped to the plain reason the run understands. Anything else is a plain failure. */
 const KNOWN_REASONS = ["takeover_off", "killed", "order_not_waiting", "paragraph_changed", "checksum_mismatch", "slot_missing", "article_missing", "already_posted", "door_day_cap", "door_not_open"] as const;
 
@@ -85,6 +91,45 @@ function clipBrief(value: unknown): string {
   if (typeof value !== "string") return "";
   const flat = value.replace(/\s+/g, " ").trim();
   return flat.length > 1200 ? `${flat.slice(0, 1199)}…` : flat;
+}
+
+/**
+ * The shop's own refusal, in plain words. The Auditor checks the price first, so these are the day's rules the plan
+ * cannot see: a product already changed today, and the guard rails the database keeps whatever the plan says.
+ */
+function priceReasonFrom(message: string): string {
+  if (/takeover_off/.test(message)) return "Takeover is off, so no price was changed.";
+  if (/killed/.test(message)) return "A Kill switch stops the minds, so no price was changed.";
+  if (/price_already_changed_today/.test(message)) return "This product's price already changed today. One change a day, so nothing else was written.";
+  if (/price_not_usd/.test(message)) return "US dollar prices only. Nothing was changed.";
+  if (/price_missing|price_free|price_too_low|price_too_high|price_same|price_too_big_a_step/.test(message)) return "The shop would not take that price. Nothing was changed.";
+  if (/price_reason_money/.test(message)) return "The reason named money other than US dollars. Nothing was changed.";
+  if (/price_no_reason/.test(message)) return "The change had no reason with it. Nothing was changed.";
+  return "The shop would not take that price. Nothing was changed.";
+}
+
+/** One rival page, as its html. Public pages only, a short wait, and a size cap so one big page cannot fill the run. */
+async function fetchCompetitorPage(url: string): Promise<CompetitorFetch> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), COMPETITOR_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { Accept: "text/html,application/xhtml+xml" },
+    });
+    // A redirect may land somewhere that is not a public page. Nothing is read from there.
+    const landed = publicPageProblem(response.url || url);
+    if (landed) return { ok: false, reason: "it moved to an address that is not a public page." };
+    if (!response.ok) return { ok: false, reason: `the page answered with status ${response.status}.` };
+    const text = await response.text();
+    if (!text) return { ok: false, reason: "the page came back empty." };
+    return { ok: true, html: text.slice(0, COMPETITOR_MAX_BYTES) };
+  } catch {
+    return { ok: false, reason: "the page could not be reached in time." };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -280,9 +325,13 @@ export async function handleRun(req: Request): Promise<Response> {
   // The RSS doors only ping the hub, so they are not counted as posts in the noticeable act.
   const posted = doors.outcomes.filter((item) => item.outcome === "posted");
   const postedReal = posted.filter((item) => !isRssDoor(item.door));
-  const articleTitle = posted.length > 0 ? doors.outcomes.find((item) => item.outcome === "posted")?.detail ?? "today's article" : "today's article";
+  const firstPost = postedReal[0];
+  const articleTitle = firstPost?.articleTitle ?? "today's article";
+  // An older article went out because nothing new was published. The telling says so, so the owner is never misled
+  // into thinking it was a new one.
+  const fromArchive = postedReal.some((item) => item.drip === true);
   if (postedReal.length > 0) {
-    await reportAct(doorPostedAct("The free doors", articleTitle, localDay), acts);
+    await reportAct(doorPostedAct("The free doors", articleTitle, localDay, fromArchive), acts);
   }
   // A quiet door is not silence: each one that did not post is told with the reason the door step gave. A step that
   // never reached a door at all (every door paused by the owner, or the step held) is told as one line, so the
@@ -325,6 +374,58 @@ export async function handleRun(req: Request): Promise<Response> {
     } catch {
       // The thinking steps are extra. Nothing else in the run depends on them.
     }
+  }
+  // Phase I slice 5: the rival pages the owner asked to watch, and the day's one US dollar price change. Both run
+  // after the thinking minds (so a log row here never eats a mind's retry) and before the packs (so a pack's copy
+  // carries the price the shop really shows). Each is extra: a failure in either never changes the day.
+  try {
+    await runCompetitorsForDay(sb, owner, localDay, takeover, killScope);
+  } catch {
+    // The rival reads are extra. Nothing else in the run depends on them.
+  }
+  try {
+    const priced = await runPriceChange(
+      { localDay, takeover, killScope },
+      {
+        readShop: async () => {
+          const { data, error } = await sb
+            .from("products")
+            .select("id,name,price_cents,currency")
+            .eq("is_active", true)
+            .or("currency.eq.USD,currency.is.null")
+            .order("name", { ascending: true })
+            .limit(SHOP_LIMIT);
+          if (error || !Array.isArray(data)) throw new Error("shop");
+          return data.map((row: Record<string, unknown>): PriceProduct => ({
+            id: String(row.id),
+            name: String(row.name ?? ""),
+            priceUsd: typeof row.price_cents === "number" ? row.price_cents / 100 : null,
+            currency: typeof row.currency === "string" ? row.currency : null,
+          }));
+        },
+        readFacts: () => readMindFacts(sb),
+        think: (request) => think(request),
+        apply: async (candidate) => {
+          const { data, error } = await sb.rpc("minds_apply_price_change", {
+            p_owner_id: owner,
+            p_product_id: candidate.productId,
+            p_new_cents: Math.round(candidate.priceUsd * 100),
+            p_local_day: localDay,
+            p_why: candidate.why,
+          });
+          if (error) return { ok: false, reason: priceReasonFrom(error.message) };
+          const row = asRecord(Array.isArray(data) ? data[0] : data);
+          const fromCents = typeof row?.from_cents === "number" ? row.from_cents : null;
+          const toCents = typeof row?.to_cents === "number" ? row.to_cents : null;
+          if (fromCents === null || toCents === null) return { ok: false, reason: "The shop did not confirm the new price, so nothing is claimed about it." };
+          return { ok: true, fromUsd: fromCents / 100, newUsd: toCents / 100 };
+        },
+        log: (entry) => acts.log({ mind: "executioner", action: entry.action, outcome: entry.outcome, detail: entry.detail }),
+      },
+    );
+    if (priced.act) await reportAct(priced.act, acts);
+  } catch {
+    // The price check is extra. Nothing else in the run depends on it.
   }
   const doorsReply = { status: doors.status, posted: doors.posted };
   if (outcome.status === "cannot_think") {
@@ -569,6 +670,22 @@ async function runDoorsForDay(
           .in("status", ["queued", "posted"]);
         if (error) throw new Error("count");
         return count ?? 0;
+      },
+      // Phase I slice 5: the day's drip rows. The doors may send an older article only when nothing new is in the
+      // window, and never more than three articles a day (the database's own rule). A failed read returns null, so
+      // nothing older is stamped blind.
+      countDripsToday: async (day) => {
+        const { count, error } = await sb
+          .from("post_drip_days")
+          .select("post_id", { count: "exact", head: true })
+          .eq("owner_id", owner)
+          .eq("local_day", day);
+        if (error) throw new Error("drips");
+        return count ?? 0;
+      },
+      recordDrip: async (articleId, day) => {
+        const { error } = await sb.rpc("minds_record_drip", { p_owner_id: owner, p_local_day: day, p_post_id: articleId });
+        return !error;
       },
       readSecret: async (name) => {
         const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: name });
@@ -823,6 +940,84 @@ async function runLivingMindsForDay(
     doneToday,
     stoppedToday,
   });
+}
+
+/**
+ * Phase I slice 5: the rival pages the owner asked Buddy to watch, read ten at most a day, oldest first, public pages
+ * only. A page that really changed is told through the notable list (which buzzes the phone, and is read by the
+ * briefing and the night report) and through the daily log. A page that changed nothing says nothing. A page that
+ * could not be read is not recorded, so it is tried again next run, and nothing is ever claimed about it.
+ *
+ * The daily-log rows name the Executioner, who carried the read out. The notable names the Strategist, the mind that
+ * watches rivals. Neither uses a thinking mind's name, so a row written here never stops a mind's own retry today.
+ * Only reached when Takeover is on and Kill allows the run.
+ */
+async function runCompetitorsForDay(sb: SupabaseClient, owner: string, localDay: string, takeover: boolean, killScope: KillScope): Promise<void> {
+  const savedRead = await sb
+    .from("minds_competitors")
+    .select("id,url,label,last_read_at,last_title,last_fingerprint")
+    .eq("owner_id", owner)
+    .order("last_read_at", { ascending: true, nullsFirst: true })
+    .limit(COMPETITOR_SAVE_LIMIT);
+  if (savedRead.error || !Array.isArray(savedRead.data)) return;
+  const saved: SavedCompetitor[] = savedRead.data.map((row: Record<string, unknown>) => ({
+    id: String(row.id),
+    url: String(row.url ?? ""),
+    label: typeof row.label === "string" && row.label ? row.label : competitorLabel(String(row.url ?? "")),
+    lastReadAt: typeof row.last_read_at === "string" ? row.last_read_at : null,
+    lastTitle: typeof row.last_title === "string" ? row.last_title : null,
+    lastFingerprint: typeof row.last_fingerprint === "string" ? row.last_fingerprint : null,
+  }));
+  const lines: string[] = [];
+  const result = await runCompetitorReads(
+    { localDay, takeover, killScope },
+    {
+      readSaved: async () => saved,
+      readReadToday: async () => {
+        const { data, error } = await sb.from("minds_competitor_reads").select("competitor_id").eq("owner_id", owner).eq("local_day", localDay);
+        if (error || !Array.isArray(data)) throw new Error("reads");
+        return new Set(data.map((row: Record<string, unknown>) => String(row.competitor_id)));
+      },
+      readPage: (url) => fetchCompetitorPage(url),
+      recordRead: async (read, page, changeNote, day) => {
+        const { error } = await sb.rpc("minds_record_competitor_read", {
+          p_owner_id: owner,
+          p_competitor_id: read.id,
+          p_local_day: day,
+          p_title: page.title,
+          p_fingerprint: page.fingerprint,
+          p_change_note: changeNote,
+        });
+        return !error;
+      },
+      log: async (line) => {
+        lines.push(line);
+      },
+    },
+  );
+  if (result.status === "held" || result.read === 0) return;
+  // One row for the day's read, then one row for each page that really changed.
+  await sb.from("minds_daily_log").insert({
+    owner_id: owner,
+    day: localDay,
+    mind: "executioner",
+    action: "Read the rival pages",
+    outcome: "done",
+    detail: clip(result.detail, 500),
+    order_id: null,
+  });
+  for (const change of result.changes) {
+    await sb.from("minds_daily_log").insert({
+      owner_id: owner,
+      day: localDay,
+      mind: "executioner",
+      action: "Rival page changed",
+      outcome: "done",
+      detail: clip(change.detail, 500),
+      order_id: null,
+    });
+    await recordNotable(sb, owner, localDay, "strategist", COMPETITOR_CHANGE_KIND, change.title, change.detail, change.key);
+  }
 }
 
 /** This week and last week, as counts only: article views and paid orders. A failed read says so, and is never a guess. */

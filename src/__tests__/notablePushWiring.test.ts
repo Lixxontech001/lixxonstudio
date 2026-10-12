@@ -10,8 +10,9 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 const RUN = read('supabase/functions/minds-run-placement/index.ts');
 const MIGRATION = read('supabase/migrations/20261011210000_notable_push.sql');
 // The kind list the table accepts today (the newest CHECK). Every kind that buzzes must be in it.
-// Phase I slice 3 replaced the Phase B check with one that also allows the acts that used to be silent.
-const KIND_CHECK = read('supabase/migrations/20261022000000_minds_act_kinds.sql');
+// Phase I slice 3 replaced the Phase B check with one that also allows the acts that used to be silent, and slice 5's
+// rival migration replaces that list again, so the newest file is the one that decides.
+const KIND_CHECK = read('supabase/migrations/20261024000000_minds_competitors.sql');
 
 describe('the day run records and buzzes through one helper', () => {
   it('a door post, a saved pack, the Auditor, and a broken door step each call the helper', () => {

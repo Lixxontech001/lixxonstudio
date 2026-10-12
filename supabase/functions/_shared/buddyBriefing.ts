@@ -110,6 +110,8 @@ export const BRIEFING_NOTABLE_KINDS: readonly string[] = [
   "price_changed",
   "pack_saved",
   "product_looks_dead",
+  // Phase I slice 5: a rival page the owner asked Buddy to watch really changed. Told in the morning briefing too.
+  "competitor_changed",
 ];
 const WENT_OUT_NOTABLE_KINDS = ["door_posted", "pack_saved"];
 const MONEY_NOTABLE_KINDS = ["sale", "product_click", "traffic_new_kind", "week_up", "week_down", "price_changed"];
@@ -121,7 +123,7 @@ const PROBLEM_NOTABLE_KINDS = ["auditor_blocked", "door_failed", "mind_failed", 
 /** The word the push helper writes when nothing is registered. The briefing reads it back; it never retypes the help line. */
 const PUSH_SKIP_NO_DEVICE = "no device";
 /** The two lines a notable's own title is shown as. A skipped door and a dead product carry their own sentence. */
-const NOTABLE_DETAIL_LINE_KINDS = ["door_failed", "door_skipped", "product_looks_dead", "price_changed", "pack_saved"];
+const NOTABLE_DETAIL_LINE_KINDS = ["door_failed", "door_skipped", "product_looks_dead", "price_changed", "pack_saved", "competitor_changed"];
 
 /**
  * The line the briefing shows when a buzz could not go out. The push helper writes the reason into the log, and this
@@ -135,7 +137,7 @@ export function pushSkipLine(detail: string): string {
   return `Phone alerts did not go out. ${reason}`;
 }
 // Takeover and Kill switch changes are part of what happened since you left.
-const SINCE_NOTABLE_KINDS = ["takeover_changed", "kill_changed"];
+const SINCE_NOTABLE_KINDS = ["takeover_changed", "kill_changed", "competitor_changed"];
 export const NOTABLE_LINE_LIMIT = 3;
 /** The daily-log action the push helper writes for a buzz that could not go out. Same words, one list. */
 export const PUSH_SKIP_ACTION = "Owner phone push";
