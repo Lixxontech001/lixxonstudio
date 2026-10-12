@@ -13,6 +13,7 @@ import { isInternalCall } from "../_shared/internalCall.ts";
 import { isAllowedAutomationOrigin } from "../_shared/automationKeyChecks.ts";
 import { readWaitingOrders } from "../_shared/buddyOrders.ts";
 import { makeMindThink } from "../_shared/mindThink.ts";
+import { saveRunChatReport } from "../_shared/runChatReport.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
@@ -153,6 +154,36 @@ export async function handleRun(req: Request): Promise<Response> {
   const cors = internal ? {} : corsFor(req);
   // Every answer below carries the same CORS decision that was made above.
   const out = (payload: unknown, status = 200) => reply(req, payload, status, internal);
+  let chatReportContext: { client: SupabaseClient; owner: string; chatId: string } | null = null;
+  const reportOut = async (payload: unknown, status = 200): Promise<Response> => {
+    const result = asRecord(payload);
+    const reportContext = chatReportContext;
+    if (!reportContext || typeof result?.detail !== "string") return out(payload, status);
+    const saved = await saveRunChatReport(
+      { ownerId: reportContext.owner, chatId: reportContext.chatId, detail: result.detail },
+      {
+        saveBuddyReply: async ({ ownerId, chatId, content }) => {
+          const { error } = await reportContext.client.from("buddy_messages").insert({
+            owner_id: ownerId,
+            chat_id: chatId,
+            role: "buddy",
+            kind: "reply",
+            content,
+          });
+          return !error;
+        },
+        touchChat: async ({ ownerId, chatId }) => {
+          const { error } = await reportContext.client
+            .from("buddy_chats")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", chatId)
+            .eq("owner_id", ownerId);
+          if (error) throw new Error("chat");
+        },
+      },
+    );
+    return out({ ...result, chat_reply_saved: saved }, status);
+  };
   if (!cors) return new Response(null, { status: 403 });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return out({ error: "Method not allowed." }, 405);
@@ -175,8 +206,14 @@ export async function handleRun(req: Request): Promise<Response> {
   if (requestedOrder !== undefined && requestedOrder !== null && (typeof requestedOrder !== "string" || !UUID.test(requestedOrder))) {
     return out({ error: "The order id is not valid." }, 400);
   }
+  const requestedChat = asRecord(body)?.chat_id;
+  if (requestedChat !== undefined && requestedChat !== null && (typeof requestedChat !== "string" || !UUID.test(requestedChat))) {
+    return out({ error: "The chat id is not valid." }, 400);
+  }
   // The clock never picks an order: an internal call always runs the oldest waiting order, as Run today does.
+  // Only an owner browser call may return its result to a chat.
   const orderId = !internal && typeof requestedOrder === "string" ? requestedOrder : null;
+  const chatId = !internal && typeof requestedChat === "string" ? requestedChat : null;
   const brief = internal ? clipBrief(asRecord(body)?.brief) : "";
 
   let user: { id: string } | null = null;
@@ -222,19 +259,25 @@ export async function handleRun(req: Request): Promise<Response> {
     return out({ error: "The Executioner is not configured." }, 503);
   }
   const owner = internal ? String(asRecord(body)?.owner_id) : (user as { id: string }).id;
+  if (chatId) {
+    const { data: chat, error: chatError } = await sb.from("buddy_chats").select("id").eq("id", chatId).eq("owner_id", owner).maybeSingle();
+    if (chatError || !chat) return out({ error: "That chat could not be found for this owner." }, 403);
+    chatReportContext = { client: sb, owner, chatId };
+  }
 
   // Owner pushes that are still waiting go out first, whatever the switches say. A sent row is never sent again.
   await flushUnpushedNotables(servicePushPorts(sb), Date.now(), owner);
 
   // Switches first. Takeover is on only when the saved value is exactly true. An unknown Kill value stops everything.
   const controlsRow = await sb.from("minds_controls").select("takeover,kill_scope").eq("id", 1).maybeSingle();
-  if (controlsRow.error) return out({ status: "held", detail: "Minds settings could not be read. Nothing changed." });
+  if (controlsRow.error) return reportOut({ status: "held", detail: "Minds settings could not be read. Nothing changed." });
   const takeover = asRecord(controlsRow.data)?.takeover === true;
   const killScope = parseKill(asRecord(controlsRow.data)?.kill_scope ?? "none");
 
-  // Takeover off, or Kill on a mind the run needs: nothing else is read, nothing is logged, orders stay waiting.
+  // Takeover off, or Kill on a mind the run needs: no waiting order or site data is read, no site change is made, and no daily log is written.
+  // If this came from a chat, reportOut still tells the owner why the run was held.
   const blocked = blockedDetail(takeover, killScope);
-  if (blocked) return out({ status: "held", detail: blocked, order_id: orderId });
+  if (blocked) return reportOut({ status: "held", detail: blocked, order_id: orderId });
 
   // The owner's waiting orders, oldest first. Other orders wait.
   const orderRows = await sb
@@ -245,7 +288,7 @@ export async function handleRun(req: Request): Promise<Response> {
     .order("created_at", { ascending: true })
     .limit(50);
   const waiting = await readWaitingOrders(async () => (orderRows.error || !Array.isArray(orderRows.data) ? null : orderRows.data));
-  if (!waiting.ok) return out({ status: "held", detail: "Waiting orders could not be read. Nothing changed." });
+  if (!waiting.ok) return reportOut({ status: "held", detail: "Waiting orders could not be read. Nothing changed." });
   // The minds walk the same brain chain as Buddy. Each brain's key is read here, on the server, and never passed on.
   const think = makeMindThink(async (secretName: string) => {
     try {
@@ -431,11 +474,11 @@ export async function handleRun(req: Request): Promise<Response> {
   }
   const doorsReply = { status: doors.status, posted: doors.posted };
   if (outcome.status === "cannot_think") {
-    return out({ status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
+    return reportOut({ status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
   }
   const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think, await readCaptionDraft(sb, owner, localDay));
   const detail = clip(`${orderOutcomeLine(outcome.status, outcome.detail)} ${packs.detail} ${doors.detail}`, 800);
-  return out({
+  return reportOut({
     status: outcome.status,
     detail,
     order_id: outcome.orderId,

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ invoke: vi.fn() }));
 const ORDER_ID = '66666666-6666-4666-8666-666666666666';
+const CHAT_ID = '77777777-7777-4777-8777-777777777777';
 vi.mock('../lib/supabaseClient', () => ({ supabase: { functions: { invoke: mocks.invoke } } }));
 
 import { startDayRun } from '../buddy/buddyChatStore';
@@ -12,13 +13,20 @@ beforeEach(() => {
 });
 
 describe('starting today\'s run from the browser', () => {
-  it('runs the exact chat order through the owner-only function', async () => {
-    mocks.invoke.mockResolvedValue({ data: { status: 'applied', detail: 'I added one product.', order_id: ORDER_ID }, error: null });
-    const answer = await startDayRun('2026-10-10', ORDER_ID);
-    expect(mocks.invoke).toHaveBeenCalledWith('minds-run-placement', {
-      body: { local_day: '2026-10-10', order_id: ORDER_ID },
+  it('runs the exact chat order and saves its combined result in the same chat', async () => {
+    mocks.invoke.mockResolvedValue({
+      data: { status: 'applied', detail: 'I added one product. Four packs were saved. Telegram posted the article.', order_id: ORDER_ID, chat_reply_saved: true },
+      error: null,
     });
-    expect(answer).toEqual({ status: 'applied', detail: 'I added one product.' });
+    const answer = await startDayRun('2026-10-10', ORDER_ID, CHAT_ID);
+    expect(mocks.invoke).toHaveBeenCalledWith('minds-run-placement', {
+      body: { local_day: '2026-10-10', order_id: ORDER_ID, chat_id: CHAT_ID },
+    });
+    expect(answer).toEqual({
+      status: 'applied',
+      detail: 'I added one product. Four packs were saved. Telegram posted the article.',
+      chatReplySaved: true,
+    });
   });
 
   it('can still start a general day run without naming an order', async () => {

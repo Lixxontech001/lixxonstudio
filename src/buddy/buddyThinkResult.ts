@@ -61,11 +61,15 @@ export function parseBriefingResult(value: unknown): BuddyBriefingResult | null 
 export interface DayRunAnswer {
   status: string;
   detail: string;
+  /** Present when the run function tried to save its result in the originating chat. */
+  chatReplySaved?: boolean;
 }
 
 /** Reads the answer of the owner-only run function. Anything without a plain detail becomes null. */
 export function parseRunAnswer(value: unknown): DayRunAnswer | null {
   if (!isRecord(value)) return null;
   if (typeof value.status !== 'string' || typeof value.detail !== 'string' || !value.detail.trim()) return null;
-  return { status: value.status.slice(0, 40), detail: value.detail.slice(0, 300) };
+  const answer: DayRunAnswer = { status: value.status.slice(0, 40), detail: value.detail.slice(0, 1200) };
+  if (typeof value.chat_reply_saved === 'boolean') answer.chatReplySaved = value.chat_reply_saved;
+  return answer;
 }

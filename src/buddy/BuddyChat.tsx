@@ -26,7 +26,8 @@ import './buddy.css';
 export const BUDDY_MAX_MESSAGE_CHARS = 1000;
 const COUNT_FROM_CHARS = 800;
 const NO_KEY_LINE = 'Buddy cannot think yet because no brain key is saved. Add one on the Brains page, under Automation in Admin.';
-const RUN_NOT_STARTED = 'Buddy could not start today\'s run just now. Your order stays waiting.';
+const RUN_NOT_STARTED = 'Buddy could not confirm the run just now. Check what happened before trying again.';
+const RUN_REPLY_NOT_SAVED = 'I could not save the run result in this chat.';
 const CHAT_NOT_REACHED = 'Buddy could not be reached just now. Check the messages below and try again shortly.';
 const BRIEFING_NOT_REACHED = 'Buddy could not get your briefing just now. You can still type below.';
 
@@ -157,13 +158,17 @@ export default function BuddyChat() {
     const result = await askBuddy(chatId, text);
     // Buddy authorizes a saved, supported request only when Takeover is on: start that exact run now.
     const run = result?.ok && result.runStart && result.runOrderId
-      ? await startDayRun(localDateString(), result.runOrderId)
+      ? await startDayRun(localDateString(), result.runOrderId, chatId)
       : null;
     const rows = await loadMessages(chatId);
     if (rows) setMessages(rows);
     if (!result) setNotice(CHAT_NOT_REACHED);
     else if (!result.ok && result.reason !== 'no_key') setNotice(result.message);
-    else if (result.ok && result.runStart) setNotice(run ? run.detail : RUN_NOT_STARTED);
+    else if (result.ok && result.runStart) {
+      if (!run) setNotice(RUN_NOT_STARTED);
+      else if (run.chatReplySaved === false) setNotice(`${RUN_REPLY_NOT_SAVED} ${run.detail}`);
+      else if (run.chatReplySaved !== true) setNotice(run.detail);
+    }
     if (result?.ok && settings.speakReplies) speak(result.reply);
     setPendingText(null);
     setSending(false);

@@ -192,6 +192,11 @@ describe('Buddy chat screen', () => {
       data: { ok: true, action: 'ask', reply: 'Takeover is on, so I am starting it now.', run_start: true, run_order_id: ORDER_ID },
       error: null,
     });
+    actions.run = () => {
+      const detail = 'Done. One product was added. Four packs were saved. Telegram posted the article.';
+      stored.push({ id: 'm3', role: 'buddy', kind: 'reply', content: detail, payload: null, created_at: CHAT.updated_at });
+      return { data: { status: 'applied', detail, chat_reply_saved: true }, error: null };
+    };
     const el = await render();
     await continueFromGreeting();
     await act(async () => buttonByText('New chat')?.click());
@@ -201,8 +206,30 @@ describe('Buddy chat screen', () => {
 
     const runCall = mocks.invoke.mock.calls.find(([name]) => name === 'minds-run-placement');
     expect(runCall).toBeDefined();
-    expect(runCall?.[1]).toMatchObject({ body: { order_id: ORDER_ID, local_day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } });
-    expect(el.querySelector('[role="alert"]')?.textContent).toBe('The product line was added.');
+    expect(runCall?.[1]).toMatchObject({ body: { order_id: ORDER_ID, chat_id: 'chat-1', local_day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } });
+    expect(el.textContent).toContain('Four packs were saved. Telegram posted the article.');
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('keeps the run details visible if the result cannot be saved in the chat', async () => {
+    inserts.buddy_chats = () => ({ data: CHAT, error: null });
+    actions.ask = () => ({
+      data: { ok: true, action: 'ask', reply: 'Takeover is on, so I am starting it now.', run_start: true, run_order_id: ORDER_ID },
+      error: null,
+    });
+    actions.run = () => ({
+      data: { status: 'applied', detail: 'The product was added. Four packs were saved.', chat_reply_saved: false },
+      error: null,
+    });
+    const el = await render();
+    await continueFromGreeting();
+    await act(async () => buttonByText('New chat')?.click());
+    await typeMessage('Swap the kit onto the article');
+    await act(async () => buttonByText('Send')?.click());
+    await settle();
+
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('could not save the run result in this chat');
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('Four packs were saved.');
   });
 
   it('does not start a run when Buddy does not authorize one', async () => {
