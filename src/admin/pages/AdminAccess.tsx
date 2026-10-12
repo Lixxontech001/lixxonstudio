@@ -119,7 +119,7 @@ export default function AdminAccess() {
       <div className="mb-6">
         <h1 className="font-serif text-2xl text-charcoal flex items-center gap-2"><KeyRound size={20} className="text-bronze" /> Team &amp; access</h1>
         <p className="text-sm text-charcoal-muted mt-1">
-          Roles and permissions are rows in the database, not a list in the app. Everything you change here takes effect on the next request; row-level security enforces it even if someone calls the API directly.
+          Permissions are decided by the site itself, not by a list in this app. Everything you change here takes effect on the next page, and the rules hold even if someone tries to reach the site directly.
         </p>
       </div>
 

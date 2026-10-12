@@ -24,12 +24,43 @@ type Metrics = {
 
 const bytes = (n: number) => n > 1024 * 1024 * 1024 ? `${(n / 1024 / 1024 / 1024).toFixed(2)} GB` : n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
 
+/**
+ * Every check the database can raise, in the owner's words. The database writes its own label for each check, and
+ * that label is engine talk ("Row-level security", "Cache hit ratio"), so the screen never prints it: it prints the
+ * line from this map instead. src/__tests__/adminPlainEnglish.test.ts fails if a migration adds a check that is
+ * missing here, or if a line here drifts back into engine talk.
+ */
 const CHECK_LABELS: Record<string, string> = {
   'db.cache_hit': 'Reads served from memory',
   'db.unindexed_fk': 'Links without a quick lookup',
   'db.seq_scans': 'Tables read the slow way',
   'db.dead_tuples': 'Tables needing a clean-up',
+  'db.long_queries': 'Queries stuck for too long',
+  'db.size': 'Database size',
+  'perf.slow': 'Slow lookups',
   'security.rls': 'Tables without access rules',
+  'security.anon_write': 'Tables anyone could write to',
+  'security.founder': 'Founder account flag',
+  'security.mfa': 'Two-factor setup',
+  'security.owner': 'Active owner account',
+  'content.cadence': 'How often you publish',
+  'content.drafts': 'Drafts nobody finished',
+  'content.images': 'Images that do not load',
+  'content.orphans': 'Articles without a category or author',
+  'content.seo': 'Missing search wording',
+  'commerce.entitlements': 'Paid orders without download links',
+  'commerce.pending': 'Orders left unpaid',
+  'commerce.webhooks': 'Payments we could not check',
+  'carts.recoverable': 'Carts still waiting',
+  'refunds.pending': 'Refunds waiting',
+  'email.failed': 'Emails that failed',
+  'email.stuck': 'Emails stuck in the queue',
+  'email.volume': 'Emails sent today',
+  'moderation.backlog': 'Comments and questions waiting',
+  'search.gaps': 'Searches that found nothing',
+  'storage.size': 'Storage used',
+  'backup.last': 'Newest backup',
+  'cron.failures': 'Jobs that did not run',
 };
 
 /** Plain English for a check's label. The check text itself is written in the database; this only changes the label on screen. */
