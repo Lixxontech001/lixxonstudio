@@ -25,9 +25,11 @@ import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, ty
 import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { orderOutcomeLine } from "../_shared/buddyFeedback.ts";
 import { LIVING_MINDS, STOPPED_ACTION, runLivingMinds, type LivingMindPorts } from "../_shared/buddyLivingMinds.ts";
+import { doorPostedAct, doorSkippedAct, packSavedAct, reportAct, type ActPorts } from "../_shared/mindActs.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
 import { doorLogAction, isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
 import { DOOR_LABEL } from "../_shared/buddyControls.ts";
+import { DOORS } from "../_shared/doorRegistry.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
@@ -264,22 +266,29 @@ export async function handleRun(req: Request): Promise<Response> {
   const pausedRaw = asRecord(pausedRow.data)?.paused_doors;
   const pausedDoors = pausedRow.error || !Array.isArray(pausedRaw) ? [] : pausedRaw.filter((item): item is string => typeof item === "string");
   const doors = await runDoorsSafely(sb, owner, localDay, takeover, killScope, pausedDoors);
-  // A door send that did not go out is a notable (one per door per day, by source key). It does not buzz the phone.
+  // The acts. A door send that did not go out is a notable of its own; a door that posted, and every door that
+  // stayed quiet with its own plain reason, is told once per door per day. The Executioner did all of these, and each
+  // one carries the log row and the buzz in the same telling.
+  const acts = actPortsFor(sb, owner, localDay);
   for (const notice of doorFailNotices(doors.outcomes, localDay)) {
     await recordNotable(sb, owner, localDay, notice.mind, notice.kind, notice.title, notice.detail, notice.key);
   }
-  // The RSS doors only ping the hub, so they are not counted as posts in the notable.
-  const realPosts = doors.outcomes.filter((item) => item.outcome === "posted" && !isRssDoor(item.door)).length;
-  if (realPosts > 0) {
-    await recordNotable(
-      sb,
-      owner,
-      localDay,
-      "executioner",
-      "door_posted",
-      `${realPosts} ${realPosts === 1 ? "free door posted" : "free doors posted"} today`,
-      "The Executioner sent these. Each one is in the log.",
-    );
+  // The RSS doors only ping the hub, so they are not counted as posts in the noticeable act.
+  const posted = doors.outcomes.filter((item) => item.outcome === "posted");
+  const postedReal = posted.filter((item) => !isRssDoor(item.door));
+  const articleTitle = posted.length > 0 ? doors.outcomes.find((item) => item.outcome === "posted")?.detail ?? "today's article" : "today's article";
+  if (postedReal.length > 0) {
+    await reportAct(doorPostedAct("The free doors", articleTitle, localDay), acts);
+  }
+  // A quiet door is not silence: each one that did not post is told with the reason the door step gave. A step that
+  // never reached a door at all (every door paused by the owner, or the step held) is told as one line, so the
+  // morning is never quiet by accident.
+  const quiet = doors.outcomes.filter((row) => row.outcome === "skipped" || row.outcome === "not_connected");
+  if (quiet.length === 0 && posted.length === 0) {
+    await reportAct(doorSkippedAct("The free doors", doors.detail, localDay), acts);
+  }
+  for (const item of quiet) {
+    await reportAct(doorSkippedAct(DOORS[item.door].label, item.detail, localDay), acts);
   }
   // Shop facts the owner should hear about, then a placement job that really changed an article.
   // Each is written once (source keys). Neither can fail the day run.
@@ -355,6 +364,29 @@ async function recordNotable(
   } catch {
     return null;
   }
+}
+
+/**
+ * Phase I slice 3: every act is told here. The log row and the notable that buzzes the phone are written together,
+ * through the same notable helper the run already uses, so an act cannot happen silently and a push problem can
+ * never take the log row with it.
+ */
+function actPortsFor(sb: SupabaseClient, owner: string, localDay: string): ActPorts {
+  return {
+    log: async (entry) => {
+      const { error } = await sb.from("minds_daily_log").insert({
+        owner_id: owner,
+        day: localDay,
+        mind: entry.mind,
+        action: clip(entry.action, 120),
+        outcome: entry.outcome,
+        detail: clip(entry.detail, 500),
+        order_id: null,
+      });
+      if (error) throw new Error("log");
+    },
+    notable: (kind, title, detail, key) => recordNotable(sb, owner, localDay, "executioner", kind, title, detail, key),
+  };
 }
 
 /** The door step never throws into the run. A read or write failure is a plain held step, and nothing more is sent. */
@@ -724,6 +756,7 @@ async function runPacksForDay(
     priceUsd: typeof row.price_cents === "number" ? row.price_cents / 100 : null,
   }));
   let readyPacks = 0;
+  let blockedPacks = 0;
   const learning = await readWindowLearning(sb, owner, new Date());
   const result = await runDayPacks(
     { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0, learning },
@@ -751,6 +784,7 @@ async function runPacksForDay(
           p_auditor_note: row.auditorNote,
         });
         if (!error && row.status === "ready") readyPacks += 1;
+        if (!error && row.status === "blocked") blockedPacks += 1;
         return error ? { ok: false, reason: reasonFrom(error.message) } : { ok: true };
       },
       log: async (entry) => {
@@ -766,16 +800,10 @@ async function runPacksForDay(
       },
     },
   );
-  if (readyPacks > 0) {
-    await recordNotable(
-      sb,
-      owner,
-      localDay,
-      "executioner",
-      "pack_ready",
-      `${readyPacks} gated ${readyPacks === 1 ? "pack is" : "packs are"} ready`,
-      "Instagram, TikTok, Facebook and Pinterest packs are ready for you to post by hand. Nothing was posted for you.",
-    );
+  // A saved pack is an act, and so is a pack the Auditor held back. Both are told: the log row, the buzz, the
+  // briefing and the night report, with the honest status of each pack. Nothing was posted for the owner.
+  if (readyPacks > 0 || blockedPacks > 0) {
+    await reportAct(packSavedAct(readyPacks, blockedPacks, localDay), actPortsFor(sb, owner, localDay));
   }
   return result;
 }

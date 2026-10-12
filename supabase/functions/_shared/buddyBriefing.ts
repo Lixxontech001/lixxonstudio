@@ -103,15 +103,43 @@ export const BRIEFING_NOTABLE_KINDS: readonly string[] = [
   "pack_ready",
   "door_failed",
   "mind_failed",
+  // Phase I slice 3: every act is told here too. A skipped door, a price change, a saved pack and a product that
+  // looks dead are all read by the briefing, and every kind in this list buzzes the phone.
+  "door_skipped",
+  "price_changed",
+  "pack_saved",
+  "product_looks_dead",
 ];
-const WENT_OUT_NOTABLE_KINDS = ["door_posted"];
-const MONEY_NOTABLE_KINDS = ["sale", "product_click", "traffic_new_kind", "week_up", "week_down"];
+const WENT_OUT_NOTABLE_KINDS = ["door_posted", "pack_saved"];
+const MONEY_NOTABLE_KINDS = ["sale", "product_click", "traffic_new_kind", "week_up", "week_down", "price_changed"];
 const JOB_NOTABLE_KINDS = ["order_blocked"];
-// The Auditor holding a change, a door that failed and a mind that failed all belong under Problems.
-const PROBLEM_NOTABLE_KINDS = ["auditor_blocked", "door_failed", "mind_failed"];
+// The Auditor holding a change, a door that failed, a door that did not go out, a mind that failed and a product
+// that looks dead all belong under Problems.
+const PROBLEM_NOTABLE_KINDS = ["auditor_blocked", "door_failed", "mind_failed", "door_skipped", "product_looks_dead"];
+
+/** The word the push helper writes when nothing is registered. The briefing reads it back; it never retypes the help line. */
+const PUSH_SKIP_NO_DEVICE = "no device";
+/** The two lines a notable's own title is shown as. A skipped door and a dead product carry their own sentence. */
+const NOTABLE_DETAIL_LINE_KINDS = ["door_failed", "door_skipped", "product_looks_dead", "price_changed", "pack_saved"];
+
+/**
+ * The line the briefing shows when a buzz could not go out. The push helper writes the reason into the log, and this
+ * reads it back: a missing device or a missing key is told plainly, never reported as sent.
+ */
+export function pushSkipLine(detail: string): string {
+  const reason = detail.trim();
+  if (!reason || reason === PUSH_SKIP_NO_DEVICE) {
+    return "Phone alerts did not go out: no device is registered. Open /admin/settings on your phone and tap Register this device.";
+  }
+  return `Phone alerts did not go out. ${reason}`;
+}
 // Takeover and Kill switch changes are part of what happened since you left.
 const SINCE_NOTABLE_KINDS = ["takeover_changed", "kill_changed"];
 export const NOTABLE_LINE_LIMIT = 3;
+/** The daily-log action the push helper writes for a buzz that could not go out. Same words, one list. */
+export const PUSH_SKIP_ACTION = "Owner phone push";
+/** The most phone-alert skip lines the briefing shows at once. The rest are still in the log. */
+export const PUSH_SKIP_LINE_LIMIT = 2;
 
 /** One door post the owner can see. `status` is the send log's own word: queued, posted or failed. */
 export interface BriefingDoorPost {
@@ -217,6 +245,20 @@ function moneyLines(facts: BriefingFacts): string[] {
 }
 
 /** The honest skips and closed doors since the owner last looked, plus blocked packs. Plain words, never a guess. */
+/**
+ * The phone-alert skips the push helper wrote into the log: one line per plain reason, newest first. A skip is told
+ * here as well as in the log, so a missing key or a missing device can never look like a sent alert.
+ */
+function pushSkipLines(minds: BriefingMindRow[]): string[] {
+  const lines: string[] = [];
+  for (const row of minds) {
+    if (row.action !== PUSH_SKIP_ACTION || row.outcome !== "skipped") continue;
+    const line = pushSkipLine(row.detail);
+    if (!lines.includes(line)) lines.push(line);
+  }
+  return lines.slice(0, PUSH_SKIP_LINE_LIMIT);
+}
+
 function honestProblemLines(minds: BriefingMindRow[], packs: BriefingPack[]): string[] {
   const lines: string[] = [];
   for (const row of minds) {
@@ -246,13 +288,13 @@ function notableLines(notables: BriefingFacts["notables"], kinds: string[]): str
     .slice(0, NOTABLE_LINE_LIMIT)
     .map((row) => {
       const detail = row.detail.trim();
-      if (row.kind === "door_failed" && detail) return detail.slice(0, DOOR_NOTE_LIMIT);
+      if (detail && NOTABLE_DETAIL_LINE_KINDS.includes(row.kind)) return detail.slice(0, DOOR_NOTE_LIMIT);
       return `${clipTitle(row.title).replace(/[.!?]+$/, "")}.`;
     });
 }
 
 function problemLines(failures: BriefingFacts["failures"], minds: BriefingMindRow[], packs: BriefingPack[], notables: BriefingFacts["notables"]): string[] {
-  const honest = [...honestProblemLines(minds, packs), ...notableLines(notables, PROBLEM_NOTABLE_KINDS)];
+  const honest = [...pushSkipLines(minds), ...honestProblemLines(minds, packs), ...notableLines(notables, PROBLEM_NOTABLE_KINDS)];
   if (notables && !notables.ok) honest.push("I cannot read the notable events yet.");
   if (!failures.ok) return ["I cannot read the error log yet.", ...honest];
   if (failures.count === 0) return honest.length > 0 ? honest : ["No errors since you left."];
@@ -429,7 +471,10 @@ export function buildBriefing(facts: BriefingFacts, now: Date, sinceIso: string,
   // A door post that went out, failed or is still saving is news, so the day is not quiet.
   const doorsReal = (facts.doors?.rows.length ?? 0) > 0;
   // An honest skip or a closed door is a problem the owner should see, so it also keeps the day from being quiet.
-  const mindsReal = (facts.minds?.rows ?? []).some((row) => REAL_OUTCOMES.includes(row.outcome) || isHonestSkip(row.detail));
+  // A buzz that could not go out counts too: the owner has to hear that the phone was not told.
+  const mindsReal = (facts.minds?.rows ?? []).some(
+    (row) => REAL_OUTCOMES.includes(row.outcome) || isHonestSkip(row.detail) || row.action === PUSH_SKIP_ACTION,
+  );
   // An order still waiting for the owner is not quiet, even when nothing else happened.
   const ordersWaiting = (facts.waiting?.count ?? 0) > 0;
   // An article change or an open product gap is real news too, so the day is not quiet.

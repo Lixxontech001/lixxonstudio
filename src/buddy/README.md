@@ -649,3 +649,20 @@ The 08:00 clock queues the day and then runs the day as a team, in one fixed ord
   gets CORS headers.
 - `minds-morning-clock` sends the brief with the call, and `minds-run-placement` writes it as one `minds_daily_log`
   row, so the owner can read what the morning team planned.
+
+## Phase I slice 3: every act is told four ways
+
+One daily-log row, one notable event (which buzzes the phone), one briefing line, one night line.
+
+- `supabase/functions/_shared/mindActs.ts` is the one list of acts and the one place their plain words live:
+  `door_posted`, `door_skipped`, `price_changed`, `pack_saved`, `product_looks_dead`, `auditor_blocked`. Each act
+  carries its log action, its notable title, its detail, its outcome and its once-a-day key.
+- `reportAct` writes the log row and the notable together and never throws: a phone that cannot be reached is
+  reported, not raised, so an act is never lost because a device was missing.
+- The briefing and the night report both read the notable events, so a notable is a briefing line and a night line.
+  The four new kinds are in `BRIEFING_NOTABLE_KINDS`, which is what makes them buzz (`BUZZ_KINDS`).
+- A door that did not go out is told per door with the door step's own reason, and a step that never reached a door
+  is told as one line: the morning is never quiet by accident. A saved pack is told ready or blocked.
+- Missing VAPID or no device: the push helper writes its skip row as before, the briefing now shows
+  `pushSkipLine(detail)` under Problems, and a skipped buzz keeps the day from being "Quiet". Nothing claims sent.
+- Migration `20261022000000_minds_act_kinds.sql` (not applied) allows the four new kinds in the table check.

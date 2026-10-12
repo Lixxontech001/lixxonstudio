@@ -151,9 +151,12 @@ describe('Phase F freeze: Buddy', () => {
   });
 
   it('notable kinds are exactly the briefing list, and include door_failed', () => {
+    // Phase I slice 3 added the four acts that used to be silent: a door that did not go out, a price change, a
+    // saved pack, and a product that looks dead. They are briefing kinds, so they buzz the phone as well.
     expect([...BRIEFING_NOTABLE_KINDS]).toEqual([
       'takeover_changed', 'kill_changed', 'week_up', 'week_down', 'door_posted', 'sale', 'product_click',
       'traffic_new_kind', 'auditor_blocked', 'order_blocked', 'pack_ready', 'door_failed', 'mind_failed',
+      'door_skipped', 'price_changed', 'pack_saved', 'product_looks_dead',
     ]);
   });
 
