@@ -57,7 +57,9 @@ describe('missing VAPID is an honest skip, and nothing is sent', () => {
   });
 
   it('the owner is shown the same help line the Keys page uses', () => {
-    expect(PUSH_HELP_COPY).toMatch(/VAPID/);
+    expect(PUSH_HELP_COPY).toMatch(/Keys page/);
+    expect(PUSH_HELP_COPY).toMatch(/\/admin\/settings/);
+    expect(PUSH_HELP_COPY).toMatch(/phone/);
     expect(PUSH_HELP_COPY).toMatch(/Register this device/);
   });
 });

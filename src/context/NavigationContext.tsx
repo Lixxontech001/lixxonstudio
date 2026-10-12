@@ -78,6 +78,7 @@ export type Route =
   | { name: 'admin-activity-log' }
   | { name: 'admin-access' }
   | { name: 'admin-data' }
+  | { name: 'admin-guide' }
   | { name: 'admin-health' }
   | { name: 'admin-growth' }
   | { name: 'admin-advisor' }
@@ -185,6 +186,7 @@ function parsePath(): Route {
     if (parts[1] === 'team') return { name: 'admin-team' };
     if (parts[1] === 'access') return { name: 'admin-access' };
     if (parts[1] === 'data') return { name: 'admin-data' };
+    if (parts[1] === 'guide') return { name: 'admin-guide' };
     if (parts[1] === 'health') return { name: 'admin-health' };
     if (parts[1] === 'growth') return { name: 'admin-growth' };
     if (parts[1] === 'advisor') return { name: 'admin-advisor' };
@@ -296,6 +298,7 @@ export function routeToPath(route: Route): string {
     case 'admin-activity-log': return '/admin/activity-log';
     case 'admin-access': return '/admin/access';
     case 'admin-data': return '/admin/data';
+    case 'admin-guide': return '/admin/guide';
     case 'admin-health': return '/admin/health';
     case 'admin-growth': return '/admin/growth';
     case 'admin-advisor': return '/admin/advisor';

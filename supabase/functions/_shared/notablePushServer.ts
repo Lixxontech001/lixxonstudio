@@ -7,7 +7,7 @@
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
 import { BUZZ_KINDS, NO_DEVICE_COPY, PUSH_HELP_COPY, notifyOwnerDevices, shouldBuzz, type PushNotifyDeps, type PushStatus } from "./notablePush.ts";
-import { OWNER_UTC_OFFSET_HOURS } from "./mindsNightReport.ts";
+import { ownerDayOf as ownerDayOnTheClock } from "./mindsNightReport.ts";
 import type { PushTarget, VapidCredentials } from "./webPush.ts";
 
 /** The browser and chat paths only push a row this fresh. */
@@ -52,11 +52,9 @@ function clip(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
-/** The owner's calendar day for a timestamp, on the same clock the daily log uses. */
+/** The owner's calendar day for a timestamp. One definition, in the clock module; kept here for every caller. */
 export function ownerDayOf(iso: string): string {
-  const time = new Date(iso).getTime();
-  if (Number.isNaN(time)) return new Date().toISOString().slice(0, 10);
-  return new Date(time + OWNER_UTC_OFFSET_HOURS * 3_600_000).toISOString().slice(0, 10);
+  return ownerDayOnTheClock(iso);
 }
 
 /**

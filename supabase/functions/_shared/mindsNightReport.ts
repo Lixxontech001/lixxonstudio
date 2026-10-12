@@ -69,6 +69,13 @@ export function ownerClock(iso: string): string {
   return `${String(shifted.getUTCHours()).padStart(2, "0")}:${String(shifted.getUTCMinutes()).padStart(2, "0")}`;
 }
 
+/** The owner's calendar day for a timestamp, on the same clock the daily log uses. */
+export function ownerDayOf(iso: string): string {
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) return new Date().toISOString().slice(0, 10);
+  return new Date(time + OWNER_UTC_OFFSET_HOURS * 3_600_000).toISOString().slice(0, 10);
+}
+
 /** The UTC range that covers one owner day. Used to read events by time. */
 export function ownerDayWindow(day: string): { start: string; end: string } {
   const [year, month, date] = day.split("-").map(Number);

@@ -25,7 +25,7 @@ describe('the Keys page does not repeat the free-door details', () => {
   it('removes every door detail and keeps every other key', () => {
     const doorRows = doorSecretNames().map((name) => ({ name }));
     // YouTube's names are door details now (Phase 6), so they are not in this list of other keys.
-    const others = [{ name: 'gemini_api_key' }, { name: 'openai_api_key' }, { name: 'whatsapp_access_token' }];
+    const others = [{ name: 'gemini_api_key' }, { name: 'resend_api_key' }, { name: 'whatsapp_access_token' }];
     const kept = keysWithoutDoorDetails([...others, ...doorRows]);
     expect(kept.map((row) => row.name)).toEqual(others.map((row) => row.name));
   });
@@ -39,11 +39,11 @@ describe('the Keys page does not repeat the free-door details', () => {
 describe('automation Keys security boundary', () => {
   it('whitelists safe key metadata and drops all secret/Vault properties', () => {
     const parsed = parseAutomationKeyList([{
-      name: 'openai_api_key',
-      label: 'OpenAI API key',
-      category: 'ai',
+      name: 'resend_api_key',
+      label: 'Resend API key',
+      category: 'email',
       credential_type: 'secret',
-      purpose: 'Optional provider route',
+      purpose: 'Send approved owner-requested email',
       required: false,
       configured: true,
       last_test_status: 'ok',
@@ -53,11 +53,11 @@ describe('automation Keys security boundary', () => {
       decrypted_secret: 'FAKE-SECRET-MUST-NOT-ENTER-COMPONENT-STATE',
     }]);
     expect(parsed).toEqual([{
-      name: 'openai_api_key',
-      label: 'OpenAI API key',
-      category: 'ai',
+      name: 'resend_api_key',
+      label: 'Resend API key',
+      category: 'email',
       credential_type: 'secret',
-      purpose: 'Optional provider route',
+      purpose: 'Send approved owner-requested email',
       required: false,
       configured: true,
       last_test_status: 'ok',

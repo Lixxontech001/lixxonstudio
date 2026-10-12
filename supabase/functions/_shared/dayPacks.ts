@@ -4,7 +4,8 @@
 // A pack is ready only with a real MP4. No MP4 is made by this run yet, so every pack is honest "video not made yet".
 
 import { PACK_CHANNELS, type PackChannel } from "./packRules.ts";
-import { chooseProductsForCopy, choosePackArticle, planPackCopy, suggestedTimeFor, type CopyPlan, type PackArticle } from "./packCopy.ts";
+import { chooseProductsForCopy, choosePackArticle, planPackCopy, suggestedTimeFor, type CopyPlan, type PackArticle, type PackCopy } from "./packCopy.ts";
+import { draftForArticle, DRAFT_USED_DETAIL } from "./chatCaptions.ts";
 import { planPackMedia, VIDEO_NOT_MADE_REASON } from "./packMedia.ts";
 import { imageProblemNote, type ArticleImageCheck } from "./articleImage.ts";
 import { blockedDetail } from "./runDay.ts";
@@ -38,6 +39,11 @@ export interface DayPacksInput {
   alreadyMade: boolean;
   /** Learned window order from measured posts. Absent or not learned: the current windows are kept. */
   learning?: { learned: boolean; ranked: string[]; note: string } | null;
+  /**
+   * The four captions the owner drafted in the chat today (Phase I slice 4). When it is for this article, it is used
+   * instead of writing new ones, and the Auditor still checks it first. Absent: the pack writes its own captions.
+   */
+  draftedCopy?: { articleTitle: string; copy: PackCopy } | null;
 }
 
 /** One pack row, as the database's pack door takes it. */
@@ -96,6 +102,11 @@ function textFor(channel: PackChannel, copy: NonNullable<CopyPlan["copy"]>): { c
   return { caption: copy[channel], title: null, description: null };
 }
 
+/** The line the pack writes when the owner's own draft was used, so the log says where the captions came from. */
+function draftDetail(): string {
+  return `${DRAFT_USED_DETAIL} The Auditor allowed it.`;
+}
+
 function saveReason(reason: string): string {
   if (reason === "takeover_off") return "Takeover is off. The rest of the packs were not saved.";
   if (reason === "killed") return "A Kill switch is on. The rest of the packs were not saved.";
@@ -122,7 +133,17 @@ export async function runDayPacks(input: DayPacksInput, ports: DayPacksPorts): P
   if (!source || !source.slug) return { status: "nothing_to_do", detail: NO_PACK_ARTICLE_DETAIL, saved: 0, postId: null };
 
   const products = chooseProductsForCopy(liveShop(source));
-  const plan = await planPackCopy({ title: source.title }, products, ports.think);
+  // The owner's own draft comes first, and only for the article it was written for. It passes the same Auditor as a
+  // fresh one, so a draft can never reach a pack unchecked. Without a draft, the pack writes its own captions.
+  const drafted = draftForArticle(input.draftedCopy ?? null, source.title, products);
+  const plan: CopyPlan = drafted
+    ? {
+        status: drafted.verdict.verdict === "block" ? "blocked" : "planned",
+        detail: drafted.verdict.verdict === "block" ? drafted.verdict.fix : draftDetail(),
+        copy: drafted.copy,
+        verdict: drafted.verdict,
+      }
+    : await planPackCopy({ title: source.title }, products, ports.think);
   if (plan.status === "cannot_think") return { status: "held", detail: plan.detail, saved: 0, postId: source.id };
   if (plan.status === "failed" || !plan.copy || !plan.verdict) return { status: "failed", detail: plan.detail, saved: 0, postId: source.id };
 
@@ -178,7 +199,9 @@ export async function runDayPacks(input: DayPacksInput, ports: DayPacksPorts): P
   const reasons = [...new Set(rows.map((row) => row.blockedReason).filter((reason): reason is string => Boolean(reason)))];
   const blockedText = rows.length - ready > 0 ? ` Blocked: ${reasons.join("; ")}.` : "";
   const learnText = input.learning ? ` ${input.learning.note}` : "";
-  const detail = clip(`Made today's packs for "${source.title}": ${saved} saved, ${ready} ready to post by hand.${blockedText}${learnText}`, 500);
+  // When the owner's own captions were used, the day's line says so, so the log and the packs agree.
+  const draftText = drafted ? ` ${DRAFT_USED_DETAIL}` : "";
+  const detail = clip(`Made today's packs for "${source.title}": ${saved} saved, ${ready} ready to post by hand.${blockedText}${learnText}${draftText}`, 500);
   await ports.log({ mind: "executioner", action: "Made today's packs", outcome: "done", detail });
   return { status: "done", detail, saved, postId: source.id };
 }

@@ -62,9 +62,9 @@ export default function AdminSettings() {
           </div>
 
           <div>
-            <p className="text-xs font-medium text-charcoal mb-2">Step 2: Add the Public Key to your project</p>
+            <p className="text-xs font-medium text-charcoal mb-2">Step 2: Add the public key to the site's build settings</p>
             <p className="text-sm text-charcoal-muted leading-relaxed mb-2">
-              Open the <code className="text-xs bg-taupe-light px-1 rounded">.env</code> file in your project root and add this line (replace with your actual key):
+              Add this line to the site's build settings, in the same place the other build values live (replace it with your actual key):
             </p>
             <div className="bg-charcoal text-white text-sm font-mono px-4 py-3 rounded-sm flex items-center justify-between">
               <span>VITE_FLUTTERWAVE_PUBLIC_KEY=FLWPUBK_TEST-your-key-here</span>
@@ -75,10 +75,9 @@ export default function AdminSettings() {
           </div>
 
           <div>
-            <p className="text-xs font-medium text-charcoal mb-2">Step 3: Add the Secret Key as an Edge Function secret</p>
+            <p className="text-xs font-medium text-charcoal mb-2">Step 3: Add the secret key to the site's server settings</p>
             <p className="text-sm text-charcoal-muted leading-relaxed mb-2">
-              The secret key is used server-side only to verify payments. Set it using the Supabase dashboard:
-              Go to <strong>Project Settings &rarr; Edge Functions &rarr; Secrets</strong> and add:
+              The secret key is used on the server only, never in the browser. Open your hosting dashboard, find the project's function settings, and add:
             </p>
             <div className="bg-charcoal text-white text-sm font-mono px-4 py-3 rounded-sm flex items-center justify-between">
               <span>FLW_SECRET_KEY = FLWSECK_TEST-your-secret-key-here</span>
@@ -91,16 +90,12 @@ export default function AdminSettings() {
           <div>
             <p className="text-xs font-medium text-charcoal mb-2">Step 4 (Optional): Email delivery with Resend</p>
             <p className="text-sm text-charcoal-muted leading-relaxed mb-2">
-              To automatically email download links to customers after purchase, create a free account at
+              To email download links to customers after a purchase, create a free account at
               <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="text-bronze underline"> resend.com</a>,
-              get your API key, and add it as another Edge Function secret:
+              get your API key, and paste it on the
+              <a href="/admin/automation/keys" className="text-bronze underline">Keys page</a>.
+              It is saved once, and it is never shown again.
             </p>
-            <div className="bg-charcoal text-white text-sm font-mono px-4 py-3 rounded-sm flex items-center justify-between">
-              <span>RESEND_API_KEY = re_your-resend-api-key</span>
-              <button onClick={() => copyToClipboard('RESEND_API_KEY', 'resend')} className="text-white/60 hover:text-white">
-                {copied === 'resend' ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-            </div>
             <p className="text-xs text-charcoal-muted mt-2">If Resend is not configured, download links still appear on-screen after payment — they just won't be emailed.</p>
           </div>
 
@@ -108,7 +103,7 @@ export default function AdminSettings() {
             <p className="text-xs font-medium text-charcoal mb-2">Step 5: Verify your domain in Flutterwave</p>
             <p className="text-sm text-charcoal-muted leading-relaxed">
               In the Flutterwave dashboard, go to <strong>Settings &rarr; Webhooks</strong> and add your live domain.
-              Also verify your website domain under <strong>Settings &rarr; Domains</strong> so the payment modal works on your live site.
+              Also verify your website domain under <strong>Settings &rarr; Domains</strong> so payments work on your live site.
             </p>
           </div>
         </div>
@@ -168,7 +163,7 @@ export default function AdminSettings() {
 
           <div>
             <p className="font-medium text-charcoal mb-1">Media</p>
-            <p className="text-charcoal-muted leading-relaxed">Upload and manage images for articles and products. Images are stored in Supabase storage and referenced by URL.</p>
+            <p className="text-charcoal-muted leading-relaxed">Upload and manage images for articles and products. Images are kept with the site's own files and are shown from their link.</p>
           </div>
 
           <div>

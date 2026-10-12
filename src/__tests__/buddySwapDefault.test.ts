@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
-import { ASK_WHICH_MIND_LINE, routeFilingGate, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
+import { laneFor, HELD_PRICE } from '../../supabase/functions/_shared/buddyOrders';
+import { RESTRICTED_LINE, routeFilingGate, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
 import { handleBuddyThink, type BuddyThinkDeps } from '../../supabase/functions/_shared/buddyThink';
 
 // Phase E slice 2: a swap with no mind named files to the Executioner. No "which mind?" question for a swap.
@@ -85,31 +86,43 @@ describe('an unnamed swap goes to the Executioner', () => {
     expect(routeMessage(SWAP, { instruction: 'Look at the spring kit plan' })).toMatchObject({ kind: 'order', mind: 'executioner' });
   });
 
-  it('no "which mind?" question is asked for a swap', () => {
-    expect(routeMessage(SWAP, null).kind).not.toBe('ask_which_mind');
+  it('a swap files straight away, and no question is asked of any kind', () => {
+    expect(routeMessage(SWAP, null).kind).toBe('order');
   });
 
-  it('through the chat handler: the swap is saved for the Executioner and the owner gets no which-mind question', async () => {
+  it('through the chat handler: the swap is saved for the Executioner and nothing asks the owner to choose', async () => {
     const { deps, saveOrder, saved } = chatDeps();
     const result = await handleBuddyThink(ask(SWAP), deps);
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, SWAP, 'executioner');
     expect(result.body).toMatchObject({ ok: true, route: 'order' });
-    expect(saved.some((item) => item.content === ASK_WHICH_MIND_LINE)).toBe(false);
+    expect(saved.every((item) => !/which mind/i.test(item.content))).toBe(true);
   });
 });
 
 describe('the swap default never widens the closed list', () => {
-  it('a swap that also asks for an email or a price change is refused, so nothing is filed', async () => {
-    for (const outside of ['Swap the kit onto the article and email the list', 'Swap the kit onto the article and change the price to 5 dollars']) {
-      const route = routeMessage(outside, null);
-      // Refused by the router, or by the gate if the router ever lets it through. Either way nothing is filed.
-      if (route.kind === 'refused') expect(route.line).toBe(REFUSAL_LINE);
-      else expect(routeFilingGate(route)).toEqual({ ok: false, line: REFUSAL_LINE });
-      const { deps, saveOrder, saved } = chatDeps();
-      await handleBuddyThink(ask(outside), deps);
-      expect(saveOrder).not.toHaveBeenCalled();
-      expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
-    }
+  it('a swap that also asks for an email is refused, so nothing is filed', async () => {
+    const route = routeMessage('Swap the kit onto the article and email the list', null);
+    // Refused by the router, or by the gate if the router ever lets it through. Either way nothing is filed.
+    if (route.kind === 'refused') expect(route.line).toBe(REFUSAL_LINE);
+    else expect(routeFilingGate(route)).toEqual({ ok: false, line: REFUSAL_LINE });
+    const { deps, saveOrder, saved } = chatDeps();
+    await handleBuddyThink(ask('Swap the kit onto the article and email the list'), deps);
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(saved.at(-1)?.content).toBe(REFUSAL_LINE);
+  });
+
+  it('a swap that also asks for a price change is filed, and the price lane keeps it from running', async () => {
+    // Phase I slice 5: a price ask is no longer an outside action, so nothing is refused. It is also never run from
+    // the chat: the lane holds the order, and the reply carries the rule that the day's run is where a price changes.
+    const TEXT = 'Swap the kit onto the article and change the price to 5 dollars';
+    const route = routeMessage(TEXT, null);
+    expect(route.kind).toBe('order');
+    if (route.kind === 'order') expect(laneFor(route.instruction)).toEqual({ lane: 'held', reason: HELD_PRICE });
+    const { deps, saveOrder, saved } = chatDeps();
+    await handleBuddyThink(ask(TEXT), deps);
+    expect(saveOrder).toHaveBeenCalledTimes(1);
+    // The reply names the rule in full, so the owner knows a chat price ask is never run quietly.
+    expect(saved.at(-1)?.content).toContain(RESTRICTED_LINE);
   });
 
   it('a swap is never filed as anything but the five kinds', () => {
@@ -120,11 +133,10 @@ describe('the swap default never widens the closed list', () => {
 });
 
 describe('a question is never filed, swap or not', () => {
-  it('a question about a swap is not an order and not a which-mind prompt', () => {
+  it('a question about a swap stays a question: no order, no choice for the owner', () => {
     for (const question of ['Can you swap the kit onto the article?', 'How do I swap the kit onto the article?']) {
       const route = routeMessage(question, null);
-      expect(route.kind).not.toBe('order');
-      expect(route.kind).not.toBe('ask_which_mind');
+      expect(route.kind).toBe('chat');
     }
   });
 
@@ -135,9 +147,15 @@ describe('a question is never filed, swap or not', () => {
   });
 });
 
-describe('other unnamed orders keep asking which mind (unchanged)', () => {
-  it('"Do the new article" still asks which mind, because it is not a swap', () => {
-    expect(routeMessage('Do the new article', null)).toEqual({ kind: 'ask_which_mind', instruction: 'Do the new article' });
+describe('other unnamed orders are placed by the rules, like every unnamed order', () => {
+  it('"Do the new article" goes to the Executioner, with one line and no question', () => {
+    expect(routeMessage('Do the new article', null)).toEqual({
+      kind: 'order',
+      mind: 'executioner',
+      instruction: 'Do the new article',
+      resolvesPending: false,
+      routed: true,
+    });
   });
 });
 
@@ -146,7 +164,6 @@ describe('the refusal reaches an outside action after "and", "then" or a comma',
     'Swap the kit onto the article and email the list',
     'Swap the kit onto the article, then refund Jane',
     'Put the sleep guide on the new article and delete the old article',
-    'Swap the kit onto the article; change the price to 5 dollars',
   ])('refused, nothing filed: %s', async (outside) => {
     const { deps, saveOrder } = chatDeps();
     const result = await handleBuddyThink(ask(outside), deps);

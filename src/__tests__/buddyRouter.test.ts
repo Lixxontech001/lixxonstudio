@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ASK_WHICH_MIND_LINE,
+  DEFAULT_MIND,
   answerFromLog,
   NEVER_LIST_LINES,
   neverListLine,
   isRestricted,
+  mindFit,
+  mindFitTable,
   namedMind,
   routeMessage,
+  routedOrderLine,
   type MindLogLine,
 } from '../../supabase/functions/_shared/buddyRouter';
 
@@ -50,10 +53,13 @@ describe('routing: orders', () => {
     });
   });
 
-  it('an order with no mind asks which mind, once', () => {
+  it('an order with no mind is placed by the rules, so Buddy never asks', () => {
     expect(routeMessage('Check the new article', null)).toEqual({
-      kind: 'ask_which_mind',
+      kind: 'order',
+      mind: 'auditor',
       instruction: 'Check the new article',
+      resolvesPending: false,
+      routed: true,
     });
   });
 
@@ -70,9 +76,15 @@ describe('routing: orders', () => {
     expect(routeMessage('What did the Auditor do?', PENDING).kind).toBe('mind_log');
   });
 
-  it('naming two minds is unclear, so Buddy asks which one', () => {
+  it('naming two minds is unclear, so the rules place the order instead of asking', () => {
     expect(namedMind('Tell the analyst and the ceo to plan it')).toBeNull();
-    expect(routeMessage('Tell the analyst and the ceo to plan it', null).kind).toBe('ask_which_mind');
+    expect(routeMessage('Tell the analyst and the ceo to plan it', null)).toEqual({
+      kind: 'order',
+      mind: 'strategist',
+      instruction: 'Tell the analyst and the ceo to plan it',
+      resolvesPending: false,
+      routed: true,
+    });
   });
 });
 
@@ -99,8 +111,20 @@ describe('restricted words', () => {
     expect(isRestricted('Check the spring guide')).toBe(false);
   });
 
-  it('the question to ask stays one plain line', () => {
-    expect(ASK_WHICH_MIND_LINE).toBe('Which mind should take this: Analyst, Strategist, CEO, Executioner or Auditor? Reply with one name.');
+  it('two fits are shown as a table, and the placed order is announced in one line', () => {
+    expect(mindFitTable(['analyst', 'auditor'])).toBe([
+      'Mind    | What it would do',
+      '------- | ----------------------------------------',
+      'Analyst | Read the numbers and say what they show.',
+      'Auditor | Check the work and say what is wrong.',
+    ].join('\n'));
+    expect(routedOrderLine('executioner', [])).toBe('No mind was named.');
+    expect(routedOrderLine('analyst', ['auditor'])).toBe(`Two minds fit this:\n${mindFitTable(['analyst', 'auditor'])}`);
+  });
+
+  it('work that fits no rule goes to the doer, so no order is left without a mind', () => {
+    expect(DEFAULT_MIND).toBe('executioner');
+    expect(mindFit('Look at the shelf in the shop window')).toEqual({ mind: 'executioner', others: [] });
   });
 });
 
@@ -136,12 +160,24 @@ describe('answers come from real log rows', () => {
 });
 
 describe('ordinary action words become orders, with no magic phrase', () => {
-  it('"Do the new article" is an order, not a question: Buddy asks which mind', () => {
-    expect(routeMessage('Do the new article', null)).toEqual({ kind: 'ask_which_mind', instruction: 'Do the new article' });
+  it('"Do the new article" is an order, not a question, and the rules give it a mind', () => {
+    expect(routeMessage('Do the new article', null)).toEqual({
+      kind: 'order',
+      mind: 'executioner',
+      instruction: 'Do the new article',
+      resolvesPending: false,
+      routed: true,
+    });
   });
 
   it('a polite opener does not hide the action word', () => {
-    expect(routeMessage('Please do the new article', null)).toEqual({ kind: 'ask_which_mind', instruction: 'Please do the new article' });
+    expect(routeMessage('Please do the new article', null)).toEqual({
+      kind: 'order',
+      mind: 'executioner',
+      instruction: 'Please do the new article',
+      resolvesPending: false,
+      routed: true,
+    });
     expect(routeMessage('Could you tell the Analyst to check the spring guide', null)).toEqual({
       kind: 'order',
       mind: 'analyst',

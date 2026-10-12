@@ -23,7 +23,7 @@ export default function AdminBackups() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div><h1 className="font-serif text-2xl text-charcoal flex items-center gap-2"><DatabaseBackup size={20} className="text-bronze" /> Backups & jobs</h1><p className="text-sm text-charcoal-muted mt-1">Supabase Free has no point-in-time recovery, so a nightly JSON snapshot of all editorial and commerce tables is kept for 30 days. Download one occasionally and keep it somewhere safe.</p></div>
+        <div><h1 className="font-serif text-2xl text-charcoal flex items-center gap-2"><DatabaseBackup size={20} className="text-bronze" /> Backups & jobs</h1><p className="text-sm text-charcoal-muted mt-1">The free plan cannot rewind the database, so a snapshot of every article and shop table is kept for 30 days. Download one occasionally and keep it somewhere safe.</p></div>
         <button onClick={run} disabled={busy} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-sm rounded-sm hover:bg-bronze disabled:opacity-60">{busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} Snapshot now</button>
       </div>
       <div className="grid sm:grid-cols-2 gap-4 mb-6">

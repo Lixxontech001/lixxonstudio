@@ -127,7 +127,9 @@ describe('the day run sends the RSS doors by ping and keeps them out of the post
   });
 
   it('the door notable counts real posts only, so a ping never reads as a post', () => {
-    expect(RUN).toContain('const realPosts = doors.outcomes.filter((item) => item.outcome === "posted" && !isRssDoor(item.door)).length;');
-    expect(RUN).toContain('if (realPosts > 0) {');
+    // Phase I slice 3: the notable now goes out through the act list, so the same filter is done first and only the
+    // real posts reach the act. An RSS ping still cannot read as a post.
+    expect(RUN).toContain('const postedReal = posted.filter((item) => !isRssDoor(item.door));');
+    expect(RUN).toContain('if (postedReal.length > 0) {');
   });
 });

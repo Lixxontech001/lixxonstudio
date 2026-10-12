@@ -153,7 +153,7 @@ describe('the states that must never fail the day run', () => {
     expect(outcome.status).toBe('not_configured');
     expect(spy.sends).toHaveLength(0);
     expect(PUSH_HELP_COPY).toBe(
-      'To turn push on: enter your VAPID values, then open /admin/settings on your phone and tap Register this device.',
+      'Phone alerts: make the keys on the Keys page, then open /admin/settings on your phone and tap Register this device.',
     );
   });
 
@@ -171,7 +171,10 @@ describe('the states that must never fail the day run', () => {
 
   it('the help line is the same wording the Keys page already shows', () => {
     const generator = readFileSync(join(process.cwd(), 'src/admin/components/VapidGenerator.tsx'), 'utf8');
-    expect(generator).toContain(PUSH_HELP_COPY);
+    // One constant, two places: the panel imports the very line the daily log writes, so they cannot drift apart.
+    expect(generator).toContain("import { PUSH_HELP_COPY } from '../../../supabase/functions/_shared/notablePush'");
+    expect(generator).toContain('{PUSH_HELP_COPY}');
+    expect(generator).not.toMatch(/VAPID values/);
   });
 });
 

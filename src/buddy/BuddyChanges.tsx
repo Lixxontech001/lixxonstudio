@@ -3,6 +3,7 @@ import { describeChange, listAppliedChanges, listGapNotes, markGapSeen, type App
 import { describePackJob, listPackJobs, markPackPosted, type PackJob } from './buddyJobs';
 import { formatDayLabel } from './buddyChatStore';
 import type { BuddyVibeId } from './buddyVibes';
+import BuddyGuideLink from './BuddyGuideLink';
 
 interface BuddyChangesProps {
   vibe: BuddyVibeId;
@@ -90,6 +91,7 @@ export default function BuddyChanges({ vibe, onBack }: BuddyChangesProps) {
           <section className="buddy-briefing-section" aria-label="Your jobs">
             <h2 className="buddy-briefing-title">Your jobs</h2>
             <p className="buddy-empty">{JOBS_NOTE}</p>
+            <BuddyGuideLink section="packs" />
             {packsFailed && (
               <p className="buddy-banner buddy-error" role="alert">
                 {JOBS_READ_FAILED}
@@ -117,9 +119,12 @@ export default function BuddyChanges({ vibe, onBack }: BuddyChangesProps) {
                         </p>
                       ))}
                       {view.canMarkPosted && (
-                        <button type="button" className="buddy-button" onClick={() => posted(job.id)}>
-                          I posted this
-                        </button>
+                        <>
+                          <button type="button" className="buddy-button" onClick={() => posted(job.id)}>
+                            I posted this
+                          </button>
+                          <BuddyGuideLink section="i-posted-this" />
+                        </>
                       )}
                     </li>
                   );

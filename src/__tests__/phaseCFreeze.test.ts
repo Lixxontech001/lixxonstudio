@@ -98,7 +98,8 @@ describe('Phase C freeze 7: WhatsApp is not a door on Keys or Connections', () =
   });
 
   it('the shared filter names the two WhatsApp keys, and the keys function refuses them without a test', () => {
-    expect(NOT_OFFERED_KEY_NAMES).toEqual(['whatsapp_access_token', 'whatsapp_phone_number_id']);
+    // Phase H slice 3 grew this list (dead thinking keys, social rows with no leftover job). WhatsApp is still in it.
+    expect(NOT_OFFERED_KEY_NAMES).toEqual(expect.arrayContaining(['whatsapp_access_token', 'whatsapp_phone_number_id']));
     const keysFunction = read('supabase/functions/automation-keys/index.ts');
     expect(keysFunction).not.toMatch(/testWhatsAppCredential/);
     expect(keysFunction).toMatch(/isNotOfferedKey\(name\)\) return "invalid"/);

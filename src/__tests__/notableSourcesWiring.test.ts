@@ -20,13 +20,18 @@ function scanBody(): string {
 describe('the day run calls the shop scan and the job event', () => {
   it('runs the scan and the job event after the free doors, and never lets the scan stop the run', () => {
     const doorsAt = RUN.indexOf('const doors = await runDoorsSafely(');
-    const scanAt = RUN.indexOf('await scanShopNotables(sb, owner, localDay);');
+    // Phase I slice 4: the scan is handed the tellings the owner has already heard, so nothing is retold.
+    const scanAt = RUN.indexOf('await scanShopNotables(sb, owner, localDay, told);');
     const jobAt = RUN.indexOf('planJobNotable(outcome.status, outcome.orderId)');
     expect(doorsAt).toBeGreaterThan(0);
     expect(scanAt).toBeGreaterThan(doorsAt);
     expect(jobAt).toBeGreaterThan(scanAt);
-    const block = RUN.slice(scanAt - 200, scanAt + 60);
-    expect(block).toMatch(/try \{[\s\S]*catch \{/);
+    // The scan sits inside its own try/catch, so a failed scan can never stop the rest of the day.
+    const tryAt = RUN.lastIndexOf('try {', scanAt);
+    const catchAt = RUN.indexOf('catch {', scanAt);
+    expect(tryAt).toBeGreaterThan(doorsAt);
+    expect(catchAt).toBeGreaterThan(scanAt);
+    expect(catchAt - scanAt).toBeLessThan(300);
   });
 
   it('a job event is written with its source key, so it is written once', () => {
@@ -37,8 +42,9 @@ describe('the day run calls the shop scan and the job event', () => {
 describe('the shop scan only reads the shop, and only writes notable rows', () => {
   const body = scanBody();
 
-  it('is found, and reads paid orders, product clicks and sources', () => {
+  it('is found, and reads paid orders, product clicks, sources and the owner s earlier tellings', () => {
     expect(body.length).toBeGreaterThan(500);
+    expect(body).toContain('readTold:');
     expect(body).toContain('.from("orders")');
     expect(body).toContain('.eq("payment_status", "paid")');
     expect(body).toContain('.from("product_clicks")');

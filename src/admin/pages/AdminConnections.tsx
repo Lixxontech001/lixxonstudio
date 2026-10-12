@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { Btn, Loading, Notice } from '../components/ui';
+import GuideLink from '../components/GuideLink';
 import { DOOR_IDS, DOORS, doorStatus, type DoorField, type DoorId, type DoorState } from '../../../supabase/functions/_shared/doorRegistry';
 import { DOOR_TEST_MESSAGE, type DoorTestStatus } from '../../../supabase/functions/_shared/doorConnectionTests';
 
@@ -139,6 +140,7 @@ export default function AdminConnections() {
         <p className="mt-1 text-sm text-charcoal-muted">{CONNECTIONS_INTRO}</p>
         <p className="mt-1 text-sm text-charcoal-muted">{CONNECTIONS_MANUAL}</p>
         <p className="mt-1 text-sm text-charcoal-muted">{CONNECTIONS_NEVER_SHOWN}</p>
+        <GuideLink section="connections" back="/admin/ai/connections" className="mt-1" />
       </header>
 
       {message && <Notice tone={message.tone === 'ok' ? 'ok' : 'error'}>{message.text}</Notice>}
@@ -156,6 +158,7 @@ export default function AdminConnections() {
               <span className="text-sm text-charcoal-muted">{stateLabel(status.state)}</span>
             </div>
             <p className="mt-1 text-sm text-charcoal-muted">{door.summary}</p>
+            <GuideLink section={`door-${id}`} back={`/admin/ai/connections#door-${id}`} className="mt-1" />
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <Btn

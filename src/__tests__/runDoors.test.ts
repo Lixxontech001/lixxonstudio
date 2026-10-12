@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runDoors, ALL_DOORS_PAUSED_DETAIL, DOORS_NOTHING_CONNECTED_DETAIL, type AudioLoad, type DoorRunPorts, type DoorSendExtra, type ReserveResult, type VideoLoad } from '../../supabase/functions/_shared/runDoors';
+import { DRIP_FULL_NOTE, DRIP_UNREADABLE_NOTE, OPEN_DOORS } from '../../supabase/functions/_shared/doorPosts';
 import { KILL_BLOCK_DETAIL, TAKEOVER_OFF_DETAIL } from '../../supabase/functions/_shared/runDay';
 import type { DoorArticle } from '../../supabase/functions/_shared/doorPosts';
 import type { DoorSendResult } from '../../supabase/functions/_shared/doorAdapters';
@@ -99,6 +100,10 @@ interface Harness {
   /** The article ids the video and audio loaders were asked for. */
   loadedVideo: string[];
   loadedAudio: string[];
+  /** Every drip stamp this run wrote, in order. */
+  drips: string[];
+  /** The order the step did its work in: a drip stamp, a reserve and a send, as they really happened. */
+  events: string[];
 }
 
 function harness(options: {
@@ -121,6 +126,10 @@ function harness(options: {
   loadVideo?: (articleId: string) => VideoLoad;
   /** The episode audio loader. Default: a real MP3. */
   loadAudio?: (articleId: string) => AudioLoad;
+  /** How many articles are already stamped for the day (the drip rows). Null makes the read fail. */
+  dripsToday?: number | null;
+  /** Return false to refuse a drip stamp, as the database does when the day's three are used up. */
+  dripRecord?: (articleId: string) => boolean;
 } = {}): Harness {
   const finishAttempts: Record<string, number> = {};
   const secrets = options.secrets ?? ALL_SECRETS;
@@ -134,6 +143,8 @@ function harness(options: {
   const loadedCovers: string[] = [];
   const loadedVideo: string[] = [];
   const loadedAudio: string[] = [];
+  const drips: string[] = [];
+  const events: string[] = [];
   const rows = new Map<string, QueuedRow>();
   const marks: Harness['marks'] = [];
   const ports: DoorRunPorts = {
@@ -147,6 +158,7 @@ function harness(options: {
     reserve: async (door, articleId, localDay) => {
       if (options.reserveThrows) throw new Error('database');
       reserved.push(`${door}:${articleId}`);
+      events.push(`reserve:${door}:${articleId}`);
       const result = options.reserve ? options.reserve(door) : { ok: true as const, id: `row-${door}` };
       if (result.ok) rows.set(result.id, { door, day: localDay, status: 'queued', pendingStatus: null, externalRef: null, errorNote: null });
       return result;
@@ -180,6 +192,7 @@ function harness(options: {
     send: async (door, _values, text, key, extra) => {
       if (options.sendThrows) throw new Error('send');
       sent.push({ door, text });
+      events.push(`send:${door}`);
       media.push({ door, kind: extra.media ? extra.media.kind : null });
       extras.push({ door, extra });
       keys.push({ door, key });
@@ -199,9 +212,21 @@ function harness(options: {
     log: async (entry) => {
       logs.push(entry);
     },
+    countDripsToday: async () => {
+      if (options.dripsToday === null) throw new Error('drips');
+      return options.dripsToday ?? 0;
+    },
+    recordDrip: async (articleId) => {
+      const allowed = options.dripRecord ? options.dripRecord(articleId) : true;
+      if (allowed) {
+        drips.push(articleId);
+        events.push(`drip:${articleId}`);
+      }
+      return allowed;
+    },
     pause: async () => {},
   };
-  return { ports, sent, keys, reserved, finished, logs, finishAttempts, media, extras, loadedCovers, loadedVideo, loadedAudio, rows, marks };
+  return { ports, sent, keys, reserved, finished, logs, finishAttempts, media, extras, loadedCovers, loadedVideo, loadedAudio, drips, events, rows, marks };
 }
 
 // The four RSS doors are paused in these older tests, so the twelve-door counts stay as they were. Their own tests are at the end.
@@ -837,5 +862,77 @@ describe('the four RSS doors: a ping, logged as RSS, never as a post', () => {
     await runDoors({ ...DAY_INPUT, pausedDoors: [...TWELVE, 'flipboard'] }, h.ports);
     expect(h.sent.some((item) => item.door === 'flipboard')).toBe(false);
     expect(h.sent.some((item) => item.door === 'google_news')).toBe(true);
+  });
+});
+
+// Phase I slice 5: an older article goes to the doors when nothing new was published, and never more than three
+// articles a day. The cap is the database's own rule (post_drip_days), and the stamp is written before the send.
+const ONE_DOOR_OPEN = OPEN_DOORS.filter((door) => door !== 'telegram');
+const TWO_DOORS_OPEN = OPEN_DOORS.filter((door) => door !== 'telegram' && door !== 'discord');
+
+const OLD_ARTICLE: DoorArticle = {
+  id: 'old-1',
+  title: 'Old but good routine',
+  slug: 'old-but-good-routine',
+  publishedAt: new Date(NOW - 30 * DAY).toISOString(),
+  coverImage: null,
+};
+const OLDER_ARTICLE: DoorArticle = { ...OLD_ARTICLE, id: 'old-2', title: 'An older guide', slug: 'an-older-guide', publishedAt: new Date(NOW - 60 * DAY).toISOString() };
+
+describe('the archive drip at the doors', () => {
+  it('nothing new in the window: the newest old article goes out, stamped once before the reserve and the send', async () => {
+    const h = harness({ articles: [OLD_ARTICLE, OLDER_ARTICLE] });
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: ONE_DOOR_OPEN }, h.ports);
+    expect(result.posted).toBe(1);
+    expect(h.sent[0]?.text).toContain('From the archive: Old but good routine');
+    expect(h.drips).toEqual(['old-1']);
+    expect(h.events).toEqual(['drip:old-1', 'reserve:telegram:old-1', 'send:telegram']);
+    const step = result.outcomes[0];
+    expect(step.outcome).toBe('posted');
+    expect(step.drip).toBe(true);
+    expect(step.articleTitle).toBe('Old but good routine');
+    expect(step.detail).toContain('No new article was published in the last 7 days');
+  });
+
+  it('a new article is never mixed up with the archive: no drip stamp, and no archive words', async () => {
+    const h = harness({ articles: [ARTICLE, OLD_ARTICLE] });
+    await runDoors({ ...DAY_INPUT, pausedDoors: ONE_DOOR_OPEN }, h.ports);
+    expect(h.drips).toEqual([]);
+    expect(h.sent[0]?.text).not.toContain('From the archive');
+  });
+
+  it("the day's three are used up: the door is skipped, and nothing is reserved or sent", async () => {
+    const h = harness({ articles: [OLD_ARTICLE], dripsToday: 3 });
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: ONE_DOOR_OPEN }, h.ports);
+    expect(h.drips).toEqual([]);
+    expect(h.reserved).toEqual([]);
+    expect(h.sent).toEqual([]);
+    expect(result.posted).toBe(0);
+    expect(result.outcomes[0]).toMatchObject({ outcome: 'skipped' });
+    expect(result.outcomes[0]?.detail).toContain(DRIP_FULL_NOTE);
+  });
+
+  it('the day is counted as the run goes, so the last door past the three waits for tomorrow', async () => {
+    const h = harness({ articles: [OLD_ARTICLE], dripsToday: 2 });
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: TWO_DOORS_OPEN }, h.ports);
+    expect(h.drips).toEqual(['old-1']);
+    expect(result.posted).toBe(1);
+    const skipped = result.outcomes.find((row) => row.outcome === 'skipped');
+    expect(skipped?.detail).toContain(DRIP_FULL_NOTE);
+  });
+
+  it('a refused stamp skips the door, and nothing is reserved', async () => {
+    const h = harness({ articles: [OLD_ARTICLE], dripRecord: () => false });
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: ONE_DOOR_OPEN }, h.ports);
+    expect(h.reserved).toEqual([]);
+    expect(result.outcomes[0]?.detail).toContain(DRIP_FULL_NOTE);
+  });
+
+  it('a count that cannot be read stamps nothing blind, and says so', async () => {
+    const h = harness({ articles: [OLD_ARTICLE], dripsToday: null });
+    const result = await runDoors({ ...DAY_INPUT, pausedDoors: ONE_DOOR_OPEN }, h.ports);
+    expect(h.drips).toEqual([]);
+    expect(h.reserved).toEqual([]);
+    expect(result.outcomes[0]?.detail).toContain(DRIP_UNREADABLE_NOTE);
   });
 });

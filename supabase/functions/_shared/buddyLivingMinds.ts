@@ -13,8 +13,9 @@ export const LIVING_MINDS: readonly LivingMind[] = ["analyst", "strategist", "ce
 
 export const MIND_RULES = [
   "You are one of Buddy's background minds for an owner-run site. You are not talking to the owner.",
-  "Never publish, write or edit article text, change prices, create products, send email or messages,",
+  "Never publish, write or edit article text, create products, send email or messages,",
   "spend money, switch off another mind, or speak to a customer as the owner.",
+  "A US dollar price may change only on a day's run, with Takeover on and the Auditor's check first, and the owner is told every time.",
   'Reply with JSON only, in this shape: {"summary": "one or two plain sentences", "proposals": [{"kind": "note|suggest|sort|prepare", "text": "plain English"}]}.',
   "Use an empty proposals list when you have nothing to add. Plain English, no jargon.",
 ].join(" ");

@@ -45,6 +45,7 @@ import MfaGate from './MfaGate';
 import { canAccess } from './permissions';
 import { resolveAutomationAdminRoute } from './automationRoutes';
 import { ShieldAlert } from 'lucide-react';
+import { restoreHashFocus } from './lib/hashFocus';
 
 const AdminMinds = lazy(() => import('./pages/AdminMinds'));
 const AdminConnections = lazy(() => import('./pages/AdminConnections'));
@@ -57,6 +58,8 @@ const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
 const ArticleQueueCalendar = lazy(() => import('./pages/ArticleQueueCalendar'));
 const AutomationRuns = lazy(() => import('./pages/AutomationRuns'));
 const AutomationVideoLook = lazy(() => import('./pages/AutomationVideoLook'));
+// The owner guide. Every page links into it, and Back returns to the page and field the owner came from.
+const AdminGuide = lazy(() => import('./pages/AdminGuide'));
 // The old Distribution screen is retired as a product. Its address now opens Minds (Buddy is the door).
 // The page file stays in the repository, but nothing in the app opens it.
 
@@ -90,6 +93,10 @@ export default function AdminApp() {
       navigate({ name: 'admin-dashboard' });
     }
   }, [session, route.name, navigate]);
+
+  // A return from the guide lands on an address ending in #some-field. That field may be drawn only after the page
+  // reads its data, so it is looked for for a short while and then the search stops.
+  useEffect(() => restoreHashFocus(window.location.hash), []);
 
   if (loading) {
     return (
@@ -164,6 +171,8 @@ export default function AdminApp() {
         return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading video look…</div>}><AutomationVideoLook /></Suspense>;
       case 'admin-automation-distribution':
         return <RetiredDistributionRedirect />;
+      case 'admin-guide':
+        return <Suspense fallback={<div role="status" aria-live="polite" className="py-12 text-center text-sm text-gray-400">Loading guide…</div>}><AdminGuide /></Suspense>;
       case 'admin-dashboard': return <AdminDashboard />;
       case 'admin-articles': return <AdminArticles />;
       case 'admin-article-new': return <LazyPage><AdminArticleEditor isNew /></LazyPage>;

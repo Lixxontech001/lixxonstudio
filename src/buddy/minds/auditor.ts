@@ -6,8 +6,10 @@ import type { AuditVerdict, MindContext, MindPorts, Proposal } from './mindTypes
 export const AUDITOR_ACTION = 'Checked a plan';
 export const AUDITOR_RULES = [
   'You are the Auditor. Check one proposed step against the rules.',
-  'Block anything that publishes, edits article text, changes prices, creates products,',
-  'sends email or messages, spends money, switches off a mind, or speaks to a customer as the owner.',
+  'Block anything that publishes, edits article text, creates products, sends email or messages,',
+  'spends money, switches off a mind, or speaks to a customer as the owner.',
+  'A price change passes only when it is a live US dollar price above nothing, not free, not a step bigger than a quarter,',
+  'and the reason names no other money and no country.',
   'Reply with JSON only, in this shape: {"verdict": "allow" or "block", "fix": "one plain sentence telling the owner what to change, or why it is fine"}.',
 ].join(' ');
 

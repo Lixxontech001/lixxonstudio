@@ -11,7 +11,7 @@ import { DOOR_IDS } from '../../supabase/functions/_shared/doorRegistry';
 import { RSS_DOORS, WEBSUB_HUB, sendRssPing, sentLead, sentVerb } from '../../supabase/functions/_shared/rssHub';
 import { planSaleNotables } from '../../supabase/functions/_shared/notableSources';
 import { BUZZ_KINDS, shouldBuzz } from '../../supabase/functions/_shared/notablePush';
-import { neverListLine, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
+import { neverListLine } from '../../supabase/functions/_shared/buddyRouter';
 import { AUDITOR_REFUSAL, WAIT_LINE, parseControlRequest } from '../../supabase/functions/_shared/buddyControls';
 import {
   BUDDY_GEMINI_MODEL,
@@ -165,7 +165,11 @@ describe('Phase 8 freeze: Buddy thinks with Gemini, and the never-list still blo
     expect(neverListLine('Buy ads for this post')).toMatch(/does not spend money or buy ads/);
     expect(neverListLine('Reply to the readers as me')).toMatch(/does not reply to readers as you/);
     expect(neverListLine('Rewrite the whole article')).toMatch(/one or two sentences/);
-    expect(routeMessage('Create a new shop product for me', null).kind).not.toBe('order');
+    // Phase H slice 5 places unnamed orders on a mind, so the router no longer leaves a product request unfiled.
+    // What stops it is the never-list check in the handler, which runs before any route is answered or filed.
+    const think = read('supabase/functions/_shared/buddyThink.ts');
+    expect(think.indexOf('const never = neverListLine(message)')).toBeGreaterThan(-1);
+    expect(think.indexOf('const never = neverListLine(message)')).toBeLessThan(think.indexOf('return answerRouted(chatId, title, message, route, action, deps)'));
   });
 
   it('Buddy never creates a shop product, and never places more than three products on an article', () => {

@@ -94,10 +94,22 @@ describe('Phase G rule 2: no WhatsApp in visible copy', () => {
   });
 });
 
-describe('Phase G rule 3: unnamed orders are routed the same way as before', () => {
-  it('an unnamed order that is not a swap asks "which mind?"', () => {
-    expect(routeMessage('Review the Calm Skin article', null)).toEqual({ kind: 'ask_which_mind', instruction: 'Review the Calm Skin article' });
-    expect(routeMessage('Plan the next article about tea', null).kind).toBe('ask_which_mind');
+describe('Phase G rule 3: unnamed orders are routed (Phase H slice 5: by the plain rules, with no question)', () => {
+  it('an unnamed order is placed by the rules, and the owner is never asked which mind', () => {
+    expect(routeMessage('Review the Calm Skin article', null)).toEqual({
+      kind: 'order',
+      mind: 'auditor',
+      instruction: 'Review the Calm Skin article',
+      resolvesPending: false,
+      routed: true,
+    });
+    expect(routeMessage('Plan the next article about tea', null)).toEqual({
+      kind: 'order',
+      mind: 'strategist',
+      instruction: 'Plan the next article about tea',
+      resolvesPending: false,
+      routed: true,
+    });
   });
 
   it('an unnamed swap goes to the Executioner, with no question, and is filed as a product-line apply', () => {

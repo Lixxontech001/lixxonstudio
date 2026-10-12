@@ -165,10 +165,12 @@ BEGIN
 
   -- Owner can use the masked-list and Vault write path. The fake value may not escape
   -- into the RPC response, metadata, audit diff, or structured log.
+  -- The fixture uses a key the site still offers: Phase H slice 3 retired the dead thinking keys
+  -- and the social rows, so saving openai_api_key is refused by the catalogue before the Vault is touched.
   PERFORM set_config('request.jwt.claims', owner_claims::text, true);
   PERFORM set_config('request.jwt.claim.sub', owner_claims->>'sub', true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
-  SELECT automation_secret_save('openai_api_key', fake_secret) INTO result;
+  SELECT automation_secret_save('gemini_api_key', fake_secret) INTO result;
   IF result::text LIKE '%' || fake_secret || '%' OR result ? 'secret' OR result ? 'secret_value' THEN
     RAISE EXCEPTION 'Secret save response disclosed its value';
   END IF;
@@ -179,7 +181,7 @@ BEGIN
      OR secret_list LIKE '%secret_value%' THEN
     RAISE EXCEPTION 'Secret list response disclosed a value or Vault identifier';
   END IF;
-  IF (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_openai_api_key') IS DISTINCT FROM fake_secret THEN
+  IF (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_gemini_api_key') IS DISTINCT FROM fake_secret THEN
     RAISE EXCEPTION 'Secret was not stored in the Vault boundary';
   END IF;
 
@@ -189,7 +191,7 @@ BEGIN
   IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_list_secrets()') THEN
     RAISE EXCEPTION 'Non-owner editor listed automation secrets';
   END IF;
-  IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_secret_save(''openai_api_key'', ''not-authorized'')') THEN
+  IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_secret_save(''gemini_api_key'', ''not-authorized'')') THEN
     RAISE EXCEPTION 'Non-owner editor saved an automation secret';
   END IF;
 
@@ -206,7 +208,7 @@ BEGIN
   IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_list_secrets()') THEN
     RAISE EXCEPTION 'An explicit permission override opened the owner-only Keys page';
   END IF;
-  IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_secret_save(''openai_api_key'', ''not-authorized'')') THEN
+  IF NOT _automation_raises('authenticated', editor_claims, 'SELECT automation_secret_save(''gemini_api_key'', ''not-authorized'')') THEN
     RAISE EXCEPTION 'An explicit permission override allowed saving a Vault secret';
   END IF;
   PERFORM set_config('request.jwt.claims', owner_claims::text, true);
@@ -216,12 +218,12 @@ BEGIN
 
   -- Replacing a key rotates the Vault row transactionally, clears its old test,
   -- and never returns either value in the owner response.
-  SELECT automation_secret_save('openai_api_key', replacement_secret) INTO result;
+  SELECT automation_secret_save('gemini_api_key', replacement_secret) INTO result;
   IF result::text LIKE '%' || replacement_secret || '%' OR result ? 'secret_value' THEN
     RAISE EXCEPTION 'Key replacement response disclosed its value';
   END IF;
-  IF EXISTS (SELECT 1 FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_openai_api_key' AND decrypted_secret = fake_secret)
-     OR (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_openai_api_key') IS DISTINCT FROM replacement_secret THEN
+  IF EXISTS (SELECT 1 FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_gemini_api_key' AND decrypted_secret = fake_secret)
+     OR (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_gemini_api_key') IS DISTINCT FROM replacement_secret THEN
     RAISE EXCEPTION 'Key replacement did not remove the old Vault value and store the new one';
   END IF;
   SELECT automation_list_secrets()::text INTO secret_list;
@@ -232,15 +234,15 @@ BEGIN
   IF NOT _automation_raises('authenticated', owner_claims, 'SELECT * FROM automation_secrets') THEN
     RAISE EXCEPTION 'Owner bypassed the masked secret-list API via direct table read';
   END IF;
-  IF NOT _automation_raises('authenticated', owner_claims, 'SELECT automation_secret_get_internal(''openai_api_key'')') THEN
+  IF NOT _automation_raises('authenticated', owner_claims, 'SELECT automation_secret_get_internal(''gemini_api_key'')') THEN
     RAISE EXCEPTION 'Authenticated browser role retrieved a plaintext secret';
   END IF;
 
   -- Only a service-role Edge caller may retrieve the value, and only into its
   -- server-side process. A test result is a fixed safe code, not provider output.
-  internal_value := _automation_text('service_role', service_claims, 'automation_secret_get_internal(''openai_api_key'')');
+  internal_value := _automation_text('service_role', service_claims, 'automation_secret_get_internal(''gemini_api_key'')');
   IF internal_value IS DISTINCT FROM replacement_secret THEN RAISE EXCEPTION 'Service role could not retrieve its replacement Vault secret'; END IF;
-  SELECT _automation_text('service_role', service_claims, 'test_automation_secret(''openai_api_key'', ''ok'')')::jsonb INTO result;
+  SELECT _automation_text('service_role', service_claims, 'test_automation_secret(''gemini_api_key'', ''ok'')')::jsonb INTO result;
   IF result->>'status' <> 'ok' OR result::text LIKE '%' || fake_secret || '%' THEN
     RAISE EXCEPTION 'Internal key test result is missing or leaked the secret';
   END IF;
@@ -253,7 +255,7 @@ BEGIN
     RAISE EXCEPTION 'Safe provider-test/catalogue metadata was not recorded';
   END IF;
   SELECT _automation_text('service_role', service_claims,
-    'test_automation_secret(''openai_api_key'', ''invalid'')')::jsonb INTO result;
+    'test_automation_secret(''gemini_api_key'', ''invalid'')')::jsonb INTO result;
   IF result->>'status' <> 'invalid'
      OR result->>'message' <> 'Provider rejected this credential or required scope.'
      OR result::text LIKE '%' || replacement_secret || '%' THEN
@@ -267,7 +269,7 @@ BEGIN
     RAISE EXCEPTION 'Invalid provider result was not persisted safely';
   END IF;
   SELECT _automation_text('service_role', service_claims,
-    'test_automation_secret(''openai_api_key'', ''local_ok'')')::jsonb INTO result;
+    'test_automation_secret(''gemini_api_key'', ''local_ok'')')::jsonb INTO result;
   IF result->>'status' <> 'local_ok' OR result->>'ok' <> 'false'
      OR result->>'message' <> 'Local format check passed; provider connectivity is not verified.'
      OR result::text LIKE '%' || replacement_secret || '%' THEN
@@ -284,7 +286,7 @@ BEGIN
   -- Stale read-only tests and unmeasured quotas never get a green status.
   UPDATE automation_secrets
      SET last_test_status = 'ok', last_tested_at = now() - interval '48 hours'
-   WHERE secret_name = 'openai_api_key';
+   WHERE secret_name = 'gemini_api_key';
   SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
     INTO health_snapshot;
   SELECT check_row INTO health_item
@@ -294,7 +296,7 @@ BEGIN
      OR (health_item->'evidence'->>'recent_successful_tests')::integer <> 0 THEN
     RAISE EXCEPTION 'A stale AI provider test was reported as fresh or healthy';
   END IF;
-  UPDATE automation_secrets SET last_tested_at = now() WHERE secret_name = 'openai_api_key';
+  UPDATE automation_secrets SET last_tested_at = now() WHERE secret_name = 'gemini_api_key';
   SELECT _automation_text('authenticated', owner_claims, 'automation_health_snapshot()')::jsonb
     INTO health_snapshot;
   SELECT check_row INTO health_item
@@ -511,9 +513,9 @@ BEGIN
     RAISE EXCEPTION 'Audit log contains a raw Vault secret';
   END IF;
 
-  IF NOT automation_secret_delete('openai_api_key') THEN RAISE EXCEPTION 'Owner could not delete a Vault secret'; END IF;
-  IF EXISTS (SELECT 1 FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_openai_api_key')
-     OR EXISTS (SELECT 1 FROM automation_secrets WHERE secret_name = 'openai_api_key') THEN
+  IF NOT automation_secret_delete('gemini_api_key') THEN RAISE EXCEPTION 'Owner could not delete a Vault secret'; END IF;
+  IF EXISTS (SELECT 1 FROM vault.decrypted_secrets WHERE name = 'lixxon_automation_gemini_api_key')
+     OR EXISTS (SELECT 1 FROM automation_secrets WHERE secret_name = 'gemini_api_key') THEN
     RAISE EXCEPTION 'Secret deletion left the Vault value or metadata behind';
   END IF;
 END $$;

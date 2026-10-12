@@ -152,7 +152,7 @@ export default function AutomationRuns() {
       if (rpcError) {
         setMonitor(null);
         setError(rpcError.code === '42501'
-          ? 'Your admin session does not have the database-verified automation monitor permission.'
+          ? 'Your account is not allowed to watch the runs yet. An owner can grant the run monitor permission under Team & access.'
           : apiFailureMessage());
         return;
       }

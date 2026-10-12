@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Btn, Loading, Notice } from '../components/ui';
+import GuideLink from '../components/GuideLink';
 import { KILL_OPTIONS, MINDS, isKillScope, mindStatus, type KillScope } from '../../buddy/minds/mindRoster';
 import {
   MINDS_SAVE_FAILED,
@@ -100,11 +101,14 @@ export default function AdminMinds() {
         <div className="mt-3">
           <a href="/admin/ai/connections" className="inline-flex items-center rounded-sm border border-taupe/50 bg-white px-3 py-1.5 text-sm text-charcoal hover:border-bronze">Connections</a>
         </div>
+        <div className="mt-2 max-w-2xl">
+          <GuideLink section="minds" back="/admin/ai" />
+        </div>
       </header>
 
       {message && <Notice tone={message.tone === 'ok' ? 'ok' : 'error'}>{message.text}</Notice>}
 
-      <section aria-labelledby="minds-takeover-title" className={`${CARD_CLASS} space-y-3`}>
+      <section id="minds-takeover" aria-labelledby="minds-takeover-title" className={`${CARD_CLASS} space-y-3`}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="minds-takeover-title" className="text-base font-medium text-charcoal">Takeover</h2>
@@ -122,9 +126,10 @@ export default function AdminMinds() {
             {controls.takeover ? 'On' : 'Off'}
           </button>
         </div>
+        <GuideLink section="takeover" back="/admin/ai#minds-takeover" />
       </section>
 
-      <section aria-labelledby="minds-kill-title" className={`${CARD_CLASS} space-y-3`}>
+      <section id="minds-kill-card" aria-labelledby="minds-kill-title" className={`${CARD_CLASS} space-y-3`}>
         <h2 id="minds-kill-title" className="text-base font-medium text-charcoal">Kill</h2>
         <p className="text-sm text-charcoal-muted">Stop a mind, or all of them. The choice is saved.</p>
         <label htmlFor="minds-kill" className="sr-only">Kill setting</label>
@@ -142,6 +147,7 @@ export default function AdminMinds() {
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
+        <GuideLink section="kill" back="/admin/ai#minds-kill" />
       </section>
 
       <section aria-labelledby="minds-cards-title" className="space-y-3">

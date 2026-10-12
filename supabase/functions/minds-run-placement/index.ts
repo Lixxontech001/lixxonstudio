@@ -3,28 +3,40 @@
 // The run itself lives in _shared/placementRun.ts; the choice lives in _shared/runDay.ts.
 // This file reads the state, hands the run its doors (database and Gemini), and reports back in plain words.
 // Takeover off, or a Kill that stops the run: this returns before any read or log, and orders stay waiting.
-// Nothing runs on a timer yet. The owner starts a run through Buddy.
+// Two callers, one run: the owner (a signed-in session), and the 08:00 morning clock on the server, which has no
+// session and proves itself with the internal function secret plus an owner id that is checked against app_admins.
+// The owner path is unchanged, and a browser without a session still gets the same refusal it always did.
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
 import { callerUser, env, serviceClient } from "../_shared/http.ts";
+import { isInternalCall } from "../_shared/internalCall.ts";
 import { isAllowedAutomationOrigin } from "../_shared/automationKeyChecks.ts";
 import { readWaitingOrders } from "../_shared/buddyOrders.ts";
 import { makeMindThink } from "../_shared/mindThink.ts";
 import { blockedDetail, runDay } from "../_shared/runDay.ts";
 import { checkArticleImage, fetchArticleImage } from "../_shared/articleImage.ts";
 import { runDayPacks, type DayPacksResult, type PackRow, type PackSource } from "../_shared/dayPacks.ts";
-import { LEARN_LOOKBACK_DAYS, learnWindows, type WindowLearning } from "../_shared/packCopy.ts";
+import { LEARN_LOOKBACK_DAYS, learnWindows, type PackCopy, type WindowLearning } from "../_shared/packCopy.ts";
 import { doorFailNotices, runDoors, type AudioLoad, type DoorRunResult, type VideoLoad } from "../_shared/runDoors.ts";
 import { shouldBuzz, type PushStatus } from "../_shared/notablePush.ts";
-import { attemptRow, flushUnpushedNotables, ownerNotablePorts, pushNewestNotable, servicePushPorts, type NotableRow } from "../_shared/notablePushServer.ts";
+import { attemptRow, flushUnpushedNotables, ownerDayOf, ownerNotablePorts, pushNewestNotable, servicePushPorts, type NotableRow } from "../_shared/notablePushServer.ts";
 import { DOOR_WINDOW_DAYS, type DoorArticle } from "../_shared/doorPosts.ts";
-import { planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
+import { ORDER_READ_LIMIT, planJobNotable, scanNotableSources, type ClickRow, type NotablePlan, type NotablePorts, type OrderRow, type ScanResult } from "../_shared/notableSources.ts";
 import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { orderOutcomeLine } from "../_shared/buddyFeedback.ts";
 import { LIVING_MINDS, STOPPED_ACTION, runLivingMinds, type LivingMindPorts } from "../_shared/buddyLivingMinds.ts";
+import { doorPostedAct, doorSkippedAct, packSavedAct, reportAct, type ActPorts, type ActWords } from "../_shared/mindActs.ts";
+import { factsWithMemory, freshTellings, TOLD_LIMIT, type ToldTelling } from "../_shared/mindMemory.ts";
+import { readMemoryBlock } from "../_shared/mindMemoryServer.ts";
+import { deadProductWindows, planDeadProductActs, salesByProduct, type PaidItem, type ProductSales } from "../_shared/deadProducts.ts";
+import { draftFromPayload } from "../_shared/chatCaptions.ts";
+import { COMPETITOR_CHANGE_KIND, COMPETITOR_SAVE_LIMIT, competitorLabel, publicPageProblem, runCompetitorReads, type CompetitorFetch, type SavedCompetitor } from "../_shared/competitors.ts";
+import { runPriceChange } from "../_shared/priceRun.ts";
+import type { PriceProduct } from "../_shared/priceChanges.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
 import { doorLogAction, isRssDoor, sendRssPing } from "../_shared/rssHub.ts";
 import { DOOR_LABEL } from "../_shared/buddyControls.ts";
+import { DOORS } from "../_shared/doorRegistry.ts";
 import { sendBlogger, sendBluesky, sendDiscord, sendMastodon, sendMedium, sendPixelfed, sendTelegram, sendTumblr, sendVimeo, sendWordPressCom, sendYouTube, VIDEO_MAX_BYTES } from "../_shared/doorAdapters.ts";
 import {
   runPlacementOrder,
@@ -46,6 +58,9 @@ const SHOP_LIMIT = 200;
 const EDIT_LIMIT = 500;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KILL_SCOPES = ["none", "all", "analyst", "strategist", "ceo", "executioner", "auditor"] as const;
+/** How long one rival page may take, and how much of it is read. Both keep the run small. */
+const COMPETITOR_TIMEOUT_MS = 12000;
+const COMPETITOR_MAX_BYTES = 600000;
 /** Database rule messages, mapped to the plain reason the run understands. Anything else is a plain failure. */
 const KNOWN_REASONS = ["takeover_off", "killed", "order_not_waiting", "paragraph_changed", "checksum_mismatch", "slot_missing", "article_missing", "already_posted", "door_day_cap", "door_not_open"] as const;
 
@@ -61,14 +76,60 @@ function corsFor(req: Request): Record<string, string> | null {
   };
 }
 
-function reply(req: Request, body: unknown, status = 200): Response {
-  const cors = corsFor(req);
-  return new Response(JSON.stringify(body), { status: cors ? status : 403, headers: { ...JSON_HEADERS, ...(cors || {}) } });
+function reply(req: Request, body: unknown, status = 200, internal = false): Response {
+  const cors = internal ? {} : corsFor(req);
+  return new Response(JSON.stringify(body), { status: internal || cors ? status : 403, headers: { ...JSON_HEADERS, ...cors } });
 }
 
 function clip(text: string, limit: number): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
+}
+
+/** The day's brief from the three thinking minds, as it arrives from the clock. Plain text, clipped, or empty. */
+function clipBrief(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const flat = value.replace(/\s+/g, " ").trim();
+  return flat.length > 1200 ? `${flat.slice(0, 1199)}…` : flat;
+}
+
+/**
+ * The shop's own refusal, in plain words. The Auditor checks the price first, so these are the day's rules the plan
+ * cannot see: a product already changed today, and the guard rails the database keeps whatever the plan says.
+ */
+function priceReasonFrom(message: string): string {
+  if (/takeover_off/.test(message)) return "Takeover is off, so no price was changed.";
+  if (/killed/.test(message)) return "A Kill switch stops the minds, so no price was changed.";
+  if (/price_already_changed_today/.test(message)) return "This product's price already changed today. One change a day, so nothing else was written.";
+  if (/price_not_usd/.test(message)) return "US dollar prices only. Nothing was changed.";
+  if (/price_missing|price_free|price_too_low|price_too_high|price_same|price_too_big_a_step/.test(message)) return "The shop would not take that price. Nothing was changed.";
+  if (/price_reason_money/.test(message)) return "The reason named money other than US dollars. Nothing was changed.";
+  if (/price_no_reason/.test(message)) return "The change had no reason with it. Nothing was changed.";
+  return "The shop would not take that price. Nothing was changed.";
+}
+
+/** One rival page, as its html. Public pages only, a short wait, and a size cap so one big page cannot fill the run. */
+async function fetchCompetitorPage(url: string): Promise<CompetitorFetch> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), COMPETITOR_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { Accept: "text/html,application/xhtml+xml" },
+    });
+    // A redirect may land somewhere that is not a public page. Nothing is read from there.
+    const landed = publicPageProblem(response.url || url);
+    if (landed) return { ok: false, reason: "it moved to an address that is not a public page." };
+    if (!response.ok) return { ok: false, reason: `the page answered with status ${response.status}.` };
+    const text = await response.text();
+    if (!text) return { ok: false, reason: "the page came back empty." };
+    return { ok: true, html: text.slice(0, COMPETITOR_MAX_BYTES) };
+  } catch {
+    return { ok: false, reason: "the page could not be reached in time." };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -85,70 +146,95 @@ function parseKill(value: unknown): KillScope {
 }
 
 export async function handleRun(req: Request): Promise<Response> {
-  const cors = corsFor(req);
+  // The 08:00 morning clock has no session. It proves itself with the internal secret, and the owner id in the body
+  // is checked against app_admins below. Everything else (a browser) goes down the owner-session path, unchanged.
+  const internal = isInternalCall(req, env("INTERNAL_FN_SECRET"));
+  // An internal call has no Origin, so the browser rule is not applied to it. A reply never carries CORS headers then.
+  const cors = internal ? {} : corsFor(req);
+  // Every answer below carries the same CORS decision that was made above.
+  const out = (payload: unknown, status = 200) => reply(req, payload, status, internal);
   if (!cors) return new Response(null, { status: 403 });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-  if (req.method !== "POST") return reply(req, { error: "Method not allowed." }, 405);
+  if (req.method !== "POST") return out({ error: "Method not allowed." }, 405);
   if (req.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
-    return reply(req, { error: "JSON request body required." }, 415);
+    return out({ error: "JSON request body required." }, 415);
   }
   const raw = await req.text();
-  if (raw.length > MAX_BODY_BYTES) return reply(req, { error: "Request body is too large." }, 413);
+  if (raw.length > MAX_BODY_BYTES) return out({ error: "Request body is too large." }, 413);
   let body: unknown;
   try {
     body = JSON.parse(raw);
   } catch {
-    return reply(req, { error: "Invalid request body." }, 400);
+    return out({ error: "Invalid request body." }, 400);
   }
   const localDay = asRecord(body)?.local_day;
   if (typeof localDay !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(localDay)) {
-    return reply(req, { error: "A local day is required." }, 400);
+    return out({ error: "A local day is required." }, 400);
   }
   const requestedOrder = asRecord(body)?.order_id;
   if (requestedOrder !== undefined && requestedOrder !== null && (typeof requestedOrder !== "string" || !UUID.test(requestedOrder))) {
-    return reply(req, { error: "The order id is not valid." }, 400);
+    return out({ error: "The order id is not valid." }, 400);
   }
-  const orderId = typeof requestedOrder === "string" ? requestedOrder : null;
+  // The clock never picks an order: an internal call always runs the oldest waiting order, as Run today does.
+  const orderId = !internal && typeof requestedOrder === "string" ? requestedOrder : null;
+  const brief = internal ? clipBrief(asRecord(body)?.brief) : "";
 
-  const user = await callerUser(req);
-  if (!user) return reply(req, { error: "Owner authentication required." }, 401);
+  let user: { id: string } | null = null;
+  if (!internal) {
+    user = await callerUser(req);
+    if (!user) return out({ error: "Owner authentication required." }, 401);
+  }
 
   const supabaseUrl = env("SUPABASE_URL", "SUPABASE_PROJECT_URL");
   const anonKey = env("SUPABASE_ANON_KEY", "SUPABASE_KEY");
-  if (!supabaseUrl || !anonKey) return reply(req, { error: "The Executioner is not configured." }, 503);
+  if (!supabaseUrl || !anonKey) return out({ error: "The Executioner is not configured." }, 503);
 
-  // Owner check: the same owner-only read Buddy uses. The key itself is never read here.
-  try {
-    const userClient: SupabaseClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await userClient.rpc("automation_list_secrets");
-    if (error || !Array.isArray(data)) return reply(req, { error: "Owner-only access is required." }, 403);
-  } catch {
-    return reply(req, { error: "Owner-only access is required." }, 403);
+  // Owner check, the only two ways in. A browser must pass the same owner-only read Buddy uses (the key itself is
+  // never read here). The clock must pass the internal secret and name an owner that app_admins really lists.
+  if (internal) {
+    const claimed = asRecord(body)?.owner_id;
+    if (typeof claimed !== "string" || !UUID.test(claimed)) return out({ error: "An owner id is required." }, 403);
+    let sb: SupabaseClient;
+    try {
+      sb = serviceClient();
+    } catch {
+      return out({ error: "The Executioner is not configured." }, 503);
+    }
+    const { data, error } = await sb.from("app_admins").select("user_id").eq("user_id", claimed).eq("role", "owner").maybeSingle();
+    if (error || !data) return out({ error: "Owner-only access is required." }, 403);
+  } else {
+    try {
+      const userClient: SupabaseClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data, error } = await userClient.rpc("automation_list_secrets");
+      if (error || !Array.isArray(data)) return out({ error: "Owner-only access is required." }, 403);
+    } catch {
+      return out({ error: "Owner-only access is required." }, 403);
+    }
   }
 
   let sb: SupabaseClient;
   try {
     sb = serviceClient();
   } catch {
-    return reply(req, { error: "The Executioner is not configured." }, 503);
+    return out({ error: "The Executioner is not configured." }, 503);
   }
-  const owner = user.id;
+  const owner = internal ? String(asRecord(body)?.owner_id) : (user as { id: string }).id;
 
   // Owner pushes that are still waiting go out first, whatever the switches say. A sent row is never sent again.
   await flushUnpushedNotables(servicePushPorts(sb), Date.now(), owner);
 
   // Switches first. Takeover is on only when the saved value is exactly true. An unknown Kill value stops everything.
   const controlsRow = await sb.from("minds_controls").select("takeover,kill_scope").eq("id", 1).maybeSingle();
-  if (controlsRow.error) return reply(req, { status: "held", detail: "Minds settings could not be read. Nothing changed." });
+  if (controlsRow.error) return out({ status: "held", detail: "Minds settings could not be read. Nothing changed." });
   const takeover = asRecord(controlsRow.data)?.takeover === true;
   const killScope = parseKill(asRecord(controlsRow.data)?.kill_scope ?? "none");
 
   // Takeover off, or Kill on a mind the run needs: nothing else is read, nothing is logged, orders stay waiting.
   const blocked = blockedDetail(takeover, killScope);
-  if (blocked) return reply(req, { status: "held", detail: blocked, order_id: orderId });
+  if (blocked) return out({ status: "held", detail: blocked, order_id: orderId });
 
   // The owner's waiting orders, oldest first. Other orders wait.
   const orderRows = await sb
@@ -159,7 +245,7 @@ export async function handleRun(req: Request): Promise<Response> {
     .order("created_at", { ascending: true })
     .limit(50);
   const waiting = await readWaitingOrders(async () => (orderRows.error || !Array.isArray(orderRows.data) ? null : orderRows.data));
-  if (!waiting.ok) return reply(req, { status: "held", detail: "Waiting orders could not be read. Nothing changed." });
+  if (!waiting.ok) return out({ status: "held", detail: "Waiting orders could not be read. Nothing changed." });
   // The minds walk the same brain chain as Buddy. Each brain's key is read here, on the server, and never passed on.
   const think = makeMindThink(async (secretName: string) => {
     try {
@@ -189,6 +275,20 @@ export async function handleRun(req: Request): Promise<Response> {
     return runAgainstSite(order.id, order.instruction, localDay, takeover, killScope, think, logRow, owner, sb);
   };
 
+  // The team's brief, when the 08:00 clock sent one: the Analyst's read, the Strategist's plans and the CEO's order,
+  // in the minds' own words. One log row, so the owner can read what the morning team planned. It changes nothing.
+  if (brief) {
+    await sb.from("minds_daily_log").insert({
+      owner_id: owner,
+      day: localDay,
+      mind: "strategist",
+      action: "The day's plan from the three minds",
+      outcome: "done",
+      detail: clip(brief, 500),
+      order_id: null,
+    });
+  }
+
   const outcome = await runDay(
     {
       localDay,
@@ -215,29 +315,52 @@ export async function handleRun(req: Request): Promise<Response> {
   const pausedRaw = asRecord(pausedRow.data)?.paused_doors;
   const pausedDoors = pausedRow.error || !Array.isArray(pausedRaw) ? [] : pausedRaw.filter((item): item is string => typeof item === "string");
   const doors = await runDoorsSafely(sb, owner, localDay, takeover, killScope, pausedDoors);
-  // A door send that did not go out is a notable (one per door per day, by source key). It does not buzz the phone.
+  // The acts. A door send that did not go out is a notable of its own; a door that posted, and every door that
+  // stayed quiet with its own plain reason, is told once per door per day. The Executioner did all of these, and each
+  // one carries the log row and the buzz in the same telling.
+  const acts = actPortsFor(sb, owner, localDay);
   for (const notice of doorFailNotices(doors.outcomes, localDay)) {
     await recordNotable(sb, owner, localDay, notice.mind, notice.kind, notice.title, notice.detail, notice.key);
   }
-  // The RSS doors only ping the hub, so they are not counted as posts in the notable.
-  const realPosts = doors.outcomes.filter((item) => item.outcome === "posted" && !isRssDoor(item.door)).length;
-  if (realPosts > 0) {
-    await recordNotable(
-      sb,
-      owner,
-      localDay,
-      "executioner",
-      "door_posted",
-      `${realPosts} ${realPosts === 1 ? "free door posted" : "free doors posted"} today`,
-      "The Executioner sent these. Each one is in the log.",
-    );
+  // The RSS doors only ping the hub, so they are not counted as posts in the noticeable act.
+  const posted = doors.outcomes.filter((item) => item.outcome === "posted");
+  const postedReal = posted.filter((item) => !isRssDoor(item.door));
+  const firstPost = postedReal[0];
+  const articleTitle = firstPost?.articleTitle ?? "today's article";
+  // An older article went out because nothing new was published. The telling says so, so the owner is never misled
+  // into thinking it was a new one.
+  const fromArchive = postedReal.some((item) => item.drip === true);
+  if (postedReal.length > 0) {
+    await reportAct(doorPostedAct("The free doors", articleTitle, localDay, fromArchive), acts);
   }
+  // A quiet door is not silence: each one that did not post is told with the reason the door step gave. A step that
+  // never reached a door at all (every door paused by the owner, or the step held) is told as one line, so the
+  // morning is never quiet by accident.
+  const quiet = doors.outcomes.filter((row) => row.outcome === "skipped" || row.outcome === "not_connected");
+  if (quiet.length === 0 && posted.length === 0) {
+    await reportAct(doorSkippedAct("The free doors", doors.detail, localDay), acts);
+  }
+  for (const item of quiet) {
+    await reportAct(doorSkippedAct(DOORS[item.door].label, item.detail, localDay), acts);
+  }
+  // What the owner has already been told (Phase I slice 4). Read once, so the shop scan and the run's own acts
+  // agree on what is news: the same telling is never made twice, and a day with nothing new stays Quiet.
+  const told = await readToldTellings(sb, owner);
   // Shop facts the owner should hear about, then a placement job that really changed an article.
   // Each is written once (source keys). Neither can fail the day run.
   try {
-    await scanShopNotables(sb, owner, localDay);
+    await scanShopNotables(sb, owner, localDay, told);
   } catch {
     // The shop scan is extra. Nothing else in the run depends on it.
+  }
+  // A product that sold nothing this week and nothing last week: told through the act list, never deleted, and only
+  // once. Extra like the shop scan: a failure here never changes the day.
+  try {
+    for (const act of await scanDeadProducts(sb, localDay, told)) {
+      await reportAct(act, acts);
+    }
+  } catch {
+    // The dead-product check is extra. Nothing else in the run depends on it.
   }
   const job = planJobNotable(outcome.status, outcome.orderId);
   if (job) await recordNotable(sb, owner, localDay, job.mind, job.kind, job.title, job.detail, job.key);
@@ -252,19 +375,172 @@ export async function handleRun(req: Request): Promise<Response> {
       // The thinking steps are extra. Nothing else in the run depends on them.
     }
   }
+  // Phase I slice 5: the rival pages the owner asked to watch, and the day's one US dollar price change. Both run
+  // after the thinking minds (so a log row here never eats a mind's retry) and before the packs (so a pack's copy
+  // carries the price the shop really shows). Each is extra: a failure in either never changes the day.
+  try {
+    await runCompetitorsForDay(sb, owner, localDay, takeover, killScope);
+  } catch {
+    // The rival reads are extra. Nothing else in the run depends on them.
+  }
+  try {
+    const priced = await runPriceChange(
+      { localDay, takeover, killScope },
+      {
+        readShop: async () => {
+          const { data, error } = await sb
+            .from("products")
+            .select("id,name,price_cents,currency")
+            .eq("is_active", true)
+            .or("currency.eq.USD,currency.is.null")
+            .order("name", { ascending: true })
+            .limit(SHOP_LIMIT);
+          if (error || !Array.isArray(data)) throw new Error("shop");
+          return data.map((row: Record<string, unknown>): PriceProduct => ({
+            id: String(row.id),
+            name: String(row.name ?? ""),
+            priceUsd: typeof row.price_cents === "number" ? row.price_cents / 100 : null,
+            currency: typeof row.currency === "string" ? row.currency : null,
+          }));
+        },
+        readFacts: () => readMindFacts(sb),
+        think: (request) => think(request),
+        apply: async (candidate) => {
+          const { data, error } = await sb.rpc("minds_apply_price_change", {
+            p_owner_id: owner,
+            p_product_id: candidate.productId,
+            p_new_cents: Math.round(candidate.priceUsd * 100),
+            p_local_day: localDay,
+            p_why: candidate.why,
+          });
+          if (error) return { ok: false, reason: priceReasonFrom(error.message) };
+          const row = asRecord(Array.isArray(data) ? data[0] : data);
+          const fromCents = typeof row?.from_cents === "number" ? row.from_cents : null;
+          const toCents = typeof row?.to_cents === "number" ? row.to_cents : null;
+          if (fromCents === null || toCents === null) return { ok: false, reason: "The shop did not confirm the new price, so nothing is claimed about it." };
+          return { ok: true, fromUsd: fromCents / 100, newUsd: toCents / 100 };
+        },
+        log: (entry) => acts.log({ mind: "executioner", action: entry.action, outcome: entry.outcome, detail: entry.detail }),
+      },
+    );
+    if (priced.act) await reportAct(priced.act, acts);
+  } catch {
+    // The price check is extra. Nothing else in the run depends on it.
+  }
   const doorsReply = { status: doors.status, posted: doors.posted };
   if (outcome.status === "cannot_think") {
-    return reply(req, { status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
+    return out({ status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
   }
-  const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think);
+  const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think, await readCaptionDraft(sb, owner, localDay));
   const detail = clip(`${orderOutcomeLine(outcome.status, outcome.detail)} ${packs.detail} ${doors.detail}`, 800);
-  return reply(req, {
+  return out({
     status: outcome.status,
     detail,
     order_id: outcome.orderId,
     packs: { status: packs.status, saved: packs.saved },
     doors: doorsReply,
   });
+}
+
+/**
+ * Phase I slice 4: the tellings the owner has already heard, newest first. One read for the whole run, used by the
+ * shop scan and by the acts the run reports itself. A failed read returns an empty list: memory that cannot be read
+ * never silences a real telling.
+ */
+async function readToldTellings(sb: SupabaseClient, owner: string): Promise<ToldTelling[]> {
+  try {
+    const { data, error } = await sb
+      .from("minds_notable_events")
+      .select("title,detail,happened_at")
+      .eq("owner_id", owner)
+      .order("happened_at", { ascending: false })
+      .limit(TOLD_LIMIT);
+    if (error || !Array.isArray(data)) return [];
+    return (data as Array<Record<string, unknown>>)
+      .map((row) => ({
+        day: typeof row.happened_at === "string" ? ownerDayOf(row.happened_at) : "",
+        text: [typeof row.title === "string" ? row.title : "", typeof row.detail === "string" ? row.detail : ""].filter(Boolean).join(" "),
+      }))
+      .filter((item) => item.text.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Phase I slice 4: a product that sold nothing this week and nothing the 7 days before, and that has been on sale
+ * through both weeks. Buddy never deletes a product. Each finding is told through the act list, so it is logged and
+ * buzzed, and a finding the owner has already heard is not repeated. Never fails the run.
+ */
+async function scanDeadProducts(sb: SupabaseClient, localDay: string, told: readonly ToldTelling[]): Promise<ActWords[]> {
+  try {
+    const windows = deadProductWindows(new Date());
+    const [productRead, orderRead] = await Promise.all([
+      sb.from("products").select("id,name,created_at").eq("is_active", true).or("currency.eq.USD,currency.is.null").limit(SHOP_LIMIT),
+      sb
+        .from("orders")
+        .select("id,created_at")
+        .eq("payment_status", "paid")
+        .gte("created_at", windows.lastStart)
+        .order("created_at", { ascending: false })
+        .limit(ORDER_READ_LIMIT),
+    ]);
+    if (productRead.error || orderRead.error) return [];
+    const orderIds = (orderRead.data ?? []).map((row: Record<string, unknown>) => String(row.id ?? "")).filter(Boolean);
+    const orderAt = new Map<string, string>();
+    for (const row of orderRead.data ?? []) orderAt.set(String((row as Record<string, unknown>).id ?? ""), String((row as Record<string, unknown>).created_at ?? ""));
+    const items: PaidItem[] = [];
+    if (orderIds.length > 0) {
+      const { data, error } = await sb.from("order_items").select("order_id,product_id").in("order_id", orderIds).limit(2000);
+      if (error) return [];
+      for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+        items.push({ productId: typeof row.product_id === "string" ? row.product_id : null, at: orderAt.get(String(row.order_id ?? "")) ?? "" });
+      }
+    }
+    const sales = salesByProduct(items, windows);
+    const products: ProductSales[] = ((productRead.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+      const counted = sales.get(String(row.id));
+      return {
+        id: String(row.id),
+        name: String(row.name ?? ""),
+        createdAt: typeof row.created_at === "string" ? row.created_at : null,
+        paidThisWeek: counted?.thisWeek ?? 0,
+        paidLastWeek: counted?.lastWeek ?? 0,
+      };
+    });
+    // The same finding is never retold: memory holds what the owner has already heard, and only the new ones speak.
+    return freshTellings(planDeadProductActs(products, windows, localDay), told).fresh;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Phase I slice 4: the captions the owner drafted in the chat today, for today's pack. Read-only. Takeover is decided
+ * by the pack step's own rule; this only finds the draft. Null when there is none, or when it cannot be read.
+ */
+async function readCaptionDraft(sb: SupabaseClient, owner: string, localDay: string): Promise<{ articleTitle: string; copy: PackCopy } | null> {
+  try {
+    const { data: chats, error: chatError } = await sb.from("buddy_chats").select("id").eq("owner_id", owner).order("updated_at", { ascending: false }).limit(5);
+    if (chatError || !Array.isArray(chats) || chats.length === 0) return null;
+    const chatIds = (chats as Array<Record<string, unknown>>).map((row) => String(row.id ?? "")).filter(Boolean);
+    if (chatIds.length === 0) return null;
+    const { data, error } = await sb
+      .from("buddy_messages")
+      .select("payload,created_at")
+      .in("chat_id", chatIds)
+      .eq("payload->>kind", "caption_draft")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    if (error || !Array.isArray(data)) return null;
+    for (const row of data as Array<Record<string, unknown>>) {
+      const draft = draftFromPayload(row.payload);
+      if (draft && draft.day === localDay) return { articleTitle: draft.articleTitle, copy: draft.copy };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -306,6 +582,29 @@ async function recordNotable(
   } catch {
     return null;
   }
+}
+
+/**
+ * Phase I slice 3: every act is told here. The log row and the notable that buzzes the phone are written together,
+ * through the same notable helper the run already uses, so an act cannot happen silently and a push problem can
+ * never take the log row with it.
+ */
+function actPortsFor(sb: SupabaseClient, owner: string, localDay: string): ActPorts {
+  return {
+    log: async (entry) => {
+      const { error } = await sb.from("minds_daily_log").insert({
+        owner_id: owner,
+        day: localDay,
+        mind: entry.mind,
+        action: clip(entry.action, 120),
+        outcome: entry.outcome,
+        detail: clip(entry.detail, 500),
+        order_id: null,
+      });
+      if (error) throw new Error("log");
+    },
+    notable: (kind, title, detail, key) => recordNotable(sb, owner, localDay, "executioner", kind, title, detail, key),
+  };
 }
 
 /** The door step never throws into the run. A read or write failure is a plain held step, and nothing more is sent. */
@@ -371,6 +670,22 @@ async function runDoorsForDay(
           .in("status", ["queued", "posted"]);
         if (error) throw new Error("count");
         return count ?? 0;
+      },
+      // Phase I slice 5: the day's drip rows. The doors may send an older article only when nothing new is in the
+      // window, and never more than three articles a day (the database's own rule). A failed read returns null, so
+      // nothing older is stamped blind.
+      countDripsToday: async (day) => {
+        const { count, error } = await sb
+          .from("post_drip_days")
+          .select("post_id", { count: "exact", head: true })
+          .eq("owner_id", owner)
+          .eq("local_day", day);
+        if (error) throw new Error("drips");
+        return count ?? 0;
+      },
+      recordDrip: async (articleId, day) => {
+        const { error } = await sb.rpc("minds_record_drip", { p_owner_id: owner, p_local_day: day, p_post_id: articleId });
+        return !error;
       },
       readSecret: async (name) => {
         const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: name });
@@ -608,7 +923,102 @@ async function runLivingMindsForDay(
       });
     },
   };
-  await runLivingMinds(ports, { takeover, killScope, facts: await readMindFacts(sb), orders: orders.map((order) => order.instruction), doneToday, stoppedToday });
+  // The same memory the 08:00 clock gives the minds: the facts, the last telling, and the owner's own chat. Read
+  // once here; a memory that cannot be read leaves the minds with the facts alone.
+  const facts = await readMindFacts(sb);
+  let memory: string | null = null;
+  try {
+    memory = await readMemoryBlock(sb, owner, facts);
+  } catch {
+    memory = null;
+  }
+  await runLivingMinds(ports, {
+    takeover,
+    killScope,
+    facts: factsWithMemory(facts, memory),
+    orders: orders.map((order) => order.instruction),
+    doneToday,
+    stoppedToday,
+  });
+}
+
+/**
+ * Phase I slice 5: the rival pages the owner asked Buddy to watch, read ten at most a day, oldest first, public pages
+ * only. A page that really changed is told through the notable list (which buzzes the phone, and is read by the
+ * briefing and the night report) and through the daily log. A page that changed nothing says nothing. A page that
+ * could not be read is not recorded, so it is tried again next run, and nothing is ever claimed about it.
+ *
+ * The daily-log rows name the Executioner, who carried the read out. The notable names the Strategist, the mind that
+ * watches rivals. Neither uses a thinking mind's name, so a row written here never stops a mind's own retry today.
+ * Only reached when Takeover is on and Kill allows the run.
+ */
+async function runCompetitorsForDay(sb: SupabaseClient, owner: string, localDay: string, takeover: boolean, killScope: KillScope): Promise<void> {
+  const savedRead = await sb
+    .from("minds_competitors")
+    .select("id,url,label,last_read_at,last_title,last_fingerprint")
+    .eq("owner_id", owner)
+    .order("last_read_at", { ascending: true, nullsFirst: true })
+    .limit(COMPETITOR_SAVE_LIMIT);
+  if (savedRead.error || !Array.isArray(savedRead.data)) return;
+  const saved: SavedCompetitor[] = savedRead.data.map((row: Record<string, unknown>) => ({
+    id: String(row.id),
+    url: String(row.url ?? ""),
+    label: typeof row.label === "string" && row.label ? row.label : competitorLabel(String(row.url ?? "")),
+    lastReadAt: typeof row.last_read_at === "string" ? row.last_read_at : null,
+    lastTitle: typeof row.last_title === "string" ? row.last_title : null,
+    lastFingerprint: typeof row.last_fingerprint === "string" ? row.last_fingerprint : null,
+  }));
+  const lines: string[] = [];
+  const result = await runCompetitorReads(
+    { localDay, takeover, killScope },
+    {
+      readSaved: async () => saved,
+      readReadToday: async () => {
+        const { data, error } = await sb.from("minds_competitor_reads").select("competitor_id").eq("owner_id", owner).eq("local_day", localDay);
+        if (error || !Array.isArray(data)) throw new Error("reads");
+        return new Set(data.map((row: Record<string, unknown>) => String(row.competitor_id)));
+      },
+      readPage: (url) => fetchCompetitorPage(url),
+      recordRead: async (read, page, changeNote, day) => {
+        const { error } = await sb.rpc("minds_record_competitor_read", {
+          p_owner_id: owner,
+          p_competitor_id: read.id,
+          p_local_day: day,
+          p_title: page.title,
+          p_fingerprint: page.fingerprint,
+          p_change_note: changeNote,
+        });
+        return !error;
+      },
+      log: async (line) => {
+        lines.push(line);
+      },
+    },
+  );
+  if (result.status !== "done") return;
+  // One row for the day's read, then one row for each page that really changed. A day where no page could be read is
+  // told as a skip, with the step's own reasons, so a rival step that did nothing is never silent about it.
+  await sb.from("minds_daily_log").insert({
+    owner_id: owner,
+    day: localDay,
+    mind: "executioner",
+    action: "Read the rival pages",
+    outcome: result.read > 0 ? "done" : "skipped",
+    detail: clip(result.read > 0 ? result.detail : lines.join(" ") || result.detail, 500),
+    order_id: null,
+  });
+  for (const change of result.changes) {
+    await sb.from("minds_daily_log").insert({
+      owner_id: owner,
+      day: localDay,
+      mind: "executioner",
+      action: "Rival page changed",
+      outcome: "done",
+      detail: clip(change.detail, 500),
+      order_id: null,
+    });
+    await recordNotable(sb, owner, localDay, "strategist", COMPETITOR_CHANGE_KIND, change.title, change.detail, change.key);
+  }
 }
 
 /** This week and last week, as counts only: article views and paid orders. A failed read says so, and is never a guess. */
@@ -645,6 +1055,7 @@ async function runPacksForDay(
   takeover: boolean,
   killScope: KillScope,
   think: ReturnType<typeof makeMindThink>,
+  drafted: { articleTitle: string; copy: PackCopy } | null = null,
 ): Promise<DayPacksResult> {
   const siteOrigin = env("SITE_URL") || null;
   const [existing, articleRows, slotRows, productRows] = await Promise.all([
@@ -675,9 +1086,10 @@ async function runPacksForDay(
     priceUsd: typeof row.price_cents === "number" ? row.price_cents / 100 : null,
   }));
   let readyPacks = 0;
+  let blockedPacks = 0;
   const learning = await readWindowLearning(sb, owner, new Date());
   const result = await runDayPacks(
-    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0, learning },
+    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0, learning, draftedCopy: drafted },
     {
       think,
       checkImage: (cover, origin) => checkArticleImage(cover, origin),
@@ -702,6 +1114,7 @@ async function runPacksForDay(
           p_auditor_note: row.auditorNote,
         });
         if (!error && row.status === "ready") readyPacks += 1;
+        if (!error && row.status === "blocked") blockedPacks += 1;
         return error ? { ok: false, reason: reasonFrom(error.message) } : { ok: true };
       },
       log: async (entry) => {
@@ -717,16 +1130,10 @@ async function runPacksForDay(
       },
     },
   );
-  if (readyPacks > 0) {
-    await recordNotable(
-      sb,
-      owner,
-      localDay,
-      "executioner",
-      "pack_ready",
-      `${readyPacks} gated ${readyPacks === 1 ? "pack is" : "packs are"} ready`,
-      "Instagram, TikTok, Facebook and Pinterest packs are ready for you to post by hand. Nothing was posted for you.",
-    );
+  // A saved pack is an act, and so is a pack the Auditor held back. Both are told: the log row, the buzz, the
+  // briefing and the night report, with the honest status of each pack. Nothing was posted for the owner.
+  if (readyPacks > 0 || blockedPacks > 0) {
+    await reportAct(packSavedAct(readyPacks, blockedPacks, localDay), actPortsFor(sb, owner, localDay));
   }
   return result;
 }
@@ -735,9 +1142,11 @@ async function runPacksForDay(
  * Reads the shop's paid orders, today's product clicks and sources, and writes what is new as notable events.
  * Only the day run calls this, so Takeover and Kill already allowed the run. Reads only; writes are notable rows.
  */
-async function scanShopNotables(sb: SupabaseClient, owner: string, localDay: string): Promise<ScanResult> {
+async function scanShopNotables(sb: SupabaseClient, owner: string, localDay: string, told: readonly ToldTelling[]): Promise<ScanResult> {
   const window = ownerDayWindow(localDay);
   const ports: NotablePorts = {
+    // Memory: a telling the owner has already heard is not written again (Phase I slice 4).
+    readTold: async (): Promise<ToldTelling[]> => [...told],
     readPaidOrders: async (sinceIso: string): Promise<OrderRow[] | null> => {
       const { data, error } = await sb
         .from("orders")

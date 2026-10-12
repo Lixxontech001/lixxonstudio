@@ -8,20 +8,24 @@ import { feedbackLine } from "./buddyFeedback.ts";
 import { closedOrderKind, gateModelOrder, type AllowedOrder } from "./buddyOrderPolicy.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
+import { captionAsk, draftPayload, type CaptionDraftResult } from "./chatCaptions.ts";
+import { WATCH_NONE_LINE, WATCH_SAVE_FAILED_LINE, watchRefusedLine, watchSavedLine, type RefusedUrl } from "./competitors.ts";
+import { ownerDayOf } from "./mindsNightReport.ts";
 import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure, type BrainPorts } from "./brainChain.ts";
 import { stateFactsBlock, type BuddyStateFacts } from "./buddyStateFacts.ts";
 import {
-  ASK_WHICH_MIND_LINE,
   MIND_KEYS,
   MAX_ORDER_CHARS,
   MIND_LABELS,
   RESTRICTED_LINE,
   answerFromLog,
-  cleanInstruction,
   isRestricted,
+  mindFit,
+  mindFitTable,
   neverListLine,
   routeFilingGate,
   routeMessage,
+  routedOrderLine,
   type MindLogLine,
   type MindName,
   type Route,
@@ -48,7 +52,7 @@ export const BUDDY_SYSTEM_INSTRUCTION = [
   "You talk only to the owner. Be short, clear and human. Plain English, no jargon, no hype.",
   "You do not write marketing copy. You do not post, send, publish, edit or change anything yourself.",
   "You can read the website's published article titles and the active shop products. Their current list comes with each question, under THE SITE RIGHT NOW. Use only that list. Never guess or invent article titles, product names, prices or numbers. Money is always in USD.",
-  "Takeover decides what the site can change. Takeover off: nothing on the site changes, and you say so. Takeover on: the minds may do the work they are already allowed to do, and you must tell the owner whenever you report such a change. You never publish, edit articles, change products or prices, or spend money yourself.",
+  "Takeover decides what the site can change. Takeover off: nothing on the site changes, and you say so. Takeover on: the minds may do the work they are already allowed to do, and you must tell the owner whenever you report such a change. You never publish or edit articles, never create products and never spend money yourself. A US dollar price changes only on a day's run, with Takeover on and the Auditor's check first, and the owner is told every time.",
   "You only know what the owner tells you in this conversation, the briefings Buddy has written in it, and the site list.",
 ].join("\n");
 
@@ -111,12 +115,23 @@ export interface BuddyThinkDeps {
   readSiteFacts(nowIso: string): Promise<SiteFacts>;
   /** Today's briefing thread for this owner, created on first use. Null when it cannot be read or made. */
   findOrCreateBriefing(localDate: string): Promise<{ id: string; created: boolean } | null>;
-  /** The "which mind?" order waiting on the last Buddy message of this chat, if there is one. `ok:false` means unreadable. */
+  /** An order left waiting on an older Buddy message, before the rules placed unnamed work. `ok:false` means unreadable. */
   loadPendingOrder(chatId: string): Promise<{ ok: true; instruction: string | null } | { ok: false }>;
   /** Files one order as waiting. The mind is null when the owner has not chosen one. Returns false when not saved. */
   saveOrder(chatId: string, instruction: string, mind: MindName | null): Promise<boolean>;
   /** The newest log rows, optionally for one mind. Null when they cannot be read. */
   readMindLog(mind: MindName | null): Promise<MindLogLine[] | null>;
+  /**
+   * Saves the rival links the owner asked Buddy to watch (Phase I slice 5). Optional. This is the owner's own list,
+   * so it works whether Takeover is on or off, and it writes nothing on the site. Every link that is not a public
+   * https page comes back refused with a plain reason.
+   */
+  saveCompetitors?(urls: readonly string[]): Promise<{ saved: string[]; refused: RefusedUrl[] }>;
+  /**
+   * Drafts the four captions in this chat for a caption order (Phase I slice 4). Optional. It is talk, not a change,
+   * so it runs with Takeover on or off; it reads the site and the brain, and writes nothing but the chat.
+   */
+  draftCaptions?(input: { takeover: boolean | null; day: string }): Promise<CaptionDraftResult>;
   /** The Takeover switch as saved. Null when it cannot be read. Read only; a run never turns it on. */
   readTakeover(): Promise<boolean | null>;
   /** Read-only view of Takeover, the kill switch, waiting orders, recent mind steps and notable events. */
@@ -134,7 +149,7 @@ export const BUDDY_ANSWER_RULES = [
   'Put your whole answer in "reply". Be short, warm and practical. Plain English. No em dash.',
   'If the owner asks for work to be done by a mind, set "order" to {"mind": "analyst" | "strategist" | "ceo" | "executioner" | "auditor" | null, "kind": "mind_work", "instruction": "the work, in the owner\'s words"}.',
   'Only five kinds of order exist: run_today, pause_resume_free_door, kill_or_start_mind, product_line_apply and mind_work. Only those five kinds become orders. Set "kind" to "mind_work" for an order you propose. Any other kind, or a missing kind, is refused and nothing is filed.',
-  'Use null for "mind" when the owner named no mind. Then ask in "reply" which mind should take it.',
+  'Use null for "mind" when the owner named no mind: the rules then give the order to the mind that fits. Never ask in "reply" which mind should take it, and never make the owner choose.',
   'Use null for "order" for questions, thanks, small talk, and anything that is not work for a mind.',
   "An order is only filed as waiting for the owner. Nothing runs because of your reply.",
   "When you name a shop product or an article, use its exact name from THE SITE RIGHT NOW. Quote prices only in USD, from that list.",
@@ -327,7 +342,7 @@ async function readTakeoverSafe(deps: BuddyThinkDeps): Promise<boolean | null> {
   }
 }
 
-/** Answers a routed message: a log answer, a question about which mind, or an order filed as waiting. */
+/** Answers a routed message: a log answer, a how-to reply, or an order filed as waiting for one mind. */
 async function answerRouted(
   chatId: string,
   title: string,
@@ -368,8 +383,11 @@ async function answerRouted(
   if (!savedQuestion) return fail(503, "not_saved", SAVE_FAILED_MESSAGE);
 
   let reply: string;
-  let payload: Record<string, unknown> | null = null;
   let runStart = false;
+  // How many rival links this message really saved (Phase I slice 5). Zero for every other route.
+  let savedLinks = 0;
+  // A caption draft, when this order asked for one. Saved with the reply so today's pack step can use it.
+  let captionPayload: Record<string, unknown> | null = null;
   if (route.kind === "mind_log") {
     reply = answerFromLog(route.mind, await deps.readMindLog(route.mind));
   } else if (route.kind === "run_day") {
@@ -394,16 +412,68 @@ async function answerRouted(
     reply = brainHowToReply(route.brain);
   } else if (route.kind === "refused") {
     reply = route.line;
-  } else if (route.kind === "ask_which_mind") {
-    reply = ASK_WHICH_MIND_LINE;
-    payload = { pending_order: cleanInstruction(route.instruction) };
+  } else if (route.kind === "competitors") {
+    // The links are saved now, in the owner's own list. A link the app or the database will not take is named with
+    // its plain reason, so the owner always knows which pages are being watched. Nothing is filed, and nothing on
+    // the site changes.
+    let refused = [...route.refused];
+    let savedFacts: string[] = [];
+    let failed = deps.saveCompetitors === undefined && route.wanted.length > 0;
+    if (deps.saveCompetitors) {
+      try {
+        const outcome = await deps.saveCompetitors(route.wanted);
+        savedFacts = outcome.saved;
+        savedLinks = outcome.saved.length;
+        refused = [...refused, ...outcome.refused];
+      } catch {
+        failed = true;
+      }
+    }
+    if (failed) reply = WATCH_SAVE_FAILED_LINE;
+    else {
+      const lines = [savedLinks > 0 ? watchSavedLine(savedFacts) : WATCH_NONE_LINE];
+      const refusedLine = watchRefusedLine(refused);
+      if (refusedLine) lines.push(refusedLine);
+      reply = lines.join("\n");
+    }
   } else {
     const takeover = await readTakeoverSafe(deps);
-    reply = `${feedbackLine({ state: "waiting", takeover, mind: MIND_LABELS[route.mind] })}${isRestricted(route.instruction) ? ` ${RESTRICTED_LINE}` : ""}`;
+    // An order the rules placed says so first, with the fit table when a second mind also fitted. Nothing is asked.
+    const placed = route.routed ? `${routedOrderLine(route.mind, route.others ?? [])}\n` : "";
+    reply = `${placed}${feedbackLine({ state: "waiting", takeover, mind: MIND_LABELS[route.mind] })}${isRestricted(route.instruction) ? ` ${RESTRICTED_LINE}` : ""}`;
+    // A caption order also gets the four captions drafted here and now. A draft is talk, so it works with Takeover
+    // off; it is stored in this chat only, and today's pack step may use it, and that step runs only while Takeover
+    // is on. Four captions stay four: the pack's own Auditor checks them before they are shown.
+    if (deps.draftCaptions && captionAsk(route.instruction)) {
+      try {
+        const day = ownerDayOf(deps.now().toISOString());
+        const draft = await deps.draftCaptions({ takeover, day });
+        if (draft.ok) {
+          reply = `${reply}\n\n${draft.lines.join("\n")}`;
+          captionPayload = draftPayload(day, draft.articleTitle, draft.copy);
+        } else {
+          reply = `${reply}\n\n${draft.line}`;
+        }
+      } catch {
+        // The draft is extra. A draft that could not be made never changes the order's own reply.
+      }
+    }
   }
-  const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, payload);
+  const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, captionPayload);
   await deps.touchChat(chatId, title);
-  return { status: 200, body: { ok: true, action, route: route.kind, reply, saved, ...(runStart ? { run_start: true } : {}) } };
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      action,
+      route: route.kind,
+      reply,
+      saved,
+      ...(captionPayload ? { drafted: true } : {}),
+      ...(route.kind === "competitors" ? { saved_links: savedLinks } : {}),
+      ...(runStart ? { run_start: true } : {}),
+    },
+  };
 }
 
 /** The ports the brain chain needs, from the deps. One place, so the probe and chat read keys the same way. */
@@ -589,7 +659,6 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
   }
 
   let reply = answer.reply;
-  let replyPayload: Record<string, unknown> | null = null;
   let filedAs: string | null = null;
   // Every order the model proposes passes the same gate as the router's. A refused one is never saved.
   // A question is answered as the reply and filed as nothing.
@@ -605,14 +674,20 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
       const takeover = await readTakeoverSafe(deps);
       reply = `${reply} ${feedbackLine({ state: "waiting", takeover, mind: MIND_LABELS[answer.order.mind] })}`;
     } else {
-      // No mind yet: the owner's words wait on this reply, so the next message can name one.
-      filedAs = "no_mind";
-      replyPayload = { pending_order: answer.order.instruction };
+      // No mind named: the same plain rules that route a typed order place this one, so the owner is never asked
+      // to choose. A second fitting mind is shown in a table, exactly as it is on the rules path.
+      const fit = mindFit(answer.order.instruction);
+      const filed = await deps.saveOrder(chatId, answer.order.instruction, fit.mind);
+      if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
+      filedAs = fit.mind;
+      const takeover = await readTakeoverSafe(deps);
+      const table = fit.others.length ? `\n${mindFitTable([fit.mind, ...fit.others])}` : "";
+      reply = `${reply}${table} ${feedbackLine({ state: "waiting", takeover, mind: MIND_LABELS[fit.mind] })}`;
     }
     if (isRestricted(answer.order.instruction)) reply = `${reply} ${RESTRICTED_LINE}`;
   }
 
-  const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, replyPayload);
+  const saved = await deps.saveMessage(chatId, "buddy", "reply", reply);
   return {
     status: 200,
     body: { ok: true, action, model: result.model, brain: result.brain, route: "chat", reply, saved, ...(filedAs ? { filed: filedAs } : {}) },

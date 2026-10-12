@@ -143,7 +143,8 @@ describe('the day run reads each mind on its own rows (source check, no network)
     expect(placement).toContain('select("mind,action,outcome")');
     expect(placement).toMatch(/row\.mind === mind && row\.outcome === "done"/);
     expect(placement).toMatch(/row\.action === STOPPED_ACTION/);
-    expect(placement).toContain('doneToday, stoppedToday });');
+    // Phase I slice 4: the call now carries the memory block too, so it is written over several lines.
+    expect(placement).toMatch(/await runLivingMinds\(ports, \{[\s\S]{0,400}?doneToday,[\s\S]{0,80}?stoppedToday,\s*\}\);/);
   });
 
   it('a read error still skips the steps entirely, so a flaky read never runs them twice', () => {

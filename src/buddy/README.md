@@ -54,12 +54,12 @@ Server side:
   - `supabase/functions/_shared/mindThink.ts`: the server's one door for the minds' thinking. It walks the brain chain through `askBrains` (Gemini first), makes no call without a saved brain key, and never returns a key.
 - Phase 2 slice 5 teaches Buddy to take orders. `supabase/functions/_shared/buddyRouter.ts` sorts each message with plain rules, so no key is needed.
   - An order that names a mind (Analyst, Strategist, CEO, Executioner or Auditor) is saved to `buddy_orders` as waiting. It is never saved as done.
-  - An order that names no mind gets one question: which mind. The next short reply that names one mind files the order. If the owner moves on instead, the order is saved as waiting with no mind.
+  - An order that names no mind is placed by the rules: numbers and weeks to the Analyst, plans and rivals to the Strategist, sorting and priority to the CEO, packs, doors, captions and the day run to the Executioner, checks to the Auditor. Two fits: the first takes it and the reply shows both in a table. Buddy never asks which mind (Phase H slice 5 removed that question).
   - A question about a mind ("What did the Analyst do?") is answered from the newest rows of `minds_daily_log`. An empty log says so. A failed read says so and changes nothing.
   - An order that mentions publishing, sending, spending, prices, refunds or deleting is still saved as waiting, and Buddy says those parts wait for the owner.
   - The briefing section "The five minds" reads the same log. A day with a waiting order is not called quiet.
   - Phase 3 slice 1: "Do the new article" is now an order, not a question. Polite openers such as "please" and "could you" are read past. Questions ("?", "what", "do you") are never filed as orders.
-  - With a Google key saved, a statement the rules cannot place gets one Gemini judgement (order, ask which mind, or chat). Clear orders (a named mind plus an action word) are decided by the rules with no call. Without a key, the rules decide.
+  - With a Google key saved, a statement the rules cannot place gets one Gemini judgement (order or chat). Clear orders (a named mind plus an action word) are decided by the rules with no call. A model order with no mind is placed by the same rules, so the owner is never asked to choose. Without a key, the rules decide.
   - `supabase/functions/_shared/buddyOrders.ts` reads the waiting orders, oldest first, and sorts each into a lane. Product lines on articles are the only lane this phase runs. Channels and video, prices and spending, and creating a product each wait with a plain reason.
   - No mind acts on an order yet. The owner still cannot open a chat with any mind.
 - Phase 3 slice 2 adds the records for placing products on articles. All four migrations are additive and not applied.
@@ -96,7 +96,7 @@ Server side:
 
 ## Phase 4 slice 1: starting a run
 
-- "Run the products", "make today's posts", "run today" and "daily run" are filed as orders with no mind named (`buddyRouter.ts`, `run_day` route). They no longer get the "which mind?" question. Questions about a run stay chat.
+- "Run the products", "make today's posts", "run today" and "daily run" are filed as orders with no mind named (`buddyRouter.ts`, `run_day` route). No "which mind?" question is asked anywhere (Phase H slice 5). Questions about a run stay chat.
 - Orders in the `daily_run` lane (`buddyOrders.ts`) are runnable. A run request that also names a channel stays held. "Post it to instagram" stays held.
 - `supabase/functions/_shared/runDay.ts` decides what runs. Takeover off, or a Kill on all, strategist, executioner or auditor: nothing runs, nothing is read, nothing is logged, and orders stay waiting. Otherwise the oldest runnable order runs, or the daily trigger queues today's order first.
 - `minds-run-placement` accepts an optional `order_id`, the owner's choice. The browser starts the run only when Buddy says Takeover is on (`run_start`).
@@ -353,7 +353,7 @@ What is still not done, or not verified:
 - **Which events buzz.** Doors posted, gated packs ready, a sale or product click, a new traffic kind, the Auditor stopping something, a door step that broke, and a mind finishing a real job. The list is `BUZZ_KINDS` in `supabase/functions/_shared/notablePush.ts`. Takeover, kill, order, article, and night-report events are written to the list but do not buzz. A heartbeat never buzzes and is not a notable kind.
 - **Which events are written today.** `door_posted` (once per day run, when at least one door posted), `pack_ready` (once per day run, when a gated pack was saved as ready), `mind_failed` (the door step threw), and `auditor_blocked` (the Auditor stopped an edit). `sale`, `product_click`, `traffic_new_kind`, and `job_finished` are defined but nothing produces them yet, because the repo has no sales, click, or traffic table and no job-finished producer.
 - **How it sends.** The day run writes the event, then calls the existing Web Push sender (`webPush.ts`) with the VAPID values already in Vault (`vapid_public_key`, `vapid_subject`, `vapid_private_key`). No second push vendor. Each confirmed device gets one short notification titled "Buddy", with a line of words, and a tap that opens `/buddy`. Buddy stays the only voice to the owner. The payload has no device, address, or key in it.
-- **Statuses.** Each event records what the push did in `minds_notable_events.push_note`: `sent`, `no_device`, `not_configured`, `failed`, or `not_buzzing`. A `no_device` or `not_configured` result is also written once to the daily log with the plain words: "no device", or the register copy "To turn push on: enter your VAPID values, then open /admin/settings on your phone and tap Register this device." A push problem never fails the day run. A device the push service says is gone is turned off.
+- **Statuses.** Each event records what the push did in `minds_notable_events.push_note`: `sent`, `no_device`, `not_configured`, `failed`, or `not_buzzing`. A `no_device` or `not_configured` result is also written once to the daily log with the plain words: "no device", or the register copy "Phone alerts: make the keys on the Keys page, then open /admin/settings on your phone and tap Register this device." A push problem never fails the day run. A device the push service says is gone is turned off.
 - **Database.** Migration `20261011210000_notable_push.sql` adds the new kinds to the table check, keeps every existing kind, and adds `push_note`. It is not applied to production.
 - **Tests.** `notablePush.test.ts` uses fake sends only. It covers which kinds buzz, the payload, one send per device, gone devices, the no-device and no-keys states, and a send that throws. `notablePushWiring.test.ts` checks that the day run uses the helper, never sends a heartbeat, and never calls the provider directly. `mindsPacksDb.test.ts` checks the new kinds and the push note values on PGlite.
 - **Not done here:** no real push was sent to any phone. The Edge functions are not deployed or run live. "Register this device" is on `/admin/settings` (checked in the code), not tested in a browser. The night report (slice 5) is not in this slice.
@@ -613,3 +613,118 @@ What is still not done, or not verified:
 - Not changed in Phase B: the brains, the doors, the looks, the briefing sections, the audio on video, and the Takeover default.
 - Not proven live: the migrations (`20261018000000_notable_week_change.sql`, `20261018010000_retire_old_sender_keys.sql`) are not applied. The Gemini call and the live rate fetch were not run from this sandbox.
 - Nothing was merged, opened as a pull request, deployed, or applied to production.
+
+## Phase H slice 5: Buddy never asks which mind
+
+- `supabase/functions/_shared/buddyRouter.ts` places every order that names no mind, with plain rules and no question. The rules are tried in this order, and the first fit takes the order:
+  - Analyst: numbers, figures, stats, sales, views, reads, traffic and any week or month (`this week`, `last week`, `monthly`).
+  - Strategist: strategy, plans, positioning, rivals, competitors and dead products.
+  - CEO: sort, order, priority, rank and triage.
+  - Executioner: packs, doors, captions, thumbnails, videos, product lines on an article, and the shape of the day's run.
+  - Auditor: check, audit, review, verify, inspect, confirm, prove and safety.
+- Work that fits no rule goes to the Executioner, the doer, so an order is never left without a mind. Swap orders (a product placed on an article) keep their own route to the Executioner.
+- Two minds fit: Buddy does not ask. The reply shows a small plain-text table of both minds and what each would do, and the first mind in rule order takes the order.
+- A question stays a question. "How are sales?" and "Can you check the article for me?" are chat, and today's run is still the `run_day` route. The never-list requests (reader replies, spending, product creation, whole-article rewrites) are still refused with one line and nothing filed.
+- Removed: the export `ASK_WHICH_MIND_LINE` and the `ask_which_mind` route. No new chat message carries `pending_order`. An order left waiting by an older message still resolves when the owner names a mind, and still flushes as waiting with no mind if the owner moves on.
+- Tests: `src/__tests__/buddyNoAskWhichMind.test.ts` (the rules, the table, the never-ask guarantee, questions and refusals), plus the updated `buddyRouter`, `buddyRunDayRouting`, `buddySwapDefault`, `buddyMindsFlow`, `buddyThink` and `phaseGFreeze` checks.
+
+## Phase I slice 2: the morning pipeline (Analyst, Strategist, CEO, then the Executioner)
+
+The 08:00 clock queues the day and then runs the day as a team, in one fixed order.
+
+- `supabase/functions/_shared/mindPipeline.ts`: `PIPELINE_ORDER` is analyst, strategist, ceo, executioner. The three
+  thinking minds are the existing ones (`runLivingMinds`): a mind with a done row today is not asked again, a mind
+  Kill stops writes its one stopped row, and a brain that cannot answer is an honest row. Their summaries and the
+  plans they put forward become one brief, which is handed to the Executioner.
+- Gates: Takeover off returns before any port is called (no think, no log, no run). A Kill that stops the run is the
+  run's own rule (`blockedDetail`), asked here and again inside the run, so no change can slip past it. A day whose
+  order is already done is not run again.
+- `_shared/productPlacement.ts` gained `fixPlacementOnce`: the Auditor blocks, its own words go back to the
+  Strategist exactly once, and the repaired plan is audited again. Still blocked, or no usable fix: the change is
+  stopped, logged and noticed once (`repairOnce` in `placementRun.ts` covers both block points, the plan and the
+  apply).
+- `_shared/internalCall.ts` is the door the clock uses to start the owner's own run: the internal secret, timing
+  safe, one JSON body. `minds-run-placement` now has exactly two ways in: the owner's session (unchanged), and the
+  internal secret plus an owner id that `app_admins` really lists. An internal call never picks an order and never
+  gets CORS headers.
+- `minds-morning-clock` sends the brief with the call, and `minds-run-placement` writes it as one `minds_daily_log`
+  row, so the owner can read what the morning team planned.
+
+## Phase I slice 3: every act is told four ways
+
+One daily-log row, one notable event (which buzzes the phone), one briefing line, one night line.
+
+- `supabase/functions/_shared/mindActs.ts` is the one list of acts and the one place their plain words live:
+  `door_posted`, `door_skipped`, `price_changed`, `pack_saved`, `product_looks_dead`, `auditor_blocked`. Each act
+  carries its log action, its notable title, its detail, its outcome and its once-a-day key.
+- `reportAct` writes the log row and the notable together and never throws: a phone that cannot be reached is
+  reported, not raised, so an act is never lost because a device was missing.
+- The briefing and the night report both read the notable events, so a notable is a briefing line and a night line.
+  The four new kinds are in `BRIEFING_NOTABLE_KINDS`, which is what makes them buzz (`BUZZ_KINDS`).
+- A door that did not go out is told per door with the door step's own reason, and a step that never reached a door
+  is told as one line: the morning is never quiet by accident. A saved pack is told ready or blocked.
+- Missing VAPID or no device: the push helper writes its skip row as before, the briefing now shows
+  `pushSkipLine(detail)` under Problems, and a skipped buzz keeps the day from being "Quiet". Nothing claims sent.
+- Migration `20261022000000_minds_act_kinds.sql` (not applied) allows the four new kinds in the table check.
+
+## Phase I slice 4: memory, the four captions, and a product that looks dead
+
+**Memory.** A mind remembers three things, and nothing else: the facts (the site numbers read for this run), the last
+thing the owner was told (with the day it was told), and the owner's own chat. `supabase/functions/_shared/mindMemory.ts`
+builds the one block the Monday clock hands the minds, and `runMindPipeline` puts it in front of every thinking mind
+with the facts. The rule that comes with memory: the same telling is never made twice. The shop scan and the run's own
+acts pass every plan through `freshTellings`, so a spike, a drop or a dead product the owner has already heard writes
+nothing, buzzes nothing, and does not read as news in the briefing or the night report. When everything to tell was
+already told, the day is `Quiet since you left.` The briefing also prints the same telling only once.
+
+**The four captions.** An order about captions ("Write the captions for the pack") is filed for the Executioner as
+before, and Buddy also drafts the four captions **in the chat, at any time**, with Takeover on or off: a draft is
+talk, not a change. `supabase/functions/_shared/chatCaptions.ts` uses the pack's own prompt and the pack's own Auditor,
+and the four stay four (Instagram, TikTok, Facebook, Pinterest, each with words, no two the same). The draft is saved
+into the chat with its day. The day's pack step reads today's draft and uses it for its own article instead of writing
+new captions, and that step runs only while Takeover is on, so a draft reaches a pack only when Takeover is on. The
+four rows of a pack stay four, and nothing is ever posted for the owner.
+
+**A product that looks dead.** `supabase/functions/_shared/deadProducts.ts` says a product looks dead only when it had
+no paid order this week and none the 7 days before, and only when it has been on sale through both weeks: never day
+one, never on a date that cannot be read. The day run counts paid order items per product for the two windows, reports
+each finding through the act list (`product_looks_dead`), and names at most two in a day. Buddy never deletes a
+product: the words say so, and the owner decides to write an article that fits it or make a new product himself. The
+finding is told once, and the owner's memory is what stops the repeat.
+
+## Phase I slice 5: the archive drip, the rival pages, and one US dollar price change
+
+Three more things the day run does on its own, all inside the same gates (Takeover on, no Kill), all of them extra:
+each step sits in its own `try`/`catch`, so a rival page that cannot be reached or a shop that refuses never changes
+the rest of the day.
+
+**The archive drip.** When no new article was published in the window, a free door may post an older one instead of
+saying "nothing new". `doorPosts.ts` picks it in one pass: a fresh article first, and only when there is nothing fresh
+at all does `pickDripArticle` look past the window — never beside a fresh article that broke a rule, because the
+`From the archive: ` note has to be true. An older article keeps the door's own daily and weekly caps, is stamped once
+per door, and the day's three come from the same `post_drip_days` rule the placement step already uses:
+`countDripsToday` is read once, and `minds_record_drip` (migration `20261023000000_minds_door_drip.sql`, **not
+applied**) writes nothing without `minds_assert_can_act()`, nothing for a draft, and nothing for anyone who is not the
+owner. The stamp is kept before the send, so a later attempt the same day cannot slip past the day's three. The door
+telling says which article went out and that it came from the archive.
+
+**The rival pages the owner asks to watch.** The owner saves the links himself, in his own words: `competitors.ts`
+accepts only a public https page (never a local or private address, never a sign-in in the address, at most 300
+characters) and refuses the rest with a plain reason. The list holds up to a hundred pages. The day run reads at most
+**ten a day**, oldest read first, and records each read through `minds_record_competitor_read` (one row per page per
+owner day, an eleventh refused by the table's own cap, `minds_assert_can_act()` first) so a second run the same day
+cannot read twenty. A page that cannot be reached is not recorded at all, and the owner is told so. When a page really
+changed, the owner gets one honest line — the new headline, or that the page text changed — through the notable list
+(`competitor_changed`), which is what buzzes the phone and reaches the briefing and the night report. Nothing else is
+ever claimed about a page.
+
+**One US dollar price change, with the Auditor first.** An owner's price ask is no longer refused in the chat, and it
+is not run from the chat either: the reply carries the rule, and the order lane holds it (`HELD_PRICE`). The day's run
+does the work, once a day: `priceChanges.ts` asks the brain for one product and one US dollar price with a reason,
+`auditPriceChange` checks it before anything is written (never nothing, free or under a dollar, never over the
+ceiling, never a step bigger than a quarter, never another currency, never a country or another money in the words),
+and a blocked change gets exactly one repair ask before it is stopped and told as `auditor_blocked`. An allowed change
+goes through `minds_apply_price_change` (migration `20261025000000_minds_price_changes.sql`, **not applied**), which
+re-checks every one of those rules in the database, writes both `products.price` and `price_cents`, records the old and
+the new price with the day, and refuses a second change on the same product the same day. The owner is told every
+time, in dollars, through `priceChangedAct`.

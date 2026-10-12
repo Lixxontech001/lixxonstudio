@@ -18,7 +18,7 @@ export function shouldBuzz(kind: string): boolean {
 }
 
 /** The owner's words for turning push on. The same wording as the Keys page. */
-export const PUSH_HELP_COPY = "To turn push on: enter your VAPID values, then open /admin/settings on your phone and tap Register this device.";
+export const PUSH_HELP_COPY = "Phone alerts: make the keys on the Keys page, then open /admin/settings on your phone and tap Register this device.";
 export const NO_DEVICE_COPY = "no device";
 const NOTIFICATION_TITLE = "Buddy";
 /** Where a tap on the notification opens: Buddy, the owner's voice. */

@@ -44,8 +44,11 @@ describe('lie 1: Buddy\'s system text states the real Takeover rule', () => {
     expect(BUDDY_SYSTEM_INSTRUCTION).toContain('Takeover on: the minds may do the work they are already allowed to do, and you must tell the owner');
   });
 
-  it('Buddy itself still never publishes, edits, changes prices or spends money', () => {
-    expect(BUDDY_SYSTEM_INSTRUCTION).toContain('You never publish, edit articles, change products or prices, or spend money yourself.');
+  it('Buddy itself still never publishes, edits, creates products or spends money, and states the price rule', () => {
+    // Phase I slice 5: prices are no longer on the never list. One US dollar price may change on the day's run, with
+    // Takeover on and the Auditor's check first, and the owner is told every time.
+    expect(BUDDY_SYSTEM_INSTRUCTION).toContain('You never publish or edit articles, never create products and never spend money yourself.');
+    expect(BUDDY_SYSTEM_INSTRUCTION).toContain("A US dollar price changes only on a day's run, with Takeover on and the Auditor's check first, and the owner is told every time.");
   });
 });
 

@@ -151,9 +151,14 @@ describe('Phase F freeze: Buddy', () => {
   });
 
   it('notable kinds are exactly the briefing list, and include door_failed', () => {
+    // Phase I slice 3 added the four acts that used to be silent: a door that did not go out, a price change, a
+    // saved pack, and a product that looks dead. They are briefing kinds, so they buzz the phone as well.
     expect([...BRIEFING_NOTABLE_KINDS]).toEqual([
       'takeover_changed', 'kill_changed', 'week_up', 'week_down', 'door_posted', 'sale', 'product_click',
       'traffic_new_kind', 'auditor_blocked', 'order_blocked', 'pack_ready', 'door_failed', 'mind_failed',
+      'door_skipped', 'price_changed', 'pack_saved', 'product_looks_dead',
+      // Phase I slice 5: a rival page the owner asked Buddy to watch really changed.
+      'competitor_changed',
     ]);
   });
 
@@ -186,7 +191,7 @@ describe('Phase F freeze: Buddy', () => {
 
   it('Buddy never replies to readers; the refusal line names the never-list', () => {
     expect(REFUSAL_LINE).toBe(
-      'Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, price changes, and posting or publishing stay with you. Nothing was filed or changed.',
+      'Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, and posting or publishing stay with you. Nothing was filed or changed.',
     );
   });
 
@@ -205,7 +210,8 @@ describe('Phase F freeze: Buddy', () => {
     expect(refusedRequest('Delete that post')).toBe(true);
     expect(refusedRequest('Email my readers the new guide')).toBe(true);
     expect(refusedRequest('Reply to the reader who wrote in')).toBe(true);
-    expect(refusedRequest('Change the price of the kit')).toBe(true);
+    // Phase I slice 5: a price ask left this list. It is answered with the day's price rule instead of a refusal.
+    expect(refusedRequest('Change the price of the kit')).toBe(false);
   });
 
   // Phase F slice 6: the Phase E report left this open (owner decision B). It is now refused. It is a tiny gate fix.
@@ -565,12 +571,13 @@ describe('Phase F freeze: nothing shipped that should not be', () => {
     expect(read('src/components/PwaInstallPanel.tsx')).toContain("href: '/buddy'");
   });
 
-  // Phase G is the phase that comes after F. Its report and freeze are the only later artifacts, and no Phase H is in the tree.
-  it('Phase G is the only later phase: its report and freeze exist, and there is no Phase H', () => {
+  // Phase G was the latest phase when this pin was written. Phase H is the latest now, so the pin is flipped:
+  // both reports and both freezes are in the tree, and the Phase F rules themselves are unchanged.
+  it('Phase H is now the latest phase: its report and freeze exist beside the Phase G ones', () => {
     expect(exists('PHASE_G_REPORT.md')).toBe(true);
     expect(exists('src/buddy/phaseGFreeze.test.ts')).toBe(true);
-    expect(exists('PHASE_H_REPORT.md')).toBe(false);
-    expect(exists('src/buddy/phaseHFreeze.test.ts')).toBe(false);
+    expect(exists('PHASE_H_REPORT.md')).toBe(true);
+    expect(exists('src/buddy/phaseHFreeze.test.ts')).toBe(true);
   });
 
   it('the go-live checklist exists and says the agent does not merge or deploy', () => {

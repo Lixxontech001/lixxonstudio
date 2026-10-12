@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, RefreshCw, Save } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { parseVideoTemplates, type VideoTemplateDocument, type VideoTemplateList } from '../../lib/automationDistribution';
+import GuideLink from '../components/GuideLink';
 import {
   BUILT_IN_LOOK, LOOK_LIMITS, LOOK_SCOPE_NOTE, applyLookEdits, lookSummary, type LookEdits,
 } from '../../lib/videoLook';
@@ -145,11 +146,13 @@ export default function AutomationVideoLook() {
             }}
           >
             <h2 className="text-sm font-semibold text-gray-900">Change the look</h2>
+            <GuideLink section="video-look" back="/admin/automation/video-look#look-length" />
 
             <label className="block text-sm">
               <span className="text-gray-800">Length in seconds</span>
               <span className="block text-xs text-gray-500">A whole number from {lengthRange}.</span>
               <input
+                id="look-length"
                 type="text"
                 inputMode="numeric"
                 value={edits.durationSeconds}
@@ -162,6 +165,7 @@ export default function AutomationVideoLook() {
               <span className="text-gray-800">Caption size</span>
               <span className="block text-xs text-gray-500">A whole number from {sizeRange}.</span>
               <input
+                id="look-caption-size"
                 type="text"
                 inputMode="numeric"
                 value={edits.captionFontSize}
@@ -174,6 +178,7 @@ export default function AutomationVideoLook() {
               <span className="text-gray-800">Caption colour</span>
               <span className="block text-xs text-gray-500">Six hex digits after 0x, for example 0xFFFFFF.</span>
               <input
+                id="look-caption-colour"
                 type="text"
                 value={edits.captionColor}
                 onChange={(event) => setEdits({ ...edits, captionColor: event.target.value })}

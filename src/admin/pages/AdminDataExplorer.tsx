@@ -35,12 +35,12 @@ export default function AdminDataExplorer() {
       <div className="mb-6">
         <h1 className="font-serif text-2xl text-charcoal flex items-center gap-2"><Database size={20} className="text-bronze" /> Data</h1>
         <p className="text-sm text-charcoal-muted mt-1">
-          Browse and edit any table the database lets you touch. Row-level security runs as <em>you</em>, so the explorer can never show or change a row a permission does not cover — and every write is audited.
+          Browse and edit any table your own access allows. The access rules run as <em>you</em>, so this screen can never show or change a row you are not allowed to reach, and every change is recorded.
         </p>
       </div>
 
       <div className="flex gap-1 mb-5 border-b border-taupe/30">
-        {([['browse', 'Browse & edit', <Table2 size={14} key="t" />], ['sql', 'SQL console', <Play size={14} key="p" />]] as const).map(([id, label, icon]) => (
+        {([['browse', 'Browse & edit', <Table2 size={14} key="t" />], ['sql', 'Query', <Play size={14} key="p" />]] as const).map(([id, label, icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-2 px-3 py-2 text-xs border-b-2 -mb-px ${tab === id ? 'border-bronze text-charcoal' : 'border-transparent text-charcoal-muted hover:text-charcoal'}`}>
             {icon}{label}
@@ -255,7 +255,7 @@ function TableBrowser({ entry }: { entry: CatalogueEntry }) {
 }
 
 function SqlConsole({ allowed }: { allowed: boolean }) {
-  const [sql, setSql] = useState('SELECT table_name, (SELECT count(*) FROM pg_stat_user_tables s WHERE s.relname = t.table_name) AS seq_scans\nFROM information_schema.tables t\nWHERE table_schema = \'public\'\nORDER BY table_name\nLIMIT 50;');
+  const [sql, setSql] = useState('SELECT id, title, status, published_at\nFROM posts\nORDER BY published_at DESC\nLIMIT 20;');
   const [result, setResult] = useState<{ ok: boolean; rows?: Record<string, unknown>[]; row_count?: number; truncated?: boolean; ms?: number; error?: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -267,14 +267,14 @@ function SqlConsole({ allowed }: { allowed: boolean }) {
   };
 
   if (!allowed) {
-    return <Notice tone="warn">Your role does not hold the <code>data.sql</code> permission. An owner can grant it under Team &amp; access.</Notice>;
+    return <Notice tone="warn">Your role cannot run read-only queries yet. An owner can grant the Run read-only SQL permission under Team &amp; access.</Notice>;
   }
 
   return (
-    <Panel title="Read-only SQL" icon={<Play size={15} className="text-bronze" />}
+    <Panel title="Read-only query" icon={<Play size={15} className="text-bronze" />}
       actions={<Btn onClick={run} busy={busy} icon={<Play size={13} />}>Run (⌘/Ctrl + Enter)</Btn>}>
       <p className="text-xs text-charcoal-muted mb-3">
-        Single <code>SELECT</code>/<code>WITH</code> statement. It runs as you inside a read-only transaction with a 5-second timeout and a 200-row cap, so writes fail, and the database access rules still hide rows you could not read elsewhere.
+        One SQL statement at a time, run as you. It stops after 5 seconds and returns at most 200 rows, so nothing here can change the site. The access rules still hide rows you could not read elsewhere.
       </p>
       <textarea value={sql} onChange={e => setSql(e.target.value)} rows={7} spellCheck={false}
         onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run(); }}

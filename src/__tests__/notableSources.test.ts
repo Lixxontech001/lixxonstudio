@@ -145,11 +145,11 @@ describe('the scan writes each new event once, and buzzes only buzz kinds', () =
       readEarlierSources: async () => ['shop'],
     });
     const first = await scanNotableSources(ports, WINDOW);
-    expect(first).toEqual({ written: 3, skipped: 0, unreadable: [] });
+    expect(first).toEqual({ written: 3, skipped: 0, retold: 0, unreadable: [] });
     expect(written.map((plan) => plan.kind).sort()).toEqual(['product_click', 'sale', 'traffic_new_kind']);
 
     const second = await scanNotableSources(ports, WINDOW);
-    expect(second).toEqual({ written: 0, skipped: 3, unreadable: [] });
+    expect(second).toEqual({ written: 0, skipped: 3, retold: 0, unreadable: [] });
     expect(record).toHaveBeenCalledTimes(6);
   });
 
@@ -187,7 +187,7 @@ describe('the scan writes each new event once, and buzzes only buzz kinds', () =
   it('with no sales and no clicks, nothing is written and the run is not called a failure', async () => {
     const { ports, record } = fakePorts();
     const result = await scanNotableSources(ports, WINDOW);
-    expect(result).toEqual({ written: 0, skipped: 0, unreadable: [] });
+    expect(result).toEqual({ written: 0, skipped: 0, retold: 0, unreadable: [] });
     expect(record).not.toHaveBeenCalled();
   });
 });
@@ -220,7 +220,7 @@ describe('the Analyst writes a daily-log line a person can read later', () => {
       },
     });
     const result = await scanNotableSources(ports, WINDOW);
-    expect(result).toEqual({ written: 1, skipped: 0, unreadable: [] });
+    expect(result).toEqual({ written: 1, skipped: 0, retold: 0, unreadable: [] });
     expect(written.map((plan) => plan.key)).toEqual(['sale:ord-10']);
   });
 

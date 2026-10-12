@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, FlaskConical, Loader2, RefreshCw } from 'l
 import { supabase } from '../../lib/supabaseClient';
 import { parseAutomationKeyList, safeAutomationKeyTestResult, type AutomationKeyEntry } from '../../lib/automationKeys';
 import { brainRows, type BrainRow } from '../../lib/brainRows';
+import GuideLink from '../components/GuideLink';
 
 type Notice = { tone: 'success' | 'warning' | 'error' | 'info'; message: string };
 
@@ -183,6 +184,7 @@ export default function AutomationBrains() {
                   <label className="text-sm text-charcoal">
                     {row.keyLabel}
                     <input
+                      id={`brain-key-${row.keyName}`}
                       type="password"
                       autoComplete="off"
                       spellCheck={false}
@@ -196,6 +198,7 @@ export default function AutomationBrains() {
                     <label className="text-sm text-charcoal">
                       {row.identifier.label}
                       <input
+                        id={`brain-key-${row.identifier.name}`}
                         type="text"
                         autoComplete="off"
                         spellCheck={false}
@@ -206,6 +209,10 @@ export default function AutomationBrains() {
                       />
                     </label>
                   )}
+                </div>
+
+                <div className="mt-3">
+                  <GuideLink section={row.slot.id} back={`/admin/automation/brains#brain-key-${row.keyName}`} />
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
