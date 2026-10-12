@@ -17,7 +17,6 @@ import {
   mindFit,
   neverListLine,
   routeMessage,
-  routedOrderLine,
 } from '../../supabase/functions/_shared/buddyRouter';
 import {
   GUIDE_ANCHOR_IDS,
@@ -273,15 +272,13 @@ describe('Phase H slice 5: Buddy never asks which mind', () => {
     }
   });
 
-  it('work that fits no rule still goes to a mind, and two fits show a table instead of a question', () => {
+  it('work with no named helper still routes internally, and two matches stay out of the reply', () => {
     expect(DEFAULT_MIND).toBe('executioner');
     expect(mindFit('Do the new article')).toEqual({ mind: 'executioner', others: [] });
     const both = mindFit('Check the numbers for the week');
     expect(both).toEqual({ mind: 'analyst', others: ['auditor'] });
-    const table = routedOrderLine(both.mind, both.others);
-    expect(table).toContain('Two minds fit this:');
-    expect(table).toContain('| What it would do');
-    expect(table).not.toContain('?');
+    const route = routeMessage('Check the numbers for the week', null);
+    expect(route).toMatchObject({ kind: 'order', mind: 'analyst', routed: true, others: ['auditor'] });
   });
 
   it('"how are sales" stays a question, "run today" is the day run, and a swap is the Executioner', () => {

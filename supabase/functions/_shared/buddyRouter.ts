@@ -2,13 +2,9 @@
 // and which go to the normal chat. Pure logic: no database, no Gemini. Simple words, so it works with no key.
 // Rules:
 // - A question about a mind is answered from the real daily log, never from a guess.
-// - An order names a mind, or the plain rules give it to the mind that fits. Buddy never asks which mind.
-// - The rules, in order: numbers and weeks to the Analyst, plans and rivals to the Strategist, sorting and
-//   priority to the CEO, packs, doors and captions to the Executioner, checks to the Auditor. Two fits: the
-//   first takes the order, and the reply shows both in a table.
+// - An order names a mind, or the plain rules choose the best internal route. The owner is never asked to route it.
 // - Ordinary action words are orders. "Do the new article" is an order. Only question forms are questions.
-// - Minds cannot publish, send or spend. A US dollar price changes only on the day's run, with Takeover on and the
-//   Auditor's check first, and the owner is told every time. Buddy says so when an order touches those.
+// - Safety rules decide what may change; internal routing is never narrated to the owner.
 
 import { ownerClock } from "./mindsNightReport.ts";
 import { brainHowTo, howToDoor, type HowToDoor } from "./buddyHowTo.ts";
@@ -28,35 +24,27 @@ export const MIND_LABELS: Record<MindName, string> = {
   auditor: "Auditor",
 };
 
-/**
- * Which mind fits a kind of work, in the order the rules are tried. The first fit takes an order that named no mind,
- * so Buddy never has to ask. When a second mind also fits, the reply shows both in a small table.
- */
-const MIND_FITS: { mind: MindName; fits: RegExp; note: string }[] = [
+/** Which internal route fits a kind of work. The first fit takes an order that named no mind. */
+const MIND_FITS: { mind: MindName; fits: RegExp }[] = [
   {
     mind: "analyst",
     fits: /\b(numbers?|figures|stats|statistics|metrics?|analytics|sales|revenue|views?|reads?|traffic|trends?|counts?|scores?|report)\b|\b(this week|last week|weekly|the week|per week|this month|last month|monthly)\b/i,
-    note: "Read the numbers and say what they show.",
   },
   {
     mind: "strategist",
     fits: /\b(strateg(y|ies|ic)|plans?|planning|positions?|positioning|competitors?|competition|rivals?|dead products?|what to stop|where to play)\b/i,
-    note: "Plan the next move and weigh the rivals.",
   },
   {
     mind: "ceo",
     fits: /\b(sort|sorted|sorting|re-?order|priorit(y|ies|ise|ize)|rank|ranks|ranking|what first|next up|triage)\b/i,
-    note: "Put the queue in order and say what comes first.",
   },
   {
     mind: "executioner",
     fits: /\b(packs?|doors?|captions?|thumbnails?|clips?|videos?|run today|today'?s run|run the day|product lines?|place the product|put the product|post the pack)\b/i,
-    note: "Make the packs, the captions and the day's work.",
   },
   {
     mind: "auditor",
     fits: /\b(check|checks|checking|audit|audits?|verify|verifies|review|reviews?|inspect|confirm|prove|proof|safety|mistakes?|errors?|broken)\b/i,
-    note: "Check the work and say what is wrong.",
   },
 ];
 
@@ -64,8 +52,8 @@ const MIND_FITS: { mind: MindName; fits: RegExp; note: string }[] = [
 export const DEFAULT_MIND: MindName = "executioner";
 
 /**
- * The mind that takes work the owner did not name, plus every other mind that also fits (in rule order). `others`
- * is empty when exactly one mind fits, and holds one or more minds when the reply should show a table.
+ * The mind that takes work the owner did not name, plus every other internal match (in rule order). `others`
+ * is kept for routing and tests only; it is never shown in the owner's reply.
  */
 export function mindFit(message: string): { mind: MindName; others: MindName[] } {
   const fits = MIND_FITS.filter((rule) => rule.fits.test(message)).map((rule) => rule.mind);
@@ -74,37 +62,9 @@ export function mindFit(message: string): { mind: MindName; others: MindName[] }
   return { mind, others };
 }
 
-/** What one mind would do with this order, for the fit table. */
-function fitNote(mind: MindName): string {
-  return MIND_FITS.find((rule) => rule.mind === mind)?.note ?? "Do the work.";
-}
-
-/** The minds that fit, as a small plain-text table. The chat keeps its line breaks, so it draws as a table. */
-export function mindFitTable(minds: MindName[]): string {
-  const head = ["Mind", "What it would do"];
-  const rows = minds.map((mind) => [MIND_LABELS[mind], fitNote(mind)]);
-  const gap = " | ";
-  const nameWide = Math.max(head[0].length, ...rows.map((row) => row[0].length));
-  const noteWide = Math.max(head[1].length, ...rows.map((row) => row[1].length));
-  const draw = (row: string[]) => `${row[0].padEnd(nameWide)}${gap}${row[1]}`;
-  return [draw(head), `${"-".repeat(nameWide)}${gap}${"-".repeat(noteWide)}`, ...rows.map(draw)].join("\n");
-}
-
-/**
- * The first line of the reply for an order the rules placed instead of the owner naming a mind. Two fits: both are
- * shown, most specific first. Buddy never asks which mind.
- */
-export function routedOrderLine(mind: MindName, others: MindName[]): string {
-  if (others.length === 0) return "No mind was named.";
-  return `Two minds fit this:\n${mindFitTable([mind, ...others])}`;
-}
-export const RESTRICTED_LINE =
-  "Minds will not publish, send or spend, so any part like that waits for you. A US dollar price changes only on a day's run, with Takeover on and the Auditor's check first, and you are told every time.";
 export const MAX_ORDER_CHARS = 1000;
 export const LOG_ANSWER_ROWS = 10;
 
-/** Words that mean the owner wants something a mind does not do from the chat, so the reply says the rule. */
-const RESTRICTED_WORDS = /\b(publish|send|email|e-mail|spend|pay|refund|price|prices|pricing|discount|delete|post)\b/i;
 /** Action words that start an order. "do" is one of them, so "Do the new article" is an order.
  *  The words the routing rules below watch for (audit, verify, inspect, rank, prioritise, triage) are here too,
  *  so "Audit the guide" reaches the Auditor as an order instead of falling to chat. */
@@ -135,8 +95,8 @@ export function isRunDayRequest(message: string): boolean {
 
 export type Route =
   | { kind: "mind_log"; mind: MindName }
-  // `routed` means the owner named no mind and the rules placed the order. `others` holds a second mind that
-  // also fitted, so the reply shows a table. Both are absent on an order that named its mind.
+  // `routed` means the owner named no mind and the rules placed the order. `others` records additional internal
+  // matches; routing details never belong in the owner's reply.
   | { kind: "order"; mind: MindName; instruction: string; resolvesPending: boolean; routed?: true; others?: MindName[] }
   | { kind: "run_day"; instruction: string }
   | { kind: "control"; action: ControlAction; instruction: string }
@@ -161,10 +121,6 @@ export function namedMind(message: string): MindName | null {
     if (pattern.test(message)) found.add(key);
   }
   return found.size === 1 ? [...found][0] : null;
-}
-
-export function isRestricted(message: string): boolean {
-  return RESTRICTED_WORDS.test(message);
 }
 
 /** Replies for requests a mind never does, whatever the model would say. Checked before any model call. */
@@ -260,8 +216,8 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
   if (!mind && imperative && filingKindFor(text) === "product_line_apply") {
     return { kind: "order", mind: "executioner", instruction: cleanInstruction(text), resolvesPending: false };
   }
-  // The owner named no mind: the rules give the order to the mind that fits, so no question is asked. When a
-  // second mind also fits, the reply shows both in a table and the first one takes the order.
+  // The owner named no mind: the rules pick an internal route, so no question is asked. When a second mind fits,
+  // both matches stay internal and the first one takes the order.
   if (!mind && imperative && !question) {
     const fit = mindFit(text);
     const instruction = cleanInstruction(text);

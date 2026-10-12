@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import { laneFor, HELD_PRICE } from '../../supabase/functions/_shared/buddyOrders';
-import { RESTRICTED_LINE, routeFilingGate, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
-import { handleBuddyThink, type BuddyThinkDeps } from '../../supabase/functions/_shared/buddyThink';
+import { routeFilingGate, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
+import { handleBuddyThink, NO_KEY_MESSAGE, type BuddyThinkDeps } from '../../supabase/functions/_shared/buddyThink';
 
 // Phase E slice 2: a swap with no mind named files to the Executioner. No "which mind?" question for a swap.
 // A named mind keeps its name. A question is never filed. Fake deps only: no model, no database, no push.
@@ -12,7 +12,7 @@ const SWAP = 'Swap the Calm Skin Routine Guide onto the skin guide';
 
 function chatDeps() {
   const saved: { role: string; kind: string; content: string }[] = [];
-  const saveOrder = vi.fn(async () => true);
+  const saveOrder = vi.fn(async () => '66666666-6666-4666-8666-666666666666');
   const askGemini = vi.fn(async () => ({ ok: true as const, text: 'unused' }));
   const deps = {
     keyConfigured: async () => true,
@@ -112,8 +112,7 @@ describe('the swap default never widens the closed list', () => {
   });
 
   it('a swap that also asks for a price change is filed, and the price lane keeps it from running', async () => {
-    // Phase I slice 5: a price ask is no longer an outside action, so nothing is refused. It is also never run from
-    // the chat: the lane holds the order, and the reply carries the rule that the day's run is where a price changes.
+    // A price ask remains internally held for the day pipeline and must not change the owner-facing thought into a stamp.
     const TEXT = 'Swap the kit onto the article and change the price to 5 dollars';
     const route = routeMessage(TEXT, null);
     expect(route.kind).toBe('order');
@@ -121,8 +120,8 @@ describe('the swap default never widens the closed list', () => {
     const { deps, saveOrder, saved } = chatDeps();
     await handleBuddyThink(ask(TEXT), deps);
     expect(saveOrder).toHaveBeenCalledTimes(1);
-    // The reply names the rule in full, so the owner knows a chat price ask is never run quietly.
-    expect(saved.at(-1)?.content).toContain(RESTRICTED_LINE);
+    expect(saved.at(-1)?.content).toBe(NO_KEY_MESSAGE);
+    expect(saved.at(-1)?.content).not.toMatch(/Minds will not publish|Saved for|next run/i);
   });
 
   it('a swap is never filed as anything but the five kinds', () => {

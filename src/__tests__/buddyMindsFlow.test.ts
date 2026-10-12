@@ -4,13 +4,13 @@ import {
   handleBuddyThink,
   type BuddyThinkDeps,
   type GeminiResult,
+  NO_KEY_MESSAGE,
 } from '../../supabase/functions/_shared/buddyThink';
 import { buildBriefing, type BriefingFacts } from '../../supabase/functions/_shared/buddyBriefing';
-import { RESTRICTED_LINE, type MindLogLine } from '../../supabase/functions/_shared/buddyRouter';
+import { type MindLogLine } from '../../supabase/functions/_shared/buddyRouter';
 
 const FAKE_KEY = 'FAKE-GEMINI-KEY-NOT-REAL-0002';
 const CHAT_ID = '6f1c2b7e-3d4a-4b8c-9e1f-0a2b3c4d5e6f';
-const PENDING_FLUSH_LINE = 'Saved your earlier order as waiting. No mind was picked, so it waits for you.';
 
 type Saved = { chatId: string; role: string; kind: string; content: string; payload: Record<string, unknown> | null };
 
@@ -19,7 +19,7 @@ function setup(options: { key?: string | null; pending?: string | null; pendingO
   const saved: Saved[] = [];
   const askGemini = vi.fn<(key: string, input: { system: string; turns: unknown[] }) => Promise<GeminiResult>>(async () => ({ ok: true, text: 'Buddy reply.' }));
   const readKey = vi.fn(async () => (options.key === undefined ? FAKE_KEY : options.key));
-  const saveOrder = vi.fn(async () => options.saveOrderOk ?? true);
+  const saveOrder = vi.fn(async () => options.saveOrderOk === false ? null : '66666666-6666-4666-8666-666666666666');
   const readMindLog = vi.fn(async () => (options.logRows === undefined ? [] : options.logRows));
   const loadPendingOrder = vi.fn(async () =>
     options.pendingOk === false ? { ok: false as const } : { ok: true as const, instruction: options.pending ?? null },
@@ -78,17 +78,18 @@ describe('orders from ordinary language', () => {
     expect(result.status).toBe(200);
     expect(result.body).toMatchObject({ ok: true, route: 'order' });
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Tell the Analyst to check the spring guide', 'analyst');
-    expect(lastSaved(t.saved)?.content).toBe('Saved for the Analyst. It is waiting. I could not read Takeover just now, so nothing has changed.');
+    expect(lastSaved(t.saved)?.content).toBe(NO_KEY_MESSAGE);
     expect(t.askGemini).not.toHaveBeenCalled();
-    expect(t.readKey).not.toHaveBeenCalled();
+    expect(t.readKey).toHaveBeenCalledTimes(1);
   });
 
-  it('says a restricted part waits for the owner, and still files it as waiting', async () => {
+  it('does not append a blanket publish refusal to a routed order', async () => {
     const t = setup();
     await handleBuddyThink(ask('Tell the Executioner to publish the guide'), t.deps);
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Tell the Executioner to publish the guide', 'executioner');
-    expect(lastSaved(t.saved)?.content).toContain(RESTRICTED_LINE);
-    expect(t.askGemini).not.toHaveBeenCalled();
+    expect(lastSaved(t.saved)?.content).toBe('Buddy reply.');
+    expect(lastSaved(t.saved)?.content).not.toMatch(/publish, send or spend|Executioner|next run/i);
+    expect(t.askGemini).toHaveBeenCalledTimes(1);
   });
 
   it('places an order that names no mind, saves it as waiting, and asks nothing', async () => {
@@ -97,7 +98,8 @@ describe('orders from ordinary language', () => {
     const result = await handleBuddyThink(ask('Check the new article'), t.deps);
     expect(result.body).toMatchObject({ route: 'order' });
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', 'auditor');
-    expect(lastSaved(t.saved)?.content).toBe('No mind was named.\nSaved for the Auditor. It is waiting. I could not read Takeover just now, so nothing has changed.');
+    expect(lastSaved(t.saved)?.content).toBe(NO_KEY_MESSAGE);
+    expect(lastSaved(t.saved)?.content).not.toMatch(/No mind was named|Auditor|Executioner|waiting|next run/i);
     expect(lastSaved(t.saved)?.payload).toBeNull();
     expect(t.saved.every((row) => !/which mind/i.test(row.content))).toBe(true);
     expect(t.askGemini).not.toHaveBeenCalled();
@@ -108,7 +110,7 @@ describe('orders from ordinary language', () => {
     await handleBuddyThink(ask('the analyst'), t.deps);
     expect(t.saveOrder).toHaveBeenCalledTimes(1);
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', 'analyst');
-    expect(lastSaved(t.saved)?.content).toBe('Saved for the Analyst. It is waiting. I could not read Takeover just now, so nothing has changed.');
+    expect(lastSaved(t.saved)?.content).toBe(NO_KEY_MESSAGE);
     expect(t.askGemini).not.toHaveBeenCalled();
   });
 
@@ -116,7 +118,7 @@ describe('orders from ordinary language', () => {
     const t = setup({ pending: 'Check the new article' });
     const result = await handleBuddyThink(ask('Thanks, that helps'), t.deps);
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', null);
-    expect(t.saved.some((row) => row.kind === 'notice' && row.content === PENDING_FLUSH_LINE)).toBe(true);
+    expect(t.saved.some((row) => row.kind === 'notice' && /waiting|mind was picked/i.test(row.content))).toBe(false);
     expect(result.body).toMatchObject({ ok: true, model: 'gemini-3.8-flash' });
     // One ordinary chat call: Gemini writes the reply, with the answer rules in its instructions.
     expect(t.askGemini).toHaveBeenCalledTimes(1);
@@ -128,7 +130,8 @@ describe('orders from ordinary language', () => {
     const result = await handleBuddyThink(ask('What did the Auditor do?'), t.deps);
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', null);
     expect(result.body).toMatchObject({ route: 'mind_log' });
-    expect(lastSaved(t.saved)?.content).toBe('The Auditor has not logged any action yet.');
+    expect(lastSaved(t.saved)?.content).toBe(NO_KEY_MESSAGE);
+    expect(t.readMindLog).not.toHaveBeenCalled();
     expect(t.askGemini).not.toHaveBeenCalled();
   });
 
@@ -157,7 +160,8 @@ describe('ordinary words are orders, not questions', () => {
     const result = await handleBuddyThink(ask('Do the new article'), t.deps);
     expect(result.body).toMatchObject({ route: 'order' });
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Do the new article', 'executioner');
-    expect(lastSaved(t.saved)?.content).toContain('No mind was named.');
+    expect(lastSaved(t.saved)?.content).toBe(NO_KEY_MESSAGE);
+    expect(lastSaved(t.saved)?.content).not.toMatch(/Executioner|No mind was named|Saved for|next run/i);
     expect(lastSaved(t.saved)?.content).not.toMatch(/which mind/i);
     expect(lastSaved(t.saved)?.payload).toBeNull();
   });
@@ -174,11 +178,13 @@ describe('ordinary words are orders, not questions', () => {
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Could you tell the Analyst to check the spring guide', 'analyst');
   });
 
-  it('a real question about a mind is still answered from the log, and not filed', async () => {
-    const t = setup({ key: null, logRows: [] });
-    await handleBuddyThink(ask('Do you know what the Analyst did?'), t.deps);
+  it('a real question about a mind uses the brain and is never filed as work', async () => {
+    const t = setup({ logRows: [] });
+    const result = await handleBuddyThink(ask('Do you know what the Analyst did?'), t.deps);
+    expect(result.body).toMatchObject({ ok: true, route: 'mind_log', brain: 'gemini', reply: 'Buddy reply.' });
+    expect(t.readMindLog).toHaveBeenCalledWith('analyst');
     expect(t.saveOrder).not.toHaveBeenCalled();
-    expect(lastSaved(t.saved)?.content).toBe('The Analyst has not logged any action yet.');
+    expect(t.askGemini).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -188,23 +194,26 @@ describe('questions about a mind come from the real log', () => {
     { happened_at: '2026-10-09T07:00:00.000Z', day: '2026-10-09', mind: 'analyst', action: 'Cannot think: no Google key', outcome: 'skipped', detail: '' },
   ];
 
-  it('lists the Analyst rows and never calls Gemini', async () => {
-    const t = setup({ key: null, logRows: rows });
+  it('passes only the Analyst rows to Gemini and saves the brain-written answer', async () => {
+    const t = setup({ logRows: rows });
     const result = await handleBuddyThink(ask('What did the Analyst do?'), t.deps);
-    expect(result.body).toMatchObject({ ok: true, route: 'mind_log' });
+    expect(result.body).toMatchObject({ ok: true, route: 'mind_log', brain: 'gemini', reply: 'Buddy reply.' });
     expect(t.readMindLog).toHaveBeenCalledWith('analyst');
-    const reply = lastSaved(t.saved)?.content ?? '';
-    expect(reply).toContain('What the Analyst did, newest first:');
-    expect(reply).toContain('2026-10-09 09:05: Read the site numbers. Done.');
-    expect(reply).toContain('2026-10-09 08:00: Cannot think: no Google key. Skipped.');
-    expect(t.askGemini).not.toHaveBeenCalled();
+    const system = t.askGemini.mock.calls[0][1].system;
+    expect(system).toContain('"Read the site numbers"');
+    expect(system).toContain('"Cannot think: no Google key"');
+    expect(system).not.toContain('This belongs to another mind.');
+    expect(lastSaved(t.saved)?.content).toBe('Buddy reply.');
+    expect(t.askGemini).toHaveBeenCalledTimes(1);
   });
 
-  it('says plainly when the log cannot be read', async () => {
+  it('passes an unreadable log to Gemini, with no made-up fixed answer', async () => {
     const t = setup({ logRows: null });
-    await handleBuddyThink(ask('What did the Strategist do?'), t.deps);
-    expect(lastSaved(t.saved)?.content).toBe('I could not read the log just now, so I cannot say what the Strategist did. Nothing was changed. Try again shortly.');
-    expect(t.askGemini).not.toHaveBeenCalled();
+    const result = await handleBuddyThink(ask('What did the Strategist do?'), t.deps);
+    expect(result.body).toMatchObject({ ok: true, route: 'mind_log', reply: 'Buddy reply.' });
+    expect(lastSaved(t.saved)?.content).toBe('Buddy reply.');
+    expect(t.askGemini.mock.calls[0][1].system).toContain('Could not be read just now. Do not describe any action.');
+    expect(t.askGemini).toHaveBeenCalledTimes(1);
   });
 
   it('every saved row belongs to the owner chat, so no mind gets a chat of its own', async () => {

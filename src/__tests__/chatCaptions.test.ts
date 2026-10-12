@@ -289,7 +289,7 @@ describe('the chat order: the captions are drafted here and now, with Takeover o
       readSiteFacts: async () => ({ articles: { ok: true, total: 0, items: [] }, products: { ok: true, total: 0, items: [] } }),
       findOrCreateBriefing: async () => ({ id: CHAT, created: false }),
       loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
-      saveOrder: async () => true,
+      saveOrder: async () => '66666666-6666-4666-8666-666666666666',
       readMindLog: async () => [],
       readTakeover: async () => options.takeover ?? false,
       readStateFacts: async () => ({ takeover: false, killScope: 'none', orders: { ok: true, total: 0, items: [] }, log: { ok: true, rows: [] }, doors: { ok: true, rows: [] }, notable: { ok: true, rows: [] } }),
@@ -303,7 +303,7 @@ describe('the chat order: the captions are drafted here and now, with Takeover o
     const store = chatStore();
     const result = await handleBuddyThink({ action: 'ask', message: 'Write the captions for the pack', chat_id: CHAT }, store.deps);
     const reply = String(result.body.reply);
-    expect(reply).toContain('No mind was named.');
+    expect(reply).not.toMatch(/No mind was named|Executioner|Two minds fit this|Saved for|next run/i);
     expect(reply).toContain('Instagram: ');
     expect(reply).toContain('Pinterest: ');
     expect(reply).toContain(DRAFT_SAVE_OFF_LINE);

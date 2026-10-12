@@ -1,8 +1,10 @@
 /** Reads the buddy-think answers. Anything unexpected becomes null, so the screen never shows a made-up reply. */
 
 export type BuddyThinkReply =
-  | { ok: true; reply: string; model: string; canThink: boolean; runStart: boolean }
+  | { ok: true; reply: string; model: string; canThink: boolean; runStart: boolean; runOrderId: string | null }
   | { ok: false; reason: string; message: string; canThink: boolean };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -19,12 +21,15 @@ export function parseThinkReply(value: unknown): BuddyThinkReply | null {
   const canThink = value.can_think === true;
   if (value.ok) {
     if (typeof value.reply !== 'string' || !value.reply.trim()) return null;
+    const runOrderId = typeof value.run_order_id === 'string' && UUID_RE.test(value.run_order_id) ? value.run_order_id : null;
+    const runStart = value.run_start === true;
     return {
       ok: true,
       reply: value.reply.slice(0, 4000),
       model: typeof value.model === 'string' ? value.model.slice(0, 80) : '',
       canThink,
-      runStart: value.run_start === true,
+      runStart,
+      runOrderId: runStart ? runOrderId : null,
     };
   }
   if (typeof value.reason !== 'string' || typeof value.message !== 'string') return null;
@@ -56,11 +61,15 @@ export function parseBriefingResult(value: unknown): BuddyBriefingResult | null 
 export interface DayRunAnswer {
   status: string;
   detail: string;
+  /** Present when the run function tried to save its result in the originating chat. */
+  chatReplySaved?: boolean;
 }
 
 /** Reads the answer of the owner-only run function. Anything without a plain detail becomes null. */
 export function parseRunAnswer(value: unknown): DayRunAnswer | null {
   if (!isRecord(value)) return null;
   if (typeof value.status !== 'string' || typeof value.detail !== 'string' || !value.detail.trim()) return null;
-  return { status: value.status.slice(0, 40), detail: value.detail.slice(0, 300) };
+  const answer: DayRunAnswer = { status: value.status.slice(0, 40), detail: value.detail.slice(0, 1200) };
+  if (typeof value.chat_reply_saved === 'boolean') answer.chatReplySaved = value.chat_reply_saved;
+  return answer;
 }

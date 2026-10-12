@@ -15,7 +15,7 @@ const FAKE_KEY = 'FAKE-GEMINI-KEY-NOT-REAL-0001';
 function chatDeps(answerText: string) {
   const saved: { role: string; kind: string; content: string }[] = [];
   const askGemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: answerText }));
-  const saveOrder = vi.fn(async () => true);
+  const saveOrder = vi.fn(async () => '66666666-6666-4666-8666-666666666666');
   const deps = {
     keyConfigured: async () => true,
     readKey: async () => FAKE_KEY,
@@ -65,8 +65,11 @@ describe('Buddy model orders: the closed list', () => {
   it('a named-mind order with kind mind_work is filed as waiting', async () => {
     const { deps, saveOrder, saved } = chatDeps('{"reply":"Got it.","order":{"mind":"strategist","kind":"mind_work","instruction":"Look at the spring kit plan"}}');
     const result = await handleBuddyThink(QUESTION, deps);
-    expect(result.body).toMatchObject({ ok: true, filed: 'strategist' });
+    expect(result.body).toMatchObject({ ok: true, route: 'chat' });
+    expect(result.body).not.toHaveProperty('filed');
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Look at the spring kit plan', 'strategist');
+    expect(saved.at(-1)?.content).toBe('Got it.');
+    expect(saved.at(-1)?.content).not.toMatch(/Strategist|Saved for|waiting|next run/i);
     expect(saved.at(-1)?.content).not.toBe(REFUSAL_LINE);
   });
 

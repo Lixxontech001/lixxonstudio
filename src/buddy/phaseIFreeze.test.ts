@@ -203,7 +203,7 @@ function competitorPorts() {
 
 // ==================================================================== PASS A
 
-describe('Pass A1: Takeover off means the run changes nothing at all', () => {
+describe('Pass A1: Takeover off means no site changes or saved packs', () => {
   const OFF = { takeover: false, killScope: 'none' as const };
 
   it('no door is read, reserved or sent', async () => {
@@ -257,8 +257,8 @@ describe('Pass A1: Takeover off means the run changes nothing at all', () => {
     for (const step of ['await runDoorsSafely(', 'await runCompetitorsForDay(', 'await runPriceChange(', 'await runPacksForDay(sb, owner, localDay, takeover, killScope, think,']) {
       expect(RUN.indexOf(step), step).toBeGreaterThan(gate);
     }
-    // And the gate is a real early return, not a flag left behind: the run stops with the gate's own line.
-    expect(RUN).toMatch(/if \(blocked\) return out\(/);
+    // And the gate is a real early return, not a flag left behind: held results are reported without entering later stages.
+    expect(RUN).toMatch(/if \(blocked\) return reportOut\(/);
   });
 });
 

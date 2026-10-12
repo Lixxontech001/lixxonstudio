@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ invoke: vi.fn() }));
+const ORDER_ID = '66666666-6666-4666-8666-666666666666';
+const CHAT_ID = '77777777-7777-4777-8777-777777777777';
 vi.mock('../lib/supabaseClient', () => ({ supabase: { functions: { invoke: mocks.invoke } } }));
 
 import { startDayRun } from '../buddy/buddyChatStore';
@@ -11,11 +13,26 @@ beforeEach(() => {
 });
 
 describe('starting today\'s run from the browser', () => {
-  it('calls the owner-only run function with the local day and returns its plain answer', async () => {
-    mocks.invoke.mockResolvedValue({ data: { status: 'applied', detail: 'I added one product.', order_id: 'x' }, error: null });
-    const answer = await startDayRun('2026-10-10');
+  it('runs the exact chat order and saves its combined result in the same chat', async () => {
+    mocks.invoke.mockResolvedValue({
+      data: { status: 'applied', detail: 'I added one product. Four packs were saved. Telegram posted the article.', order_id: ORDER_ID, chat_reply_saved: true },
+      error: null,
+    });
+    const answer = await startDayRun('2026-10-10', ORDER_ID, CHAT_ID);
+    expect(mocks.invoke).toHaveBeenCalledWith('minds-run-placement', {
+      body: { local_day: '2026-10-10', order_id: ORDER_ID, chat_id: CHAT_ID },
+    });
+    expect(answer).toEqual({
+      status: 'applied',
+      detail: 'I added one product. Four packs were saved. Telegram posted the article.',
+      chatReplySaved: true,
+    });
+  });
+
+  it('can still start a general day run without naming an order', async () => {
+    mocks.invoke.mockResolvedValue({ data: { status: 'applied', detail: 'The day run finished.' }, error: null });
+    expect(await startDayRun('2026-10-10')).toEqual({ status: 'applied', detail: 'The day run finished.' });
     expect(mocks.invoke).toHaveBeenCalledWith('minds-run-placement', { body: { local_day: '2026-10-10' } });
-    expect(answer).toEqual({ status: 'applied', detail: 'I added one product.' });
   });
 
   it('a refused run returns the refusal, so the owner is told why', async () => {
@@ -44,9 +61,15 @@ describe('reading the run answer', () => {
 });
 
 describe('reading the Buddy reply for a run', () => {
-  it('run_start is true only when the server says the run starts', () => {
-    expect(parseThinkReply({ ok: true, reply: 'Filed.', run_start: true })).toMatchObject({ ok: true, runStart: true });
-    expect(parseThinkReply({ ok: true, reply: 'Filed.' })).toMatchObject({ ok: true, runStart: false });
-    expect(parseThinkReply({ ok: true, reply: 'Filed.', run_start: 'yes' })).toMatchObject({ ok: true, runStart: false });
+  it('reads the start signal but accepts only a valid saved-order id for a run call', () => {
+    expect(parseThinkReply({ ok: true, reply: 'Filed.', run_start: true, run_order_id: ORDER_ID })).toMatchObject({
+      ok: true,
+      runStart: true,
+      runOrderId: ORDER_ID,
+    });
+    expect(parseThinkReply({ ok: true, reply: 'Filed.', run_start: true })).toMatchObject({ ok: true, runStart: true, runOrderId: null });
+    expect(parseThinkReply({ ok: true, reply: 'Filed.', run_start: true, run_order_id: 'not-an-id' })).toMatchObject({ ok: true, runStart: true, runOrderId: null });
+    expect(parseThinkReply({ ok: true, reply: 'Filed.' })).toMatchObject({ ok: true, runStart: false, runOrderId: null });
+    expect(parseThinkReply({ ok: true, reply: 'Filed.', run_start: 'yes', run_order_id: ORDER_ID })).toMatchObject({ ok: true, runStart: false, runOrderId: null });
   });
 });
