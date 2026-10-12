@@ -627,3 +627,25 @@ What is still not done, or not verified:
 - A question stays a question. "How are sales?" and "Can you check the article for me?" are chat, and today's run is still the `run_day` route. The never-list requests (reader replies, spending, product creation, whole-article rewrites) are still refused with one line and nothing filed.
 - Removed: the export `ASK_WHICH_MIND_LINE` and the `ask_which_mind` route. No new chat message carries `pending_order`. An order left waiting by an older message still resolves when the owner names a mind, and still flushes as waiting with no mind if the owner moves on.
 - Tests: `src/__tests__/buddyNoAskWhichMind.test.ts` (the rules, the table, the never-ask guarantee, questions and refusals), plus the updated `buddyRouter`, `buddyRunDayRouting`, `buddySwapDefault`, `buddyMindsFlow`, `buddyThink` and `phaseGFreeze` checks.
+
+## Phase I slice 2: the morning pipeline (Analyst, Strategist, CEO, then the Executioner)
+
+The 08:00 clock queues the day and then runs the day as a team, in one fixed order.
+
+- `supabase/functions/_shared/mindPipeline.ts`: `PIPELINE_ORDER` is analyst, strategist, ceo, executioner. The three
+  thinking minds are the existing ones (`runLivingMinds`): a mind with a done row today is not asked again, a mind
+  Kill stops writes its one stopped row, and a brain that cannot answer is an honest row. Their summaries and the
+  plans they put forward become one brief, which is handed to the Executioner.
+- Gates: Takeover off returns before any port is called (no think, no log, no run). A Kill that stops the run is the
+  run's own rule (`blockedDetail`), asked here and again inside the run, so no change can slip past it. A day whose
+  order is already done is not run again.
+- `_shared/productPlacement.ts` gained `fixPlacementOnce`: the Auditor blocks, its own words go back to the
+  Strategist exactly once, and the repaired plan is audited again. Still blocked, or no usable fix: the change is
+  stopped, logged and noticed once (`repairOnce` in `placementRun.ts` covers both block points, the plan and the
+  apply).
+- `_shared/internalCall.ts` is the door the clock uses to start the owner's own run: the internal secret, timing
+  safe, one JSON body. `minds-run-placement` now has exactly two ways in: the owner's session (unchanged), and the
+  internal secret plus an owner id that `app_admins` really lists. An internal call never picks an order and never
+  gets CORS headers.
+- `minds-morning-clock` sends the brief with the call, and `minds-run-placement` writes it as one `minds_daily_log`
+  row, so the owner can read what the morning team planned.

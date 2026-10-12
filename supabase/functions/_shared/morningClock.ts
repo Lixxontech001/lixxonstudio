@@ -30,6 +30,18 @@ export const NOT_DUE_DETAIL = "The 08:00 run is not due. Nothing was read and no
 /** The plain line when the owner list cannot be read. Nothing was queued. */
 export const OWNERS_UNREADABLE_DETAIL = "The owner could not be read. Nothing was queued.";
 
+/** What one owner's morning pipeline reported: which minds ran, what was planned, and how many live changes. */
+export interface PipelineRunSummary {
+  status: string;
+  detail: string;
+  minds: number;
+  plans: number;
+  changed: number;
+}
+
+/** The plain line when the day's pipeline could not be started at all. Nothing was changed by it. */
+export const PIPELINE_START_FAILED_DETAIL = "The day's run could not be started. Nothing changed.";
+
 export interface MorningClockPorts {
   /** Every owner id. A read failure means nothing runs. */
   readOwners(): Promise<{ ok: true; owners: string[] } | { ok: false }>;
@@ -37,6 +49,11 @@ export interface MorningClockPorts {
   readControls(): Promise<{ ok: true; takeover: boolean; killScope: KillScope } | { ok: false }>;
   /** Queues the day's order through the database rule. Null means the rule refused, so nothing was written. */
   queueDailyRun(ownerId: string, day: string): Promise<string | null>;
+  /**
+   * The morning pipeline: Analyst, Strategist, CEO, then the Executioner. Optional, and only ever called after the
+   * day's order is in place, so a stopped run never reaches it. The pipeline asks the run's own rule again.
+   */
+  runPipeline?: (ownerId: string, day: string) => Promise<PipelineRunSummary>;
 }
 
 export interface MorningClockCounts {
@@ -53,6 +70,8 @@ export interface MorningClockResult extends MorningClockCounts {
   status: "not_due" | "takeover_off" | "done" | "failed";
   day: string | null;
   detail: string;
+  /** One entry per owner whose day was queued this tick. Empty when the clock did nothing. */
+  pipeline: PipelineRunSummary[];
 }
 
 /**
@@ -63,18 +82,18 @@ export interface MorningClockResult extends MorningClockCounts {
 export async function runMorningClock(now: Date, ports: MorningClockPorts): Promise<MorningClockResult> {
   const day = morningRunDayDue(now);
   if (!day) {
-    return { status: "not_due", day: null, owners: 0, queued: 0, skipped: 0, failed: 0, detail: NOT_DUE_DETAIL };
+    return { status: "not_due", day: null, owners: 0, queued: 0, skipped: 0, failed: 0, detail: NOT_DUE_DETAIL, pipeline: [] };
   }
 
   let ownerIds: string[];
   try {
     const read = await ports.readOwners();
     if (!read.ok) {
-      return { status: "failed", day, owners: 0, queued: 0, skipped: 0, failed: 0, detail: OWNERS_UNREADABLE_DETAIL };
+      return { status: "failed", day, owners: 0, queued: 0, skipped: 0, failed: 0, detail: OWNERS_UNREADABLE_DETAIL, pipeline: [] };
     }
     ownerIds = [...new Set(read.owners)];
   } catch {
-    return { status: "failed", day, owners: 0, queued: 0, skipped: 0, failed: 0, detail: OWNERS_UNREADABLE_DETAIL };
+    return { status: "failed", day, owners: 0, queued: 0, skipped: 0, failed: 0, detail: OWNERS_UNREADABLE_DETAIL, pipeline: [] };
   }
 
   let queued = 0;
@@ -82,6 +101,7 @@ export async function runMorningClock(now: Date, ports: MorningClockPorts): Prom
   let failed = 0;
   let stopped = 0;
   let blockedLine = "";
+  const pipeline: PipelineRunSummary[] = [];
 
   for (const ownerId of ownerIds) {
     let controls: { ok: true; takeover: boolean; killScope: KillScope } | { ok: false };
@@ -110,8 +130,20 @@ export async function runMorningClock(now: Date, ports: MorningClockPorts): Prom
     } catch {
       orderId = null;
     }
-    if (orderId) queued += 1;
-    else skipped += 1;
+    if (!orderId) {
+      skipped += 1;
+      continue;
+    }
+    queued += 1;
+    // The day is in place, so the pipeline may run. It asks the run's own rule again before anything is thought or
+    // changed, and a pipeline that cannot start is reported as failed without touching the day's order.
+    if (ports.runPipeline) {
+      try {
+        pipeline.push(await ports.runPipeline(ownerId, day));
+      } catch {
+        pipeline.push({ status: "failed", detail: PIPELINE_START_FAILED_DETAIL, minds: 0, plans: 0, changed: 0 });
+      }
+    }
   }
 
   const allStopped = ownerIds.length > 0 && stopped === ownerIds.length;
@@ -119,5 +151,5 @@ export async function runMorningClock(now: Date, ports: MorningClockPorts): Prom
   const detail = allStopped
     ? blockedLine || TAKEOVER_OFF_DETAIL
     : `Queued the day for ${queued} of ${ownerIds.length} owner(s).`;
-  return { status, day, owners: ownerIds.length, queued, skipped, failed, detail };
+  return { status, day, owners: ownerIds.length, queued, skipped, failed, detail, pipeline };
 }

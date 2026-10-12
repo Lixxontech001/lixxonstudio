@@ -6,7 +6,7 @@
 //   4. The edit must fit: at most 3 products, the drip limit, the paragraph unchanged (checksum).
 // Only then does the apply port run, and it does all its writes in one database transaction.
 
-import { auditPlacement, planPlacement, type PlacementCandidate, type ShopProduct } from "./productPlacement.ts";
+import { FIX_ONCE_REFUSED_DETAIL, auditPlacement, fixPlacementOnce, planPlacement, type PlacementCandidate, type ShopProduct } from "./productPlacement.ts";
 import { DRIP_DAILY_LIMIT, PRODUCT_CAP, paragraphChecksum } from "./postEdits.ts";
 import type { MindThinkResult } from "./mindThink.ts";
 
@@ -201,24 +201,49 @@ function applyFailure(reason: string): RunOutcome {
   return { status: "failed", detail: "The change did not fit the article any more, so nothing changed. It stays waiting." };
 }
 
+/**
+ * Phase I: one allowed fix after an Auditor block. The plan is audited as it is; if it is blocked, the Auditor's own
+ * words go back to the Strategist exactly once, and the repaired plan is audited again. A plan that is allowed comes
+ * back unchanged, so a first-time plan is never repaired. Null means the change is stopped, and the block is logged
+ * and noticed once, with plain words.
+ */
+async function repairOnce(
+  article: RunArticle,
+  planned: PlacementCandidate,
+  input: RunInput,
+  ports: RunPorts,
+  checkedAction: string,
+): Promise<PlacementCandidate | null> {
+  const verdict = auditPlacement(planned, article.content, input.shop);
+  if (verdict.verdict === "allow") return planned;
+  const fixed = await fixPlacementOnce({ id: article.id, title: article.title, content: article.content }, input.shop, planned, verdict.fix, ports.think);
+  const audited = fixed ? auditPlacement(fixed, article.content, input.shop) : null;
+  if (fixed && audited && audited.verdict === "allow") {
+    await ports.log({ mind: "auditor", action: checkedAction, outcome: "done", detail: clip(`Allowed after one fix. ${verdict.fix}`, 500) });
+    return fixed;
+  }
+  const stopped = fixed ? FIX_ONCE_REFUSED_DETAIL : `Blocked. ${verdict.fix}`;
+  await ports.log({ mind: "auditor", action: checkedAction, outcome: "blocked", detail: clip(stopped, 500) });
+  await ports.notable("auditor_blocked", `Auditor blocked a change to "${clip(article.title, 80)}"`, clip(stopped, 500));
+  return null;
+}
+
 async function tryPlacement(
   article: RunArticle,
-  candidate: PlacementCandidate,
+  planned: PlacementCandidate,
   input: RunInput,
   ports: RunPorts,
 ): Promise<RunOutcome | null> {
+  // The Auditor checks again on the text as it is now, not as it was when the plan was made.
+  const checkedAction = `Checked a change to "${clip(article.title, 80)}"`;
+  const candidate = await repairOnce(article, planned, input, ports, checkedAction);
+  if (!candidate) return null;
+  const verdict = auditPlacement(candidate, article.content, input.shop);
+
+  // The place is read after the check, so a fixed plan edits its own paragraph, not the one the blocked plan named.
   const lines = (article.content ?? "").split("\n");
   const before = lines[candidate.paragraphIndex];
   if (before === undefined) return null;
-
-  // The Auditor checks again on the text as it is now, not as it was when the plan was made.
-  const checkedAction = `Checked a change to "${clip(article.title, 80)}"`;
-  const verdict = auditPlacement(candidate, article.content, input.shop);
-  if (verdict.verdict === "block") {
-    await ports.log({ mind: "auditor", action: checkedAction, outcome: "blocked", detail: clip(`Blocked. ${verdict.fix}`, 500) });
-    await ports.notable("auditor_blocked", `Auditor blocked a change to "${clip(article.title, 80)}"`, clip(verdict.fix, 500));
-    return null;
-  }
 
   if (candidate.productIds.some((id) => article.liveProductIds.includes(id))) {
     await ports.log({ mind: "auditor", action: checkedAction, outcome: "blocked", detail: "Blocked. That product is already on this article." });
@@ -323,8 +348,16 @@ export async function runPlacementOrder(input: RunInput, ports: RunPorts): Promi
     }
     if (plan.status === "blocked" || !plan.candidate) {
       sawBlock = true;
-      await ports.log({ mind: "auditor", action: `Checked a change to "${clip(article.title, 80)}"`, outcome: "blocked", detail: clip(`Blocked. ${plan.detail}`, 500) });
-      await ports.notable("auditor_blocked", `Auditor blocked a plan for "${clip(article.title, 80)}"`, clip(plan.detail, 500));
+      const checkedAction = `Checked a change to "${clip(article.title, 80)}"`;
+      // A plan with a candidate gets the one allowed fix. A plan without one is blocked outright, nothing to repair.
+      const repaired = plan.candidate ? await repairOnce(article, plan.candidate, input, ports, checkedAction) : null;
+      if (repaired) {
+        const outcome = await tryPlacement(article, repaired, input, ports);
+        if (outcome) return outcome;
+      } else if (!plan.candidate) {
+        await ports.log({ mind: "auditor", action: checkedAction, outcome: "blocked", detail: clip(`Blocked. ${plan.detail}`, 500) });
+        await ports.notable("auditor_blocked", `Auditor blocked a plan for "${clip(article.title, 80)}"`, clip(plan.detail, 500));
+      }
       continue;
     }
 

@@ -10,6 +10,7 @@ import {
   MORNING_RUN_MINUTES,
   NOT_DUE_DETAIL,
   OWNERS_UNREADABLE_DETAIL,
+  PIPELINE_START_FAILED_DETAIL,
   morningRunDayDue,
   runMorningClock,
   type MorningClockPorts,
@@ -82,7 +83,7 @@ describe('Phase I slice 1: the 08:00 window on the owner clock', () => {
   it('outside the window nothing is read and nothing is written', async () => {
     const ports = fakePorts();
     const result = await runMorningClock(ownerClock(DAY, 7 * 60), ports.doors);
-    expect(result).toEqual({ status: 'not_due', day: null, owners: 0, queued: 0, skipped: 0, failed: 0, detail: NOT_DUE_DETAIL });
+    expect(result).toEqual({ status: 'not_due', day: null, owners: 0, queued: 0, skipped: 0, failed: 0, detail: NOT_DUE_DETAIL, pipeline: [] });
     expect(ports.readOwners).not.toHaveBeenCalled();
     expect(ports.readControls).not.toHaveBeenCalled();
     expect(ports.queueDailyRun).not.toHaveBeenCalled();
@@ -129,6 +130,7 @@ describe('Phase I slice 1: the run happens only when Takeover is On', () => {
       skipped: 0,
       failed: 0,
       detail: 'Queued the day for 1 of 1 owner(s).',
+      pipeline: [],
     });
     expect(ports.readControls).toHaveBeenCalledTimes(1);
     expect(ports.queueDailyRun).toHaveBeenCalledTimes(1);
@@ -195,6 +197,7 @@ describe('Phase I slice 1: the run happens only when Takeover is On', () => {
       skipped: 0,
       failed: 0,
       detail: OWNERS_UNREADABLE_DETAIL,
+      pipeline: [],
     });
     expect(ports.readControls).not.toHaveBeenCalled();
     expect(ports.queueDailyRun).not.toHaveBeenCalled();
@@ -220,11 +223,16 @@ describe('Phase I slice 1: the clock only queues, and the schedule is a file', (
     const source = code(read('supabase/functions/minds-morning-clock/index.ts'));
     expect(source).toContain('env("INTERNAL_FN_SECRET")');
     expect(source).toContain('req.headers.get("x-internal-secret")');
-    expect(source).toContain('runMorningClock(new Date(), ports)');
+    expect(source).toContain('runMorningClock(now, ports)');
+    expect(source).toContain('const now = new Date();');
     expect(source).toContain('minds_queue_daily_run');
     expect(source).toContain('minds_controls');
+    expect(source).toContain('runMindPipeline');
     expect(source).not.toContain('callerUser');
-    expect(source).not.toMatch(/\.insert\(|\.update\(|\.delete\(/);
+    // The clock writes the daily log and nothing else: no article, no product, no order, no price, no post.
+    expect(source).not.toMatch(/\.update\(|\.delete\(/);
+    expect([...source.matchAll(/from\("([a-z_]+)"\)\.insert/g)].map((match) => match[1])).toEqual(['minds_daily_log']);
+    expect(source).not.toMatch(/from\("(posts|products|orders|buddy_orders|shop_products)"\)\.insert/);
     expect(read('supabase/config.toml')).toMatch(/\[functions\.minds-morning-clock\]\nverify_jwt = false/);
   });
 
@@ -240,6 +248,66 @@ describe('Phase I slice 1: the clock only queues, and the schedule is a file', (
     expect(sql).toContain("vault.decrypted_secrets WHERE name = 'lixxon_internal_fn_secret'");
     expect(sql).toContain('pg_available_extensions');
   });
+
+
+describe('Phase I slice 2: the clock starts the day, and only after the day is in place', () => {
+  it('no pipeline port means the day is only queued', async () => {
+    const ports = fakePorts();
+    const result = await runMorningClock(ownerClock(DAY, 8 * 60), ports.doors);
+    expect(result.pipeline).toEqual([]);
+  });
+
+  it('a queued day runs the pipeline once, for that owner and that day', async () => {
+    const ports = fakePorts();
+    const runPipeline = vi.fn(async () => ({ status: 'done', detail: 'Added the kit.', minds: 3, plans: 2, changed: 1 }));
+    const result = await runMorningClock(ownerClock(DAY, 8 * 60), { ...ports.doors, runPipeline } as MorningClockPorts);
+    expect(runPipeline).toHaveBeenCalledTimes(1);
+    expect(runPipeline).toHaveBeenCalledWith(OWNER, DAY);
+    expect(result.pipeline).toEqual([{ status: 'done', detail: 'Added the kit.', minds: 3, plans: 2, changed: 1 }]);
+  });
+
+  it('a day that was held back never reaches the pipeline', async () => {
+    for (const options of [{ takeover: false }, { killScope: 'all' as KillScope }]) {
+      const ports = fakePorts(options);
+      const runPipeline = vi.fn(async () => ({ status: 'done', detail: 'x', minds: 3, plans: 0, changed: 0 }));
+      const result = await runMorningClock(ownerClock(DAY, 8 * 60), { ...ports.doors, runPipeline } as MorningClockPorts);
+      expect(runPipeline).not.toHaveBeenCalled();
+      expect(result.pipeline).toEqual([]);
+    }
+  });
+
+  it('a database refusal never reaches the pipeline either', async () => {
+    const ports = fakePorts({ orderId: null });
+    const runPipeline = vi.fn(async () => ({ status: 'done', detail: 'x', minds: 3, plans: 0, changed: 0 }));
+    await runMorningClock(ownerClock(DAY, 8 * 60), { ...ports.doors, runPipeline } as MorningClockPorts);
+    expect(runPipeline).not.toHaveBeenCalled();
+  });
+
+  it('a pipeline that throws is reported as failed, and the day is still counted as queued', async () => {
+    const ports = fakePorts();
+    const runPipeline = vi.fn(async () => {
+      throw new Error('the run is down');
+    });
+    const result = await runMorningClock(ownerClock(DAY, 8 * 60), { ...ports.doors, runPipeline } as MorningClockPorts);
+    expect(result.queued).toBe(1);
+    expect(result.pipeline).toEqual([{ status: 'failed', detail: PIPELINE_START_FAILED_DETAIL, minds: 0, plans: 0, changed: 0 }]);
+  });
+
+  it('two owners each get their own run', async () => {
+    const ports = fakePorts({ owners: [OWNER, OTHER] });
+    const runPipeline = vi.fn(async () => ({ status: 'done', detail: 'ran', minds: 3, plans: 0, changed: 0 }));
+    const result = await runMorningClock(ownerClock(DAY, 8 * 60), { ...ports.doors, runPipeline } as MorningClockPorts);
+    expect(runPipeline.mock.calls.map((call) => call[0])).toEqual([OWNER, OTHER]);
+    expect(result.pipeline).toHaveLength(2);
+  });
+
+  it('the run address is asked only inside the window', async () => {
+    const ports = fakePorts();
+    const runPipeline = vi.fn(async () => ({ status: 'done', detail: 'ran', minds: 3, plans: 0, changed: 0 }));
+    await runMorningClock(ownerClock(DAY, 13 * 60), { ...ports.doors, runPipeline } as MorningClockPorts);
+    expect(runPipeline).not.toHaveBeenCalled();
+  });
+});
 
   it('the old commented 07:00 queue line is left commented, so nothing is scheduled twice', () => {
     const sql = read('supabase/migrations/20261010090000_minds_daily_run.sql');

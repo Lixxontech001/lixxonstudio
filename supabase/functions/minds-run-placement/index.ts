@@ -3,10 +3,13 @@
 // The run itself lives in _shared/placementRun.ts; the choice lives in _shared/runDay.ts.
 // This file reads the state, hands the run its doors (database and Gemini), and reports back in plain words.
 // Takeover off, or a Kill that stops the run: this returns before any read or log, and orders stay waiting.
-// Nothing runs on a timer yet. The owner starts a run through Buddy.
+// Two callers, one run: the owner (a signed-in session), and the 08:00 morning clock on the server, which has no
+// session and proves itself with the internal function secret plus an owner id that is checked against app_admins.
+// The owner path is unchanged, and a browser without a session still gets the same refusal it always did.
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
 import { callerUser, env, serviceClient } from "../_shared/http.ts";
+import { isInternalCall } from "../_shared/internalCall.ts";
 import { isAllowedAutomationOrigin } from "../_shared/automationKeyChecks.ts";
 import { readWaitingOrders } from "../_shared/buddyOrders.ts";
 import { makeMindThink } from "../_shared/mindThink.ts";
@@ -61,14 +64,21 @@ function corsFor(req: Request): Record<string, string> | null {
   };
 }
 
-function reply(req: Request, body: unknown, status = 200): Response {
-  const cors = corsFor(req);
-  return new Response(JSON.stringify(body), { status: cors ? status : 403, headers: { ...JSON_HEADERS, ...(cors || {}) } });
+function reply(req: Request, body: unknown, status = 200, internal = false): Response {
+  const cors = internal ? {} : corsFor(req);
+  return new Response(JSON.stringify(body), { status: internal || cors ? status : 403, headers: { ...JSON_HEADERS, ...cors } });
 }
 
 function clip(text: string, limit: number): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
+}
+
+/** The day's brief from the three thinking minds, as it arrives from the clock. Plain text, clipped, or empty. */
+function clipBrief(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const flat = value.replace(/\s+/g, " ").trim();
+  return flat.length > 1200 ? `${flat.slice(0, 1199)}…` : flat;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -85,70 +95,95 @@ function parseKill(value: unknown): KillScope {
 }
 
 export async function handleRun(req: Request): Promise<Response> {
-  const cors = corsFor(req);
+  // The 08:00 morning clock has no session. It proves itself with the internal secret, and the owner id in the body
+  // is checked against app_admins below. Everything else (a browser) goes down the owner-session path, unchanged.
+  const internal = isInternalCall(req, env("INTERNAL_FN_SECRET"));
+  // An internal call has no Origin, so the browser rule is not applied to it. A reply never carries CORS headers then.
+  const cors = internal ? {} : corsFor(req);
+  // Every answer below carries the same CORS decision that was made above.
+  const out = (payload: unknown, status = 200) => reply(req, payload, status, internal);
   if (!cors) return new Response(null, { status: 403 });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-  if (req.method !== "POST") return reply(req, { error: "Method not allowed." }, 405);
+  if (req.method !== "POST") return out({ error: "Method not allowed." }, 405);
   if (req.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
-    return reply(req, { error: "JSON request body required." }, 415);
+    return out({ error: "JSON request body required." }, 415);
   }
   const raw = await req.text();
-  if (raw.length > MAX_BODY_BYTES) return reply(req, { error: "Request body is too large." }, 413);
+  if (raw.length > MAX_BODY_BYTES) return out({ error: "Request body is too large." }, 413);
   let body: unknown;
   try {
     body = JSON.parse(raw);
   } catch {
-    return reply(req, { error: "Invalid request body." }, 400);
+    return out({ error: "Invalid request body." }, 400);
   }
   const localDay = asRecord(body)?.local_day;
   if (typeof localDay !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(localDay)) {
-    return reply(req, { error: "A local day is required." }, 400);
+    return out({ error: "A local day is required." }, 400);
   }
   const requestedOrder = asRecord(body)?.order_id;
   if (requestedOrder !== undefined && requestedOrder !== null && (typeof requestedOrder !== "string" || !UUID.test(requestedOrder))) {
-    return reply(req, { error: "The order id is not valid." }, 400);
+    return out({ error: "The order id is not valid." }, 400);
   }
-  const orderId = typeof requestedOrder === "string" ? requestedOrder : null;
+  // The clock never picks an order: an internal call always runs the oldest waiting order, as Run today does.
+  const orderId = !internal && typeof requestedOrder === "string" ? requestedOrder : null;
+  const brief = internal ? clipBrief(asRecord(body)?.brief) : "";
 
-  const user = await callerUser(req);
-  if (!user) return reply(req, { error: "Owner authentication required." }, 401);
+  let user: { id: string } | null = null;
+  if (!internal) {
+    user = await callerUser(req);
+    if (!user) return out({ error: "Owner authentication required." }, 401);
+  }
 
   const supabaseUrl = env("SUPABASE_URL", "SUPABASE_PROJECT_URL");
   const anonKey = env("SUPABASE_ANON_KEY", "SUPABASE_KEY");
-  if (!supabaseUrl || !anonKey) return reply(req, { error: "The Executioner is not configured." }, 503);
+  if (!supabaseUrl || !anonKey) return out({ error: "The Executioner is not configured." }, 503);
 
-  // Owner check: the same owner-only read Buddy uses. The key itself is never read here.
-  try {
-    const userClient: SupabaseClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await userClient.rpc("automation_list_secrets");
-    if (error || !Array.isArray(data)) return reply(req, { error: "Owner-only access is required." }, 403);
-  } catch {
-    return reply(req, { error: "Owner-only access is required." }, 403);
+  // Owner check, the only two ways in. A browser must pass the same owner-only read Buddy uses (the key itself is
+  // never read here). The clock must pass the internal secret and name an owner that app_admins really lists.
+  if (internal) {
+    const claimed = asRecord(body)?.owner_id;
+    if (typeof claimed !== "string" || !UUID.test(claimed)) return out({ error: "An owner id is required." }, 403);
+    let sb: SupabaseClient;
+    try {
+      sb = serviceClient();
+    } catch {
+      return out({ error: "The Executioner is not configured." }, 503);
+    }
+    const { data, error } = await sb.from("app_admins").select("user_id").eq("user_id", claimed).eq("role", "owner").maybeSingle();
+    if (error || !data) return out({ error: "Owner-only access is required." }, 403);
+  } else {
+    try {
+      const userClient: SupabaseClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data, error } = await userClient.rpc("automation_list_secrets");
+      if (error || !Array.isArray(data)) return out({ error: "Owner-only access is required." }, 403);
+    } catch {
+      return out({ error: "Owner-only access is required." }, 403);
+    }
   }
 
   let sb: SupabaseClient;
   try {
     sb = serviceClient();
   } catch {
-    return reply(req, { error: "The Executioner is not configured." }, 503);
+    return out({ error: "The Executioner is not configured." }, 503);
   }
-  const owner = user.id;
+  const owner = internal ? String(asRecord(body)?.owner_id) : (user as { id: string }).id;
 
   // Owner pushes that are still waiting go out first, whatever the switches say. A sent row is never sent again.
   await flushUnpushedNotables(servicePushPorts(sb), Date.now(), owner);
 
   // Switches first. Takeover is on only when the saved value is exactly true. An unknown Kill value stops everything.
   const controlsRow = await sb.from("minds_controls").select("takeover,kill_scope").eq("id", 1).maybeSingle();
-  if (controlsRow.error) return reply(req, { status: "held", detail: "Minds settings could not be read. Nothing changed." });
+  if (controlsRow.error) return out({ status: "held", detail: "Minds settings could not be read. Nothing changed." });
   const takeover = asRecord(controlsRow.data)?.takeover === true;
   const killScope = parseKill(asRecord(controlsRow.data)?.kill_scope ?? "none");
 
   // Takeover off, or Kill on a mind the run needs: nothing else is read, nothing is logged, orders stay waiting.
   const blocked = blockedDetail(takeover, killScope);
-  if (blocked) return reply(req, { status: "held", detail: blocked, order_id: orderId });
+  if (blocked) return out({ status: "held", detail: blocked, order_id: orderId });
 
   // The owner's waiting orders, oldest first. Other orders wait.
   const orderRows = await sb
@@ -159,7 +194,7 @@ export async function handleRun(req: Request): Promise<Response> {
     .order("created_at", { ascending: true })
     .limit(50);
   const waiting = await readWaitingOrders(async () => (orderRows.error || !Array.isArray(orderRows.data) ? null : orderRows.data));
-  if (!waiting.ok) return reply(req, { status: "held", detail: "Waiting orders could not be read. Nothing changed." });
+  if (!waiting.ok) return out({ status: "held", detail: "Waiting orders could not be read. Nothing changed." });
   // The minds walk the same brain chain as Buddy. Each brain's key is read here, on the server, and never passed on.
   const think = makeMindThink(async (secretName: string) => {
     try {
@@ -188,6 +223,20 @@ export async function handleRun(req: Request): Promise<Response> {
     if (!order) return { status: "nothing_to_do", detail: "That order is not waiting, or it cannot run yet." };
     return runAgainstSite(order.id, order.instruction, localDay, takeover, killScope, think, logRow, owner, sb);
   };
+
+  // The team's brief, when the 08:00 clock sent one: the Analyst's read, the Strategist's plans and the CEO's order,
+  // in the minds' own words. One log row, so the owner can read what the morning team planned. It changes nothing.
+  if (brief) {
+    await sb.from("minds_daily_log").insert({
+      owner_id: owner,
+      day: localDay,
+      mind: "strategist",
+      action: "The day's plan from the three minds",
+      outcome: "done",
+      detail: clip(brief, 500),
+      order_id: null,
+    });
+  }
 
   const outcome = await runDay(
     {
@@ -254,11 +303,11 @@ export async function handleRun(req: Request): Promise<Response> {
   }
   const doorsReply = { status: doors.status, posted: doors.posted };
   if (outcome.status === "cannot_think") {
-    return reply(req, { status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
+    return out({ status: outcome.status, detail: clip(`${outcome.detail} ${doors.detail}`, 800), order_id: outcome.orderId, doors: doorsReply });
   }
   const packs = await runPacksForDay(sb, owner, localDay, takeover, killScope, think);
   const detail = clip(`${orderOutcomeLine(outcome.status, outcome.detail)} ${packs.detail} ${doors.detail}`, 800);
-  return reply(req, {
+  return out({
     status: outcome.status,
     detail,
     order_id: outcome.orderId,

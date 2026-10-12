@@ -169,6 +169,37 @@ export function buildPlacementPrompt(
   return { system, prompt };
 }
 
+/** The one fix a blocked plan is allowed. Phase I: the Auditor blocks, the Strategist is asked once, then the Auditor checks again. */
+export const FIX_ONCE_NOTE = "The Auditor blocked the last plan. Fix it once, then it is checked again.";
+export const FIX_ONCE_REFUSED_DETAIL = "The Auditor blocked the plan twice, so the change was stopped.";
+
+/**
+ * One allowed fix. The Strategist is asked once, with the Auditor's own words, to repair the plan it just made.
+ * It answers in the same JSON shape, so the same reader and the same Auditor are used. Null means: no usable fix,
+ * and the change is stopped. Nothing here is ever applied.
+ */
+export async function fixPlacementOnce(
+  article: { id: string; title: string; content: string | null },
+  shop: ShopProduct[],
+  blocked: PlacementCandidate,
+  fix: string,
+  think: (request: { mind: string; system: string; prompt: string }) => Promise<MindThinkResult>,
+): Promise<PlacementCandidate | null> {
+  if (shop.length === 0) return null;
+  const { system, prompt } = buildPlacementPrompt(article.title, article.content, shop);
+  const blockedText = `paragraph ${blocked.paragraphIndex}, products ${blocked.productIds.join(", ") || "none"}, sentences "${blocked.sentences.join(" ")}"`;
+  const result = await think({
+    mind: "strategist",
+    system,
+    prompt: `${prompt}\n\n${FIX_ONCE_NOTE}\nTHE PLAN THE AUDITOR BLOCKED: ${blockedText}\nWHAT THE AUDITOR SAID (fix exactly this): ${fix}`,
+  });
+  if (!result.ok) return null;
+  if (/"paragraph"\s*:\s*-1\b/.test(result.text)) return null;
+  const parsed = parsePlacementReply(result.text);
+  if (!parsed) return null;
+  return { ...parsed, productIds: digitalFirst(parsed.productIds, shop) };
+}
+
 /**
  * The Auditor. Allows the plan only when every check passes. Each failed check adds one plain-English fix.
  * Pure: it reads the article and the shop, and changes neither.
