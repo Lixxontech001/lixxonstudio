@@ -127,6 +127,7 @@ export default defineConfig(({ mode }) => {
             // article intake/calendar and System Check remain size-budgeted as
             // separate chunks rather than inflating the core admin route bundle.
             if (id.includes('/src/admin/pages/AutomationRuns.tsx')) return 'automation-runs';
+            if (id.includes('/src/admin/lib/guideSections')) return 'admin-guide';
             if (id.includes('/src/lib/automationDistribution.ts')) return 'automation-distribution';
             if (id.includes('/src/admin/pages/AutomationCheck.tsx')) return 'automation-check';
             if (id.includes('/src/admin/pages/ArticleQueueCalendar.tsx')) return 'article-intake';

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import VapidGenerator from '../components/VapidGenerator';
+import GuideLink from '../components/GuideLink';
 import { withoutBrainKeys } from '../../lib/brainRows';
 import {
   AUTOMATION_KEY_CATEGORIES,
@@ -242,6 +243,9 @@ export default function AutomationKeys() {
           <p className="text-sm text-gray-600 mt-2 max-w-3xl">
             Buddy's brain keys (Google, Groq and the rest) are on the <a className="underline" href="/admin/automation/brains">Brains page</a>.
           </p>
+          <div className="mt-2 max-w-3xl">
+            <GuideLink section="keys" back="/admin/automation/keys" />
+          </div>
         </div>
         <button
           type="button"
@@ -299,6 +303,9 @@ export default function AutomationKeys() {
             <span>Feature switches remain off until an owner enables them separately.</span>
           </div>
 
+          <div className="space-y-1">
+            <GuideLink section="vapid" back="/admin/automation/keys#vapid-subject" />
+          </div>
           <VapidGenerator
             subject={vapidSubject}
             publicKey={generatedVapidPublicKey}
@@ -359,6 +366,7 @@ export default function AutomationKeys() {
                                 {isBusy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <FlaskConical size={15} aria-hidden="true" />}
                                 Test
                               </button>
+                              <GuideLink section="test-key" back={`/admin/automation/keys#automation-key-${item.name}`} compact className="self-center" />
                               <button
                                 type="button"
                                 onClick={() => void remove(item)}
@@ -369,6 +377,7 @@ export default function AutomationKeys() {
                                 <Trash2 size={15} aria-hidden="true" />
                                 Delete
                               </button>
+                              <GuideLink section="delete-key" back={`/admin/automation/keys#automation-key-${item.name}`} compact className="self-center" />
                             </div>
                           </div>
 
@@ -393,6 +402,7 @@ export default function AutomationKeys() {
                               <p id={`automation-key-help-${item.name}`} className="mt-1 text-xs text-gray-500">
                                 {item.credential_type === 'secret' ? 'Hidden while typing; cleared from the form after the save attempt.' : 'Account ID or public value. Saved safely and not shown again after saving.'}
                               </p>
+                              <GuideLink section="save-key" back={`/admin/automation/keys#automation-key-${item.name}`} className="mt-1" />
                             </div>
                             <button
                               type="button"

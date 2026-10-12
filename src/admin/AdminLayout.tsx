@@ -9,7 +9,7 @@ import {
   Tag, RotateCcw, ShoppingCart,
   Activity, FileCode, Gift, Share2, Calendar,
   Layers, BookA, MessageCircleQuestion, DatabaseBackup, Moon, Sun,
-  Database, HeartPulse, TrendingUp, Lightbulb, Sparkles, Palette, KeyRound, Cpu
+  Database, HeartPulse, TrendingUp, Lightbulb, Sparkles, Palette, KeyRound, Cpu, Compass
 } from 'lucide-react';
 import { canAccess } from './permissions';
 import { useTheme } from '../context/ThemeContext';
@@ -31,6 +31,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Operations',
     items: [
+      { label: 'Guide', route: { name: 'admin-guide' }, icon: Compass },
       { label: 'Team & access', route: { name: 'admin-access' }, icon: KeyRound },
       { label: 'Health & issues', route: { name: 'admin-health' }, icon: HeartPulse },
       { label: 'Advisor', route: { name: 'admin-advisor' }, icon: Lightbulb },
