@@ -135,10 +135,11 @@ describe('Phase D freeze, slice 5: swap, briefing sources, living mind steps', (
     expect(queueLines({ ok: true, count: 3 }, CARTS_WORDING)).toEqual(['3 abandoned carts have not been recovered yet.']);
   });
 
-  it('the day run calls the Analyst, the Strategist and the CEO on a run with no order named, and writes their rows', () => {
+  it('the day run calls the three thinking minds for a general run or a named daily-run order', () => {
     const run = read('supabase/functions/minds-run-placement/index.ts');
     expect(LIVING_MINDS).toEqual(['analyst', 'strategist', 'ceo']);
-    expect(run).toMatch(/if \(orderId === null\) \{\s*try \{\s*await runLivingMindsForDay/);
+    expect(run).toContain('const namedDailyRun = orderId !== null && waiting.orders.some((order) => order.id === orderId && order.lane.lane === "daily_run");');
+    expect(run).toMatch(/if \(orderId === null \|\| namedDailyRun\) \{\s*try \{\s*await runLivingMindsForDay/);
     // Phase I slice 4: the facts are read first, then the memory is folded in, so the call is written over lines.
     expect(run).toContain('await runLivingMinds(ports, {');
     expect(run).toContain('facts: factsWithMemory(facts, memory),');

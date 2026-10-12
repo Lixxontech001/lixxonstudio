@@ -19,7 +19,7 @@ function setup(options: { key?: string | null; pending?: string | null; pendingO
   const saved: Saved[] = [];
   const askGemini = vi.fn<(key: string, input: { system: string; turns: unknown[] }) => Promise<GeminiResult>>(async () => ({ ok: true, text: 'Buddy reply.' }));
   const readKey = vi.fn(async () => (options.key === undefined ? FAKE_KEY : options.key));
-  const saveOrder = vi.fn(async () => options.saveOrderOk ?? true);
+  const saveOrder = vi.fn(async () => options.saveOrderOk === false ? null : '66666666-6666-4666-8666-666666666666');
   const readMindLog = vi.fn(async () => (options.logRows === undefined ? [] : options.logRows));
   const loadPendingOrder = vi.fn(async () =>
     options.pendingOk === false ? { ok: false as const } : { ok: true as const, instruction: options.pending ?? null },

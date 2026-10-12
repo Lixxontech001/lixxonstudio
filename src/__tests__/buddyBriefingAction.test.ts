@@ -55,7 +55,7 @@ function fakeStore(options: { seenAt?: string | null; facts?: BriefingFacts; sav
       return { id, created: true };
     },
     loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
-    saveOrder: async () => true,
+    saveOrder: async () => '66666666-6666-4666-8666-666666666666',
     readMindLog: async () => [],
   };
   return { deps, threads, saved, markSeen, readBriefingFacts };

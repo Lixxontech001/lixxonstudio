@@ -100,9 +100,10 @@ describe('the day run calls the three living minds, in order, and each writes it
     expect(logs.map((row) => row.outcome)).toEqual(['done', 'done', 'skipped']);
   });
 
-  it('the day run guards the steps: they run only on a run with no order named, a done mind is not run again today, and the steps read facts through a fixed read', () => {
+  it('the day run guards the steps: they run for a general run or named daily-run order, and a done mind is not run again today', () => {
     const placement = readFileSync(resolve(__dirname, '../../supabase/functions/minds-run-placement/index.ts'), 'utf8');
-    expect(placement).toMatch(/if \(orderId === null\) \{\s*try \{\s*await runLivingMindsForDay/);
+    expect(placement).toContain('const namedDailyRun = orderId !== null && waiting.orders.some((order) => order.id === orderId && order.lane.lane === "daily_run");');
+    expect(placement).toMatch(/if \(orderId === null \|\| namedDailyRun\) \{\s*try \{\s*await runLivingMindsForDay/);
     expect(placement).toMatch(/\.in\("mind", \[\.\.\.LIVING_MINDS\]\);\s*if \(today\.error\) return;/);
     expect(placement).toMatch(/doneToday\.length === LIVING_MINDS\.length\) return;/);
     expect(placement).toMatch(/log: async \(entry\) => \{\s*await sb\.from\("minds_daily_log"\)\.insert\(\{/);

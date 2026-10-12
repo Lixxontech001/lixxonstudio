@@ -34,6 +34,7 @@ function fromTable(table: string) {
 }
 
 const QUIET = { data: { ok: true, action: 'briefing', chat_id: 'brief-1', created: true, first_visit: true, quiet: true, text: 'Quiet since you left.' }, error: null };
+const ORDER_ID = '66666666-6666-4666-8666-666666666666';
 const CHAT = { id: 'chat-1', title: 'Shop question', kind: 'chat', briefing_date: null, created_at: '2026-10-09T10:00:00Z', updated_at: '2026-10-09T10:05:00Z' };
 const BRIEFING_ROW = { id: 'brief-1', title: null, kind: 'briefing', briefing_date: '2026-10-09', created_at: '2026-10-09T08:00:00Z', updated_at: '2026-10-09T08:00:00Z' };
 
@@ -93,10 +94,12 @@ beforeEach(() => {
   mocks.from.mockReset();
   mocks.from.mockImplementation((table: string) => fromTable(table));
   mocks.invoke.mockReset();
-  mocks.invoke.mockImplementation(async (_name: string, options: { body: Record<string, unknown> }) => {
-    const handler = actions[String(options.body.action)];
+  mocks.invoke.mockImplementation(async (name: string, options: { body: Record<string, unknown> }) => {
+    const key = typeof options.body.action === 'string' ? options.body.action : name === 'minds-run-placement' ? 'run' : '';
+    const handler = actions[key];
     return handler ? handler(options.body) : { data: null, error: new Error('unexpected action') };
   });
+  actions.run = () => ({ data: { status: 'applied', detail: 'The product line was added.' }, error: null });
 });
 
 afterEach(() => {
@@ -179,6 +182,39 @@ describe('Buddy chat screen', () => {
     await settle();
     expect(mocks.invoke).toHaveBeenLastCalledWith('buddy-think', { body: { action: 'ask', chat_id: 'chat-1', message: 'Hi Buddy' } });
     expect(el.textContent).toContain('Hello. How can I help?');
+  });
+
+  it('starts only the saved order when Buddy explicitly asks for an immediate run', async () => {
+    const stored: Array<Record<string, unknown>> = [];
+    inserts.buddy_chats = () => ({ data: CHAT, error: null });
+    reads.buddy_messages = () => ({ data: stored, error: null });
+    actions.ask = () => ({
+      data: { ok: true, action: 'ask', reply: 'Takeover is on, so I am starting it now.', run_start: true, run_order_id: ORDER_ID },
+      error: null,
+    });
+    const el = await render();
+    await continueFromGreeting();
+    await act(async () => buttonByText('New chat')?.click());
+    await typeMessage('Swap the kit onto the article');
+    await act(async () => buttonByText('Send')?.click());
+    await settle();
+
+    const runCall = mocks.invoke.mock.calls.find(([name]) => name === 'minds-run-placement');
+    expect(runCall).toBeDefined();
+    expect(runCall?.[1]).toMatchObject({ body: { order_id: ORDER_ID, local_day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } });
+    expect(el.querySelector('[role="alert"]')?.textContent).toBe('The product line was added.');
+  });
+
+  it('does not start a run when Buddy does not authorize one', async () => {
+    inserts.buddy_chats = () => ({ data: CHAT, error: null });
+    actions.ask = () => ({ data: { ok: true, action: 'ask', reply: 'Takeover is off, so nothing changed.' }, error: null });
+    await render();
+    await continueFromGreeting();
+    await act(async () => buttonByText('New chat')?.click());
+    await typeMessage('Swap the kit onto the article');
+    await act(async () => buttonByText('Send')?.click());
+    await settle();
+    expect(mocks.invoke).not.toHaveBeenCalledWith('minds-run-placement', expect.anything());
   });
 
   it('shows the honest failure message from the server and never a made-up reply', async () => {

@@ -30,7 +30,7 @@ const ask = (message: string) => ({ action: 'ask' as const, chat_id: CHAT_ID, me
 /** Fake dependencies for the chat path, so an order can be followed all the way to a saved message. */
 function chatDeps() {
   const saved: { role: string; kind: string; content: string; payload: Record<string, unknown> | null }[] = [];
-  const saveOrder = vi.fn(async () => true);
+  const saveOrder = vi.fn(async () => '66666666-6666-4666-8666-666666666666');
   const askGemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: 'Buddy reply.' }));
   const deps = {
     keyConfigured: async () => false,

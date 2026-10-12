@@ -17,7 +17,7 @@ const FAKE_KEY = 'FAKE-GEMINI-KEY-NOT-REAL-0002';
 function chatDeps(answerText: string, pendingInstruction: string | null = null) {
   const saved: { role: string; kind: string; content: string }[] = [];
   const askGemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: answerText }));
-  const saveOrder = vi.fn(async () => true);
+  const saveOrder = vi.fn(async () => '66666666-6666-4666-8666-666666666666');
   const deps = {
     keyConfigured: async () => true,
     readKey: async () => FAKE_KEY,

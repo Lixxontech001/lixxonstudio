@@ -12,7 +12,7 @@ const SWAP = 'Swap the Calm Skin Routine Guide onto the skin guide';
 
 function chatDeps() {
   const saved: { role: string; kind: string; content: string }[] = [];
-  const saveOrder = vi.fn(async () => true);
+  const saveOrder = vi.fn(async () => '66666666-6666-4666-8666-666666666666');
   const askGemini = vi.fn(async () => ({ ok: true as const, text: 'unused' }));
   const deps = {
     keyConfigured: async () => true,

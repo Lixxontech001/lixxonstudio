@@ -1,8 +1,10 @@
 /** Reads the buddy-think answers. Anything unexpected becomes null, so the screen never shows a made-up reply. */
 
 export type BuddyThinkReply =
-  | { ok: true; reply: string; model: string; canThink: boolean; runStart: boolean }
+  | { ok: true; reply: string; model: string; canThink: boolean; runStart: boolean; runOrderId: string | null }
   | { ok: false; reason: string; message: string; canThink: boolean };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -19,12 +21,15 @@ export function parseThinkReply(value: unknown): BuddyThinkReply | null {
   const canThink = value.can_think === true;
   if (value.ok) {
     if (typeof value.reply !== 'string' || !value.reply.trim()) return null;
+    const runOrderId = typeof value.run_order_id === 'string' && UUID_RE.test(value.run_order_id) ? value.run_order_id : null;
+    const runStart = value.run_start === true;
     return {
       ok: true,
       reply: value.reply.slice(0, 4000),
       model: typeof value.model === 'string' ? value.model.slice(0, 80) : '',
       canThink,
-      runStart: value.run_start === true,
+      runStart,
+      runOrderId: runStart ? runOrderId : null,
     };
   }
   if (typeof value.reason !== 'string' || typeof value.message !== 'string') return null;

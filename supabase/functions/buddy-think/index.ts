@@ -310,10 +310,14 @@ function chatStore(userClient: SupabaseClient) {
       const pending = (last.payload as Record<string, unknown>).pending_order;
       return { ok: true as const, instruction: typeof pending === "string" && pending.trim() ? pending.slice(0, 1000) : null };
     },
-    // Files one order as waiting. The database rule allows only status "waiting" from the owner's session.
+    // Files one order as waiting and returns its id. The database rule allows only status "waiting" from the owner's session.
     saveOrder: async (_chatId: string, instruction: string, mind: MindName | null) => {
-      const { error } = await userClient.from("buddy_orders").insert({ instruction, mind, status: "waiting" });
-      return !error;
+      const { data, error } = await userClient
+        .from("buddy_orders")
+        .insert({ instruction, mind, status: "waiting" })
+        .select("id")
+        .single();
+      return !error && typeof data?.id === "string" ? data.id : null;
     },
     // The owner's orders that are still waiting, oldest first. Null when the read fails. Read by buddyOrders.ts.
     readWaitingOrderRows: async (): Promise<unknown[] | null> => {

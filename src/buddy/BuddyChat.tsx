@@ -155,8 +155,10 @@ export default function BuddyChat() {
     }
 
     const result = await askBuddy(chatId, text);
-    // Takeover is on and the owner asked for today's run: start it now, then say what happened.
-    const run = result?.ok && result.runStart ? await startDayRun(localDateString()) : null;
+    // Buddy authorizes a saved, supported request only when Takeover is on: start that exact run now.
+    const run = result?.ok && result.runStart && result.runOrderId
+      ? await startDayRun(localDateString(), result.runOrderId)
+      : null;
     const rows = await loadMessages(chatId);
     if (rows) setMessages(rows);
     if (!result) setNotice(CHAT_NOT_REACHED);

@@ -201,12 +201,13 @@ export async function askBuddy(chatId: string, message: string): Promise<BuddyTh
 }
 
 /**
- * Starts today's run through the owner-only run function. Called only after Buddy filed the run and Takeover is on.
- * Returns null when the function could not be reached or answered without a plain detail.
+ * Starts one saved request through the owner-only run function. Buddy returns its id only when Takeover is on.
+ * The function checks Takeover and Kill again. Returns null when it cannot be reached or gives no plain answer.
  */
-export async function startDayRun(localDay: string): Promise<DayRunAnswer | null> {
+export async function startDayRun(localDay: string, orderId?: string): Promise<DayRunAnswer | null> {
   try {
-    const { data, error } = await supabase.functions.invoke('minds-run-placement', { body: { local_day: localDay } });
+    const body = orderId ? { local_day: localDay, order_id: orderId } : { local_day: localDay };
+    const { data, error } = await supabase.functions.invoke('minds-run-placement', { body });
     if (!error) return parseRunAnswer(data);
     const context = (error as { context?: unknown }).context;
     if (context instanceof Response) return parseRunAnswer(await context.json().catch(() => null));

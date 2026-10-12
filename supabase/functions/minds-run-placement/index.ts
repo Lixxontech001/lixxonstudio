@@ -364,11 +364,13 @@ export async function handleRun(req: Request): Promise<Response> {
   }
   const job = planJobNotable(outcome.status, outcome.orderId);
   if (job) await recordNotable(sb, owner, localDay, job.mind, job.kind, job.title, job.detail, job.key);
-  // The day's thinking steps: the Analyst, the Strategist and the CEO. They run on the day run only (no order named),
-  // per mind per local day: a mind with a done row today is not run again, and a failed or empty one may retry on a later run that day.
+  // The day's thinking steps: the Analyst, the Strategist and the CEO. They run on the day run (no order named),
+  // and when the owner named a daily-run order. An explicitly named product-line order does not repeat these steps.
+  // Per mind per local day: a mind with a done row today is not run again, and a failed or empty one may retry later.
   // Only when Takeover is on and Kill does not stop them (checked above, and again per mind).
   // Each writes its own daily-log row. Nothing here can fail the run.
-  if (orderId === null) {
+  const namedDailyRun = orderId !== null && waiting.orders.some((order) => order.id === orderId && order.lane.lane === "daily_run");
+  if (orderId === null || namedDailyRun) {
     try {
       await runLivingMindsForDay(sb, owner, localDay, takeover, killScope, think, waiting.orders);
     } catch {

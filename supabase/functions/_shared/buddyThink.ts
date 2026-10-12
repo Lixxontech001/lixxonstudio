@@ -4,7 +4,8 @@
 
 import { buildBriefing, FIRST_VISIT_WINDOW_HOURS, type BriefingFacts, type BriefingSection } from "./buddyBriefing.ts";
 import { brainHowToReply, howToReply } from "./buddyHowTo.ts";
-import { closedOrderKind, gateModelOrder, type AllowedOrder } from "./buddyOrderPolicy.ts";
+import { closedOrderKind, gateModelOrder, type AllowedOrder, type FilingGate } from "./buddyOrderPolicy.ts";
+import { laneFor } from "./buddyOrders.ts";
 import { controlDoneLine, UNREADABLE_LINE as CONTROL_UNREADABLE_LINE, WAIT_LINE, type ControlAction } from "./buddyControls.ts";
 import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import { captionAsk, draftPayload, type CaptionDraftResult } from "./chatCaptions.ts";
@@ -30,6 +31,10 @@ import {
 export const RUN_DAY_OFF_LINE = "Filed for today's run. Takeover is off, so it waits. Nothing on the site has changed.";
 export const RUN_DAY_ON_LINE = "Filed for today's run. Takeover is on, so I am starting it now.";
 export const RUN_DAY_UNREADABLE_LINE = "Filed for today's run. I could not read Takeover just now, so it waits until I can.";
+export const ORDER_STARTING_LINE = "Takeover is on, so I am starting it now.";
+export const ORDER_OFF_LINE = "Takeover is off, so nothing changed on the site.";
+export const ORDER_UNREADABLE_LINE = "I could not read Takeover just now, so nothing was started.";
+export const ORDER_NOT_STARTED_LINE = "I could not start that request just now, so nothing changed on the site.";
 
 /** Current stable Flash model on the Gemini API (Google's model list, Oct 2026). Change here only. */
 export const CONTROL_FAILED_LINE = "I could not make that change just now, so nothing has changed. Try again in a moment.";
@@ -114,8 +119,8 @@ export interface BuddyThinkDeps {
   findOrCreateBriefing(localDate: string): Promise<{ id: string; created: boolean } | null>;
   /** An order left waiting on an older Buddy message, before the rules placed unnamed work. `ok:false` means unreadable. */
   loadPendingOrder(chatId: string): Promise<{ ok: true; instruction: string | null } | { ok: false }>;
-  /** Files one order as waiting. The mind is null when the owner has not chosen one. Returns false when not saved. */
-  saveOrder(chatId: string, instruction: string, mind: MindName | null): Promise<boolean>;
+  /** Files one order as waiting and returns its id. The mind is null when the owner has not chosen one. */
+  saveOrder(chatId: string, instruction: string, mind: MindName | null): Promise<string | null>;
   /** The newest log rows, optionally for one mind. Null when they cannot be read. */
   readMindLog(mind: MindName | null): Promise<MindLogLine[] | null>;
   /**
@@ -232,6 +237,24 @@ function ownerReplyIsSafe(text: string, message: string): boolean {
 
 type FactQuestionRoute = Extract<Route, { kind: "mind_log" | "how_to" | "brain_how_to" }>;
 type ActionRoute = Exclude<Route, { kind: "chat" | "mind_log" | "how_to" | "brain_how_to" }>;
+
+function startsSupportedRun(route: ActionRoute, filing: FilingGate | null): boolean {
+  if ((route.kind !== "order" && route.kind !== "run_day") || !filing?.ok) return false;
+  const lane = laneFor(route.instruction);
+  if (route.kind === "run_day") return filing.kind === "run_today" && lane.lane === "daily_run";
+  if (lane.lane === "product_line") return filing.kind === "product_line_apply";
+  // A named-mind run is still a run only when the existing order rules put it in the daily-run lane.
+  return lane.lane === "daily_run" && (filing.kind === "run_today" || filing.kind === "mind_work");
+}
+
+function appendOwnerLine(reply: string, line: string): string {
+  const base = reply.trim();
+  if (base.toLowerCase().includes(line.toLowerCase())) return base.slice(0, MAX_REPLY_CHARS);
+  const suffix = base ? `\n\n${line}` : line;
+  const room = Math.max(0, MAX_REPLY_CHARS - suffix.length);
+  const clipped = base.length > room ? `${base.slice(0, Math.max(0, room - 1))}…` : base;
+  return `${clipped}${suffix}`.slice(0, MAX_REPLY_CHARS);
+}
 
 function isFactQuestionRoute(route: Route): route is FactQuestionRoute {
   return route.kind === "mind_log" || route.kind === "how_to" || route.kind === "brain_how_to";
@@ -618,9 +641,10 @@ async function answerRouted(
     await deps.touchChat(chatId, title);
     return { status: 200, body: { ok: true, action, route: "refused", reply: line, saved: savedLine } };
   }
+  let savedOrderId: string | null = null;
   if (route.kind === "order") {
-    const filed = await deps.saveOrder(chatId, route.instruction, route.mind);
-    if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
+    savedOrderId = await deps.saveOrder(chatId, route.instruction, route.mind);
+    if (!savedOrderId) return fail(503, "not_saved", ORDER_SAVE_FAILED);
   }
   // A pause, stop or start request runs only when Takeover is on. Otherwise it is filed as waiting, like a run.
   let controlTakeover: boolean | null = null;
@@ -632,9 +656,9 @@ async function answerRouted(
     }
   }
   if (route.kind === "run_day") {
-    // The day-run path keeps its own separate safeguards and start signal.
-    const filed = await deps.saveOrder(chatId, route.instruction, null);
-    if (!filed) return fail(503, "not_saved", ORDER_SAVE_FAILED);
+    // Keep the newly filed run named so an older waiting request cannot be started by mistake.
+    savedOrderId = await deps.saveOrder(chatId, route.instruction, null);
+    if (!savedOrderId) return fail(503, "not_saved", ORDER_SAVE_FAILED);
   }
   let routedHistory: GeminiTurn[] | null = null;
   if (route.kind === "order") {
@@ -649,6 +673,8 @@ async function answerRouted(
 
   let reply: string;
   let runStart = false;
+  let runOrderId: string | null = null;
+  const canStartRun = startsSupportedRun(route, filing);
   // How many rival links this message really saved (Phase I slice 5). Zero for every other route.
   let savedLinks = 0;
   // A caption draft, when this order asked for one. Saved with the reply so today's pack step can use it.
@@ -656,10 +682,15 @@ async function answerRouted(
   if (route.kind === "run_day") {
     const takeover = await deps.readTakeover();
     if (takeover === null) reply = RUN_DAY_UNREADABLE_LINE;
-    else if (takeover) {
+    else if (takeover === false) reply = RUN_DAY_OFF_LINE;
+    else if (canStartRun && savedOrderId && UUID_RE.test(savedOrderId)) {
       reply = RUN_DAY_ON_LINE;
       runStart = true;
-    } else reply = RUN_DAY_OFF_LINE;
+      runOrderId = savedOrderId;
+    } else {
+      const lane = laneFor(route.instruction);
+      reply = lane.lane === "held" ? lane.reason : "I could not start today's run just now, so nothing changed.";
+    }
   } else if (route.kind === "control") {
     if (controlTakeover === null) reply = CONTROL_UNREADABLE_LINE;
     else if (controlTakeover === false) reply = WAIT_LINE;
@@ -713,6 +744,15 @@ async function answerRouted(
         // The draft is extra. A draft that could not be made never changes the order's own reply.
       }
     }
+    if (route.kind === "order" && canStartRun) {
+      if (takeover === false) reply = appendOwnerLine(reply, ORDER_OFF_LINE);
+      else if (takeover === null) reply = appendOwnerLine(reply, ORDER_UNREADABLE_LINE);
+      else if (savedOrderId && UUID_RE.test(savedOrderId)) {
+        runStart = true;
+        runOrderId = savedOrderId;
+        reply = appendOwnerLine(reply, ORDER_STARTING_LINE);
+      } else reply = appendOwnerLine(reply, ORDER_NOT_STARTED_LINE);
+    }
   }
   const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, captionPayload);
   await deps.touchChat(chatId, title);
@@ -726,7 +766,7 @@ async function answerRouted(
       saved,
       ...(captionPayload ? { drafted: true } : {}),
       ...(route.kind === "competitors" ? { saved_links: savedLinks } : {}),
-      ...(runStart ? { run_start: true } : {}),
+      ...(runStart && runOrderId ? { run_start: true, run_order_id: runOrderId } : {}),
     },
   };
 }

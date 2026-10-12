@@ -136,7 +136,7 @@ describe('Buddy question flow with the site list', () => {
       }),
       findOrCreateBriefing: async () => null,
     loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
-    saveOrder: async () => true,
+    saveOrder: async () => '66666666-6666-4666-8666-666666666666',
     readMindLog: async () => [],
     };
     return { deps, askGemini, readSiteFacts, saved };

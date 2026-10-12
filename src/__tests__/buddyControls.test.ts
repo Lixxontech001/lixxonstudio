@@ -39,7 +39,7 @@ function deps(overrides: Partial<BuddyThinkDeps> = {}) {
     touchChat: async () => {},
     now: () => new Date('2026-10-10T12:00:00Z'),
     loadPendingOrder: async () => ({ ok: true as const, instruction: null }),
-    saveOrder: vi.fn(async () => true),
+    saveOrder: vi.fn(async () => '66666666-6666-4666-8666-666666666666'),
     readTakeover: async () => false as boolean | null,
     applyControl: vi.fn(async () => true),
     ...overrides,
@@ -175,7 +175,7 @@ describe('chat control requests and Takeover', () => {
   });
 
   it('a waiting request that cannot be saved is refused, and nothing is said as if it was filed', async () => {
-    const { deps: d } = deps({ readTakeover: async () => false, saveOrder: async () => false });
+    const { deps: d } = deps({ readTakeover: async () => false, saveOrder: async () => null });
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Pause the Telegram door' }, d);
     expect(result.status).toBe(503);
   });
