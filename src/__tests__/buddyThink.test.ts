@@ -8,6 +8,7 @@ import {
   BUDDY_SYSTEM_INSTRUCTION,
   BUDDY_TEST_PROMPT,
   BUDDY_ANSWER_RULES,
+  BUDDY_FACT_ANSWER_RULES,
   BUDDY_ROUTED_ORDER_RULES,
   parseBuddyAnswer,
   callGemini,
@@ -305,6 +306,8 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     expect(BUDDY_ANSWER_RULES).toContain('{"reply": "your answer to the owner", "order": null}');
     expect(BUDDY_ANSWER_RULES).toContain('Never reply to readers as the owner.');
     expect(BUDDY_ANSWER_RULES).toContain('Never say a helper was chosen');
+    expect(BUDDY_FACT_ANSWER_RULES).toContain('THE SITE RIGHT NOW, THE OPERATIONS RIGHT NOW');
+    expect(BUDDY_FACT_ANSWER_RULES).toContain('Always set "order" to null.');
   });
 
   it('a single Hey gets one fresh brain reply instead of a helpdesk greeting', async () => {
@@ -325,6 +328,177 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     expect(askGemini.mock.calls[0][1].system).toContain('"Easy routine for dry skin"');
     expect(saved.filter((row) => row.role === 'buddy' && row.kind === 'reply').map((row) => row.content)).toEqual([livingLine]);
     expect(livingLine).not.toMatch(/how can i help|what are we working on today/i);
+  });
+
+  it('a mind-log question uses the brain with the current mind log, site facts, operations and chat history', async () => {
+    const reply = 'The Analyst checked article views and was blocked because the count was missing.';
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: JSON.stringify({ reply, order: null }),
+    }));
+    const history: GeminiTurn[] = [{ role: 'user', text: 'We were checking the new guide.' }];
+    const readMindLog = vi.fn(async () => [
+      {
+        happened_at: '2026-10-09T10:30:00Z', day: '2026-10-09', mind: 'analyst',
+        action: 'Checked article views', outcome: 'blocked', detail: 'The count was missing, so no claim was made.',
+      },
+      {
+        happened_at: '2026-10-09T10:00:00Z', day: '2026-10-09', mind: 'strategist',
+        action: 'Reviewed the plan', outcome: 'done', detail: 'This belongs to another mind.',
+      },
+    ]);
+    const site = {
+      articles: { ok: true, total: 1, items: [{ title: 'The live guide', slug: 'live-guide', publishedAt: '2026-10-08T09:00:00Z', excerpt: null }] },
+      products: { ok: true, total: 0, items: [] },
+    };
+    const saveOrder = vi.fn(async () => true);
+    const { deps: d, saved } = deps({
+      askGemini,
+      loadHistory: async () => history,
+      readMindLog,
+      readSiteFacts: async () => site,
+      readStateFacts: async () => ({
+        takeover: false,
+        killScope: 'none',
+        orders: { ok: true, total: 0, items: [] },
+        log: { ok: true, rows: [] },
+        notable: { ok: true, rows: [] },
+        doors: { ok: true, rows: [] },
+      }),
+    });
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'What did the Analyst do?' },
+      { ...d, saveOrder },
+    );
+
+    expect(result.body).toMatchObject({ ok: true, route: 'mind_log', brain: 'gemini', reply });
+    expect(readMindLog).toHaveBeenCalledWith('analyst');
+    expect(askGemini).toHaveBeenCalledTimes(1);
+    const input = askGemini.mock.calls[0][1];
+    expect(input.json).toBe(true);
+    expect(input.system).toContain(BUDDY_FACT_ANSWER_RULES);
+    expect(input.system).toContain('"Checked article views"');
+    expect(input.system).toContain('"The live guide"');
+    expect(input.system).toContain('Takeover: off.');
+    expect(input.system).not.toContain('This belongs to another mind.');
+    expect(input.turns).toEqual([...history, { role: 'user', text: 'What did the Analyst do?' }]);
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(saved.at(-1)?.content).toBe(reply);
+  });
+
+  it('a connection how-to is brain-written from the approved steps and live facts, without creating an order', async () => {
+    const reply = 'Open Connections, find Telegram, and save the bot details there. The test checks the account but posts nothing.';
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: JSON.stringify({ reply, order: null }),
+    }));
+    const saveOrder = vi.fn(async () => true);
+    const { deps: d, saved } = deps({ askGemini });
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'How do I connect Telegram?' },
+      { ...d, saveOrder },
+    );
+
+    expect(result.body).toMatchObject({ ok: true, route: 'how_to', brain: 'gemini', reply });
+    expect(askGemini).toHaveBeenCalledTimes(1);
+    const input = askGemini.mock.calls[0][1];
+    expect(input.system).toContain('APPROVED CONNECTION STEPS');
+    expect(input.system).toContain('channel or chat ID');
+    expect(input.system).toContain('THE SITE RIGHT NOW');
+    expect(input.system).toContain('THE OPERATIONS RIGHT NOW');
+    expect(input.system).not.toContain(FAKE_KEY);
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(saved.at(-1)?.content).toBe(reply);
+  });
+
+  it('a brain-key how-to is also written by a brain from the approved setup facts', async () => {
+    const reply = 'Make a key in Groq Console, then save it on the Brains page. Keep it out of this chat.';
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: JSON.stringify({ reply, order: null }),
+    }));
+    const { deps: d } = deps({ askGemini });
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'How do I get a Groq key?' },
+      d,
+    );
+    expect(result.body).toMatchObject({ ok: true, route: 'brain_how_to', brain: 'gemini', reply });
+    const system = askGemini.mock.calls[0][1].system;
+    expect(system).toContain('APPROVED BRAIN-SETUP STEPS');
+    expect(system).toContain('console.groq.com');
+    expect(system).toContain('Never ask the owner to paste a password, token, or key into this chat.');
+    expect(system).not.toContain(FAKE_KEY);
+  });
+
+  it('a failed live read is made explicit in the brain context instead of aborting or guessing', async () => {
+    const reply = 'I could not check the current shop status, but the saved Telegram setup steps are clear.';
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: JSON.stringify({ reply, order: null }),
+    }));
+    const { deps: d } = deps({
+      askGemini,
+      readSiteFacts: async () => { throw new Error('private database detail'); },
+      readStateFacts: async () => { throw new Error('private database detail'); },
+    });
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'How do I connect Telegram?' },
+      d,
+    );
+    expect(result.body).toMatchObject({ ok: true, route: 'how_to', reply });
+    const system = askGemini.mock.calls[0][1].system;
+    expect(system).toContain('Published articles: could not be read just now.');
+    expect(system).toContain('Takeover: could not be read just now.');
+    expect(system).not.toContain('private database detail');
+  });
+
+  it('an unavailable mind log is passed as unavailable, so the brain cannot fill it with a guess', async () => {
+    const reply = 'I could not read the Analyst log just now, so I cannot say what it did.';
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: JSON.stringify({ reply, order: null }),
+    }));
+    const { deps: d } = deps({ askGemini, readMindLog: async () => null });
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'What did the Analyst do?' },
+      d,
+    );
+    expect(result.body).toMatchObject({ ok: true, route: 'mind_log', reply });
+    expect(askGemini.mock.calls[0][1].system).toContain('Could not be read just now. Do not describe any action.');
+  });
+
+  it('a fact-question answer cannot file work even if a brain proposes an order', async () => {
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: JSON.stringify({
+        reply: 'I started the run.',
+        order: { mind: 'executioner', kind: 'mind_work', instruction: 'Run today' },
+      }),
+    }));
+    const saveOrder = vi.fn(async () => true);
+    const { deps: d, saved } = deps({ askGemini });
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'What did the Analyst do?' },
+      { ...d, saveOrder },
+    );
+    expect(result.body).toMatchObject({ ok: false, route: 'mind_log', reason: 'unreadable' });
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(saved.at(-1)).toMatchObject({ role: 'buddy', kind: 'notice' });
+    expect(saved.at(-1)?.content).not.toContain('I started the run');
+  });
+
+  it('a fact question with no configured brain saves only an honest no-key notice', async () => {
+    const { deps: d, askGemini, saved } = deps({ readKey: async () => null });
+    const result = await handleBuddyThink(
+      { action: 'ask', chat_id: CHAT_ID, message: 'What did the Analyst do?' },
+      d,
+    );
+    expect(result.body).toMatchObject({ ok: false, route: 'mind_log', reason: 'no_key', message: NO_KEY_MESSAGE });
+    expect(askGemini).not.toHaveBeenCalled();
+    expect(saved).toEqual([
+      { chatId: CHAT_ID, role: 'owner', kind: 'reply', content: 'What did the Analyst do?' },
+      { chatId: CHAT_ID, role: 'buddy', kind: 'notice', content: NO_KEY_MESSAGE },
+    ]);
   });
 
   it('a routed order keeps its internal path but the brain writes the owner-facing thought from live facts', async () => {
