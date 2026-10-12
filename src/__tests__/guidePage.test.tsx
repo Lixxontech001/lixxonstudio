@@ -50,10 +50,10 @@ function guideLinks(el: HTMLElement) {
   return Array.from(el.querySelectorAll('a')).filter((link) => link.textContent === GUIDE_LINK_LABEL);
 }
 
-function savedRow(name: string, label: string, category = 'actions') {
+function keyRow(name: string, label: string, category = 'actions', configured = true) {
   return {
     name, label, category, credential_type: 'secret', purpose: 'A saved credential.',
-    required: false, configured: true, last_test_status: 'ok', last_tested_at: null,
+    required: false, configured, last_test_status: 'ok', last_tested_at: null,
   };
 }
 
@@ -119,7 +119,13 @@ describe('the in-place help on Keys, Brains and Connections', () => {
   it('Keys carries the guide link for the page, each save box, Test and Delete', async () => {
     mocks.rpc.mockImplementation(async (name: string) => (
       name === 'automation_list_secrets'
-        ? { data: [savedRow('resend_api_key', 'Resend API key', 'email')], error: null }
+        ? {
+          data: [
+            keyRow('resend_api_key', 'Resend API key', 'email', true),
+            keyRow('flutterwave_secret_key', 'Flutterwave secret key', 'commerce', false),
+          ],
+          error: null,
+        }
         : { data: true, error: null }
     ));
     const el = await render(<AutomationKeys />);
@@ -134,9 +140,10 @@ describe('the in-place help on Keys, Brains and Connections', () => {
     // Each link remembers the page and the field it came from.
     const saveLink = links.find((link) => link.getAttribute('href')?.includes('#save-key'));
     expect(decodeURIComponent(saveLink?.getAttribute('href') ?? ''))
-      .toContain('/admin/automation/keys#automation-key-resend_api_key');
-    // The sentence that belongs to the action is shown next to it, not only on the guide page.
+      .toMatch(/\/admin\/automation\/keys#automation-key(-replace)?-/);
+    // The sentences that belong to the actions are shown next to them, not only on the guide page.
     expect(el.textContent).toContain('Paste a key once and press Save. It is never shown again after that.');
+    expect(el.textContent).toContain('Saved. It cannot be shown, and it does not need to be typed again.');
   });
 
   it('Brains carries the guide link for each brain, back to that key box', async () => {

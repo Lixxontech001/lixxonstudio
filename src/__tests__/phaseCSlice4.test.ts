@@ -22,8 +22,11 @@ const read = (file: string) => readFileSync(join(process.cwd(), file), 'utf8');
 
 describe('Phase C slice 4: WhatsApp is not offered', () => {
   it('the shared list names the WhatsApp token and phone-number ID', () => {
-    expect(NOT_OFFERED_KEY_NAMES).toEqual(['whatsapp_access_token', 'whatsapp_phone_number_id']);
+    // Phase H slice 3 added the dead thinking keys and the social rows with no leftover job to this list, so it is
+    // checked by what it must contain. WhatsApp is still never offered.
+    expect(NOT_OFFERED_KEY_NAMES).toEqual(expect.arrayContaining(['whatsapp_access_token', 'whatsapp_phone_number_id']));
     expect(isNotOfferedKey('whatsapp_access_token')).toBe(true);
+    expect(isNotOfferedKey('whatsapp_phone_number_id')).toBe(true);
     expect(isNotOfferedKey('telegram_bot_token')).toBe(false);
   });
 

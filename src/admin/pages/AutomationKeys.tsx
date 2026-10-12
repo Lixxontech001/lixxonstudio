@@ -20,6 +20,12 @@ import {
 
 const DEFAULT_VAPID_SUBJECT = 'mailto:owner@lixxonstudio.com';
 
+/** The one sentence the owner reads, and confirms, when a saved key is replaced. */
+export const REPLACE_SAVED_KEY_LINE = 'This replaces the key that is there. The old one is gone.';
+/** Shown instead of the paste box while a key is already saved. The owner is never asked to paste it again. */
+export const SAVED_KEY_LINE = 'Saved. It cannot be shown, and it does not need to be typed again.';
+export const REPLACE_BUTTON_LINE = 'Replace this key';
+
 /** Plain English for a key's label. The catalogue rows in the database still carry engine words; the screen does not show them. */
 function plainKeyLabel(label: string): string {
   return label
@@ -32,7 +38,8 @@ function plainKeyLabel(label: string): string {
 }
 
 const CATEGORY_LABELS: Record<AutomationKeyCategory, string> = {
-  ai: 'Thinking keys',
+  // No 'ai' row can reach this page: the brain keys are shown on Brains, and the two dead keys are never offered.
+  ai: 'AI keys',
   actions: 'Scheduled jobs',
   commerce: 'Commerce & payments',
   email: 'Email',
@@ -79,6 +86,8 @@ export default function AutomationKeys() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [vapidSubject, setVapidSubject] = useState(DEFAULT_VAPID_SUBJECT);
   const [generatedVapidPublicKey, setGeneratedVapidPublicKey] = useState('');
+  /** Rows where the owner asked to replace a saved key: only then is a paste box shown. */
+  const [replacing, setReplacing] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(async (showSpinner = false): Promise<boolean> => {
     if (showSpinner) setRefreshing(true);
@@ -121,11 +130,9 @@ export default function AutomationKeys() {
 
   const save = async (item: AutomationKeyEntry) => {
     const value = drafts[item.name] || '';
-    if (!value.length) {
-      setNotice({ tone: 'warning', message: 'Paste a credential before saving. The value is never shown again after a save attempt.' });
-      return;
-    }
-    if (item.configured && !window.confirm(`Replace the saved ${plainKeyLabel(item.label)}? The current value will be permanently replaced.`)) return;
+    // An empty box does nothing: no notice, no call, nothing saved.
+    if (!value.length) return;
+    if (item.configured && !window.confirm(REPLACE_SAVED_KEY_LINE)) return;
 
     // Remove it from React state before sending the one-time RPC; failed saves are
     // not copied back into the input or browser storage.
@@ -142,6 +149,7 @@ export default function AutomationKeys() {
         return;
       }
       setNotice({ tone: 'success', message: `${plainKeyLabel(item.label)} saved. It cannot be shown again.` });
+      setReplacing(current => ({ ...current, [item.name]: false }));
       await refresh();
     } catch {
       setNotice({ tone: 'error', message: 'Could not save this credential. No value was retained in the form; check the connection and paste it again.' });
@@ -381,11 +389,28 @@ export default function AutomationKeys() {
                             </div>
                           </div>
 
+                          {item.configured && !replacing[item.name] ? (
+                            <div className="mt-4 flex flex-wrap items-center gap-2">
+                              <p className="text-xs text-gray-500" id={`automation-key-saved-${item.name}`}>{SAVED_KEY_LINE}</p>
+                              <button
+                                type="button"
+                                onClick={() => setReplacing(current => ({ ...current, [item.name]: true }))}
+                                disabled={busyName !== null}
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-gray-300 bg-white px-3 text-sm text-charcoal hover:border-bronze focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bronze disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {REPLACE_BUTTON_LINE}
+                              </button>
+                              <GuideLink section="save-key" back={`/admin/automation/keys#automation-key-replace-${item.name}`} compact className="self-center" />
+                            </div>
+                          ) : (
                           <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                             <div>
                               <label htmlFor={`automation-key-${item.name}`} className="mb-1 block text-xs font-medium text-gray-700">
-                                {item.configured ? `Paste replacement ${item.credential_type === 'identifier' ? 'ID' : 'value'}` : `Paste ${item.credential_type === 'identifier' ? 'ID' : item.credential_type === 'public_key' ? 'public key' : 'key'}`}
+                                {item.configured ? `Paste the replacement ${item.credential_type === 'identifier' ? 'ID' : 'value'}` : `Paste ${item.credential_type === 'identifier' ? 'ID' : item.credential_type === 'public_key' ? 'public key' : 'key'}`}
                               </label>
+                              {item.configured && (
+                                <p id={`automation-key-replace-${item.name}`} className="mb-1 text-xs leading-5 text-amber-900">{REPLACE_SAVED_KEY_LINE}</p>
+                              )}
                               <input
                                 id={`automation-key-${item.name}`}
                                 name={`automation-key-${item.name}`}
@@ -414,6 +439,7 @@ export default function AutomationKeys() {
                               {item.configured ? 'Replace' : 'Save'}
                             </button>
                           </div>
+                          )}
                         </article>
                       );
                     })}
@@ -426,7 +452,8 @@ export default function AutomationKeys() {
       )}
 
       <p className="border-t border-gray-200 pt-4 text-xs leading-5 text-gray-500">
-        Keys saved here are stored for the automation functions. Existing deployment credentials for checkout, scheduled email, Supabase and Vercel remain in their current infrastructure settings until they are moved here. See <code>docs/AUTOMATION_SETUP.md</code> for the exact key names and limitations.
+        Keys saved here are used by the scheduled jobs and by Buddy. Nothing is read from the hosting settings, and
+        nothing is copied into this page. See <code>docs/AUTOMATION_SETUP.md</code> for the exact key names and limits.
       </p>
     </div>
   );

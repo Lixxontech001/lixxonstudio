@@ -168,7 +168,8 @@ describe('Phase D freeze, carried from earlier phases', () => {
   it('the handler has no WhatsApp channel or key map, and the adapters have no WhatsApp readback', () => {
     expect(read('supabase/functions/automation-distribution/handler.ts')).not.toMatch(/whatsapp/i);
     expect(read('supabase/functions/_shared/distributionAdapters.ts')).not.toMatch(/whatsapp/i);
-    expect(NOT_OFFERED_KEY_NAMES).toEqual(['whatsapp_access_token', 'whatsapp_phone_number_id']);
+    // Phase H slice 3 grew this list (dead thinking keys, social rows with no leftover job). WhatsApp is still in it.
+    expect(NOT_OFFERED_KEY_NAMES).toEqual(expect.arrayContaining(['whatsapp_access_token', 'whatsapp_phone_number_id']));
   });
 
   it('the shared distribution lib is kept on purpose: the video-template editor decision is the owner\u2019s', () => {

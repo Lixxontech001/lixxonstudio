@@ -1,4 +1,5 @@
 import { Copy, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
+import { PUSH_HELP_COPY } from '../../../supabase/functions/_shared/notablePush';
 
 interface VapidGeneratorProps {
   subject: string;
@@ -27,9 +28,7 @@ export default function VapidGenerator({
         <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-950">
           The server makes the pair. The private key is saved straight away and is never shown; only the public key is shown for copying.
         </p>
-        <p className="mt-2 text-sm font-medium leading-6 text-sky-950">
-          To turn push on: enter your VAPID values, then open /admin/settings on your phone and tap Register this device.
-        </p>
+        <p className="mt-2 text-sm font-medium leading-6 text-sky-950">{PUSH_HELP_COPY}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <div>

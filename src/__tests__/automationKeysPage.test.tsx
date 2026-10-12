@@ -11,7 +11,7 @@ vi.mock('../lib/supabaseClient', () => ({
   },
 }));
 
-import AutomationKeys from '../admin/pages/AutomationKeys';
+import AutomationKeys, { REPLACE_BUTTON_LINE, REPLACE_SAVED_KEY_LINE, SAVED_KEY_LINE } from '../admin/pages/AutomationKeys';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const FAKE_KEY = 'FAKE-AUTOMATION-KEY-NOT-FOR-STORAGE';
@@ -54,7 +54,7 @@ describe('Automation Keys page', () => {
       if (name === 'automation_list_secrets') {
         return {
           data: [{
-            name: 'openai_api_key', label: 'OpenAI API key', category: 'ai',
+            name: 'resend_api_key', label: 'Resend API key', category: 'email',
             credential_type: 'secret', purpose: 'AI route', required: false, configured,
             last_test_status: lastStatus, last_tested_at: null,
           }],
@@ -81,7 +81,7 @@ describe('Automation Keys page', () => {
     mocks.invoke.mockImplementation(async () => {
       lastStatus = nextTestStatus;
       return {
-        data: { name: 'openai_api_key', status: nextTestStatus, message: `raw ${FAKE_KEY}` },
+        data: { name: 'resend_api_key', status: nextTestStatus, message: `raw ${FAKE_KEY}` },
         error: null,
       };
     });
@@ -90,7 +90,7 @@ describe('Automation Keys page', () => {
     await act(async () => { root.render(<AutomationKeys />); await Promise.resolve(); });
     await settle();
 
-    const input = el.querySelector<HTMLInputElement>('#automation-key-openai_api_key');
+    const input = el.querySelector<HTMLInputElement>('#automation-key-resend_api_key');
     expect(input).not.toBeNull();
     expect(input?.type).toBe('password');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
@@ -106,17 +106,19 @@ describe('Automation Keys page', () => {
     await act(async () => { saveButton!.click(); await Promise.resolve(); });
     await settle();
 
-    expect(input?.value).toBe('');
+    // The box is gone after the save, the value is nowhere in the page, and nothing was kept in the browser.
+    expect(el.querySelector('#automation-key-resend_api_key')).toBeNull();
+    expect(el.textContent).toContain(SAVED_KEY_LINE);
     expect(el.textContent).not.toContain(FAKE_KEY);
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
 
-    const testButton = Array.from(el.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Test OpenAI API key');
+    const testButton = Array.from(el.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Test Resend API key');
     expect(testButton).toBeDefined();
     await act(async () => { testButton!.click(); await Promise.resolve(); });
     await settle();
     expect(mocks.invoke).toHaveBeenCalledWith('automation-keys', {
-      body: { action: 'test', name: 'openai_api_key' },
+      body: { action: 'test', name: 'resend_api_key' },
     });
     expect(el.textContent).not.toContain(FAKE_KEY);
     expect(el.textContent).toContain('A read-only provider request succeeded.');
@@ -127,24 +129,36 @@ describe('Automation Keys page', () => {
     expect(el.textContent).toContain('The provider rejected this credential or a required scope.');
     expect(el.textContent).not.toContain(FAKE_KEY);
 
+    // A saved key still shows no paste box, until the owner asks to replace it.
+    expect(el.querySelector('#automation-key-resend_api_key')).toBeNull();
+    await act(async () => {
+      Array.from(el.querySelectorAll('button')).find(button => button.textContent?.trim() === REPLACE_BUTTON_LINE)?.click();
+      await Promise.resolve();
+    });
+    await settle();
+    const revealed = el.querySelector<HTMLInputElement>('#automation-key-resend_api_key');
+    expect(revealed).not.toBeNull();
+    expect(el.textContent).toContain(REPLACE_SAVED_KEY_LINE);
     act(() => {
-      setter!.call(input, REPLACEMENT_KEY);
-      input!.dispatchEvent(new Event('input', { bubbles: true }));
+      setter!.call(revealed, REPLACEMENT_KEY);
+      revealed!.dispatchEvent(new Event('input', { bubbles: true }));
     });
     const replaceButton = Array.from(el.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Replace');
     expect(replaceButton).toBeDefined();
     await act(async () => { replaceButton!.click(); await Promise.resolve(); });
     await settle();
-    expect(window.confirm).toHaveBeenCalledWith('Replace the saved OpenAI API key? The current value will be permanently replaced.');
+    expect(window.confirm).toHaveBeenCalledWith(REPLACE_SAVED_KEY_LINE);
     expect(savedValues).toEqual([FAKE_KEY, REPLACEMENT_KEY]);
-    expect(input?.value).toBe('');
+    expect(el.querySelector('#automation-key-resend_api_key')).toBeNull();
     expect(el.textContent).not.toContain(REPLACEMENT_KEY);
+    // After a replace the box closes again: the owner is asked nothing until they ask for it.
+    expect(el.textContent).toContain(SAVED_KEY_LINE);
 
-    const deleteButton = Array.from(el.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Delete OpenAI API key');
+    const deleteButton = Array.from(el.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Delete Resend API key');
     expect(deleteButton).toBeDefined();
     await act(async () => { deleteButton!.click(); await Promise.resolve(); });
     await settle();
-    expect(window.confirm).toHaveBeenCalledWith('Permanently delete the saved OpenAI API key?');
+    expect(window.confirm).toHaveBeenCalledWith('Permanently delete the saved Resend API key?');
     expect(el.textContent).toContain('Not configured');
     expect(el.textContent).not.toContain(FAKE_KEY);
     expect(el.textContent).not.toContain(REPLACEMENT_KEY);
