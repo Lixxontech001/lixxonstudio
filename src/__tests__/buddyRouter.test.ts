@@ -4,12 +4,9 @@ import {
   answerFromLog,
   NEVER_LIST_LINES,
   neverListLine,
-  isRestricted,
   mindFit,
-  mindFitTable,
   namedMind,
   routeMessage,
-  routedOrderLine,
   type MindLogLine,
 } from '../../supabase/functions/_shared/buddyRouter';
 
@@ -103,23 +100,15 @@ describe('routing: ordinary chat is not an order', () => {
   });
 });
 
-describe('restricted words', () => {
-  it('flags an order that touches what minds may not do', () => {
-    expect(isRestricted('Publish the guide')).toBe(true);
-    expect(isRestricted('Send the newsletter')).toBe(true);
-    expect(isRestricted('Change the price of the kit')).toBe(true);
-    expect(isRestricted('Check the spring guide')).toBe(false);
-  });
-
-  it('two fits are shown as a table, and the placed order is announced in one line', () => {
-    expect(mindFitTable(['analyst', 'auditor'])).toBe([
-      'Mind    | What it would do',
-      '------- | ----------------------------------------',
-      'Analyst | Read the numbers and say what they show.',
-      'Auditor | Check the work and say what is wrong.',
-    ].join('\n'));
-    expect(routedOrderLine('executioner', [])).toBe('No mind was named.');
-    expect(routedOrderLine('analyst', ['auditor'])).toBe(`Two minds fit this:\n${mindFitTable(['analyst', 'auditor'])}`);
+describe('internal routing metadata', () => {
+  it('two fits stay internal while the route still picks the first match', () => {
+    expect(mindFit('Check the numbers for the week')).toEqual({ mind: 'analyst', others: ['auditor'] });
+    expect(routeMessage('Check the numbers for the week', null)).toMatchObject({
+      kind: 'order',
+      mind: 'analyst',
+      routed: true,
+      others: ['auditor'],
+    });
   });
 
   it('work that fits no rule goes to the doer, so no order is left without a mind', () => {

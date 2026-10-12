@@ -8,6 +8,7 @@ import {
   BUDDY_SYSTEM_INSTRUCTION,
   BUDDY_TEST_PROMPT,
   BUDDY_ANSWER_RULES,
+  BUDDY_ROUTED_ORDER_RULES,
   parseBuddyAnswer,
   callGemini,
   cleanMessage,
@@ -303,9 +304,60 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
   it('the answer rules ask for JSON only, in the agreed shape, and never mention readers as the owner', () => {
     expect(BUDDY_ANSWER_RULES).toContain('{"reply": "your answer to the owner", "order": null}');
     expect(BUDDY_ANSWER_RULES).toContain('Never reply to readers as the owner.');
+    expect(BUDDY_ANSWER_RULES).toContain('Never say a helper was chosen');
   });
 
-  it('a named-mind order the model finds is filed as waiting, and the reply says so', async () => {
+  it('a single Hey gets one fresh brain reply instead of a helpdesk greeting', async () => {
+    const livingLine = 'Views slipped while nothing went out; the new guide, “Easy routine for dry skin,” gives us one real place to start.';
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
+      ok: true,
+      text: JSON.stringify({ reply: livingLine, order: null }),
+    }));
+    const site = {
+      articles: { ok: true, total: 1, items: [{ title: 'Easy routine for dry skin', slug: 'easy-routine-dry-skin', publishedAt: '2026-10-08T09:00:00Z', excerpt: null }] },
+      products: { ok: true, total: 0, items: [] },
+    };
+    const { deps: d, saved } = deps({ askGemini, readSiteFacts: async () => site });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Hey' }, d);
+    expect(result.body).toMatchObject({ ok: true, reply: livingLine });
+    expect(askGemini).toHaveBeenCalledTimes(1);
+    expect(askGemini.mock.calls[0][1].turns.at(-1)).toEqual({ role: 'user', text: 'Hey' });
+    expect(askGemini.mock.calls[0][1].system).toContain('"Easy routine for dry skin"');
+    expect(saved.filter((row) => row.role === 'buddy' && row.kind === 'reply').map((row) => row.content)).toEqual([livingLine]);
+    expect(livingLine).not.toMatch(/how can i help|what are we working on today/i);
+  });
+
+  it('a routed order keeps its internal path but the brain writes the owner-facing thought from live facts', async () => {
+    const livingLine = 'The newest guide is “Easy routine for dry skin,” and nothing went out today; I would start there.';
+    const askGemini = vi.fn(async (): Promise<GeminiResult> => ({ ok: true, text: livingLine }));
+    const saveOrder = vi.fn(async () => true);
+    const site = {
+      articles: { ok: true, total: 1, items: [{ title: 'Easy routine for dry skin', slug: 'easy-routine-dry-skin', publishedAt: '2026-10-08T09:00:00Z', excerpt: null }] },
+      products: { ok: true, total: 0, items: [] },
+    };
+    const state: BuddyStateFacts = {
+      takeover: true,
+      killScope: 'none',
+      orders: { ok: true, total: 0, items: [] },
+      log: { ok: true, rows: [] },
+      notable: { ok: true, rows: [] },
+      doors: { ok: true, rows: [] },
+    };
+    const { deps: d, saved } = deps({ askGemini, saveOrder, readSiteFacts: async () => site, readStateFacts: async () => state });
+    const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Do something (anything), do not ask me what' }, d);
+    expect(result.body).toMatchObject({ ok: true, route: 'order', reply: livingLine });
+    expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Do something (anything), do not ask me what', 'executioner');
+    expect(askGemini).toHaveBeenCalledTimes(1);
+    const thoughtInput = askGemini.mock.calls[0][1];
+    expect(thoughtInput.system).toContain(BUDDY_ROUTED_ORDER_RULES);
+    expect(thoughtInput.system).toContain('Takeover: on.');
+    expect(thoughtInput.system).toContain('"Easy routine for dry skin"');
+    expect(thoughtInput.turns.at(-1)).toEqual({ role: 'user', text: 'Do something (anything), do not ask me what' });
+    expect(saved.at(-1)?.content).toBe(livingLine);
+    expect(livingLine).not.toMatch(/Executioner|No mind was named|Saved for|next run/i);
+  });
+
+  it('a named-mind order the model finds is saved internally while its own thought is shown', async () => {
     const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
       ok: true,
       text: '{"reply":"Got it.","order":{"mind":"strategist","kind":"mind_work","instruction":"Plan the spring push for the kit"}}',
@@ -313,13 +365,15 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     const { deps: d, saved } = deps({ askGemini });
     const saveOrder = vi.fn(async () => true);
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'The spring kit plan needs work, and the Strategist is the one for it.' }, { ...d, saveOrder });
-    expect(result.body).toMatchObject({ ok: true, route: 'chat', filed: 'strategist' });
+    expect(result.body).toMatchObject({ ok: true, route: 'chat' });
+    expect(result.body).not.toHaveProperty('filed');
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Plan the spring push for the kit', 'strategist');
-    expect(saved.at(-1)?.content).toBe('Got it. Saved for the Strategist. It is waiting. Takeover is off, so nothing has changed.');
+    expect(saved.at(-1)?.content).toBe('Got it.');
+    expect(saved.at(-1)?.content).not.toMatch(/Strategist|Saved for|waiting|next run/i);
     expect(askGemini.mock.calls[0][1]).toMatchObject({ json: true });
   });
 
-  it('an order the model sends with no mind is placed by the rules, not kept as pending', async () => {
+  it('an order the model sends with no mind is routed internally and no routing copy is added', async () => {
     const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
       ok: true,
       text: '{"reply":"Got it.","order":{"mind":null,"kind":"mind_work","instruction":"Plan the spring push for the kit"}}',
@@ -328,10 +382,11 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     const saveOrder = vi.fn(async () => true);
     const { deps: d } = deps({ askGemini, saveMessage });
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'The spring kit plan needs work soon.' }, { ...d, saveOrder });
-    expect(result.body).toMatchObject({ ok: true, filed: 'strategist' });
+    expect(result.body).toMatchObject({ ok: true });
+    expect(result.body).not.toHaveProperty('filed');
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Plan the spring push for the kit', 'strategist');
-    // No pending order rides on the reply any more: the mind was chosen by the rules, so the message carries no payload.
-    expect(saveMessage).toHaveBeenCalledWith(CHAT_ID, 'buddy', 'reply', 'Got it. Saved for the Strategist. It is waiting. Takeover is off, so nothing has changed.');
+    // No routing details are concatenated to the reply.
+    expect(saveMessage).toHaveBeenCalledWith(CHAT_ID, 'buddy', 'reply', 'Got it.');
   });
 
   it('an answer that cannot be read files nothing and says so in the chat', async () => {
@@ -392,7 +447,8 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     const { deps: d, askGemini, saved } = deps({ readKey: async () => null });
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Do the new article' }, d);
     expect(result.body).toMatchObject({ route: 'order' });
-    expect(saved.at(-1)?.content).toBe('No mind was named.\nSaved for the Executioner. It is waiting. Takeover is off, so nothing has changed.');
+    expect(saved.at(-1)?.content).toBe(NO_KEY_MESSAGE);
+    expect(saved.at(-1)?.content).not.toMatch(/No mind was named|Executioner|Saved for|next run/i);
     expect(askGemini).not.toHaveBeenCalled();
   });
 });
@@ -572,7 +628,7 @@ describe('Buddy think: the closed list of orders', () => {
     expect(saved.at(-1)?.content).not.toContain('refunded');
   });
 
-  it('a waiting order with Takeover on says it runs on the next run', async () => {
+  it('a routed order with Takeover on keeps the brain reply and does not mention a later run', async () => {
     const { deps: d, saved } = deps({ readTakeover: async () => true });
     const saveOrder = vi.fn(async () => true);
     await handleBuddyThink(
@@ -580,19 +636,17 @@ describe('Buddy think: the closed list of orders', () => {
       { ...d, saveOrder },
     );
     expect(saveOrder).toHaveBeenCalled();
-    expect(saved.at(-1)?.content).toBe(
-      'Saved for the Strategist. It is waiting. Takeover is on, so it runs on the next run.',
-    );
+    expect(saved.at(-1)?.content).toBe('Yes, Buddy can think.');
+    expect(saved.at(-1)?.content).not.toMatch(/Strategist|Saved for|waiting|next run/i);
   });
 
-  it('an unreadable Takeover on a waiting order says so, and nothing has changed', async () => {
+  it('an unreadable Takeover does not produce a canned route statement', async () => {
     const { deps: d, saved } = deps({ readTakeover: async () => { throw new Error('down'); } });
     await handleBuddyThink(
       { action: 'ask', chat_id: CHAT_ID, message: 'Plan the spring push for the kit with the Strategist.' },
       { ...d, saveOrder: async () => true },
     );
-    expect(saved.at(-1)?.content).toBe(
-      'Saved for the Strategist. It is waiting. I could not read Takeover just now, so nothing has changed.',
-    );
+    expect(saved.at(-1)?.content).toBe('Yes, Buddy can think.');
+    expect(saved.at(-1)?.content).not.toMatch(/Strategist|Saved for|waiting|next run/i);
   });
 });

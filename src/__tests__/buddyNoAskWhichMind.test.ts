@@ -1,10 +1,8 @@
 /**
  * Phase H slice 5: Buddy never asks which mind.
  *
- * Every order the owner types without naming a mind is placed by plain rules: numbers and weeks to the Analyst,
- * plans and rivals to the Strategist, sorting to the CEO, packs and doors and captions to the Executioner, checks
- * to the Auditor. Work that fits no rule goes to the Executioner, the doer. When two minds fit, the reply shows a
- * small table of both and the first one takes the order. No message ever asks the owner to choose.
+ * Every order the owner types without naming a helper is routed internally by plain rules. The owner gets a thought
+ * about the task, never the assignment or a helper table. No message ever asks the owner to choose.
  *
  * Fake deps only. No model, no database, no push.
  */
@@ -15,13 +13,11 @@ import {
   DEFAULT_MIND,
   NEVER_LIST_LINES,
   mindFit,
-  mindFitTable,
   neverListLine,
   routeMessage,
-  routedOrderLine,
   type MindLogLine,
 } from '../../supabase/functions/_shared/buddyRouter';
-import { handleBuddyThink, type BuddyThinkDeps, type GeminiResult } from '../../supabase/functions/_shared/buddyThink';
+import { handleBuddyThink, NO_KEY_MESSAGE, type BuddyThinkDeps, type GeminiResult } from '../../supabase/functions/_shared/buddyThink';
 
 const CHAT_ID = '6f1c2b7e-3d4a-4b8c-9e1f-0a2b3c4d5e6f';
 
@@ -119,59 +115,38 @@ describe('Phase H slice 5: unnamed work is routed by the rules', () => {
   });
 });
 
-describe('Phase H slice 5: two fits are shown in a table, not asked about', () => {
-  it('"Check the numbers for the week" fits the Analyst and the Auditor', () => {
+describe("Phase J slice 1: internal routing never becomes the owner's reply", () => {
+  it('two fits are recorded internally, with the first match taking the order', () => {
     expect(mindFit('Check the numbers for the week')).toEqual({ mind: 'analyst', others: ['auditor'] });
-  });
-
-  it('the first fit takes the order and the reply carries the table', () => {
-    const route = routeMessage('Check the numbers for the week', null);
-    expect(route).toEqual({
+    expect(routeMessage('Check the numbers for the week', null)).toMatchObject({
       kind: 'order',
       mind: 'analyst',
-      instruction: 'Check the numbers for the week',
-      resolvesPending: false,
       routed: true,
       others: ['auditor'],
     });
-    const table = mindFitTable(['analyst', 'auditor']);
-    expect(table).toContain('Mind');
-    expect(table).toContain('| What it would do');
-    expect(table).toContain('Analyst');
-    expect(table).toContain('Auditor');
-    expect(table).toContain('Read the numbers and say what they show.');
-    expect(table).toContain('Check the work and say what is wrong.');
-    expect(routedOrderLine('analyst', ['auditor'])).toContain(table);
-  });
-
-  it('the table holds no question mark, so nothing waits on the owner', () => {
-    expect(routedOrderLine('analyst', ['auditor'])).not.toContain('?');
-    expect(routedOrderLine('ceo', ['executioner'])).not.toContain('?');
   });
 });
 
-describe('Phase H slice 5: the owner is never asked, through the chat handler', () => {
-  it('an unnamed order is filed for the routed mind, with no pending payload and no question', async () => {
+describe('Phase J slice 1: the owner never sees internal routing', () => {
+  it('an unnamed order is internally routed while the missing-brain notice contains no routing detail', async () => {
     const { deps, saved, saveOrder, askGemini } = chatDeps();
     const result = await handleBuddyThink(ask('Check the new article'), deps);
     expect(result.body).toMatchObject({ ok: true, route: 'order' });
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', 'auditor');
     const reply = saved.at(-1);
-    expect(reply?.content).toBe('No mind was named.\nSaved for the Auditor. It is waiting. Takeover is off, so nothing has changed.');
+    expect(reply?.content).toBe(NO_KEY_MESSAGE);
+    expect(reply?.content).not.toMatch(/No mind was named|Saved for|Executioner|Auditor|waiting|next run/i);
     expect(reply?.payload).toBeNull();
     expect(saved.every((row) => !/which mind/i.test(row.content))).toBe(true);
     expect(askGemini).not.toHaveBeenCalled();
   });
 
-  it('a two-fit order is filed and the reply shows the table, with no question', async () => {
+  it('a two-fit order stays routed in code and its reply shows no helper table', async () => {
     const { deps, saved, saveOrder } = chatDeps();
     await handleBuddyThink(ask('Check the numbers for the week'), deps);
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the numbers for the week', 'analyst');
     const reply = saved.at(-1)?.content ?? '';
-    expect(reply).toContain('Two minds fit this:');
-    expect(reply).toContain('| What it would do');
-    expect(reply).toContain('Saved for the Analyst.');
-    expect(reply).not.toContain('?');
+    expect(reply).not.toMatch(/Two minds fit this|\| What it would do|Analyst|Auditor|No mind was named|Saved for|next run/i);
   });
 });
 
@@ -205,7 +180,8 @@ describe('Phase H slice 5: the question is gone from the code, not just from the
     expect(think).not.toMatch(/ASK_WHICH_MIND_LINE|ask_which_mind/);
     expect(think).not.toMatch(/Which mind should take this/);
     // The rules for the model say what to do instead of asking.
-    expect(think).toContain('Never ask in "reply" which mind should take it, and never make the owner choose.');
+    expect(think).toContain('Never ask in "reply" which helper should take it, and never describe internal routing.');
+    expect(think).toContain("Do not tell the owner which helper the app chose");
     // The only pending_order left is the read of an order an older message left waiting.
     const writes = think.match(/pending_order:/g) ?? [];
     expect(writes).toEqual([]);

@@ -65,8 +65,11 @@ describe('Buddy model orders: the closed list', () => {
   it('a named-mind order with kind mind_work is filed as waiting', async () => {
     const { deps, saveOrder, saved } = chatDeps('{"reply":"Got it.","order":{"mind":"strategist","kind":"mind_work","instruction":"Look at the spring kit plan"}}');
     const result = await handleBuddyThink(QUESTION, deps);
-    expect(result.body).toMatchObject({ ok: true, filed: 'strategist' });
+    expect(result.body).toMatchObject({ ok: true, route: 'chat' });
+    expect(result.body).not.toHaveProperty('filed');
     expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Look at the spring kit plan', 'strategist');
+    expect(saved.at(-1)?.content).toBe('Got it.');
+    expect(saved.at(-1)?.content).not.toMatch(/Strategist|Saved for|waiting|next run/i);
     expect(saved.at(-1)?.content).not.toBe(REFUSAL_LINE);
   });
 
