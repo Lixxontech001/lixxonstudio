@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { laneFor, HELD_NOT_FROM_CHAT, HELD_MONEY } from '../../supabase/functions/_shared/buddyOrders';
-import { ASK_WHICH_MIND_LINE, isRunDayRequest, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
+import { isRunDayRequest, routeFilingGate, routeMessage } from '../../supabase/functions/_shared/buddyRouter';
 
 describe('router: asking for today\'s run is an order with no mind to name', () => {
   it.each(['Run the products', 'run today', "Make today's posts", 'make the posts', 'Daily run', 'Please run the products', 'Can you run the products'])(
@@ -10,9 +10,9 @@ describe('router: asking for today\'s run is an order with no mind to name', () 
     },
   );
 
-  it('it is never answered with "which mind?"', () => {
-    expect(routeMessage('Run the products', null).kind).not.toBe('ask_which_mind');
-    expect(ASK_WHICH_MIND_LINE).toBeTruthy();
+  it('it is answered as a run request, with no mind and no question', () => {
+    expect(routeMessage('Run the products', null).kind).toBe('run_day');
+    expect(routeFilingGate({ kind: 'run_day', instruction: 'Run the products' })).toEqual({ ok: true, kind: 'run_today' });
   });
 
   it('a question about the run is chat, not an order', () => {
@@ -30,9 +30,21 @@ describe('router: asking for today\'s run is an order with no mind to name', () 
   });
 
   it('ordinary "do" and "can" messages are still orders, not dropped', () => {
-    expect(routeMessage('Do the new article', null)).toEqual({ kind: 'ask_which_mind', instruction: 'Do the new article' });
+    expect(routeMessage('Do the new article', null)).toEqual({
+      kind: 'order',
+      mind: 'executioner',
+      instruction: 'Do the new article',
+      resolvesPending: false,
+      routed: true,
+    });
     expect(routeMessage('Can you check the article for me?', null)).toEqual({ kind: 'chat' });
-    expect(routeMessage('Can you check the article', null)).toEqual({ kind: 'ask_which_mind', instruction: 'Can you check the article' });
+    expect(routeMessage('Can you check the article', null)).toEqual({
+      kind: 'order',
+      mind: 'auditor',
+      instruction: 'Can you check the article',
+      resolvesPending: false,
+      routed: true,
+    });
   });
 
   it('a run request is not a run when it is a make-a-new-article request', () => {

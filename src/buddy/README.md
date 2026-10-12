@@ -54,12 +54,12 @@ Server side:
   - `supabase/functions/_shared/mindThink.ts`: the server's one door for the minds' thinking. It walks the brain chain through `askBrains` (Gemini first), makes no call without a saved brain key, and never returns a key.
 - Phase 2 slice 5 teaches Buddy to take orders. `supabase/functions/_shared/buddyRouter.ts` sorts each message with plain rules, so no key is needed.
   - An order that names a mind (Analyst, Strategist, CEO, Executioner or Auditor) is saved to `buddy_orders` as waiting. It is never saved as done.
-  - An order that names no mind gets one question: which mind. The next short reply that names one mind files the order. If the owner moves on instead, the order is saved as waiting with no mind.
+  - An order that names no mind is placed by the rules: numbers and weeks to the Analyst, plans and rivals to the Strategist, sorting and priority to the CEO, packs, doors, captions and the day run to the Executioner, checks to the Auditor. Two fits: the first takes it and the reply shows both in a table. Buddy never asks which mind (Phase H slice 5 removed that question).
   - A question about a mind ("What did the Analyst do?") is answered from the newest rows of `minds_daily_log`. An empty log says so. A failed read says so and changes nothing.
   - An order that mentions publishing, sending, spending, prices, refunds or deleting is still saved as waiting, and Buddy says those parts wait for the owner.
   - The briefing section "The five minds" reads the same log. A day with a waiting order is not called quiet.
   - Phase 3 slice 1: "Do the new article" is now an order, not a question. Polite openers such as "please" and "could you" are read past. Questions ("?", "what", "do you") are never filed as orders.
-  - With a Google key saved, a statement the rules cannot place gets one Gemini judgement (order, ask which mind, or chat). Clear orders (a named mind plus an action word) are decided by the rules with no call. Without a key, the rules decide.
+  - With a Google key saved, a statement the rules cannot place gets one Gemini judgement (order or chat). Clear orders (a named mind plus an action word) are decided by the rules with no call. A model order with no mind is placed by the same rules, so the owner is never asked to choose. Without a key, the rules decide.
   - `supabase/functions/_shared/buddyOrders.ts` reads the waiting orders, oldest first, and sorts each into a lane. Product lines on articles are the only lane this phase runs. Channels and video, prices and spending, and creating a product each wait with a plain reason.
   - No mind acts on an order yet. The owner still cannot open a chat with any mind.
 - Phase 3 slice 2 adds the records for placing products on articles. All four migrations are additive and not applied.
@@ -96,7 +96,7 @@ Server side:
 
 ## Phase 4 slice 1: starting a run
 
-- "Run the products", "make today's posts", "run today" and "daily run" are filed as orders with no mind named (`buddyRouter.ts`, `run_day` route). They no longer get the "which mind?" question. Questions about a run stay chat.
+- "Run the products", "make today's posts", "run today" and "daily run" are filed as orders with no mind named (`buddyRouter.ts`, `run_day` route). No "which mind?" question is asked anywhere (Phase H slice 5). Questions about a run stay chat.
 - Orders in the `daily_run` lane (`buddyOrders.ts`) are runnable. A run request that also names a channel stays held. "Post it to instagram" stays held.
 - `supabase/functions/_shared/runDay.ts` decides what runs. Takeover off, or a Kill on all, strategist, executioner or auditor: nothing runs, nothing is read, nothing is logged, and orders stay waiting. Otherwise the oldest runnable order runs, or the daily trigger queues today's order first.
 - `minds-run-placement` accepts an optional `order_id`, the owner's choice. The browser starts the run only when Buddy says Takeover is on (`run_start`).
@@ -613,3 +613,17 @@ What is still not done, or not verified:
 - Not changed in Phase B: the brains, the doors, the looks, the briefing sections, the audio on video, and the Takeover default.
 - Not proven live: the migrations (`20261018000000_notable_week_change.sql`, `20261018010000_retire_old_sender_keys.sql`) are not applied. The Gemini call and the live rate fetch were not run from this sandbox.
 - Nothing was merged, opened as a pull request, deployed, or applied to production.
+
+## Phase H slice 5: Buddy never asks which mind
+
+- `supabase/functions/_shared/buddyRouter.ts` places every order that names no mind, with plain rules and no question. The rules are tried in this order, and the first fit takes the order:
+  - Analyst: numbers, figures, stats, sales, views, reads, traffic and any week or month (`this week`, `last week`, `monthly`).
+  - Strategist: strategy, plans, positioning, rivals, competitors and dead products.
+  - CEO: sort, order, priority, rank and triage.
+  - Executioner: packs, doors, captions, thumbnails, videos, product lines on an article, and the shape of the day's run.
+  - Auditor: check, audit, review, verify, inspect, confirm, prove and safety.
+- Work that fits no rule goes to the Executioner, the doer, so an order is never left without a mind. Swap orders (a product placed on an article) keep their own route to the Executioner.
+- Two minds fit: Buddy does not ask. The reply shows a small plain-text table of both minds and what each would do, and the first mind in rule order takes the order.
+- A question stays a question. "How are sales?" and "Can you check the article for me?" are chat, and today's run is still the `run_day` route. The never-list requests (reader replies, spending, product creation, whole-article rewrites) are still refused with one line and nothing filed.
+- Removed: the export `ASK_WHICH_MIND_LINE` and the `ask_which_mind` route. No new chat message carries `pending_order`. An order left waiting by an older message still resolves when the owner names a mind, and still flushes as waiting with no mind if the owner moves on.
+- Tests: `src/__tests__/buddyNoAskWhichMind.test.ts` (the rules, the table, the never-ask guarantee, questions and refusals), plus the updated `buddyRouter`, `buddyRunDayRouting`, `buddySwapDefault`, `buddyMindsFlow`, `buddyThink` and `phaseGFreeze` checks.

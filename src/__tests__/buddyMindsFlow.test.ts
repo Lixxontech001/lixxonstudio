@@ -6,7 +6,7 @@ import {
   type GeminiResult,
 } from '../../supabase/functions/_shared/buddyThink';
 import { buildBriefing, type BriefingFacts } from '../../supabase/functions/_shared/buddyBriefing';
-import { ASK_WHICH_MIND_LINE, RESTRICTED_LINE, type MindLogLine } from '../../supabase/functions/_shared/buddyRouter';
+import { RESTRICTED_LINE, type MindLogLine } from '../../supabase/functions/_shared/buddyRouter';
 
 const FAKE_KEY = 'FAKE-GEMINI-KEY-NOT-REAL-0002';
 const CHAT_ID = '6f1c2b7e-3d4a-4b8c-9e1f-0a2b3c4d5e6f';
@@ -91,13 +91,15 @@ describe('orders from ordinary language', () => {
     expect(t.askGemini).not.toHaveBeenCalled();
   });
 
-  it('asks which mind once when the order names none, and keeps the words for the next message', async () => {
+  it('places an order that names no mind, saves it as waiting, and asks nothing', async () => {
     // Rules only, so no key is saved here. The Gemini judgement has its own tests in buddyThink.test.ts.
     const t = setup({ key: null });
     const result = await handleBuddyThink(ask('Check the new article'), t.deps);
-    expect(result.body).toMatchObject({ route: 'ask_which_mind', reply: ASK_WHICH_MIND_LINE });
-    expect(t.saveOrder).not.toHaveBeenCalled();
-    expect(lastSaved(t.saved)).toMatchObject({ role: 'buddy', content: ASK_WHICH_MIND_LINE, payload: { pending_order: 'Check the new article' } });
+    expect(result.body).toMatchObject({ route: 'order' });
+    expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', 'auditor');
+    expect(lastSaved(t.saved)?.content).toBe('No mind was named.\nSaved for the Auditor. It is waiting. I could not read Takeover just now, so nothing has changed.');
+    expect(lastSaved(t.saved)?.payload).toBeNull();
+    expect(t.saved.every((row) => !/which mind/i.test(row.content))).toBe(true);
     expect(t.askGemini).not.toHaveBeenCalled();
   });
 
@@ -150,12 +152,14 @@ describe('orders from ordinary language', () => {
 });
 
 describe('ordinary words are orders, not questions', () => {
-  it('"Do the new article" is an order that needs a mind, so Buddy asks which one', async () => {
+  it('"Do the new article" is an order the rules place, with no question and nothing left pending', async () => {
     const t = setup({ key: null });
     const result = await handleBuddyThink(ask('Do the new article'), t.deps);
-    expect(result.body).toMatchObject({ route: 'ask_which_mind' });
-    expect(t.saveOrder).not.toHaveBeenCalled();
-    expect(lastSaved(t.saved)?.payload).toEqual({ pending_order: 'Do the new article' });
+    expect(result.body).toMatchObject({ route: 'order' });
+    expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Do the new article', 'executioner');
+    expect(lastSaved(t.saved)?.content).toContain('No mind was named.');
+    expect(lastSaved(t.saved)?.content).not.toMatch(/which mind/i);
+    expect(lastSaved(t.saved)?.payload).toBeNull();
   });
 
   it('the answer to that question files the order once a mind is named', async () => {

@@ -279,7 +279,8 @@ function chatStore(userClient: SupabaseClient) {
         cartsAbandoned: { ok: !cartsQueue.error, count: cartsQueue.count ?? 0 },
       };
     },
-    // The "which mind?" order waiting on the last message of this chat. Owner session, so row-level security applies.
+    // An order left waiting on an older Buddy message, from before the rules placed unnamed work. Owner session,
+    // so row-level security applies.
     loadPendingOrder: async (chatId: string) => {
       const { data, error } = await userClient
         .from("buddy_messages")

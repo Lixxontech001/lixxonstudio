@@ -319,18 +319,19 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     expect(askGemini.mock.calls[0][1]).toMatchObject({ json: true });
   });
 
-  it('an order with no mind is kept as pending, so the next message can name the mind', async () => {
+  it('an order the model sends with no mind is placed by the rules, not kept as pending', async () => {
     const askGemini = vi.fn(async (): Promise<GeminiResult> => ({
       ok: true,
-      text: '{"reply":"Which mind should take it?","order":{"mind":null,"kind":"mind_work","instruction":"Plan the spring push for the kit"}}',
+      text: '{"reply":"Got it.","order":{"mind":null,"kind":"mind_work","instruction":"Plan the spring push for the kit"}}',
     }));
     const saveMessage = vi.fn(async () => true);
     const saveOrder = vi.fn(async () => true);
     const { deps: d } = deps({ askGemini, saveMessage });
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'The spring kit plan needs work soon.' }, { ...d, saveOrder });
-    expect(result.body).toMatchObject({ ok: true, filed: 'no_mind' });
-    expect(saveOrder).not.toHaveBeenCalled();
-    expect(saveMessage).toHaveBeenCalledWith(CHAT_ID, 'buddy', 'reply', 'Which mind should take it?', { pending_order: 'Plan the spring push for the kit' });
+    expect(result.body).toMatchObject({ ok: true, filed: 'strategist' });
+    expect(saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Plan the spring push for the kit', 'strategist');
+    // No pending order rides on the reply any more: the mind was chosen by the rules, so the message carries no payload.
+    expect(saveMessage).toHaveBeenCalledWith(CHAT_ID, 'buddy', 'reply', 'Got it. Saved for the Strategist. It is waiting. Takeover is off, so nothing has changed.');
   });
 
   it('an answer that cannot be read files nothing and says so in the chat', async () => {
@@ -387,10 +388,11 @@ describe('Buddy think: Gemini writes the reply and says whether the owner asked 
     expect(askGemini).not.toHaveBeenCalled();
   });
 
-  it('with no key, a named-mind order is still filed by the rules, with no model call', async () => {
-    const { deps: d, askGemini } = deps({ readKey: async () => null });
+  it('with no key, an order that names no mind is placed by the rules, with no model call', async () => {
+    const { deps: d, askGemini, saved } = deps({ readKey: async () => null });
     const result = await handleBuddyThink({ action: 'ask', chat_id: CHAT_ID, message: 'Do the new article' }, d);
-    expect(result.body).toMatchObject({ route: 'ask_which_mind' });
+    expect(result.body).toMatchObject({ route: 'order' });
+    expect(saved.at(-1)?.content).toBe('No mind was named.\nSaved for the Executioner. It is waiting. Takeover is off, so nothing has changed.');
     expect(askGemini).not.toHaveBeenCalled();
   });
 });

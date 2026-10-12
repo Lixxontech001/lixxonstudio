@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { ALLOWED_ORDERS, MODEL_FILEABLE_ORDER, REFUSAL_LINE, gateOrder, refusedRequest } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import { tryableBrains } from '../../supabase/functions/_shared/brains';
 import { LOOK_SCOPE_NOTE } from '../lib/videoLook';
+import { routeMessage } from '../../supabase/functions/_shared/buddyRouter';
 
 const ROOT = process.cwd();
 const read = (file: string) => readFileSync(join(ROOT, file), 'utf8');
@@ -81,8 +82,11 @@ describe('Phase E freeze, slice 2: a swap with no mind named goes to Executioner
     expect(router).toMatch(/return \{ kind: "order", mind: "executioner", instruction: cleanInstruction\(text\), resolvesPending: false \};/);
   });
 
-  it('a non-swap unnamed order still asks which mind (open decision, see the report)', () => {
-    expect(read('supabase/functions/_shared/buddyRouter.ts')).toContain('Which mind should take this');
+  it('Phase H slice 5 closed that open decision: a non-swap unnamed order is placed by the rules, never asked about', () => {
+    const router = read('supabase/functions/_shared/buddyRouter.ts');
+    expect(router).not.toContain('Which mind should take this');
+    expect(router).not.toContain('ask_which_mind');
+    expect(routeMessage('Do the new article', null)).toMatchObject({ kind: 'order', mind: 'executioner', routed: true });
   });
 
   it('a question is never filed, and a refusal clause covers "and", "then", a comma and a semicolon', () => {

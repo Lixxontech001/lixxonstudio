@@ -2,7 +2,10 @@
 // and which go to the normal chat. Pure logic: no database, no Gemini. Simple words, so it works with no key.
 // Rules:
 // - A question about a mind is answered from the real daily log, never from a guess.
-// - An order names a mind, or Buddy asks which mind once. An order is stored as waiting, never as done.
+// - An order names a mind, or the plain rules give it to the mind that fits. Buddy never asks which mind.
+// - The rules, in order: numbers and weeks to the Analyst, plans and rivals to the Strategist, sorting and
+//   priority to the CEO, packs, doors and captions to the Executioner, checks to the Auditor. Two fits: the
+//   first takes the order, and the reply shows both in a table.
 // - Ordinary action words are orders. "Do the new article" is an order. Only question forms are questions.
 // - Minds cannot publish, send, spend or change prices. Buddy says so when an order touches those.
 
@@ -23,8 +26,76 @@ export const MIND_LABELS: Record<MindName, string> = {
   auditor: "Auditor",
 };
 
-export const ASK_WHICH_MIND_LINE =
-  "Which mind should take this: Analyst, Strategist, CEO, Executioner or Auditor? Reply with one name.";
+/**
+ * Which mind fits a kind of work, in the order the rules are tried. The first fit takes an order that named no mind,
+ * so Buddy never has to ask. When a second mind also fits, the reply shows both in a small table.
+ */
+const MIND_FITS: { mind: MindName; fits: RegExp; note: string }[] = [
+  {
+    mind: "analyst",
+    fits: /\b(numbers?|figures|stats|statistics|metrics?|analytics|sales|revenue|views?|reads?|traffic|trends?|counts?|scores?|report)\b|\b(this week|last week|weekly|the week|per week|this month|last month|monthly)\b/i,
+    note: "Read the numbers and say what they show.",
+  },
+  {
+    mind: "strategist",
+    fits: /\b(strateg(y|ies|ic)|plans?|planning|positions?|positioning|competitors?|competition|rivals?|dead products?|what to stop|where to play)\b/i,
+    note: "Plan the next move and weigh the rivals.",
+  },
+  {
+    mind: "ceo",
+    fits: /\b(sort|sorted|sorting|re-?order|priorit(y|ies|ise|ize)|rank|ranks|ranking|what first|next up|triage)\b/i,
+    note: "Put the queue in order and say what comes first.",
+  },
+  {
+    mind: "executioner",
+    fits: /\b(packs?|doors?|captions?|thumbnails?|clips?|videos?|run today|today'?s run|run the day|product lines?|place the product|put the product|post the pack)\b/i,
+    note: "Make the packs, the captions and the day's work.",
+  },
+  {
+    mind: "auditor",
+    fits: /\b(check|checks|checking|audit|audits?|verify|verifies|review|reviews?|inspect|confirm|prove|proof|safety|mistakes?|errors?|broken)\b/i,
+    note: "Check the work and say what is wrong.",
+  },
+];
+
+/** Work that fits no rule goes to the doer, so an order that names no mind is never left without one. */
+export const DEFAULT_MIND: MindName = "executioner";
+
+/**
+ * The mind that takes work the owner did not name, plus every other mind that also fits (in rule order). `others`
+ * is empty when exactly one mind fits, and holds one or more minds when the reply should show a table.
+ */
+export function mindFit(message: string): { mind: MindName; others: MindName[] } {
+  const fits = MIND_FITS.filter((rule) => rule.fits.test(message)).map((rule) => rule.mind);
+  if (fits.length === 0) return { mind: DEFAULT_MIND, others: [] };
+  const [mind, ...others] = fits;
+  return { mind, others };
+}
+
+/** What one mind would do with this order, for the fit table. */
+function fitNote(mind: MindName): string {
+  return MIND_FITS.find((rule) => rule.mind === mind)?.note ?? "Do the work.";
+}
+
+/** The minds that fit, as a small plain-text table. The chat keeps its line breaks, so it draws as a table. */
+export function mindFitTable(minds: MindName[]): string {
+  const head = ["Mind", "What it would do"];
+  const rows = minds.map((mind) => [MIND_LABELS[mind], fitNote(mind)]);
+  const gap = " | ";
+  const nameWide = Math.max(head[0].length, ...rows.map((row) => row[0].length));
+  const noteWide = Math.max(head[1].length, ...rows.map((row) => row[1].length));
+  const draw = (row: string[]) => `${row[0].padEnd(nameWide)}${gap}${row[1]}`;
+  return [draw(head), `${"-".repeat(nameWide)}${gap}${"-".repeat(noteWide)}`, ...rows.map(draw)].join("\n");
+}
+
+/**
+ * The first line of the reply for an order the rules placed instead of the owner naming a mind. Two fits: both are
+ * shown, most specific first. Buddy never asks which mind.
+ */
+export function routedOrderLine(mind: MindName, others: MindName[]): string {
+  if (others.length === 0) return "No mind was named.";
+  return `Two minds fit this:\n${mindFitTable([mind, ...others])}`;
+}
 export const RESTRICTED_LINE =
   "Minds will not publish, send, spend or change prices, so any part like that waits for you.";
 export const MAX_ORDER_CHARS = 1000;
@@ -32,9 +103,11 @@ export const LOG_ANSWER_ROWS = 10;
 
 /** Words that mean the owner wants something a mind is never allowed to do by itself. */
 const RESTRICTED_WORDS = /\b(publish|send|email|e-mail|spend|pay|refund|price|prices|pricing|discount|delete|post)\b/i;
-/** Action words that start an order. "do" is one of them, so "Do the new article" is an order. */
+/** Action words that start an order. "do" is one of them, so "Do the new article" is an order.
+ *  The words the routing rules below watch for (audit, verify, inspect, rank, prioritise, triage) are here too,
+ *  so "Audit the guide" reaches the Auditor as an order instead of falling to chat. */
 const IMPERATIVE =
-  /^(tell|ask|have|get|make|set|check|review|look|plan|prepare|sort|draft|find|fix|update|write|schedule|follow|watch|research|compare|list|build|run|keep|put|send|publish|pause|resume|start|stop|pull|do|add|move|swap|place|read|open|close|remove|change|create|edit|share|reply|answer)\b/i;
+  /^(tell|ask|have|get|make|set|check|review|audit|verify|inspect|rank|prioritise|prioritize|triage|look|plan|prepare|sort|draft|find|fix|update|write|schedule|follow|watch|research|compare|list|build|run|keep|put|send|publish|pause|resume|start|stop|pull|do|add|move|swap|place|read|open|close|remove|change|create|edit|share|reply|answer)\b/i;
 /** Polite openers that do not change what the owner asked for. Removed before the action word is read. */
 const POLITE_OPENER = /^(please|kindly|could you|can you|would you|will you|could we|can we|would you please)\s+/i;
 /** A question form at the start: "what", "did", "do you", and so on. */
@@ -60,16 +133,18 @@ export function isRunDayRequest(message: string): boolean {
 
 export type Route =
   | { kind: "mind_log"; mind: MindName }
-  | { kind: "order"; mind: MindName; instruction: string; resolvesPending: boolean }
+  // `routed` means the owner named no mind and the rules placed the order. `others` holds a second mind that
+  // also fitted, so the reply shows a table. Both are absent on an order that named its mind.
+  | { kind: "order"; mind: MindName; instruction: string; resolvesPending: boolean; routed?: true; others?: MindName[] }
   | { kind: "run_day"; instruction: string }
   | { kind: "control"; action: ControlAction; instruction: string }
   | { kind: "control_refused"; line: string }
   | { kind: "refused"; line: string }
-  | { kind: "ask_which_mind"; instruction: string }
   | { kind: "how_to"; door: HowToDoor }
   | { kind: "brain_how_to"; brain: BrainId }
   | { kind: "chat" };
 
+/** An order an older Buddy message left waiting. A short reply that names a mind still completes it. */
 export interface PendingOrder {
   instruction: string;
 }
@@ -133,7 +208,7 @@ export function isQuestionLike(message: string): boolean {
 
 /**
  * Decides what one owner message is, with simple rules only (no key needed).
- * `pending` is an order Buddy is waiting to file once a mind is named.
+ * `pending` is an order an older message left waiting, filed as soon as the owner names a mind.
  * Only one route is returned. When the answer to a pending order arrives, `resolvesPending` is true.
  */
 export function routeMessage(message: string, pending: PendingOrder | null): Route {
@@ -171,11 +246,19 @@ export function routeMessage(message: string, pending: PendingOrder | null): Rou
   if (!mind && !question && isRunDayRequest(text)) return { kind: "run_day", instruction: cleanInstruction(text) };
   if (mind && imperative) return { kind: "order", mind, instruction: cleanInstruction(text), resolvesPending: false };
   // Phase E: a swap (a product-line placement) with no mind named goes to the Executioner, who runs product lines.
-  // No "which mind?" question is asked for it. A named mind keeps its name (handled above).
+  // A named mind keeps its name (handled above).
   if (!mind && imperative && filingKindFor(text) === "product_line_apply") {
     return { kind: "order", mind: "executioner", instruction: cleanInstruction(text), resolvesPending: false };
   }
-  if (!mind && imperative && !question) return { kind: "ask_which_mind", instruction: cleanInstruction(text) };
+  // The owner named no mind: the rules give the order to the mind that fits, so no question is asked. When a
+  // second mind also fits, the reply shows both in a table and the first one takes the order.
+  if (!mind && imperative && !question) {
+    const fit = mindFit(text);
+    const instruction = cleanInstruction(text);
+    return fit.others.length
+      ? { kind: "order", mind: fit.mind, instruction, resolvesPending: false, routed: true, others: fit.others }
+      : { kind: "order", mind: fit.mind, instruction, resolvesPending: false, routed: true };
+  }
   return { kind: "chat" };
 }
 
