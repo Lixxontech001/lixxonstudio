@@ -26,7 +26,8 @@ import { weekWindows, type WeekFacts } from "../_shared/buddyWeek.ts";
 import { orderOutcomeLine } from "../_shared/buddyFeedback.ts";
 import { LIVING_MINDS, STOPPED_ACTION, runLivingMinds, type LivingMindPorts } from "../_shared/buddyLivingMinds.ts";
 import { doorPostedAct, doorSkippedAct, packSavedAct, reportAct, type ActPorts, type ActWords } from "../_shared/mindActs.ts";
-import { freshTellings, TOLD_LIMIT, type ToldTelling } from "../_shared/mindMemory.ts";
+import { factsWithMemory, freshTellings, TOLD_LIMIT, type ToldTelling } from "../_shared/mindMemory.ts";
+import { readMemoryBlock } from "../_shared/mindMemoryServer.ts";
 import { deadProductWindows, planDeadProductActs, salesByProduct, type PaidItem, type ProductSales } from "../_shared/deadProducts.ts";
 import { draftFromPayload } from "../_shared/chatCaptions.ts";
 import { ownerDayWindow } from "../_shared/mindsNightReport.ts";
@@ -805,7 +806,23 @@ async function runLivingMindsForDay(
       });
     },
   };
-  await runLivingMinds(ports, { takeover, killScope, facts: await readMindFacts(sb), orders: orders.map((order) => order.instruction), doneToday, stoppedToday });
+  // The same memory the 08:00 clock gives the minds: the facts, the last telling, and the owner's own chat. Read
+  // once here; a memory that cannot be read leaves the minds with the facts alone.
+  const facts = await readMindFacts(sb);
+  let memory: string | null = null;
+  try {
+    memory = await readMemoryBlock(sb, owner, facts);
+  } catch {
+    memory = null;
+  }
+  await runLivingMinds(ports, {
+    takeover,
+    killScope,
+    facts: factsWithMemory(facts, memory),
+    orders: orders.map((order) => order.instruction),
+    doneToday,
+    stoppedToday,
+  });
 }
 
 /** This week and last week, as counts only: article views and paid orders. A failed read says so, and is never a guess. */

@@ -280,13 +280,19 @@ describe('the memory is wired into the 08:00 clock and the pipeline, and reads o
   const CLOCK = readFileSync(path.join(process.cwd(), 'supabase/functions/minds-morning-clock/index.ts'), 'utf8');
   const PIPELINE = readFileSync(path.join(process.cwd(), 'supabase/functions/_shared/mindPipeline.ts'), 'utf8');
   const RUN = readFileSync(path.join(process.cwd(), 'supabase/functions/minds-run-placement/index.ts'), 'utf8');
+  const SERVER = readFileSync(path.join(process.cwd(), 'supabase/functions/_shared/mindMemoryServer.ts'), 'utf8');
 
   it('the clock reads the last telling and the owner s chat, and hands the block to the pipeline', () => {
-    expect(CLOCK).toContain('memoryBlock(memoryFromReads({ facts, lastTelling, chat }))');
-    expect(CLOCK).toContain('from("minds_notable_events")');
-    expect(CLOCK).toContain('from("buddy_messages")');
+    expect(SERVER).toContain('memoryBlock(memoryFromReads({ facts, lastTelling, chat }))');
+    expect(SERVER).toContain('from("minds_notable_events")');
+    expect(SERVER).toContain('from("buddy_messages")');
     expect(CLOCK).toContain('memory = await readMemoryBlock(sb, ownerId, facts)');
     expect(CLOCK).toContain('memory,');
+  });
+
+  it('the owner s own day run gives the minds the same memory, through the same read', () => {
+    expect(RUN).toContain('memory = await readMemoryBlock(sb, owner, facts)');
+    expect(RUN).toContain('facts: factsWithMemory(facts, memory)');
   });
 
   it('the pipeline gives the memory to every thinking mind, in one block with the facts', () => {

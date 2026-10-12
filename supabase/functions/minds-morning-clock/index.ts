@@ -14,8 +14,7 @@ import { makeMindThink } from "../_shared/mindThink.ts";
 import { briefText, runMindPipeline, type PipelineInput, type PipelineResult } from "../_shared/mindPipeline.ts";
 import { morningRunDayDue, runMorningClock, type MorningClockPorts, type MorningClockResult, type PipelineRunSummary } from "../_shared/morningClock.ts";
 import { weekWindows } from "../_shared/buddyWeek.ts";
-import { memoryBlock, memoryFromReads, MEMORY_CHAT_TURNS, TOLD_LIMIT } from "../_shared/mindMemory.ts";
-import { ownerDayOf } from "../_shared/notablePushServer.ts";
+import { readMemoryBlock } from "../_shared/mindMemoryServer.ts";
 import type { KillScope } from "../_shared/placementRun.ts";
 
 /** The Kill values the minds understand. Anything else counts as "all", the stopped direction. */
@@ -48,53 +47,6 @@ async function readMindFacts(sb: ServiceClient): Promise<string> {
   const [tv, lv, tp, lp] = await Promise.all([views(w.thisStart, w.end), views(w.lastStart, w.thisStart), paid(w.thisStart, w.end), paid(w.lastStart, w.thisStart)]);
   if (tv.error || lv.error || tp.error || lp.error) return "The site numbers could not be read this run.";
   return `Last 7 days: ${tv.count ?? 0} article views and ${tp.count ?? 0} paid orders. The 7 days before: ${lv.count ?? 0} article views and ${lp.count ?? 0} paid orders.`;
-}
-
-/**
- * What the minds remember (Phase I slice 4): the last thing the owner was told, and the owner's own chat. Read-only.
- * A memory that cannot be read is left out rather than guessed at, so a mind is never handed words nobody said.
- */
-async function readMemoryBlock(sb: ServiceClient, owner: string, facts: string): Promise<string> {
-  const [toldRead, chatRead] = await Promise.all([
-    sb
-      .from("minds_notable_events")
-      .select("title,detail,happened_at")
-      .eq("owner_id", owner)
-      .order("happened_at", { ascending: false })
-      .limit(TOLD_LIMIT),
-    sb.from("buddy_chats").select("id").eq("owner_id", owner).order("updated_at", { ascending: false }).limit(1),
-  ]);
-  const toldRows = Array.isArray(toldRead.data) ? (toldRead.data as Array<Record<string, unknown>>) : [];
-  const newest = toldRows[0];
-  const newestTitle = typeof newest?.title === "string" ? newest.title : "";
-  const newestDetail = typeof newest?.detail === "string" ? newest.detail : "";
-  const lastTelling = !toldRead.error && newestTitle
-    ? {
-        day: typeof newest?.happened_at === "string" ? ownerDayOf(newest.happened_at) : "",
-        text: [newestTitle, newestDetail].filter(Boolean).join(" "),
-      }
-    : null;
-
-  let chat: Array<{ speaker: string; text: string }> = [];
-  const chatIds = (Array.isArray(chatRead.data) ? (chatRead.data as Array<{ id?: unknown }>) : [])
-    .map((row) => row.id)
-    .filter((id): id is string => typeof id === "string");
-  if (!chatRead.error && chatIds.length > 0) {
-    const { data, error } = await sb
-      .from("buddy_messages")
-      .select("role,content,created_at")
-      .eq("chat_id", chatIds[0])
-      .in("kind", ["reply", "briefing"])
-      .order("created_at", { ascending: false })
-      .limit(MEMORY_CHAT_TURNS);
-    if (!error && Array.isArray(data)) {
-      chat = (data as Array<Record<string, unknown>>)
-        .slice()
-        .reverse()
-        .map((row) => ({ speaker: row.role === "owner" ? "owner" : "buddy", text: typeof row.content === "string" ? row.content : "" }));
-    }
-  }
-  return memoryBlock(memoryFromReads({ facts, lastTelling, chat }));
 }
 
 /** Today's rows for the three thinking minds: which already ran, and which Kill stopped today. */

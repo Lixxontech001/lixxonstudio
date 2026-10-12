@@ -139,7 +139,10 @@ describe('Phase D freeze, slice 5: swap, briefing sources, living mind steps', (
     const run = read('supabase/functions/minds-run-placement/index.ts');
     expect(LIVING_MINDS).toEqual(['analyst', 'strategist', 'ceo']);
     expect(run).toMatch(/if \(orderId === null\) \{\s*try \{\s*await runLivingMindsForDay/);
-    expect(run).toContain('await runLivingMinds(ports, { takeover, killScope, facts: await readMindFacts(sb)');
+    // Phase I slice 4: the facts are read first, then the memory is folded in, so the call is written over lines.
+    expect(run).toContain('await runLivingMinds(ports, {');
+    expect(run).toContain('facts: factsWithMemory(facts, memory),');
+    expect(run).toContain('const facts = await readMindFacts(sb);');
   });
 });
 
