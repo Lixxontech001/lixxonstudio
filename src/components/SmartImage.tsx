@@ -54,7 +54,14 @@ export default function SmartImage({
       // React 18 wants the DOM attribute spelled lowercase; browsers accept fetchpriority.
       {...(priority ? ({ fetchpriority: 'high' } as Record<string, string>) : {})}
       style={aspectRatio ? { aspectRatio, ...style } : style}
-      onError={(e) => applyImageFallback(e.currentTarget)}
+      onError={(e) => {
+        const target = e.currentTarget;
+        if (target.src.includes('/media/public/') && src && (src.startsWith('http://') || src.startsWith('https://')) && target.src !== src) {
+          target.src = src;
+          return;
+        }
+        applyImageFallback(target);
+      }}
     />
   );
 }
