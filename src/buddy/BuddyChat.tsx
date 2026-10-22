@@ -16,7 +16,7 @@ import { localDateString } from './buddyDate';
 import BuddyBriefingCard from './BuddyBriefingCard';
 import BuddyGreeting from './BuddyGreeting';
 import BuddyGuideLink from './BuddyGuideLink';
-import BuddyChanges from './BuddyChanges';
+import BuddyChanges from './BuddyChanges.tsx';
 import BuddyReports from './BuddyReports';
 import BuddySettingsPanel from './BuddySettings';
 import { DEFAULT_SETTINGS, loadSettings, type BuddySettings } from './buddySettingsStore';
@@ -132,47 +132,54 @@ export default function BuddyChat() {
     else setNotice('That chat could not be opened just now. Try again shortly.');
   };
 
+  const isSendingRef = useRef(false);
+
   const send = async () => {
+    if (isSendingRef.current) return;
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || briefingBusy) return;
+    isSendingRef.current = true;
     setSending(true);
     setNotice('');
     setDraft('');
     setPendingText(text);
 
-    let chatId = activeId;
-    if (!chatId) {
-      const created = await createChat();
-      if (!created) {
-        setPendingText(null);
-        setSending(false);
-        setDraft(text);
-        setNotice('Buddy could not start a new chat. Your message is still in the box.');
-        return;
+    try {
+      let chatId = activeId;
+      if (!chatId) {
+        const created = await createChat();
+        if (!created) {
+          setPendingText(null);
+          setDraft(text);
+          setNotice('Buddy could not start a new chat. Your message is still in the box.');
+          return;
+        }
+        chatId = created.id;
+        setActiveId(created.id);
+        setChats((previous) => [created, ...previous.filter((chat) => chat.id !== created.id)]);
       }
-      chatId = created.id;
-      setActiveId(created.id);
-      setChats((previous) => [created, ...previous.filter((chat) => chat.id !== created.id)]);
-    }
 
-    const result = await askBuddy(chatId, text);
-    // Buddy authorizes a saved, supported request only when Takeover is on: start that exact run now.
-    const run = result?.ok && result.runStart && result.runOrderId
-      ? await startDayRun(localDateString(), result.runOrderId, chatId)
-      : null;
-    const rows = await loadMessages(chatId);
-    if (rows) setMessages(rows);
-    if (!result) setNotice(CHAT_NOT_REACHED);
-    else if (!result.ok && result.reason !== 'no_key') setNotice(result.message);
-    else if (result.ok && result.runStart) {
-      if (!run) setNotice(RUN_NOT_STARTED);
-      else if (run.chatReplySaved === false) setNotice(`${RUN_REPLY_NOT_SAVED} ${run.detail}`);
-      else if (run.chatReplySaved !== true) setNotice(run.detail);
+      const result = await askBuddy(chatId, text);
+      // Buddy authorizes a saved, supported request only when Takeover is on: start that exact run now.
+      const run = result?.ok && result.runStart && result.runOrderId
+        ? await startDayRun(localDateString(), result.runOrderId, chatId)
+        : null;
+      const rows = await loadMessages(chatId);
+      if (rows) setMessages(rows);
+      if (!result) setNotice(CHAT_NOT_REACHED);
+      else if (!result.ok && result.reason !== 'no_key') setNotice(result.message);
+      else if (result.ok && result.runStart) {
+        if (!run) setNotice(RUN_NOT_STARTED);
+        else if (run.chatReplySaved === false) setNotice(`${RUN_REPLY_NOT_SAVED} ${run.detail}`);
+        else if (run.chatReplySaved !== true) setNotice(run.detail);
+      }
+      if (result?.ok && settings.speakReplies) speak(result.reply);
+      setPendingText(null);
+      await refreshChats();
+    } finally {
+      isSendingRef.current = false;
+      setSending(false);
     }
-    if (result?.ok && settings.speakReplies) speak(result.reply);
-    setPendingText(null);
-    setSending(false);
-    await refreshChats();
   };
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {

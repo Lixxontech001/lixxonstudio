@@ -9,4 +9,4 @@ Disallow: /shop/checkout
 Disallow: /search
 Disallow: /api/
 
-Sitemap: https://lixxonstudio.com/sitemap.xml
+Sitemap: https://lixxonstudio.vercel.app/sitemap.xml

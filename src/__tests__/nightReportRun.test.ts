@@ -179,7 +179,7 @@ describe('the night report stays out of the schedule, the UI, and the country ru
   });
 
   it('the new function is registered with the owner check on, like Buddy', () => {
-    const config = readFileSync(join(process.cwd(), 'supabase/config.toml'), 'utf8');
+    const config = readFileSync(join(process.cwd(), 'supabase/config.toml'), 'utf8').replace(/\r\n/g, '\n');
     expect(config).toContain('[functions.buddy-night-report]\nverify_jwt = true');
     expect(existsSync(join(process.cwd(), 'supabase/functions/buddy-night-report/index.ts'))).toBe(true);
   });

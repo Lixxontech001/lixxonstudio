@@ -55,7 +55,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "gemini_api_key",
     extraSecretNames: [],
     baseUrl: null,
-    model: "gemini-3.8-flash",
+    model: "gemini-2.5-flash",
   },
   {
     id: "groq",
@@ -68,7 +68,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "groq_api_key",
     extraSecretNames: [],
     baseUrl: "https://api.groq.com/openai/v1",
-    model: "openai/gpt-oss-120b",
+    model: "llama-3.3-70b-versatile",
   },
   {
     id: "nvidia",
@@ -94,7 +94,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "cloudflare_api_token",
     extraSecretNames: ["cloudflare_account_id"],
     baseUrl: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
-    model: "@cf/openai/gpt-oss-120b",
+    model: "@cf/meta/llama-3.3-70b-instruct",
   },
   {
     id: "openrouter",
@@ -107,7 +107,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "openrouter_api_key",
     extraSecretNames: [],
     baseUrl: "https://openrouter.ai/api/v1",
-    model: "openai/gpt-oss-120b:free",
+    model: "meta-llama/llama-3.3-70b-instruct:free",
   },
   {
     id: "cerebras",
@@ -133,7 +133,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "huggingface_token",
     extraSecretNames: [],
     baseUrl: "https://router.huggingface.co/v1",
-    model: "zai-org/GLM-5.3-Flash",
+    model: "Qwen/Qwen2.5-72B-Instruct",
   },
   {
     id: "deepseek",
@@ -146,7 +146,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "deepseek_api_key",
     extraSecretNames: [],
     baseUrl: "https://api.deepseek.com",
-    model: "deepseek-flash",
+    model: "deepseek-chat",
   },
 ];
 

@@ -19,10 +19,16 @@ export interface BrainInput {
   json?: boolean;
 }
 
-export type BrainCallOutcome = "rejected" | "rate_limited" | "unavailable" | "empty";
+export type BrainCallOutcome = "rejected" | "rate_limited" | "unavailable" | "empty" | "too_slow";
 export type BrainCallResult = { ok: true; text: string } | { ok: false; outcome: BrainCallOutcome };
 /** Why the last brain in a failed request did not answer. "unreadable" means it replied but not in the shape asked for. */
-export type BrainFailure = BrainCallOutcome | "unreadable";
+export type BrainFailure = BrainCallOutcome | "unreadable" | "refused";
+
+export interface BrainAttemptFail {
+  brain: BrainId;
+  label: string;
+  reason: string;
+}
 
 export interface BrainOptions {
   /** A reply counts only when this returns true. Otherwise the chain moves on. */
@@ -40,7 +46,14 @@ export interface BrainPorts {
 
 export type BrainAnswer =
   | { ok: true; brain: BrainId; label: string; model: string; text: string; tried: BrainId[] }
-  | { ok: false; reason: "none_saved" | "all_failed"; line: string; tried: BrainId[]; lastOutcome: BrainFailure | "none_saved" };
+  | {
+      ok: false;
+      reason: "none_saved" | "all_failed";
+      line: string;
+      tried: BrainId[];
+      lastOutcome: BrainFailure | "none_saved";
+      failures?: BrainAttemptFail[];
+    };
 
 interface BrainKeys {
   apiKey: string;
@@ -84,6 +97,7 @@ export async function anyBrainSaved(ports: Pick<BrainPorts, "readSecret">): Prom
  */
 export async function askBrains(input: BrainInput, ports: BrainPorts, options: BrainOptions = {}): Promise<BrainAnswer> {
   const tried: BrainId[] = [];
+  const failures: BrainAttemptFail[] = [];
   let lastOutcome: BrainFailure | "none_saved" = "none_saved";
   for (const slot of tryableBrains()) {
     const keys = await keysFor(slot, ports);
@@ -101,9 +115,18 @@ export async function askBrains(input: BrainInput, ports: BrainPorts, options: B
       return { ok: true, brain: slot.id, label: slot.label, model: slot.model, text: result.text, tried };
     }
     lastOutcome = result.ok ? "unreadable" : result.outcome;
+    const humanReason = lastOutcome === "rejected" ? "refused" : lastOutcome === "too_slow" ? "too slow" : lastOutcome === "rate_limited" ? "rate limited" : lastOutcome;
+    failures.push({ brain: slot.id, label: slot.label, reason: humanReason });
   }
   if (tried.length === 0) return { ok: false, reason: "none_saved", line: NONE_SAVED_LINE, tried, lastOutcome: "none_saved" };
-  return { ok: false, reason: "all_failed", line: ALL_FAILED_LINE, tried, lastOutcome };
+  const line = formatBrainFailures(failures);
+  return { ok: false, reason: "all_failed", line, tried, lastOutcome, failures };
+}
+
+export function formatBrainFailures(failures: readonly BrainAttemptFail[]): string {
+  if (!failures.length) return ALL_FAILED_LINE;
+  const failSummary = failures.map((f) => `${f.label} (${f.reason})`).join(", ");
+  return `Buddy could not reach its brains: ${failSummary}. Nothing was changed. Try again in a few minutes.`;
 }
 
 /** The plain-words daily-log line for the brain that answered. Names the brains that failed first. Never names a key. */
@@ -166,7 +189,10 @@ export async function askOpenAiStyle(
     }
     const text = extractOpenAiText(payload);
     return text ? { ok: true, text } : { ok: false, outcome: "empty" };
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return { ok: false, outcome: "too_slow" };
+    }
     return { ok: false, outcome: "unavailable" };
   } finally {
     clearTimeout(timer);

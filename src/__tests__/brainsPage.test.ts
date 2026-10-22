@@ -70,13 +70,13 @@ describe('one read-only ping per brain', () => {
   const SECRET = 'FAKE-PING-SECRET-PHASE-A';
   const pinged = ['groq_api_key', 'nvidia_api_key', 'cloudflare_api_token', 'openrouter_api_key', 'huggingface_token'];
 
-  it('each free brain has a GET request with the key in the header only', () => {
+  it('each free brain has a request with the key in the header only', () => {
     for (const name of pinged) {
       const request = buildProviderCheckRequest(name, SECRET);
       expect(request, name).not.toBeNull();
       expect(request!.url.startsWith('https://')).toBe(true);
       expect(request!.url).not.toContain(SECRET);
-      expect(request!.init.method).toBe('GET');
+      expect(['GET', 'POST']).toContain(request!.init.method);
       expect(request!.init.redirect).toBe('error');
       expect(JSON.stringify(request!.init.headers)).toContain(SECRET);
     }
@@ -87,10 +87,10 @@ describe('one read-only ping per brain', () => {
     expect(buildProviderCheckRequest('deepseek_api_key', SECRET)).toBeNull();
   });
 
-  it('no ping is a publish or a send: every request is a GET to a model or account list', () => {
+  it('no ping is a publish or a send: request checks credentials via model list or minimal 1-token test', () => {
     for (const name of pinged) {
       const request = buildProviderCheckRequest(name, SECRET)!;
-      expect(request.url).toMatch(/models|whoami|verify|\/key$/);
+      expect(request.url).toMatch(/models|whoami|verify|\/key$|chat\/completions/);
     }
   });
 });

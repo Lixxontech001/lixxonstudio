@@ -24,7 +24,7 @@ export function closedOrderKind(value: unknown): AllowedOrder | null {
 }
 
 export const REFUSAL_LINE =
-  "Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, and posting or publishing stay with you. Nothing was filed or changed.";
+  "Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, and publishing new articles stay with you. Nothing was filed or changed.";
 
 /** A question about one of these is answered as a question. Only a request is refused. */
 const QUESTION_OPENER = /^\s*(please\s+)?(what|which|how|why|who|when|where|did|does|is|are|was|were|tell me|show me)\b/i;
@@ -43,17 +43,18 @@ const REFUSED_REQUESTS: RegExp[] = [
   /\b(delete|erase|trash)\b\s+(the\s+|that\s+|this\s+|my\s+|our\s+)?(old\s+|last\s+|new\s+|first\s+)?(one|ones|it|that|this|them|those|everything|all)\b/i,
   /\b(email|e-mail|newsletter|blast|mail)\b[^.?!]*\b(list|subscribers?|readers?|customers?|everyone|followers?|members?)\b/i,
   /\b(reply|respond|answer|write back)\b[^.?!]*\b(comments?|reviews?|messages?|readers?|customers?|buyers?|subscribers?)\b/i,
-  /\b(publish|post|send|share|tweet)\b[^.?!]*\b(now|right away|immediately|this|it|article|post)\b/i,
+  // Direct silent publishing of an article stays owner-only (owner hits publish). Posting to connected doors is allowed.
+  /\b(publish|hit publish)\b[^.?!]*\b(new\s+|this\s+|an?\s+)?(article|post|draft|guide)\b/i,
 ];
 
-/** A request starts with the action word (after a name or \"please\"), or asks for it outright. */
-const REQUEST_START = /^(refund|delete|erase|trash|remove|email|e-mail|mail|blast|reply|respond|answer|change|set|raise|lower|cut|drop|update|discount|reduce|increase|publish|post|send|share|tweet)\b/i;
+/** A request starts with the action word (after a name or "please"), or asks for it outright. */
+const REQUEST_START = /^(refund|delete|erase|trash|remove|email|e-mail|mail|blast|reply|respond|answer|change|set|raise|lower|cut|drop|update|discount|reduce|increase|publish)\b/i;
 const REQUEST_MARK = /\b(can|could|would|will) you\b|\bplease\b|\bi (want|need) (you )?to\b|\blet'?s\b|\bgo ahead\b/i;
 /**
- * Phase E: an outside action asked for after "and", "then", a comma or a semicolon ("Swap the kit onto the article and
- * email the list"). Only the words that the refused patterns are about. Narrows what is filed; adds no kind.
+ * An outside action asked for after "and", "then", a comma or a semicolon ("Swap the kit onto the article and
+ * email the list"). Only the words that the refused patterns are about.
  */
-const REQUEST_CLAUSE = /(\band\b|\bthen\b|[,;])\s*(refund|delete|erase|trash|email|e-mail|blast|reply|respond|change|set|raise|lower|cut|drop|update|discount|reduce|increase|publish|tweet)\b/i;
+const REQUEST_CLAUSE = /(\band\b|\bthen\b|[,;])\s*(refund|delete|erase|trash|email|e-mail|blast|reply|respond|change|set|raise|lower|cut|drop|update|discount|reduce|increase|publish)\b/i;
 
 /** True when the message asks for something outside the closed list. Questions and plain statements are never refused. */
 export function refusedRequest(message: string): boolean {

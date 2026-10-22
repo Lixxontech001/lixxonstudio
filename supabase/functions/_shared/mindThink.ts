@@ -12,7 +12,8 @@ export type MindThinkResult = { ok: true; text: string } | { ok: false; reason: 
 /** The minds name only these failures. A reply that cannot be read counts as unavailable to them. */
 function failureFor(outcome: BrainFailure | "none_saved"): MindThinkFailure {
   if (outcome === "none_saved") return "no_key";
-  if (outcome === "unreadable") return "unavailable";
+  if (outcome === "unreadable" || outcome === "too_slow") return "unavailable";
+  if (outcome === "refused") return "rejected";
   return outcome;
 }
 

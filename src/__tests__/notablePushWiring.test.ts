@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { BUZZ_KINDS } from '../../supabase/functions/_shared/notablePush';
 
-const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
+const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8').replace(/\r\n/g, '\n');
 const RUN = read('supabase/functions/minds-run-placement/index.ts');
 const MIGRATION = read('supabase/migrations/20261011210000_notable_push.sql');
 // The kind list the table accepts today (the newest CHECK). Every kind that buzzes must be in it.

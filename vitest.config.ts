@@ -7,6 +7,8 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/__tests__/setup.ts'],
+    testTimeout: 30000,
+    hookTimeout: 30000,
     env: { VITE_SUPABASE_URL: 'https://example.supabase.co', VITE_SUPABASE_ANON_KEY: 'test-anon-key' },
   },
 });

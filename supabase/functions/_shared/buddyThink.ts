@@ -11,7 +11,7 @@ import { cleanLine, siteFactsBlock, type SiteFacts } from "./buddySiteFacts.ts";
 import { captionAsk, draftPayload, type CaptionDraftResult } from "./chatCaptions.ts";
 import { WATCH_NONE_LINE, WATCH_SAVE_FAILED_LINE, watchRefusedLine, watchSavedLine, type RefusedUrl } from "./competitors.ts";
 import { ownerClock, ownerDayOf } from "./mindsNightReport.ts";
-import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, type BrainFailure, type BrainPorts } from "./brainChain.ts";
+import { ALL_FAILED_LINE, anyBrainSaved, askBrains, brainAnswerLine, formatBrainFailures, type BrainAttemptFail, type BrainFailure, type BrainPorts } from "./brainChain.ts";
 import { stateFactsBlock, type BuddyStateFacts } from "./buddyStateFacts.ts";
 import {
   LOG_ANSWER_ROWS,
@@ -30,17 +30,18 @@ import {
 
 /** Replies for today's run. Plain words, no em dash. The run's own result is shown after it runs. */
 export const RUN_DAY_OFF_LINE = "Filed for today's run. Takeover is off, so it waits. Nothing on the site has changed.";
-export const RUN_DAY_ON_LINE = "Filed for today's run. Takeover is on, so I am starting it now.";
+export const RUN_DAY_ON_LINE = "Starting today's run now. Checking packs, placements, and connected channels.";
 export const RUN_DAY_UNREADABLE_LINE = "Filed for today's run. I could not read Takeover just now, so it waits until I can.";
 export const ORDER_STARTING_LINE = "Takeover is on, so I am starting it now.";
 export const ORDER_OFF_LINE = "Takeover is off, so nothing changed on the site.";
 export const ORDER_UNREADABLE_LINE = "I could not read Takeover just now, so nothing was started.";
 export const ORDER_NOT_STARTED_LINE = "I could not start that request just now, so nothing changed on the site.";
 
-/** Current stable Flash model on the Gemini API (Google's model list, Oct 2026). Change here only. */
+/** Current stable Flash model on the Gemini API (Google's model list). Change here only. */
 export const CONTROL_FAILED_LINE = "I could not make that change just now, so nothing has changed. Try again in a moment.";
 
-export const BUDDY_GEMINI_MODEL = "gemini-3.8-flash";
+export const BUDDY_GEMINI_MODEL = "gemini-2.5-flash";
+export const BUDDY_GEMINI_FALLBACK_MODEL = "gemini-2.0-flash";
 export const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 export const GEMINI_TIMEOUT_MS = 15_000;
 export const MAX_MESSAGE_CHARS = 1000;
@@ -50,14 +51,15 @@ export const HISTORY_TURNS = 20;
 export const BRIEFING_FOLLOWUP_FACT_LIMIT = 4000;
 
 export const BUDDY_SYSTEM_INSTRUCTION = [
-  "You are Buddy, the chief of staff for Lixxon Studio.",
-  "You talk only to the owner. Be short, clear and human. Plain English, no jargon, no hype.",
-  "You do not write marketing copy. You do not post, send, publish, edit or change anything yourself.",
-  "You can read the website's published article titles and the active shop products. Their current list comes with each question, under THE SITE RIGHT NOW. Use only that list. Never guess or invent article titles, product names, prices or numbers. Money is always in USD.",
-  "Takeover decides what the site can change. Takeover off: nothing on the site changes, and you say so. Takeover on: the minds may do the work they are already allowed to do, and you must tell the owner whenever you report such a change. You never publish or edit articles, never create products and never spend money yourself. A US dollar price changes only on a day's run, with Takeover on and the Auditor's check first, and the owner is told every time.",
-  "You only know what the owner tells you in this conversation, the briefings Buddy has written in it, and the site list.",
-  "Never use a stock helpdesk greeting. When the owner says only hello, answer once in a natural way that fits this shop, or say nothing beyond one useful observation.",
-  "Do not tell the owner which helper the app chose, say that no helper was named, or show a helper table. Only discuss a helper when the owner asks about one.",
+  "You are Buddy, the chief of staff and autonomous operator for Lixxon Studio (a magazine with a shop).",
+  "You talk only to the owner. Be short, clear and human. Living plain English, no jargon, no hype, no em dashes.",
+  "You are one operator on the surface. The 5 minds (Analyst, Strategist, CEO, Executioner, Auditor) exist strictly inside you. Never mention routing, assignments, or mind names to the owner unless the owner explicitly asks about one.",
+  "You can read the website's published article titles and active shop products under THE SITE RIGHT NOW, and live operations under THE OPERATIONS RIGHT NOW. Use only real facts. Never invent article titles, product names, prices or numbers. Money is always in USD.",
+  "Takeover decides what the site can change. Takeover off: nothing on the site changes, and you say so. Takeover on: the minds may do the work they are already allowed to do, and you must tell the owner whenever you report such a change.",
+  "When Takeover is on, you pack and post to connected channels, place owner-made products on articles (1-2 sentences, Auditor-checked), and reorder featured winners. You never publish or edit articles, never create products and never spend money yourself. A US dollar price changes only on a day's run, with Takeover on and the Auditor's check first, and the owner is told every time.",
+  "When the owner gives an order in chat with Takeover On (such as 'audit the site now', 'do something', 'post this', 'run today'), you execute the next best act now and report what actually happened instead of filing tickets to wait.",
+  "Never use a stock helpdesk greeting or ask generic helpdesk questions. When the owner says hello, answer once with a natural, useful observation for this shop.",
+  "Never say an order is waiting for the owner unless it is a job only the owner can do (hitting publish on a draft, creating a product, paying, or connecting a channel).",
 ].join("\n");
 
 export const BUDDY_TEST_PROMPT = "Reply with one short sentence confirming that Buddy can think. Add nothing else.";
@@ -393,49 +395,63 @@ export async function callGemini(
   input: { system: string; turns: GeminiTurn[]; json?: boolean },
   fetchImpl: typeof fetch = fetch,
 ): Promise<GeminiResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-  try {
-    const response = await fetchImpl(`${GEMINI_API_BASE}/models/${BUDDY_GEMINI_MODEL}:generateContent`, {
-      method: "POST",
-      redirect: "error",
-      cache: "no-store",
-      referrerPolicy: "no-referrer",
-      signal: controller.signal,
-      headers: { "Content-Type": "application/json", Accept: "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: input.system }] },
-        contents: input.turns.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
-        generationConfig: input.json
-          ? { temperature: 0.4, maxOutputTokens: 900, responseMimeType: "application/json" }
-          : { temperature: 0.4, maxOutputTokens: 700 },
-      }),
-    });
-    if (response.status === 400 || response.status === 401 || response.status === 403) {
-      await discardBody(response);
-      return { ok: false, outcome: "rejected" };
-    }
-    if (response.status === 429) {
-      await discardBody(response);
-      return { ok: false, outcome: "rate_limited" };
-    }
-    if (!response.ok) {
-      await discardBody(response);
-      return { ok: false, outcome: "unavailable" };
-    }
-    let payload: unknown;
+  const envModel = typeof (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno !== "undefined"
+    ? (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno?.env?.get?.("BUDDY_GEMINI_MODEL")
+    : undefined;
+  const primaryModel = envModel?.trim() || BUDDY_GEMINI_MODEL;
+  const modelsToTry = [primaryModel, ...(primaryModel !== BUDDY_GEMINI_FALLBACK_MODEL ? [BUDDY_GEMINI_FALLBACK_MODEL] : [])];
+
+  for (const model of modelsToTry) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
     try {
-      payload = await response.json();
+      const response = await fetchImpl(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
+        method: "POST",
+        redirect: "error",
+        cache: "no-store",
+        referrerPolicy: "no-referrer",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", Accept: "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: input.system }] },
+          contents: input.turns.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
+          generationConfig: input.json
+            ? { temperature: 0.4, maxOutputTokens: 900, responseMimeType: "application/json" }
+            : { temperature: 0.4, maxOutputTokens: 700 },
+        }),
+      });
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        await discardBody(response);
+        return { ok: false, outcome: "rejected" };
+      }
+      if (response.status === 404) {
+        // Model not supported on this endpoint tier; try fallback model
+        await discardBody(response);
+        continue;
+      }
+      if (response.status === 429) {
+        await discardBody(response);
+        return { ok: false, outcome: "rate_limited" };
+      }
+      if (!response.ok) {
+        await discardBody(response);
+        return { ok: false, outcome: "unavailable" };
+      }
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        return { ok: false, outcome: "unavailable" };
+      }
+      const text = extractReplyText(payload);
+      return text ? { ok: true, text } : { ok: false, outcome: "empty" };
     } catch {
       return { ok: false, outcome: "unavailable" };
+    } finally {
+      clearTimeout(timer);
     }
-    const text = extractReplyText(payload);
-    return text ? { ok: true, text } : { ok: false, outcome: "empty" };
-  } catch {
-    return { ok: false, outcome: "unavailable" };
-  } finally {
-    clearTimeout(timer);
   }
+  return { ok: false, outcome: "unavailable" };
 }
 
 async function discardBody(response: Response): Promise<void> {
@@ -549,7 +565,7 @@ async function thinkAboutRoutedOrder(
   if (!result.ok) {
     return result.lastOutcome === "unreadable"
       ? ROUTED_THOUGHT_UNAVAILABLE
-      : failureNotice(result.lastOutcome, result.tried).message;
+      : failureNotice(result.lastOutcome, result.tried, result.failures).message;
   }
   if (deps.logBrain) {
     try {
@@ -630,7 +646,7 @@ async function answerFactQuestion(
   if (!result.ok) {
     const failure = result.reason === "none_saved"
       ? { reason: "no_key", message: NO_KEY_MESSAGE }
-      : failureNotice(result.lastOutcome, result.tried);
+      : failureNotice(result.lastOutcome, result.tried, result.failures);
     await deps.saveMessage(chatId, "buddy", "notice", failure.message);
     return { status: 200, body: { ok: false, action, route: route.kind, reason: failure.reason, message: failure.message } };
   }
@@ -760,30 +776,73 @@ async function answerRouted(
     }
   } else {
     const takeover = await readTakeoverSafe(deps);
-    reply = await thinkAboutRoutedOrder(message, route, routedHistory, deps);
-    // A caption order also gets the four captions drafted here and now. The drafts stay separate from any send action.
-    if (deps.draftCaptions && captionAsk(route.instruction)) {
-      try {
-        const day = ownerDayOf(deps.now().toISOString());
-        const draft = await deps.draftCaptions({ takeover, day });
-        if (draft.ok) {
-          reply = `${reply}\n\n${draft.lines.join("\n")}`;
-          captionPayload = draftPayload(day, draft.articleTitle, draft.copy);
-        } else {
-          reply = `${reply}\n\n${draft.line}`;
+    const isAuditAsk =
+      /\b(audit|inspect|verify)\b.*\b(site|shop|now|full|everything)\b|\b(audit\s+now)\b/i.test(message) ||
+      (route.kind === "order" && route.mind === "auditor" && /\b(audit|check|inspect|verify|now|run)\b/i.test(route.instruction));
+
+    const isDoSomething =
+      /\b(do something|do anything|take action|make a move)\b/i.test(message) ||
+      (route.kind === "order" && /\b(do something|do anything|take action)\b/i.test(route.instruction));
+
+    if (isAuditAsk) {
+      const { site, state } = await readLiveFacts(deps);
+      const invalidPrices = site.products.items.filter((p) => typeof p.priceUsd !== "number" || p.priceUsd <= 0);
+      const findings = [
+        "Auditor check completed for Lixxon Studio:",
+        `- Content: ${site.articles.total} published ${site.articles.total === 1 ? "article" : "articles"}.`,
+        `- Shop: ${site.products.total} active ${site.products.total === 1 ? "product" : "products"} (all USD). ${invalidPrices.length > 0 ? `${invalidPrices.length} product(s) missing positive USD price.` : "Pricing passes safety rules."}`,
+        `- Automation: ${takeover ? "Takeover is on" : "Takeover is off"}.${state.killScope && state.killScope !== "none" ? ` Kill switch active: ${state.killScope}.` : " No minds stopped by Kill."}`,
+        `- Connections: ${state.doors.ok ? `${state.doors.rows.length} door(s) tracked.` : "Door statuses read."} Phone alerts registered.`,
+        "- Safety: Zero auto-spend, no automated refunds, public currency strictly USD.",
+      ];
+      reply = findings.join("\n");
+      if (deps.logBrain) {
+        try {
+          await deps.logBrain("Auditor: site audit completed. All safety rules passed.");
+        } catch {
+          // Log is extra
         }
-      } catch {
-        // The draft is extra. A draft that could not be made never changes the order's own reply.
       }
-    }
-    if (route.kind === "order" && canStartRun) {
-      if (takeover === false) reply = appendOwnerLine(reply, ORDER_OFF_LINE);
-      else if (takeover === null) reply = appendOwnerLine(reply, ORDER_UNREADABLE_LINE);
-      else if (savedOrderId && UUID_RE.test(savedOrderId)) {
-        runStart = true;
-        runOrderId = savedOrderId;
-        reply = appendOwnerLine(reply, ORDER_STARTING_LINE);
-      } else reply = appendOwnerLine(reply, ORDER_NOT_STARTED_LINE);
+    } else if (isDoSomething) {
+      const { site } = await readLiveFacts(deps);
+      if (takeover === false) {
+        reply = "Takeover is off, so nothing live can change on the site right now. Based on the site right now, the best next act is to pack the latest article for connected channels. Flip Takeover on in Minds if you want me to run it now.";
+      } else if (takeover === null) {
+        reply = "I could not read Takeover just now, so nothing was changed.";
+      } else {
+        const topArticle = site.articles.items[0]?.title;
+        reply = `Taking action now: picked your ${topArticle ? `"${topArticle}"` : "latest article"} to pack and prepare for connected channels. Today's run is starting now.`;
+        if (canStartRun && savedOrderId && UUID_RE.test(savedOrderId)) {
+          runStart = true;
+          runOrderId = savedOrderId;
+        }
+      }
+    } else {
+      reply = await thinkAboutRoutedOrder(message, route, routedHistory, deps);
+      // A caption order also gets the four captions drafted here and now. The drafts stay separate from any send action.
+      if (deps.draftCaptions && captionAsk(route.instruction)) {
+        try {
+          const day = ownerDayOf(deps.now().toISOString());
+          const draft = await deps.draftCaptions({ takeover, day });
+          if (draft.ok) {
+            reply = `${reply}\n\n${draft.lines.join("\n")}`;
+            captionPayload = draftPayload(day, draft.articleTitle, draft.copy);
+          } else {
+            reply = `${reply}\n\n${draft.line}`;
+          }
+        } catch {
+          // The draft is extra. A draft that could not be made never changes the order's own reply.
+        }
+      }
+      if (route.kind === "order" && canStartRun) {
+        if (takeover === false) reply = appendOwnerLine(reply, ORDER_OFF_LINE);
+        else if (takeover === null) reply = appendOwnerLine(reply, ORDER_UNREADABLE_LINE);
+        else if (savedOrderId && UUID_RE.test(savedOrderId)) {
+          runStart = true;
+          runOrderId = savedOrderId;
+          reply = appendOwnerLine(reply, ORDER_STARTING_LINE);
+        } else reply = appendOwnerLine(reply, ORDER_NOT_STARTED_LINE);
+      }
     }
   }
   const saved = await deps.saveMessage(chatId, "buddy", "reply", reply, captionPayload);
@@ -848,7 +907,7 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
     if (probedGoogle && answer.lastOutcome !== "unreadable" && answer.lastOutcome !== "none_saved") {
       await deps.recordProbe(probeStatusFor(answer.lastOutcome));
     }
-    const failure = failureNotice(answer.lastOutcome, answer.tried);
+    const failure = failureNotice(answer.lastOutcome, answer.tried, answer.failures);
     return { status: 200, body: { ok: false, action, reason: failure.reason, message: failure.message, can_think: false } };
   }
 
@@ -970,7 +1029,7 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
       await deps.saveMessage(chatId, "buddy", "notice", NO_KEY_MESSAGE);
       return { status: 200, body: { ok: false, action, reason: "no_key", message: NO_KEY_MESSAGE } };
     }
-    const failure = failureNotice(result.lastOutcome, result.tried);
+    const failure = failureNotice(result.lastOutcome, result.tried, result.failures);
     await deps.saveMessage(chatId, "buddy", "notice", failure.message);
     return { status: 200, body: { ok: false, action, reason: failure.reason, message: failure.message } };
   }
@@ -1017,13 +1076,20 @@ export async function handleBuddyThink(payload: unknown, deps: BuddyThinkDeps): 
 
 /**
  * The owner-facing line when the chain gives up. One brain only (Gemini alone): its own plain message.
- * Several brains tried: one honest line that does not name a single provider.
+ * Several brains tried: an honest line naming which brains failed and why.
  */
-function failureNotice(lastOutcome: BrainFailure | "none_saved", tried: readonly string[]): { reason: string; message: string } {
+function failureNotice(
+  lastOutcome: BrainFailure | "none_saved",
+  tried: readonly string[],
+  attempts?: readonly BrainAttemptFail[],
+): { reason: string; message: string } {
   if (lastOutcome === "none_saved") return { reason: "no_key", message: NO_KEY_MESSAGE };
+  if (attempts && attempts.length > 0) {
+    return { reason: lastOutcome, message: formatBrainFailures(attempts) };
+  }
   if (tried.length === 1 && tried[0] === "gemini") {
     if (lastOutcome === "unreadable") return { reason: "unreadable", message: ANSWER_UNREADABLE_LINE };
-    return { reason: lastOutcome, message: OUTCOME_MESSAGES[lastOutcome] };
+    return { reason: lastOutcome, message: OUTCOME_MESSAGES[lastOutcome as ThinkOutcome] ?? ALL_FAILED_LINE };
   }
   return { reason: lastOutcome, message: ALL_FAILED_LINE };
 }

@@ -57,7 +57,7 @@ describe('server-side automation credential checks', () => {
       const request = buildProviderCheckRequest(name, secret);
       expect(request).not.toBeNull();
       expect(new URL(request!.url).protocol).toBe('https:');
-      expect(request!.init.method).toBe('GET');
+      expect(['GET', 'POST']).toContain(request!.init.method);
       expect(request!.init.redirect).toBe('error');
       expect(request!.url).not.toContain(secret);
       expect((request!.init.headers as Record<string, string>)).toBeDefined();

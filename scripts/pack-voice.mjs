@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// #!/usr/bin/env node
 // The daily pack's narration. It makes one WAV voice track for a pack video from the same caption lines the
 // burned-in captions use. Voice order: Gemini text-to-speech on the owner's existing Gemini key (only when a key is
 // given), then a local espeak-ng or espeak on this machine. Nothing else: no paid voice, no stock music, no URL is

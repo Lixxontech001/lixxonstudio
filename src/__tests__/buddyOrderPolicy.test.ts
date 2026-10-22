@@ -25,10 +25,11 @@ describe('Buddy order policy: the closed list', () => {
       'Reply to that comment for me',
       'Answer the reader who asked about sizes',
       'Publish this article now',
-      'Post it to Facebook right away',
-      'Send this to the Pinterest board now',
     ];
     for (const message of refused) expect(refusedRequest(message), message).toBe(true);
+    // Section 19 Reversal: Posting/sharing to doors is not blanket refused
+    expect(refusedRequest('Post it to Facebook right away')).toBe(false);
+    expect(refusedRequest('Send this to the Pinterest board now')).toBe(false);
   });
 
   it('a price ask is not refused any more: it waits with the real rule, US dollars only', () => {

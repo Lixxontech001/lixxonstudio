@@ -24,7 +24,7 @@ import { HELD_CREATE, HELD_MONEY, laneFor } from '../../supabase/functions/_shar
 import type { MindThinkResult } from '../../supabase/functions/_shared/mindThink';
 
 const ROOT = process.cwd();
-const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
+const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 const exists = (rel: string) => existsSync(join(ROOT, rel));
 
 /** Every .ts file under a folder, as repo-relative paths. */
@@ -32,7 +32,7 @@ function filesUnder(rel: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(join(ROOT, rel), { withFileTypes: true })) {
     if (entry.isDirectory()) out.push(...filesUnder(join(rel, entry.name)));
-    else if (entry.name.endsWith('.ts')) out.push(join(rel, entry.name));
+    else if (entry.name.endsWith('.ts')) out.push(join(rel, entry.name).replace(/\\/g, '/'));
   }
   return out;
 }

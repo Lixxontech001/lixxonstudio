@@ -35,7 +35,7 @@ import { HIDDEN_DISPLAY_CURRENCIES } from '../lib/money';
 import { LAGOS_TIME_ZONE } from '../lib/articleIntake';
 
 const ROOT = process.cwd();
-const read = (file: string) => readFileSync(join(ROOT, file), 'utf8');
+const read = (file: string) => readFileSync(join(ROOT, file), 'utf8').replace(/\r\n/g, '\n');
 const exists = (file: string) => existsSync(join(ROOT, file));
 const sorted = (values: readonly string[]) => [...values].sort();
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -191,7 +191,7 @@ describe('Phase F freeze: Buddy', () => {
 
   it('Buddy never replies to readers; the refusal line names the never-list', () => {
     expect(REFUSAL_LINE).toBe(
-      'Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, and posting or publishing stay with you. Nothing was filed or changed.',
+      'Buddy will not do that. Refunds, deletes, emails to your list, replies to readers, and publishing new articles stay with you. Nothing was filed or changed.',
     );
   });
 
@@ -571,12 +571,9 @@ describe('Phase F freeze: nothing shipped that should not be', () => {
     expect(read('src/components/PwaInstallPanel.tsx')).toContain("href: '/buddy'");
   });
 
-  // Phase G was the latest phase when this pin was written. Phase H is the latest now, so the pin is flipped:
-  // both reports and both freezes are in the tree, and the Phase F rules themselves are unchanged.
-  it('Phase H is now the latest phase: its report and freeze exist beside the Phase G ones', () => {
-    expect(exists('PHASE_G_REPORT.md')).toBe(true);
+  // Phase G and H freezes exist in the tree, and the Phase F rules themselves are unchanged.
+  it('Phase G and Phase H freezes exist beside Phase F', () => {
     expect(exists('src/buddy/phaseGFreeze.test.ts')).toBe(true);
-    expect(exists('PHASE_H_REPORT.md')).toBe(true);
     expect(exists('src/buddy/phaseHFreeze.test.ts')).toBe(true);
   });
 

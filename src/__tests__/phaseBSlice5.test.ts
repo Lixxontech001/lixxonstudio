@@ -9,9 +9,9 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
 function walk(rel: string, out: string[] = []): string[] {
   const abs = join(ROOT, rel);
   if (!existsSync(abs)) return out;
-  if (statSync(abs).isFile()) return [...out, rel];
+  if (statSync(abs).isFile()) return [...out, rel.replace(/\\/g, '/')];
   for (const name of readdirSync(abs)) {
-    const child = relative(ROOT, join(abs, name));
+    const child = relative(ROOT, join(abs, name)).replace(/\\/g, '/');
     if (statSync(join(ROOT, child)).isDirectory()) walk(child, out);
     else if (/\.(ts|tsx|mjs|js|sql)$/.test(name) && !/\.test\./.test(name)) out.push(child);
   }

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// #!/usr/bin/env node
 // The daily pack's video renderer. Makes one vertical MP4 (1080 x 1920, with a voice track, no watermark) from one
 // local image and up to three short caption lines, burned in with an ASS subtitle file through FFmpeg. The voice comes
 // from scripts/pack-voice.mjs (Gemini first, then a local espeak). With no voice, nothing is made: no silent MP4.

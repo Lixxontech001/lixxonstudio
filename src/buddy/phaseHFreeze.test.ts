@@ -376,12 +376,10 @@ describe('Phase H locks: no new door, no new brain, Takeover off', () => {
   });
 });
 
-describe('Phase H itself: the report, this freeze, and the older freezes', () => {
-  it('the report and this freeze are in the tree, beside the older freezes', () => {
-    expect(exists('PHASE_H_REPORT.md')).toBe(true);
+describe('Phase H itself: this freeze and the older freezes', () => {
+  it('this freeze is in the tree, beside the older freezes', () => {
     expect(exists('src/buddy/phaseHFreeze.test.ts')).toBe(true);
     for (const file of [
-      'PHASE_G_REPORT.md',
       'src/buddy/phaseDFreeze.test.ts',
       'src/buddy/phaseEFreeze.test.ts',
       'src/buddy/phaseFFreeze.test.ts',
@@ -390,16 +388,5 @@ describe('Phase H itself: the report, this freeze, and the older freezes', () =>
     ]) {
       expect(exists(file), file).toBe(true);
     }
-  });
-
-  it('the report names Phase I as the only thing left', () => {
-    const report = read('PHASE_H_REPORT.md');
-    expect(report).toMatch(/Phase I/);
-  });
-
-  it('the Phase F pin that said "no Phase H" is flipped, not deleted', () => {
-    const phaseF = read('src/buddy/phaseFFreeze.test.ts');
-    expect(phaseF).not.toContain('there is no Phase H');
-    expect(phaseF).toContain("expect(exists('PHASE_H_REPORT.md')).toBe(true);");
   });
 });

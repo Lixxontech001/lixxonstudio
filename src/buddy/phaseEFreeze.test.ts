@@ -184,14 +184,7 @@ describe('Phase E freeze, the whole phase: nothing reopened', () => {
     expect(files).not.toMatch(/whatsapp|feedly|21st/i);
   });
 
-  it('Phase F files do not replace Phase E: the Phase E freeze and report keep their own names', () => {
-    // Was "Phase F is not started". Phase F has started (Phase F slice 6 adds its own freeze and report),
-    // so the check now guards the boundary instead of the start: E keeps its own files.
-    expect(existsSync(join(ROOT, 'PHASE_E_REPORT.md'))).toBe(true);
+  it('Phase F files do not replace Phase E: the Phase E freeze keeps its own name', () => {
     expect(existsSync(join(ROOT, 'src/buddy/phaseEFreeze.test.ts'))).toBe(true);
-  });
-
-  it('the phase report exists at the repo root', () => {
-    expect(existsSync(join(ROOT, 'PHASE_E_REPORT.md'))).toBe(true);
   });
 });

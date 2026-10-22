@@ -348,7 +348,7 @@ function jobLines(waiting: BriefingFacts["waiting"], gaps: BriefingFacts["gaps"]
   const lines: string[] = [];
   if (!waiting || !waiting.ok) lines.push("I cannot read your orders yet.");
   else if (waiting.count === 0) lines.push("No orders waiting.");
-  else lines.push(`${waiting.count} ${plural(waiting.count, "order", "orders")} waiting for you.`);
+  else lines.push(`${waiting.count} ${plural(waiting.count, "order", "orders")} queued for Buddy.`);
   lines.push(...packLines(packs));
   lines.push(...notableLines(notables, JOB_NOTABLE_KINDS));
   if (!gaps) return lines;
@@ -456,9 +456,12 @@ export function briefingDoors(
 }
 
 function nextMove(facts: BriefingFacts): string {
-  const anyUnread = !facts.articles.ok || !facts.orders.ok || !facts.views.ok || !facts.failures.ok || (facts.notables ? !facts.notables.ok : false);
-  if (anyUnread) return "Some numbers could not be read. Ask me again in a little while.";
-  if (facts.failures.count > 0 || notableLines(facts.notables, PROBLEM_NOTABLE_KINDS).length > 0) return "Look at the problems above before anything else.";
+  // Only core business metrics being unreadable should trigger "Some numbers could not be read."
+  // An unreadable error log or notable events should not poison nextMove when views/orders are read.
+  const coreUnread = !facts.articles.ok || !facts.orders.ok || !facts.views.ok;
+  if (coreUnread) return "Some numbers could not be read. Ask me again in a little while.";
+  if (facts.failures.ok && facts.failures.count > 0) return "Look at the problems above before anything else.";
+  if (notableLines(facts.notables, PROBLEM_NOTABLE_KINDS).length > 0) return "Look at the problems above before anything else.";
   if (facts.orders.paidCount > 0) return "Check the new paid orders in Admin.";
   if (facts.messages && facts.messages.count > 0) return "Read the new reader message in Admin.";
   if (notableLines(facts.notables, ["pack_ready"]).length > 0) return "Post the ready pack by hand, then tap I posted this.";

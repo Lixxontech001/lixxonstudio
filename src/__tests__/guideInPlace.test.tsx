@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import AdminMinds from '../admin/pages/AdminMinds';
 import AutomationVideoLook from '../admin/pages/AutomationVideoLook';
-import BuddyChanges from '../buddy/BuddyChanges';
+import BuddyChanges from '../buddy/BuddyChanges.tsx';
 import BuddyChat from '../buddy/BuddyChat';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

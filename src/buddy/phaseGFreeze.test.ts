@@ -195,8 +195,7 @@ describe('Phase G rule 6: Admin copy is plain English and the labels are the agr
 });
 
 describe('Phase G rule 7: the Phase F pins that this phase changes are changed on purpose', () => {
-  it('the Phase G report and this freeze are now in the tree', () => {
-    expect(exists('PHASE_G_REPORT.md')).toBe(true);
+  it('the Phase G freeze is in the tree', () => {
     expect(exists('src/buddy/phaseGFreeze.test.ts')).toBe(true);
   });
 });

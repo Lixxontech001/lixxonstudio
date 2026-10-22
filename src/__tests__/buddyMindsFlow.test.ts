@@ -286,9 +286,9 @@ describe('the five minds section in the briefing', () => {
 
   it('counts waiting orders, and says so plainly when there are none or none can be read', () => {
     const two = buildBriefing(facts({ waiting: { ok: true, count: 2 }, minds: { ok: true, rows: [] } }), now, since, false);
-    expect(section(two, 'jobs')).toEqual(['2 orders waiting for you.']);
+    expect(section(two, 'jobs')).toEqual(['2 orders queued for Buddy.']);
     const one = buildBriefing(facts({ waiting: { ok: true, count: 1 }, minds: { ok: true, rows: [] } }), now, since, false);
-    expect(section(one, 'jobs')).toEqual(['1 order waiting for you.']);
+    expect(section(one, 'jobs')).toEqual(['1 order queued for Buddy.']);
     const none = buildBriefing(facts({ waiting: { ok: true, count: 0 }, minds: { ok: true, rows: [] } }), now, since, false);
     // Zero waiting and nothing else is a quiet day, so the jobs section is not shown.
     expect(none.quiet).toBe(true);

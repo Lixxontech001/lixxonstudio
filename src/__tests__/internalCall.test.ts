@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { callInternal, internalCallDetail, isInternalCall, safeEqual } from '../../supabase/functions/_shared/internalCall';
 
 const SECRET = 'internal-secret-for-tests-only';
-const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
+const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8').replace(/\r\n/g, '\n');
 const post = (headers: Record<string, string> = {}) => new Request('https://example.test/minds-run-placement', { method: 'POST', headers });
 
 describe('Phase I slice 2: the internal secret is the door', () => {

@@ -55,6 +55,10 @@ function guardedGet(headers: Record<string, string>): RequestInit {
   return { ...FETCH_GUARDS, method: "GET", headers: { Accept: "application/json", ...headers } };
 }
 
+function guardedPost(headers: Record<string, string>, body: unknown): RequestInit {
+  return { ...FETCH_GUARDS, method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) };
+}
+
 function hasControlCharacters(value: string): boolean {
   for (const character of value) {
     const code = character.charCodeAt(0);
@@ -64,9 +68,8 @@ function hasControlCharacters(value: string): boolean {
 }
 
 /**
- * Return a single, read-only, HTTPS provider request. The secret is held only in
- * the server-side request header (except Telegram, whose official API puts its
- * bot token in the URL path). Unknown/paired credentials do not make a request.
+ * Return a single, read-only or 1-token-proof, HTTPS provider request. The secret is held only in
+ * the server-side request header (except Telegram/Gemini URL auth). Unknown/paired credentials do not make a request.
  */
 export function buildProviderCheckRequest(name: string, secret: string): ProviderCheckRequest | null {
   const bearer = { Authorization: `Bearer ${secret}` };
@@ -74,7 +77,10 @@ export function buildProviderCheckRequest(name: string, secret: string): Provide
     case "openai_api_key":
       return { url: "https://api.openai.com/v1/models?limit=1", init: guardedGet(bearer) };
     case "gemini_api_key":
-      return { url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", init: guardedGet({ "x-goog-api-key": secret }) };
+      return {
+        url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        init: guardedPost({ "x-goog-api-key": secret }, { contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 1 } }),
+      };
     case "anthropic_api_key":
       return {
         url: "https://api.anthropic.com/v1/models?limit=1",
@@ -108,17 +114,29 @@ export function buildProviderCheckRequest(name: string, secret: string): Provide
         url: `https://api.telegram.org/bot${encodeURIComponent(secret).replace(/%3A/gi, ":")}/getMe`,
         init: guardedGet({}),
       };
-    // Phase A brains: one cheap read-only request each. Nothing is generated and nothing is published.
+    // Brains: live 1-line generation/connectivity check. No public text or publishing.
     case "groq_api_key":
-      return { url: "https://api.groq.com/openai/v1/models", init: guardedGet(bearer) };
+      return {
+        url: "https://api.groq.com/openai/v1/chat/completions",
+        init: guardedPost(bearer, { model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
+      };
     case "nvidia_api_key":
-      return { url: "https://integrate.api.nvidia.com/v1/models", init: guardedGet(bearer) };
+      return {
+        url: "https://integrate.api.nvidia.com/v1/chat/completions",
+        init: guardedPost(bearer, { model: "meta/llama-3.3-70b-instruct", messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
+      };
     case "cloudflare_api_token":
       return { url: "https://api.cloudflare.com/client/v4/user/tokens/verify", init: guardedGet(bearer) };
     case "openrouter_api_key":
-      return { url: "https://openrouter.ai/api/v1/key", init: guardedGet(bearer) };
+      return {
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        init: guardedPost(bearer, { model: "meta-llama/llama-3.3-70b-instruct:free", messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
+      };
     case "huggingface_token":
-      return { url: "https://huggingface.co/api/whoami-v2", init: guardedGet(bearer) };
+      return {
+        url: "https://router.huggingface.co/v1/chat/completions",
+        init: guardedPost(bearer, { model: "Qwen/Qwen2.5-72B-Instruct", messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
+      };
     default:
       return null;
   }

@@ -349,8 +349,8 @@ describe('Buddy, not the minds, is the voice; the owner cannot chat with a mind'
 });
 
 describe('the model and the key stay as they were', () => {
-  it('the Gemini model is still gemini-3.8-flash', () => {
-    expect(buddyThinkSource).toContain('gemini-3.8-flash');
+  it('the Gemini model is gemini-2.5-flash (with fallback)', () => {
+    expect(buddyThinkSource).toContain('gemini-2.5-flash');
   });
 
   it('no Phase 3 file names the key in a reply or a log', () => {
