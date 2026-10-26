@@ -17,6 +17,7 @@
 
 import {
   LIVING_MINDS,
+  NO_KEY_ACTION,
   STOPPED_ACTION,
   runLivingMinds,
   type LivingLogEntry,
