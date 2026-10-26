@@ -4,17 +4,18 @@
 // A brain marked "skip" keeps its slot, but Buddy does not try it, because the provider now needs a card or is paid.
 // GitHub Models and Bytez are not brains. Mistral is not a workhorse here.
 
-const getEnv = (key: string): string | undefined => {
+function getEnv(key: string): string | undefined {
   try {
-    return typeof (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno !== "undefined"
-      ? (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno?.env?.get?.(key)
-      : typeof process !== "undefined" && process?.env
-      ? process.env[key]
-      : undefined;
+    const deno = (globalThis as unknown as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno;
+    if (typeof deno?.env?.get === "function") {
+      return deno.env.get(key);
+    }
+    const proc = (globalThis as unknown as { process?: { env?: Record<string, string> } }).process;
+    return proc?.env?.[key];
   } catch {
     return undefined;
   }
-};
+}
 
 export interface BrainProviderConfig {
   name: string;

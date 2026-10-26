@@ -44,6 +44,8 @@ export interface DayPacksInput {
    * instead of writing new ones, and the Auditor still checks it first. Absent: the pack writes its own captions.
    */
   draftedCopy?: { articleTitle: string; copy: PackCopy } | null;
+  /** Whether an active Video Look is configured. When false, clean stills + captions are ready without video. */
+  hasVideoLook?: boolean;
 }
 
 /** One pack row, as the database's pack door takes it. */
@@ -160,7 +162,12 @@ export async function runDayPacks(input: DayPacksInput, ports: DayPacksPorts): P
     if (!time) return { status: "failed", detail: "The day is not valid. Nothing was saved.", saved, postId: source.id };
     const auditorBlocked = verdict.blockedChannels.includes(channel);
     const text = textFor(channel, copy);
-    const media = planPackMedia({ coverImage: source.coverImage, copyText: text.caption ?? text.title ?? "", mp4Path: null });
+    const media = planPackMedia({
+      coverImage: source.coverImage,
+      copyText: text.caption ?? text.title ?? "",
+      mp4Path: null,
+      hasVideoLook: input.hasVideoLook,
+    });
     const blockedReason = auditorBlocked
       ? clip(`The Auditor blocked this copy. ${verdict.fix}`, REASON_LIMIT)
       : media.status === "ready"

@@ -91,15 +91,24 @@ export interface PackMediaPlan {
   chunks: string[];
 }
 
-/** What the pack may use. Blocked on the first thing missing: the image, then usable copy, then the video. */
-export function planPackMedia(input: { coverImage: string | null | undefined; copyText: string; mp4Path: string | null | undefined }): PackMediaPlan {
+/** What the pack may use. Blocked on the first thing missing: the image, then usable copy, then video if a Video Look is set. */
+export function planPackMedia(input: {
+  coverImage: string | null | undefined;
+  copyText: string;
+  mp4Path: string | null | undefined;
+  hasVideoLook?: boolean;
+}): PackMediaPlan {
   const image = articleImageFor(input.coverImage);
   if (!image.ok) return { status: "blocked", reason: NO_ARTICLE_IMAGE_REASON, imagePath: null, chunks: [] };
   const chunks = captionChunks(input.copyText);
   if (chunks.length === 0 || chunks.some((chunk) => copyProblem(chunk) !== null)) {
     return { status: "blocked", reason: COPY_NOT_USABLE_REASON, imagePath: image.path, chunks: [] };
   }
-  const videoBlock = videoBlockReason(input.mp4Path);
-  if (videoBlock) return { status: "blocked", reason: videoBlock, imagePath: image.path, chunks };
+  // If Video Look is unset (false), provide clean stills + captions: ready without fake video.
+  // If Video Look is configured (true or default), check if the video has been made.
+  if (input.hasVideoLook !== false) {
+    const videoBlock = videoBlockReason(input.mp4Path);
+    if (videoBlock) return { status: "blocked", reason: videoBlock, imagePath: image.path, chunks };
+  }
   return { status: "ready", reason: null, imagePath: image.path, chunks };
 }

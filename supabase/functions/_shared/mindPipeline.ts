@@ -169,9 +169,21 @@ export async function runMindPipeline(input: PipelineInput, ports: PipelinePorts
   }
   steps.push({ mind: "executioner", action: "Ran the day", outcome: execution.changed > 0 ? "done" : "skipped", detail: execution.detail, plans: 0 });
 
+  const thinkingSteps = steps.filter((step) => step.mind !== "executioner");
+  const allBrainsFailed = thinkingSteps.length > 0 && thinkingSteps.every((s) => s.outcome === "failed" || s.action === NO_KEY_ACTION || s.action === "Could not think");
+
+  let runDetail = execution.detail;
+  if (!runDetail || runDetail.trim().toLowerCase() === "done" || runDetail.trim() === "The day ran.") {
+    runDetail = allBrainsFailed
+      ? "Brains unreachable; AI steps skipped and non-AI tasks completed."
+      : "The day's scheduled tasks ran.";
+  } else if (allBrainsFailed && !runDetail.startsWith("Brains unreachable")) {
+    runDetail = `Brains unreachable; AI steps skipped. ${execution.detail}`;
+  }
+
   return {
     status: "done",
-    detail: execution.detail,
+    detail: runDetail,
     steps,
     plans,
     changed: execution.changed,
@@ -181,7 +193,12 @@ export async function runMindPipeline(input: PipelineInput, ports: PipelinePorts
 
 /** The pipeline's own count line for the log and the tick's answer: how many minds ran, and how many changes. */
 export function pipelineSummaryLine(result: PipelineResult): string {
-  const ran = result.steps.filter((step) => step.mind !== "executioner").length;
+  const ran = result.steps.filter((step) => step.mind !== "executioner" && step.outcome === "done").length;
+  const thinking = result.steps.filter((step) => step.mind !== "executioner");
+  const brainsFailed = thinking.length > 0 && thinking.every((s) => s.outcome === "failed" || s.action === NO_KEY_ACTION || s.action === "Could not think");
   const changes = result.changed === 1 ? "1 change" : `${result.changed} changes`;
+  if (brainsFailed) {
+    return `Brains were unreachable for morning strategy. Non-AI tasks ran: ${changes}. ${result.detail}`;
+  }
   return `${ran} of ${LIVING_MINDS.length} minds ran, then the Executioner: ${changes}.`;
 }

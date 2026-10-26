@@ -375,19 +375,26 @@ async function postToDoor(
     return { door, outcome: "skipped", detail };
   }
 
-  // From here on the door may have posted. Nothing below may report "nothing was posted" unless it is sure.
-  let sent: DoorSendResult;
-  try {
-    sent = await ports.send(door, values, pick.text, reserved.id, {
-      media,
-      articleId: pick.article.id,
-      title: pick.article.title,
-      articleUrl: pick.articleUrl,
-      localDay: input.localDay,
-      drip: pick.drip,
-    });
-  } catch {
-    sent = { ok: false, reason: "Could not reach the door." };
+  // Channel Failure Resilience: retry up to 3 times with exponential backoff before giving up.
+  let sent: DoorSendResult = { ok: false, reason: "Could not reach the door." };
+  const MAX_DOOR_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_DOOR_ATTEMPTS; attempt++) {
+    try {
+      sent = await ports.send(door, values, pick.text, reserved.id, {
+        media,
+        articleId: pick.article.id,
+        title: pick.article.title,
+        articleUrl: pick.articleUrl,
+        localDay: input.localDay,
+        drip: pick.drip,
+      });
+      if (sent.ok || sent.closed) break;
+    } catch {
+      sent = { ok: false, reason: "Could not reach the door." };
+    }
+    if (attempt < MAX_DOOR_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(2, attempt - 1)));
+    }
   }
 
   if (sent.ok) {

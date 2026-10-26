@@ -1103,15 +1103,17 @@ async function runPacksForDay(
   drafted: { articleTitle: string; copy: PackCopy } | null = null,
 ): Promise<DayPacksResult> {
   const siteOrigin = env("SITE_URL") || null;
-  const [existing, articleRows, slotRows, productRows] = await Promise.all([
+  const [existing, articleRows, slotRows, productRows, templateRow] = await Promise.all([
     sb.from("minds_packs").select("id", { count: "exact", head: true }).eq("owner_id", owner).eq("local_day", localDay),
     sb.from("posts").select("id,title,slug,cover_image").eq("status", "published").order("published_at", { ascending: false }).limit(ARTICLE_LIMIT),
     sb.from("post_product_slots").select("post_id,product_id").eq("owner_id", owner).is("removed_at", null),
     sb.from("products").select("id,name,is_digital,price_cents").eq("is_active", true).or("currency.eq.USD,currency.is.null").order("name", { ascending: true }).limit(SHOP_LIMIT),
+    sb.from("video_templates").select("id").eq("is_active", true).maybeSingle(),
   ]);
   if (existing.error || articleRows.error || slotRows.error || productRows.error) {
     return { status: "held", detail: "Site reads for the packs failed. Nothing changed.", saved: 0, postId: null };
   }
+  const hasVideoLook = Boolean(!templateRow?.error && templateRow?.data?.id);
   const liveByPost = new Map<string, string[]>();
   for (const slot of slotRows.data ?? []) {
     const key = String(slot.post_id);
@@ -1134,7 +1136,7 @@ async function runPacksForDay(
   let blockedPacks = 0;
   const learning = await readWindowLearning(sb, owner, new Date());
   const result = await runDayPacks(
-    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0, learning, draftedCopy: drafted },
+    { localDay, takeover, killScope, articles, shop, siteOrigin, alreadyMade: (existing.count ?? 0) > 0, learning, draftedCopy: drafted, hasVideoLook },
     {
       think,
       checkImage: (cover, origin) => checkArticleImage(cover, origin),

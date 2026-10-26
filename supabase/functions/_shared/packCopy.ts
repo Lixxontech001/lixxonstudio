@@ -147,9 +147,10 @@ export interface PackArticle {
  * order given (newest first). Null when no article fits.
  */
 export function choosePackArticle(articles: PackArticle[]): PackArticle | null {
+  if (articles.length === 0) return null;
   const digitalArticles = articles.filter((article) => article.liveProducts.some((product) => product.isDigital));
-  const pool = digitalArticles.length > 0 ? digitalArticles : articles.filter((article) => article.liveProducts.length > 0);
-  if (pool.length === 0) return null;
+  const productArticles = articles.filter((article) => article.liveProducts.length > 0);
+  const pool = digitalArticles.length > 0 ? digitalArticles : productArticles.length > 0 ? productArticles : articles;
   const scored = pool.map((article, position) => ({
     article,
     position,
@@ -165,6 +166,7 @@ export function buildCopyPrompt(articleTitle: string, products: ShopProduct[]): 
   const system = [
     "You write short, calm, practical social copy for Lixxon Studio, for readers in the US, UK, Canada, Australia, Ireland, New Zealand and Singapore.",
     "Warm and plain. No hype. No dashes of any kind. Never name a country or city. Prices, if any, in US dollars only.",
+    "Use the magazine's authentic voice: minimal hashtags, zero fluff or hype.",
     "Use only the product names you are given, exactly as written. Never invent a product, a guide, a bundle or a kit.",
     "Never say a product cures, heals or treats anything. Never say a doctor or dermatologist recommends it. Never tell a personal story or say you tested anything.",
     "Reply with JSON only, in this shape: {\"instagram\": \"...\", \"tiktok\": \"...\", \"facebook\": \"...\", \"pinterest\": {\"title\": \"...\", \"description\": \"...\"}}.",
