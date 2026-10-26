@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ALL_FAILED_LINE } from '../../supabase/functions/_shared/brainChain';
 import { NEVER_LIST_LINES } from '../../supabase/functions/_shared/buddyRouter';
 import { REFUSAL_LINE } from '../../supabase/functions/_shared/buddyOrderPolicy';
 import type { BuddyStateFacts } from '../../supabase/functions/_shared/buddyStateFacts';
@@ -9,7 +8,6 @@ import {
   BUDDY_TEST_PROMPT,
   BUDDY_ANSWER_RULES,
   BUDDY_FACT_ANSWER_RULES,
-  BUDDY_ROUTED_ORDER_RULES,
   parseBuddyAnswer,
   callGemini,
   cleanMessage,

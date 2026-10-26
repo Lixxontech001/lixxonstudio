@@ -1,7 +1,6 @@
 import { publicMediaOrigin, publicMediaPath } from '../src/lib/publicMedia';
 
 export const config = { runtime: 'edge' };
-const CACHE_REWRITE = 'public, s-maxage=31536000, stale-while-revalidate=86400';
 const CACHE_IMMUTABLE = 'public, max-age=31536000, immutable';
 
 function inferContentType(path: string, upstreamType: string | null): string {
@@ -34,12 +33,10 @@ export default async function handler(req: Request): Promise<Response> {
 
   let targetPath: string | null = null;
   let customOrigin: string | null = null;
-  let isDirectUrlParam = false;
 
   // 1. Support ?url= parameter (full Supabase storage URL or direct path)
   const urlParam = params.get('url');
   if (urlParam) {
-    isDirectUrlParam = true;
     try {
       if (urlParam.startsWith('http://') || urlParam.startsWith('https://')) {
         const parsed = new URL(urlParam);
