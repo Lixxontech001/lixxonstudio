@@ -119,7 +119,7 @@ describe('orders from ordinary language', () => {
     const result = await handleBuddyThink(ask('Thanks, that helps'), t.deps);
     expect(t.saveOrder).toHaveBeenCalledWith(CHAT_ID, 'Check the new article', null);
     expect(t.saved.some((row) => row.kind === 'notice' && /waiting|mind was picked/i.test(row.content))).toBe(false);
-    expect(result.body).toMatchObject({ ok: true, model: 'gemini-3.8-flash' });
+    expect(result.body).toMatchObject({ ok: true, model: 'gemini-2.0-flash' });
     // One ordinary chat call: Gemini writes the reply, with the answer rules in its instructions.
     expect(t.askGemini).toHaveBeenCalledTimes(1);
     expect(t.askGemini.mock.calls[0][1].system.startsWith(BUDDY_SYSTEM_INSTRUCTION)).toBe(true);

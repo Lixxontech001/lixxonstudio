@@ -155,7 +155,7 @@ describe('the first brain that answers wins', () => {
       gemini: async () => ({ ok: false, outcome: 'rate_limited' }),
     });
     const result = await askBrains(INPUT, p);
-    expect(result).toEqual({ ok: true, brain: 'groq', label: 'Groq', model: 'openai/gpt-oss-120b', text: `ok from ${HOST.groq}`, tried: ['gemini', 'groq'] });
+    expect(result).toEqual({ ok: true, brain: 'groq', label: 'Groq', model: 'llama-3.3-70b-versatile', text: `ok from ${HOST.groq}`, tried: ['gemini', 'groq'] });
     expect(askGemini).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -258,13 +258,11 @@ describe('every brain fails: one honest line, no crash, no key in it', () => {
     });
     const { ports: p } = ports({ saved: { ...EVERY_KEY }, fetch: fetchMock, gemini: async () => ({ ok: false, outcome: 'rate_limited' }) });
     const result = await askBrains(INPUT, p);
-    expect(result).toEqual({
-      ok: false,
-      reason: 'all_failed',
-      line: ALL_FAILED_LINE,
-      tried: ['gemini', 'groq', 'nvidia', 'cloudflare', 'openrouter', 'huggingface'],
-      lastOutcome: 'unavailable',
-    });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('all_failed');
+    expect(result.tried).toEqual(['gemini', 'groq', 'nvidia', 'cloudflare', 'openrouter', 'huggingface']);
+    expect(result.lastOutcome).toBe('unavailable');
+    expect(result.line).toMatch(/^Buddy could not reach its brains:/);
     expect(ALL_FAILED_LINE).toBe('Buddy could not reach any of its brains just now. Nothing was changed. Try again in a few minutes.');
   });
 

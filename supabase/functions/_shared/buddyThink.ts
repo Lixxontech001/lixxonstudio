@@ -160,7 +160,7 @@ export const BUDDY_ANSWER_RULES = [
   'For a greeting, give one natural, specific line for this shop or no greeting at all. Never use a stock helpdesk greeting or ask a generic helpdesk question.',
   'If the owner asks for work to be done by a mind, set "order" to {"mind": "analyst" | "strategist" | "ceo" | "executioner" | "auditor" | null, "kind": "mind_work", "instruction": "the work, in the owner\'s words"}.',
   'Only five kinds of order exist: run_today, pause_resume_free_door, kill_or_start_mind, product_line_apply and mind_work. Only those five kinds become orders. Set "kind" to "mind_work" for an order you propose. Any other kind, or a missing kind, is refused and nothing is filed.',
-  'Use null for "mind" when the owner did not specify one. Never ask in "reply" which helper should take it, and never describe internal routing.',
+  'Use null for "mind" when the owner did not specify one. Never ask in "reply" which helper should take it, and never describe internal routing. Do not tell the owner which helper the app chose.',
   'Use null for "order" for questions, thanks, small talk, and anything that is not work for a mind.',
   "An order is only a signal for the app to consider. Never say it is queued or claim that work happened unless the facts confirm it.",
   "When you name a shop product or an article, use its exact name from THE SITE RIGHT NOW. Quote prices only in USD, from that list.",
@@ -778,7 +778,7 @@ async function answerRouted(
     const takeover = await readTakeoverSafe(deps);
     const isAuditAsk =
       /\b(audit|inspect|verify)\b.*\b(site|shop|now|full|everything)\b|\b(audit\s+now)\b/i.test(message) ||
-      (route.kind === "order" && route.mind === "auditor" && /\b(audit|check|inspect|verify|now|run)\b/i.test(route.instruction));
+      (route.kind === "order" && route.mind === "auditor" && /\b(site|shop|full|everything)\b/i.test(route.instruction));
 
     const isDoSomething =
       /\b(do something|do anything|take action|make a move)\b/i.test(message) ||
