@@ -4,6 +4,80 @@
 // A brain marked "skip" keeps its slot, but Buddy does not try it, because the provider now needs a card or is paid.
 // GitHub Models and Bytez are not brains. Mistral is not a workhorse here.
 
+const getEnv = (key: string): string | undefined => {
+  try {
+    return typeof (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno !== "undefined"
+      ? (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno?.env?.get?.(key)
+      : typeof process !== "undefined" && process?.env
+      ? process.env[key]
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export interface BrainProviderConfig {
+  name: string;
+  model: string;
+  endpoint: string;
+  requiresKey: boolean;
+  timeoutMs: number;
+}
+
+export const BRAIN_PROVIDERS: Record<string, BrainProviderConfig> = {
+  gemini: {
+    name: "Google Gemini",
+    model: getEnv("BUDDY_GEMINI_MODEL") || "gemini-2.0-flash",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+    requiresKey: true,
+    timeoutMs: 15000,
+  },
+  groq: {
+    name: "Groq",
+    model: "llama-3.3-70b-versatile",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    requiresKey: true,
+    timeoutMs: 12000,
+  },
+  nvidia: {
+    name: "NVIDIA NIM",
+    model: "meta/llama-3.3-70b-instruct",
+    endpoint: "https://integrate.api.nvidia.com/v1/chat/completions",
+    requiresKey: true,
+    timeoutMs: 15000,
+  },
+  cloudflare: {
+    name: "Cloudflare Workers AI",
+    model: "@cf/meta/llama-3.3-70b-instruct",
+    endpoint: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}",
+    requiresKey: true,
+    timeoutMs: 15000,
+  },
+  openrouter: {
+    name: "OpenRouter",
+    model: "meta-llama/llama-3.3-70b-instruct:free",
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    requiresKey: true,
+    timeoutMs: 15000,
+  },
+  huggingface: {
+    name: "Hugging Face",
+    model: "meta-llama/Llama-3.3-70b-Instruct",
+    endpoint: "https://api-inference.huggingface.co/models/{model}/v1/chat/completions",
+    requiresKey: true,
+    timeoutMs: 15000,
+  },
+};
+
+export const BRAIN_CHAIN_ORDER = [
+  "gemini",
+  "groq",
+  "nvidia",
+  "cloudflare",
+  "openrouter",
+  "huggingface",
+];
+
 export const BRAIN_IDS = [
   "gemini",
   "groq",
@@ -55,7 +129,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "gemini_api_key",
     extraSecretNames: [],
     baseUrl: null,
-    model: "gemini-2.5-flash",
+    model: getEnv("BUDDY_GEMINI_MODEL") || "gemini-2.0-flash",
   },
   {
     id: "groq",
@@ -133,7 +207,7 @@ export const BRAIN_SLOTS: readonly BrainSlot[] = [
     secretName: "huggingface_token",
     extraSecretNames: [],
     baseUrl: "https://router.huggingface.co/v1",
-    model: "Qwen/Qwen2.5-72B-Instruct",
+    model: "meta-llama/Llama-3.3-70b-Instruct",
   },
   {
     id: "deepseek",

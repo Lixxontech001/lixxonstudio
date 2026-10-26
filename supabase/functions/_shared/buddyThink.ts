@@ -40,8 +40,8 @@ export const ORDER_NOT_STARTED_LINE = "I could not start that request just now, 
 /** Current stable Flash model on the Gemini API (Google's model list). Change here only. */
 export const CONTROL_FAILED_LINE = "I could not make that change just now, so nothing has changed. Try again in a moment.";
 
-export const BUDDY_GEMINI_MODEL = "gemini-2.5-flash";
-export const BUDDY_GEMINI_FALLBACK_MODEL = "gemini-2.0-flash";
+export const BUDDY_GEMINI_MODEL = "gemini-2.0-flash";
+export const BUDDY_GEMINI_FALLBACK_MODEL = "gemini-1.5-flash";
 export const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 export const GEMINI_TIMEOUT_MS = 15_000;
 export const MAX_MESSAGE_CHARS = 1000;

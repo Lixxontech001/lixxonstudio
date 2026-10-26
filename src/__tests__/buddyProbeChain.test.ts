@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ALL_FAILED_LINE } from '../../supabase/functions/_shared/brainChain';
+import { ALL_FAILED_LINE, formatBrainFailures } from '../../supabase/functions/_shared/brainChain';
 import {
   BUDDY_GEMINI_MODEL,
   NO_KEY_MESSAGE,
@@ -12,7 +12,7 @@ import {
 
 const GEMINI_KEY = 'FAKE-GEMINI-KEY-NOT-REAL-0001';
 const GROQ_KEY = 'FAKE-GROQ-KEY-NOT-REAL-0002';
-const GROQ_MODEL = 'openai/gpt-oss-120b';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 function vaultWith(saved: Record<string, string>) {
   return async (name: string) => (Object.prototype.hasOwnProperty.call(saved, name) ? saved[name] : null);
@@ -129,7 +129,12 @@ describe('Buddy probe walks the brain chain', () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     const result = await handleBuddyThink({ action: 'probe' }, deps);
-    expect(result.body).toMatchObject({ ok: false, action: 'probe', reason: 'unavailable', message: ALL_FAILED_LINE, can_think: false });
+    const expectedMessage = formatBrainFailures([
+      { brain: 'gemini', label: 'Google Gemini', reason: 'rate limited' },
+      { brain: 'groq', label: 'Groq', reason: 'unavailable' },
+    ]);
+    expect(result.body).toMatchObject({ ok: false, action: 'probe', reason: 'unavailable', message: expectedMessage, can_think: false });
+    expect(result.body.message).not.toBe(ALL_FAILED_LINE);
     expect(JSON.stringify(result)).not.toContain(GEMINI_KEY);
     expect(JSON.stringify(result)).not.toContain(GROQ_KEY);
     // Two brains were tried, so the stored Google status is left alone.

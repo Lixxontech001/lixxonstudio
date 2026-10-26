@@ -126,7 +126,7 @@ export async function askBrains(input: BrainInput, ports: BrainPorts, options: B
 export function formatBrainFailures(failures: readonly BrainAttemptFail[]): string {
   if (!failures.length) return ALL_FAILED_LINE;
   const failSummary = failures.map((f) => `${f.label} (${f.reason})`).join(", ");
-  return `Buddy could not reach its brains: ${failSummary}. Nothing was changed. Try again in a few minutes.`;
+  return `Buddy could not reach its brains: ${failSummary}. No changes were made. Try again in a few minutes.`;
 }
 
 /** The plain-words daily-log line for the brain that answered. Names the brains that failed first. Never names a key. */

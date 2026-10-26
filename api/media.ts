@@ -43,12 +43,14 @@ export default async function handler(req: Request): Promise<Response> {
     try {
       if (urlParam.startsWith('http://') || urlParam.startsWith('https://')) {
         const parsed = new URL(urlParam);
+        // External CDNs or non-Supabase domains: never proxy, redirect directly
+        if (!parsed.hostname.endsWith('.supabase.co')) {
+          return Response.redirect(urlParam, 302);
+        }
         const match = parsed.pathname.match(/\/storage\/v1\/(?:object\/public|render\/image\/public)\/(.+)/);
         if (match) {
           targetPath = publicMediaPath(match[1]);
-          if (parsed.hostname.endsWith('.supabase.co')) {
-            customOrigin = parsed.origin;
-          }
+          customOrigin = parsed.origin;
         }
       } else {
         const cleaned = urlParam.replace(/^\/?(?:media\/public\/|storage\/v1\/(?:object\/public|render\/image\/public)\/)/, '');
@@ -67,16 +69,15 @@ export default async function handler(req: Request): Promise<Response> {
     if (!targetPath) return fail(404);
   }
 
-  const envOrigin = publicMediaOrigin(
-    process.env.SUPABASE_URL ||
-    process.env.VITE_PUBLIC_SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL ||
-    process.env.VITE_SUPABASE_PROJECT_URL ||
-    process.env.VITE_SUPABASE_PUBLIC_URL ||
-    process.env.VITE_SUPABASE_PROJECT_REF_URL,
-  );
+  const envOrigin =
+    publicMediaOrigin(process.env.SUPABASE_URL) ||
+    publicMediaOrigin(process.env.VITE_SUPABASE_URL) ||
+    publicMediaOrigin(process.env.VITE_PUBLIC_SUPABASE_URL) ||
+    publicMediaOrigin(process.env.VITE_SUPABASE_PROJECT_URL) ||
+    publicMediaOrigin(process.env.VITE_SUPABASE_PUBLIC_URL) ||
+    publicMediaOrigin(process.env.VITE_SUPABASE_PROJECT_REF_URL);
 
-  const origin = customOrigin || envOrigin || (isDirectUrlParam ? 'https://jaatgiqigsmjodqgaocl.supabase.co' : null);
+  const origin = customOrigin || envOrigin;
   if (!origin) return fail(502);
 
   try {
@@ -92,10 +93,9 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     const contentType = inferContentType(targetPath, upstream.headers.get('content-type'));
-    const cacheHeader = isDirectUrlParam ? CACHE_IMMUTABLE : CACHE_REWRITE;
 
     const headers = new Headers({
-      'Cache-Control': cacheHeader,
+      'Cache-Control': CACHE_IMMUTABLE,
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': "default-src 'none'; sandbox",
     });

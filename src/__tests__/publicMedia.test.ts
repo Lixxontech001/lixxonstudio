@@ -27,6 +27,8 @@ describe('public media display (fake URLs only)', () => {
     `${origin}/storage/v1/object/public/pictures/%2f/a.jpg`,
     `${origin}/storage/v1/object/public/pictures/\\a.jpg`,
     'https://www.pexels.com/photo/example-123/',
+    'https://images.pexels.com/photos/123/pexels-photo-123.jpeg',
+    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e',
   ])('leaves ineligible URL unchanged: %s', url => {
     expect(rewritePublicMediaUrl(url, origin)).toBe(url);
   });
@@ -58,7 +60,7 @@ describe('media edge handler (mock fetch only)', () => {
     const response = await handler(request(method));
     expect(fetcher).toHaveBeenCalledWith(object, { method, redirect: 'error', credentials: 'omit' });
     expect(response.status).toBe(200);
-    expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=31536000, stale-while-revalidate=86400');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(response.headers.get('content-type')).toBe('image/jpeg');
     expect(response.headers.get('content-security-policy')).toContain('sandbox');

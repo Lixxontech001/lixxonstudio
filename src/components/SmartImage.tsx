@@ -56,7 +56,15 @@ export default function SmartImage({
       style={aspectRatio ? { aspectRatio, ...style } : style}
       onError={(e) => {
         const target = e.currentTarget;
-        if (target.src.includes('/media/public/') && src && (src.startsWith('http://') || src.startsWith('https://')) && target.src !== src) {
+        // If a proxied image fails and an unproxied raw HTTP(S) src exists, try original once before placeholder
+        if (
+          (target.src.includes('/media/public/') || target.src.includes('/api/media')) &&
+          src &&
+          (src.startsWith('http://') || src.startsWith('https://')) &&
+          target.src !== src &&
+          !target.dataset.triedOriginal
+        ) {
+          target.dataset.triedOriginal = '1';
           target.src = src;
           return;
         }

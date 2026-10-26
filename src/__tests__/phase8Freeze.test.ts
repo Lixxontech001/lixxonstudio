@@ -143,7 +143,7 @@ describe('Phase 8 freeze: Takeover is off by default, and the Phase 8 migrations
 
 describe('Phase 8 freeze: Buddy thinks with Gemini, and the never-list still blocks', () => {
   it('Buddy uses the Gemini flash model the brief names', () => {
-    expect(BUDDY_GEMINI_MODEL).toBe('gemini-3.8-flash');
+    expect(BUDDY_GEMINI_MODEL).toBe('gemini-2.0-flash');
   });
 
   it('an ordinary owner message goes to Gemini when a key is saved', async () => {

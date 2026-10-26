@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// #!/usr/bin/env node
 // Saves the day's pack pictures and videos to storage, and attaches their paths to the pack rows.
 // A still is a copy of the article's own cover image. A video is a real MP4 made from that picture by scripts/pack-video.mjs,
 // with a voice track from scripts/pack-voice.mjs. A video with no sound is never saved (no silent upload).
