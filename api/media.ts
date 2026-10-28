@@ -66,13 +66,15 @@ export default async function handler(req: Request): Promise<Response> {
     if (!targetPath) return fail(404);
   }
 
+  const FALLBACK_SUPABASE_ORIGIN = 'https://jaatgiqigsmjodqgaocl.supabase.co';
   const envOrigin =
     publicMediaOrigin(process.env.SUPABASE_URL) ||
     publicMediaOrigin(process.env.VITE_SUPABASE_URL) ||
     publicMediaOrigin(process.env.VITE_PUBLIC_SUPABASE_URL) ||
     publicMediaOrigin(process.env.VITE_SUPABASE_PROJECT_URL) ||
     publicMediaOrigin(process.env.VITE_SUPABASE_PUBLIC_URL) ||
-    publicMediaOrigin(process.env.VITE_SUPABASE_PROJECT_REF_URL);
+    publicMediaOrigin(process.env.VITE_SUPABASE_PROJECT_REF_URL) ||
+    FALLBACK_SUPABASE_ORIGIN;
 
   const origin = customOrigin || envOrigin;
   if (!origin) return fail(502);

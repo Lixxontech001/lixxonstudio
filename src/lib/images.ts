@@ -79,6 +79,17 @@ export const IMAGE_FALLBACK_SRC = '/image-placeholder.svg';
  * failing URL as a Sentry breadcrumb. Returns true if the fallback was applied.
  */
 export function applyImageFallback(img: HTMLImageElement): boolean {
+  if (
+    img.dataset.originalSrc &&
+    !img.dataset.triedOriginal &&
+    img.dataset.originalSrc !== img.src &&
+    (img.src.includes('/media/public/') || img.src.includes('/api/media'))
+  ) {
+    img.dataset.triedOriginal = '1';
+    img.removeAttribute('srcset');
+    img.src = img.dataset.originalSrc;
+    return false;
+  }
   if (img.dataset.fallbackApplied === '1') return false;
   img.dataset.fallbackApplied = '1';
   void import('./monitoring').then((m) => m.addBreadcrumb('image', 'Image failed to load', { url: img.currentSrc || img.src }));

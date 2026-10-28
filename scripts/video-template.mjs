@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// #!/usr/bin/env node
 /**
  * The video template: the *look* of a rendered vertical video, as data rather than
  * code (V22). A template is an owner-editable document; the renderer accepts one via

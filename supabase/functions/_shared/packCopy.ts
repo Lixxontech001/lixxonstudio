@@ -150,7 +150,8 @@ export function choosePackArticle(articles: PackArticle[]): PackArticle | null {
   if (articles.length === 0) return null;
   const digitalArticles = articles.filter((article) => article.liveProducts.some((product) => product.isDigital));
   const productArticles = articles.filter((article) => article.liveProducts.length > 0);
-  const pool = digitalArticles.length > 0 ? digitalArticles : productArticles.length > 0 ? productArticles : articles;
+  if (productArticles.length === 0) return null;
+  const pool = digitalArticles.length > 0 ? digitalArticles : productArticles;
   const scored = pool.map((article, position) => ({
     article,
     position,

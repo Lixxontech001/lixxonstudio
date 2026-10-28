@@ -388,12 +388,12 @@ async function postToDoor(
         localDay: input.localDay,
         drip: pick.drip,
       });
-      if (sent.ok || sent.closed) break;
+      break;
     } catch {
       sent = { ok: false, reason: "Could not reach the door." };
-    }
-    if (attempt < MAX_DOOR_ATTEMPTS) {
-      await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(2, attempt - 1)));
+      if (attempt < MAX_DOOR_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(2, attempt - 1)));
+      }
     }
   }
 

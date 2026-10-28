@@ -43,6 +43,7 @@ export default function SmartImage({
   return (
     <img
       src={normalized}
+      data-original-src={src || undefined}
       srcSet={srcSet}
       sizes={srcSet ? sizes : undefined}
       alt={alt}

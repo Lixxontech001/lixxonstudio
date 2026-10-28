@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// #!/usr/bin/env node
 // Saves podcast episode audio to the public podcast bucket: one MP3 per article, named <article id>.mp3.
 // The MP3 is made by the owner, or by a tool on the owner's machine. This runner only checks the file and saves it.
 // It never makes audio, never posts, never replaces audio that is already saved, and never runs on a schedule.

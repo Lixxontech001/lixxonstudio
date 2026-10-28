@@ -73,4 +73,21 @@ describe('applyImageFallback', () => {
     // second failure must not loop
     expect(applyImageFallback(img)).toBe(false);
   });
+
+  it('swaps a failed proxied media image to originalSrc before applying placeholder', () => {
+    const img = document.createElement('img');
+    const directUrl = 'https://jaatgiqigsmjodqgaocl.supabase.co/storage/v1/object/public/media/cover.webp';
+    img.src = '/media/public/media/cover.webp';
+    img.dataset.originalSrc = directUrl;
+
+    expect(applyImageFallback(img)).toBe(false);
+    expect(img.src).toBe(directUrl);
+    expect(img.dataset.triedOriginal).toBe('1');
+    expect(img.dataset.fallbackApplied).toBeUndefined();
+
+    // If the original URL also fails, it falls back to the placeholder
+    expect(applyImageFallback(img)).toBe(true);
+    expect(img.src).toContain('/image-placeholder.svg');
+    expect(img.dataset.fallbackApplied).toBe('1');
+  });
 });

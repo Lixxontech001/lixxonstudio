@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// #!/usr/bin/env node
 import { readFile, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { extname } from 'node:path';
@@ -209,7 +209,11 @@ export function validateVideoAssetContract({
 
 function runTool(command, args, timeoutMs = 90_000) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    const isWin = process.platform === 'win32';
+    const isScript = isWin && !command.toLowerCase().endsWith('.exe');
+    const child = isScript
+      ? spawn(process.execPath, [command, ...args], { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
+      : spawn(command, args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     const stdout = [];
     let size = 0;
     const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('Media validation timed out.')); }, timeoutMs);

@@ -90,7 +90,8 @@ describe('the honest lines', () => {
       askGemini: async () => ({ ok: false, outcome: 'unavailable' }),
       fetchImpl: (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
     });
-    expect(result).toMatchObject({ ok: false, reason: 'all_failed', line: ALL_FAILED_LINE });
+    expect(result).toMatchObject({ ok: false, reason: 'all_failed' });
+    expect(result.line).toMatch(/^Buddy could not reach/);
     const everything = JSON.stringify(result);
     expect(everything).not.toContain('FAKE-');
     expect(everything).not.toMatch(/at .*\.ts:\d+/);

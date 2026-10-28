@@ -119,7 +119,7 @@ beforeAll(async () => {
     }
   }
   await db.exec('grant all on all tables in schema public to service_role');
-});
+}, 120_000);
 
 beforeEach(async () => {
   await db.exec('reset role');

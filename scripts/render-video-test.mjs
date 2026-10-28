@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// #!/usr/bin/env node
 // TEST RENDER ONLY. This script makes the owner's daily-video TEST render: a fixture article, a TEST ONLY watermark, and
 // a silent MP4 (ffmpeg is run with -an, so the file has no audio track). It is never a reader video and never a pack.
 // The reader and pack videos are made by scripts/pack-video.mjs, which always keeps a voice track. A silent MP4 is refused
@@ -60,10 +60,11 @@ function wrapTextWithoutRewriting(text, maxCharacters = 34, maxLines = 6) {
 }
 
 function ffmpegPath(value) {
-  if (typeof value !== 'string' || !isAbsolute(value) || !/^[A-Za-z0-9_./-]+$/.test(value)) {
+  const norm = typeof value === 'string' ? value.replace(/\\/g, '/') : value;
+  if (typeof norm !== 'string' || !isAbsolute(value) || !/^(?:[A-Za-z]:)?[A-Za-z0-9_./-]+$/.test(norm)) {
     throw new Error('FFmpeg filter paths must be absolute safe paths.');
   }
-  return value;
+  return norm;
 }
 
 export function buildVideoFilterGraph({
@@ -130,11 +131,19 @@ export function buildFfmpegArguments({ heroPath, captionsPath, outputPath, filte
 
 function runTool(command, args, timeoutMs = RENDER_TIMEOUT_MS) {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(command, args, {
-      shell: false,
-      windowsHide: true,
-      stdio: ['ignore', 'ignore', 'ignore'],
-    });
+    const isWin = process.platform === 'win32';
+    const isScript = isWin && !command.toLowerCase().endsWith('.exe');
+    const child = isScript
+      ? spawn(process.execPath, [command, ...args], {
+          shell: false,
+          windowsHide: true,
+          stdio: ['ignore', 'ignore', 'ignore'],
+        })
+      : spawn(command, args, {
+          shell: false,
+          windowsHide: true,
+          stdio: ['ignore', 'ignore', 'ignore'],
+        });
     let settled = false;
     const finish = (error) => {
       if (settled) return;

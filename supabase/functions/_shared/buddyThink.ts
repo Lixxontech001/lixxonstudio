@@ -186,6 +186,7 @@ export const BUDDY_ROUTED_ORDER_RULES = [
   "Reply in one or two short, natural plain-English sentences. No labels, tables, markdown, JSON, or generic greeting.",
   "Think from this owner's current message, the shop facts, Takeover setting, recent actions, and conversation below. Speak about this business and the requested work.",
   "The app has already checked the request and chosen its safe internal path. Do not mention routing, assignment, saving to a helper, a queue, or any helper's name unless the owner named that helper in the current message.",
+  "Do not tell the owner which helper the app chose.",
   "Never say work is waiting for a future run. Do not claim a change, post, or send unless the supplied facts confirm it actually happened.",
   "If Takeover is off, be clear that nothing on the site changed. If a fact is missing or unreadable, say what you can see instead of guessing.",
 ].join("\n");
@@ -777,8 +778,8 @@ async function answerRouted(
   } else {
     const takeover = await readTakeoverSafe(deps);
     const isAuditAsk =
-      /\b(audit|inspect|verify)\b.*\b(site|shop|now|full|everything)\b|\b(audit\s+now)\b/i.test(message) ||
-      (route.kind === "order" && route.mind === "auditor" && /\b(site|shop|full|everything)\b/i.test(route.instruction));
+      /\b(audit(\s+now)?|audit\s+the\s+site|inspect\s+the\s+site)\b/i.test(message) ||
+      (route.kind === "order" && route.mind === "auditor" && /^(audit(\s+now)?|audit\s+the\s+site)$/i.test(route.instruction.trim()));
 
     const isDoSomething =
       /\b(do something|do anything|take action|make a move)\b/i.test(message) ||

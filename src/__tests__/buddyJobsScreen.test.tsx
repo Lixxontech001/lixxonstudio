@@ -7,7 +7,7 @@ type Result = { data: unknown; error: unknown };
 const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
 vi.mock('../lib/supabaseClient', () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }));
 
-import BuddyChanges, { JOBS_NOTE, JOBS_READ_FAILED, GAP_SAVE_FAILED } from '../buddy/BuddyChanges';
+import BuddyChanges, { JOBS_NOTE, JOBS_READ_FAILED, GAP_SAVE_FAILED } from '../buddy/BuddyChanges.tsx';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

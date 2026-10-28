@@ -22,7 +22,7 @@ const OWNER = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
 const ORDER = '33333333-3333-4333-8333-333333333333';
 const DAY = '2026-10-14';
-const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
+const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8').replace(/\r\n/g, '\n');
 /** The source with the comments gone, so a rule about code is not tripped by the words around it. */
 const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, ' ');
 const exists = (path: string) => existsSync(join(process.cwd(), path));
