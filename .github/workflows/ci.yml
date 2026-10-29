@@ -26,6 +26,10 @@ jobs:
         run: node scripts/public-size-budget.mjs
       - name: Bundle size budget (gzip, fails on regression)
         run: node scripts/size-budget.mjs
+      - name: Set up Python (3.11 required for pgserver wheel)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Database migrations + RLS assertions (embedded Postgres)
         run: |
           pip install --quiet pgserver fasteners platformdirs psutil
