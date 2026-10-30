@@ -390,6 +390,20 @@ export function extractReplyText(payload: unknown): string {
   return text.slice(0, MAX_REPLY_CHARS);
 }
 
+export function sanitizeGeminiContents(
+  turns: readonly GeminiTurn[],
+): Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> {
+  if (turns.length === 0) return [];
+  const contents = turns.map((turn) => ({
+    role: turn.role,
+    parts: [{ text: turn.text }],
+  }));
+  if (contents[0].role === "model") {
+    contents.unshift({ role: "user", parts: [{ text: "Hello" }] });
+  }
+  return contents;
+}
+
 /** One server-side call to Gemini. The key goes only in the request header and is never echoed back. */
 export async function callGemini(
   apiKey: string,
@@ -400,7 +414,17 @@ export async function callGemini(
     ? (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno?.env?.get?.("BUDDY_GEMINI_MODEL")
     : undefined;
   const primaryModel = envModel?.trim() || BUDDY_GEMINI_MODEL;
-  const modelsToTry = [primaryModel, ...(primaryModel !== BUDDY_GEMINI_FALLBACK_MODEL ? [BUDDY_GEMINI_FALLBACK_MODEL] : [])];
+  const fallbackCandidates = [
+    BUDDY_GEMINI_FALLBACK_MODEL,
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-8b",
+  ];
+  const modelsToTry = [
+    primaryModel,
+    ...fallbackCandidates.filter((m) => m !== primaryModel),
+  ];
+
+  const contents = sanitizeGeminiContents(input.turns);
 
   for (const model of modelsToTry) {
     const controller = new AbortController();
@@ -415,13 +439,13 @@ export async function callGemini(
         headers: { "Content-Type": "application/json", Accept: "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: input.system }] },
-          contents: input.turns.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
+          contents,
           generationConfig: input.json
             ? { temperature: 0.4, maxOutputTokens: 900, responseMimeType: "application/json" }
             : { temperature: 0.4, maxOutputTokens: 700 },
         }),
       });
-      if (response.status === 400 || response.status === 401 || response.status === 403) {
+      if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 422) {
         await discardBody(response);
         return { ok: false, outcome: "rejected" };
       }

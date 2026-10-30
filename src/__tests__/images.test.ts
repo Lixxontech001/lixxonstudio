@@ -3,7 +3,7 @@
  * CDN image files, or the <img> renders nothing.
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeImageUrl, pexelsCdnUrl, buildSrcSet, applyImageFallback } from '../lib/images';
+import { normalizeImageUrl, pexelsCdnUrl, buildSrcSet, applyImageFallback, getPublicSupabaseOrigin } from '../lib/images';
 
 describe('normalizeImageUrl', () => {
   it('rewrites Pexels photo-page URLs to the CDN file (any host form)', () => {
@@ -86,6 +86,21 @@ describe('applyImageFallback', () => {
     expect(img.dataset.fallbackApplied).toBeUndefined();
 
     // If the original URL also fails, it falls back to the placeholder
+    expect(applyImageFallback(img)).toBe(true);
+    expect(img.src).toContain('/image-placeholder.svg');
+    expect(img.dataset.fallbackApplied).toBe('1');
+  });
+
+  it('swaps a failed proxied media image without originalSrc attribute to direct Supabase storage URL', () => {
+    const img = document.createElement('img');
+    img.src = '/media/public/media/cover.webp';
+
+    expect(applyImageFallback(img)).toBe(false);
+    expect(img.src).toBe(`${getPublicSupabaseOrigin()}/storage/v1/object/public/media/cover.webp`);
+    expect(img.dataset.triedOriginal).toBe('1');
+    expect(img.dataset.fallbackApplied).toBeUndefined();
+
+    // Second failure applies placeholder
     expect(applyImageFallback(img)).toBe(true);
     expect(img.src).toContain('/image-placeholder.svg');
     expect(img.dataset.fallbackApplied).toBe('1');

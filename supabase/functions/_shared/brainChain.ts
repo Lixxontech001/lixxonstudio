@@ -91,11 +91,23 @@ export async function anyBrainSaved(ports: Pick<BrainPorts, "readSecret">): Prom
   return false;
 }
 
+/** Sanitizes brain turns so conversations never start with a model turn. */
+export function sanitizeBrainTurns(turns: readonly BrainTurn[]): BrainTurn[] {
+  if (turns.length > 0 && turns[0].role === "model") {
+    return [{ role: "user", text: "Hello" }, ...turns];
+  }
+  return turns as BrainTurn[];
+}
+
 /**
  * Asks the brains in order and returns the first reply. Skips brains without a key. Never throws.
  * `tried` lists the brains that were actually called, in order, so the log can say which one answered.
  */
 export async function askBrains(input: BrainInput, ports: BrainPorts, options: BrainOptions = {}): Promise<BrainAnswer> {
+  const sanitizedInput: BrainInput = {
+    ...input,
+    turns: sanitizeBrainTurns(input.turns),
+  };
   const tried: BrainId[] = [];
   const failures: BrainAttemptFail[] = [];
   let lastOutcome: BrainFailure | "none_saved" = "none_saved";
@@ -106,8 +118,8 @@ export async function askBrains(input: BrainInput, ports: BrainPorts, options: B
     let result: BrainCallResult;
     try {
       result = slot.id === "gemini"
-        ? await ports.askGemini(keys.apiKey, input)
-        : await askOpenAiStyle(slot, keys, input, ports.fetchImpl ?? fetch);
+        ? await ports.askGemini(keys.apiKey, sanitizedInput)
+        : await askOpenAiStyle(slot, keys, sanitizedInput, ports.fetchImpl ?? fetch);
     } catch {
       result = { ok: false, outcome: "unavailable" };
     }
@@ -169,7 +181,7 @@ export async function askOpenAiStyle(
         max_tokens: input.json ? 900 : 700,
       }),
     });
-    if (response.status === 400 || response.status === 401 || response.status === 403) {
+    if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 422) {
       await discardBody(response);
       return { ok: false, outcome: "rejected" };
     }

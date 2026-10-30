@@ -74,22 +74,69 @@ function withWidth(url: string, width: number): string {
 /** Branded placeholder (same-origin, CSP-safe) shown when an image fails to load. */
 export const IMAGE_FALLBACK_SRC = '/image-placeholder.svg';
 
+const DEFAULT_SUPABASE_ORIGIN = 'https://jaatgiqigsmjodqgaocl.supabase.co';
+
+export function getPublicSupabaseOrigin(): string {
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    const env = import.meta.env;
+    const candidate =
+      env.VITE_SUPABASE_URL ||
+      env.VITE_PUBLIC_SUPABASE_URL ||
+      env.VITE_SUPABASE_PROJECT_URL ||
+      env.VITE_SUPABASE_PUBLIC_URL ||
+      env.VITE_SUPABASE_PROJECT_REF_URL;
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim().replace(/\/+$/, '');
+    }
+  }
+  return DEFAULT_SUPABASE_ORIGIN;
+}
+
+export function extractDirectStorageUrl(rawUrl: string): string | null {
+  if (!rawUrl || (!rawUrl.includes('/media/public/') && !rawUrl.includes('/api/media'))) {
+    return null;
+  }
+  const match =
+    rawUrl.match(/\/media\/public\/([^?#]+)/) ||
+    rawUrl.match(/[?&]p=([^&#]+)/) ||
+    rawUrl.match(/[?&]url=([^&#]+)/);
+
+  if (!match) return null;
+  const decoded = decodeURIComponent(match[1]);
+  if (decoded.startsWith('http://') || decoded.startsWith('https://')) {
+    return decoded;
+  }
+  const origin = getPublicSupabaseOrigin();
+  return `${origin}/storage/v1/object/public/${decoded}`;
+}
+
 /**
  * Swap a failed <img> to the branded placeholder exactly once and report the
  * failing URL as a Sentry breadcrumb. Returns true if the fallback was applied.
  */
 export function applyImageFallback(img: HTMLImageElement): boolean {
-  if (
-    img.dataset.originalSrc &&
-    !img.dataset.triedOriginal &&
-    img.dataset.originalSrc !== img.src &&
-    (img.src.includes('/media/public/') || img.src.includes('/api/media'))
-  ) {
-    img.dataset.triedOriginal = '1';
-    img.removeAttribute('srcset');
-    img.src = img.dataset.originalSrc;
-    return false;
+  if (!img.dataset.triedOriginal) {
+    if (
+      img.dataset.originalSrc &&
+      img.dataset.originalSrc !== img.src &&
+      (img.src.includes('/media/public/') || img.src.includes('/api/media'))
+    ) {
+      img.dataset.triedOriginal = '1';
+      img.removeAttribute('srcset');
+      img.src = img.dataset.originalSrc;
+      return false;
+    }
+
+    const rawUrl = img.currentSrc || img.src || '';
+    const directUrl = extractDirectStorageUrl(rawUrl);
+    if (directUrl && directUrl !== img.src) {
+      img.dataset.triedOriginal = '1';
+      img.removeAttribute('srcset');
+      img.src = directUrl;
+      return false;
+    }
   }
+
   if (img.dataset.fallbackApplied === '1') return false;
   img.dataset.fallbackApplied = '1';
   void import('./monitoring').then((m) => m.addBreadcrumb('image', 'Image failed to load', { url: img.currentSrc || img.src }));
