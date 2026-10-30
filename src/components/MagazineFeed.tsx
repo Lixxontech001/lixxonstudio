@@ -63,7 +63,7 @@ export default function MagazineFeed({ posts, categories, activeCategory, onCate
         <p className="text-center text-charcoal-muted py-20 text-lg font-light">No articles in this category yet.</p>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
-          {posts.map((post) => {
+          {posts.map((post, idx) => {
             const hl = pickHeadline(post);
             if (post.alt_title) trackHeadline(post.id, hl.variant, 'impression');
             return (
@@ -74,7 +74,15 @@ export default function MagazineFeed({ posts, categories, activeCategory, onCate
             >
               <div className="img-zoom rounded-sm overflow-hidden luxury-shadow relative aspect-[4/5]">
                 {post.cover_image && (
-                  <SmartImage src={post.cover_image} alt={post.title} className="w-full h-full object-cover" sizes="(max-width: 768px) 50vw, 25vw" aspectRatio="4/5" />
+                  <SmartImage
+                    src={post.cover_image}
+                    alt={post.title}
+                    className="w-full h-full object-cover"
+                    sizes="(max-width: 768px) 50vw, 25vw"
+                    aspectRatio="4/5"
+                    priority={idx < 2}
+                    loading={idx < 6 ? 'eager' : 'lazy'}
+                  />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-charcoal/20 to-transparent hover-reveal transition-opacity duration-500" />
                 {post.category && (

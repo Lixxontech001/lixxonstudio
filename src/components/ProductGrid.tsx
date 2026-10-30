@@ -47,8 +47,8 @@ export default function ProductGrid() {
               </Link>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
-              {digitalGuides.slice(0, 3).map(product => (
-                <ProductMiniCard key={product.id} product={product} />
+              {digitalGuides.slice(0, 3).map((product) => (
+                <ProductMiniCard key={product.id} product={product} eager />
               ))}
             </div>
           </div>
@@ -67,8 +67,8 @@ export default function ProductGrid() {
               </Link>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
-              {affiliateProducts.slice(0, 6).map(product => (
-                <ProductMiniCard key={product.id} product={product} />
+              {affiliateProducts.slice(0, 6).map((product, i) => (
+                <ProductMiniCard key={product.id} product={product} eager={i < 3} />
               ))}
             </div>
           </div>
@@ -82,7 +82,7 @@ export default function ProductGrid() {
   );
 }
 
-function ProductMiniCard({ product }: { product: Product }) {
+function ProductMiniCard({ product, eager = false }: { product: Product; eager?: boolean }) {
   const isDigital = product.product_type === 'digital' || product.is_digital;
   const priceNum = parseFloat(product.price || '0');
 
@@ -93,7 +93,14 @@ function ProductMiniCard({ product }: { product: Product }) {
     >
       <div className="img-zoom aspect-square bg-taupe-light relative">
         {product.image_url && (
-          <SmartImage src={product.image_url} alt={product.name} className="w-full h-full object-cover" sizes="(max-width: 768px) 100vw, 33vw" aspectRatio="1/1" />
+          <SmartImage
+            src={product.image_url}
+            alt={product.name}
+            className="w-full h-full object-cover"
+            sizes="(max-width: 768px) 100vw, 33vw"
+            aspectRatio="1/1"
+            loading={eager ? 'eager' : 'lazy'}
+          />
         )}
         {isDigital && (
           <span className="absolute top-3 left-3 inline-flex items-center gap-1 text-[9px] tracking-editorial uppercase text-white bg-bronze/80 backdrop-blur-sm px-2.5 py-1 rounded-full">

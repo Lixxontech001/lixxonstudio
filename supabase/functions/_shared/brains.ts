@@ -240,5 +240,19 @@ export function anyTryableBrainConfigured(savedNames: ReadonlySet<string>): bool
 
 /** The brains Buddy may try, in order. Skipped brains are left out. */
 export function tryableBrains(): BrainSlot[] {
+  const exclusive = getEnv("BUDDY_EXCLUSIVE_BRAIN");
+  if (exclusive) {
+    const found = BRAIN_SLOTS.find((s) => s.id === exclusive);
+    if (found) return [found];
+  }
+  // In production Deno edge runtime, use Google Gemini exclusively (per user's Pro plan setup)
+  // unless explicitly configured with BUDDY_ALL_BRAINS=true
+  const isDeno = typeof (globalThis as unknown as { Deno?: unknown }).Deno !== "undefined";
+  const allBrains = getEnv("BUDDY_ALL_BRAINS") === "true";
+  const onlyGemini = getEnv("BUDDY_ONLY_GEMINI") === "true" || (isDeno && !allBrains);
+
+  if (onlyGemini) {
+    return BRAIN_SLOTS.filter((slot) => slot.id === "gemini");
+  }
   return BRAIN_SLOTS.filter((slot) => slot.access === "free_no_card");
 }

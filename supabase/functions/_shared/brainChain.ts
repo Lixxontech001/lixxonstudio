@@ -76,7 +76,7 @@ async function keysFor(slot: BrainSlot, ports: Pick<BrainPorts, "readSecret">): 
 async function safeRead(ports: Pick<BrainPorts, "readSecret">, name: string): Promise<string | null> {
   try {
     const value = await ports.readSecret(name);
-    const trimmed = typeof value === "string" ? value.trim() : "";
+    const trimmed = typeof value === "string" ? value.trim().replace(/^["']|["']$/g, "").trim() : "";
     return trimmed.length > 0 ? trimmed : null;
   } catch {
     return null;

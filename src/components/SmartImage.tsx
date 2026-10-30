@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { applyImageFallback, buildSrcSet, displayImageUrl } from '../lib/images';
+import { applyImageFallback, buildSrcSet, displayImageUrl, extractDirectStorageUrl } from '../lib/images';
 
 interface SmartImageProps {
   /** Raw URL from the CMS — Pexels photo-page URLs are normalised automatically. */
@@ -13,18 +13,21 @@ interface SmartImageProps {
   /** Intrinsic size hint — pair with aspectRatio or a fixed-size className. */
   width?: number;
   height?: number;
-  /** Hero-only: eager loading + fetchpriority="high". Everything else is lazy. */
+  /** Hero or above-the-fold: eager loading + fetchpriority="high". */
   priority?: boolean;
+  /** Optional loading strategy ('lazy' | 'eager'). Defaults to eager when priority=true, else lazy. */
+  loading?: 'lazy' | 'eager';
   style?: CSSProperties;
 }
 
 /**
- * Responsive <img> with:
- * - Pexels URL normalisation + srcset/sizes via Pexels' own `w=` parameter
- * - loading="lazy" + decoding="async" below the fold (priority → eager + fetchpriority)
- * - an explicit aspect-ratio/width/height so images never cause layout shift
- * - a branded onError fallback (plus the global error listener for markdown images)
- */
+  * Responsive <img> with:
+  * - Pexels URL normalisation + srcset/sizes via Pexels' own `w=` parameter
+  * - Direct CDN loading for Supabase & Pexels to avoid proxy latency
+  * - loading="lazy" + decoding="async" below the fold (priority → eager + fetchpriority)
+  * - an explicit aspect-ratio/width/height so images never cause layout shift
+  * - a branded onError fallback (plus the global error listener for markdown images)
+  */
 export default function SmartImage({
   src,
   alt,
@@ -34,15 +37,19 @@ export default function SmartImage({
   width,
   height,
   priority = false,
+  loading,
   style,
 }: SmartImageProps) {
   const normalized = displayImageUrl(src);
   if (!normalized) return null;
 
-  const srcSet = buildSrcSet(normalized);
+  // Use direct CDN URL to bypass proxy roundtrips
+  const directUrl = extractDirectStorageUrl(normalized) || normalized;
+  const srcSet = buildSrcSet(directUrl);
+  const effectiveLoading = priority ? 'eager' : (loading || 'lazy');
   return (
     <img
-      src={normalized}
+      src={directUrl}
       data-original-src={src || undefined}
       srcSet={srcSet}
       sizes={srcSet ? sizes : undefined}
@@ -50,7 +57,7 @@ export default function SmartImage({
       className={className}
       width={width}
       height={height}
-      loading={priority ? 'eager' : 'lazy'}
+      loading={effectiveLoading}
       decoding="async"
       // React 18 wants the DOM attribute spelled lowercase; browsers accept fetchpriority.
       {...(priority ? ({ fetchpriority: 'high' } as Record<string, string>) : {})}

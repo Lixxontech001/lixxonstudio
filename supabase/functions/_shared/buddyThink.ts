@@ -43,7 +43,7 @@ export const CONTROL_FAILED_LINE = "I could not make that change just now, so no
 export const BUDDY_GEMINI_MODEL = "gemini-2.0-flash";
 export const BUDDY_GEMINI_FALLBACK_MODEL = "gemini-1.5-flash";
 export const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-export const GEMINI_TIMEOUT_MS = 15_000;
+export const GEMINI_TIMEOUT_MS = 30_000;
 export const MAX_MESSAGE_CHARS = 1000;
 export const MAX_REPLY_CHARS = 4000;
 /** How many earlier messages of the same chat Buddy sees when it answers. */
@@ -394,14 +394,29 @@ export function sanitizeGeminiContents(
   turns: readonly GeminiTurn[],
 ): Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> {
   if (turns.length === 0) return [];
-  const contents = turns.map((turn) => ({
-    role: turn.role,
-    parts: [{ text: turn.text }],
-  }));
-  if (contents[0].role === "model") {
-    contents.unshift({ role: "user", parts: [{ text: "Hello" }] });
+  const merged: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+
+  for (const turn of turns) {
+    const text = (turn.text || "").trim();
+    if (!text) continue;
+
+    const last = merged[merged.length - 1];
+    if (last && last.role === turn.role) {
+      // Merge consecutive identical roles to satisfy Gemini's strict alternating roles requirement
+      last.parts[0].text += `\n\n${text}`;
+    } else {
+      merged.push({
+        role: turn.role,
+        parts: [{ text }],
+      });
+    }
   }
-  return contents;
+
+  if (merged.length === 0) return [];
+  if (merged[0].role === "model") {
+    merged.unshift({ role: "user", parts: [{ text: "Hello" }] });
+  }
+  return merged;
 }
 
 /** One server-side call to Gemini. The key goes only in the request header and is never echoed back. */
@@ -410,13 +425,18 @@ export async function callGemini(
   input: { system: string; turns: GeminiTurn[]; json?: boolean },
   fetchImpl: typeof fetch = fetch,
 ): Promise<GeminiResult> {
+  const cleanKey = apiKey.trim().replace(/^["']|["']$/g, "").trim();
   const envModel = typeof (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno !== "undefined"
     ? (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno?.env?.get?.("BUDDY_GEMINI_MODEL")
     : undefined;
   const primaryModel = envModel?.trim() || BUDDY_GEMINI_MODEL;
   const fallbackCandidates = [
-    BUDDY_GEMINI_FALLBACK_MODEL,
+    "gemini-2.0-flash",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro-latest",
     "gemini-1.5-flash-latest",
+    "gemini-2.0-flash-exp",
     "gemini-1.5-flash-8b",
   ];
   const modelsToTry = [
@@ -425,6 +445,7 @@ export async function callGemini(
   ];
 
   const contents = sanitizeGeminiContents(input.turns);
+  let hadRateLimit = false;
 
   for (const model of modelsToTry) {
     const controller = new AbortController();
@@ -436,7 +457,7 @@ export async function callGemini(
         cache: "no-store",
         referrerPolicy: "no-referrer",
         signal: controller.signal,
-        headers: { "Content-Type": "application/json", Accept: "application/json", "x-goog-api-key": apiKey },
+        headers: { "Content-Type": "application/json", Accept: "application/json", "x-goog-api-key": cleanKey },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: input.system }] },
           contents,
@@ -446,21 +467,33 @@ export async function callGemini(
         }),
       });
       if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 422) {
-        await discardBody(response);
+        try {
+          const errText = await response.text();
+          console.error(`[callGemini error] Model ${model} returned ${response.status}:`, errText);
+        } catch {
+          await discardBody(response);
+        }
         return { ok: false, outcome: "rejected" };
       }
       if (response.status === 404) {
-        // Model not supported on this endpoint tier; try fallback model
+        // Model not supported on this endpoint tier; try next fallback model
         await discardBody(response);
         continue;
       }
       if (response.status === 429) {
+        // Rate limited on this specific model; try next model before giving up
         await discardBody(response);
-        return { ok: false, outcome: "rate_limited" };
+        hadRateLimit = true;
+        continue;
       }
       if (!response.ok) {
-        await discardBody(response);
-        return { ok: false, outcome: "unavailable" };
+        try {
+          const errText = await response.text();
+          console.error(`[callGemini error] Model ${model} returned status ${response.status}:`, errText);
+        } catch {
+          await discardBody(response);
+        }
+        continue;
       }
       let payload: unknown;
       try {
@@ -471,11 +504,16 @@ export async function callGemini(
       const text = extractReplyText(payload);
       return text ? { ok: true, text } : { ok: false, outcome: "empty" };
     } catch (err: unknown) {
-      console.error('[callGemini error]', err);
-      return { ok: false, outcome: "unavailable" };
+      console.error(`[callGemini error] Model ${model} threw:`, err);
+      // If abort error or network issue on this model, continue to fallback model
+      continue;
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  if (hadRateLimit) {
+    return { ok: false, outcome: "rate_limited" };
   }
   return { ok: false, outcome: "unavailable" };
 }

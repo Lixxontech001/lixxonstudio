@@ -26,7 +26,7 @@ export default function EditorsPicks({ posts }: { posts: PostWithRelations[] }) 
               </div>
               <div className="img-zoom rounded-sm overflow-hidden mb-5 aspect-[3/2]">
                 {post.cover_image && (
-                  <SmartImage src={post.cover_image} alt={post.title} className="w-full h-full object-cover" sizes="(max-width: 1024px) 100vw, 33vw" aspectRatio="3/2" />
+                  <SmartImage src={post.cover_image} alt={post.title} className="w-full h-full object-cover" sizes="(max-width: 1024px) 100vw, 33vw" aspectRatio="3/2" loading="eager" />
                 )}
               </div>
               <span className="text-[10px] tracking-editorial uppercase text-bronze">{post.category?.name}</span>

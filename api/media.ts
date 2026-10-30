@@ -1,7 +1,7 @@
 import { publicMediaOrigin, publicMediaPath } from '../src/lib/publicMedia';
 
 export const config = { runtime: 'edge' };
-const CACHE_IMMUTABLE = 'public, max-age=31536000, immutable';
+const CACHE_IMMUTABLE = 'public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=86400, immutable';
 
 function inferContentType(path: string, upstreamType: string | null): string {
   if (upstreamType && upstreamType !== 'application/octet-stream' && upstreamType !== 'text/plain') {
@@ -42,7 +42,7 @@ export default async function handler(req: Request): Promise<Response> {
         const parsed = new URL(urlParam);
         // External CDNs or non-Supabase domains: never proxy, redirect directly
         if (!parsed.hostname.endsWith('.supabase.co')) {
-          return Response.redirect(urlParam, 302);
+          return Response.redirect(urlParam, 301);
         }
         const match = parsed.pathname.match(/\/storage\/v1\/(?:object\/public|render\/image\/public)\/(.+)/);
         if (match) {
@@ -91,13 +91,15 @@ export default async function handler(req: Request): Promise<Response> {
       await upstream.body?.cancel();
       if (upstream.status === 404) return fail(404);
       // Fallback directly to Supabase storage URL so the browser loads the image seamlessly
-      return Response.redirect(directStorageUrl, 302);
+      return Response.redirect(directStorageUrl, 301);
     }
 
     const contentType = inferContentType(targetPath, upstream.headers.get('content-type'));
 
     const headers = new Headers({
       'Cache-Control': CACHE_IMMUTABLE,
+      'CDN-Cache-Control': 'public, max-age=31536000, immutable',
+      'Vercel-CDN-Cache-Control': 'public, max-age=31536000, immutable',
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': "default-src 'none'; sandbox",
     });
@@ -115,6 +117,6 @@ export default async function handler(req: Request): Promise<Response> {
     });
   } catch (err) {
     console.error('[media-proxy error]', err);
-    return Response.redirect(directStorageUrl, 302);
+    return Response.redirect(directStorageUrl, 301);
   }
 }

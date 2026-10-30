@@ -1,5 +1,3 @@
-import { rewritePublicMediaUrl } from './publicMedia';
-
 /**
  * Image URL helpers.
  *
@@ -165,8 +163,7 @@ export function installImageFallback(): void {
 export function displayImageUrl(url: string | null | undefined): string | undefined {
   const normalized = normalizeImageUrl(url);
   if (!normalized) return undefined;
-  return rewritePublicMediaUrl(normalized,
-    import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_PUBLIC_SUPABASE_URL ||
-    import.meta.env.VITE_SUPABASE_PROJECT_URL || import.meta.env.VITE_SUPABASE_PUBLIC_URL ||
-    import.meta.env.VITE_SUPABASE_PROJECT_REF_URL);
+  const direct = extractDirectStorageUrl(normalized);
+  if (direct) return direct;
+  return normalized;
 }
