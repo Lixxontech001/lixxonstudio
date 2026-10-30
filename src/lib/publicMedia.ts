@@ -5,7 +5,8 @@ export function publicMediaPath(path: string): string | null {
     // Reject nested encoding, separators, control characters and dot segments.
     if (/[\\%?#]/.test(decoded) || Array.from(decoded).some(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)) return null;
     const parts = decoded.split('/');
-    if (parts.length < 2 || parts.some(p => !p || p === '.' || p === '..')) return null;
+    // At least 1 non-empty segment; no dot-traversal allowed.
+    if (parts.length < 1 || parts.some(p => !p || p === '.' || p === '..')) return null;
     return parts.map(encodeURIComponent).join('/');
   } catch { return null; }
 }
@@ -53,15 +54,22 @@ export function rewritePublicMediaUrl(url: string, projectUrl: string | undefine
     return url;
   }
 
-  const origin = publicMediaOrigin(projectUrl);
-  if (!origin) return url;
+  // Use env-derived origin when available; otherwise accept any Supabase project.
+  const configuredOrigin = publicMediaOrigin(projectUrl);
 
   const match = /^(https:\/\/[^/]+\.supabase\.co)\/storage\/v1\/(?:object\/public|render\/image\/public)\/([^?#]+)(?:\?([^#]*))?(?:#.*)?$/.exec(url);
-  if (!match || match[1] !== origin) return url;
+  if (!match) return url;
+
+  // When we know the configured origin, only rewrite URLs from that project.
+  // When the env var is missing, accept any *.supabase.co storage URL so images
+  // still get proxied instead of being requested directly (which can fail due to
+  // Supabase Storage CORS or hotlink restrictions).
+  if (configuredOrigin && match[1] !== configuredOrigin) return url;
 
   // Signed/authenticated requests must never become publicly cached requests.
-  if (Array.from(new URLSearchParams(match[3]).keys()).some(k => /token|signature|authorization/i.test(k))) return url;
+  if (Array.from(new URLSearchParams(match[3] ?? '').keys()).some(k => /token|signature|authorization/i.test(k))) return url;
 
   const path = publicMediaPath(match[2]);
+  // Fallback: if path validation fails, serve directly rather than silently breaking.
   return path ? `/media/public/${path}` : url;
 }

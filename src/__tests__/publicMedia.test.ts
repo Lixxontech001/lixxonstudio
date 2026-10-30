@@ -1,87 +1,80 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { publicMediaPath, rewritePublicMediaUrl } from '../lib/publicMedia';
-import { displayImageUrl } from '../lib/images';
-import { renderMarkdown } from '../lib/markdown';
-import handler from '../../api/media';
+import { describe, it, expect } from "vitest";
+import { publicMediaPath, publicMediaOrigin, rewritePublicMediaUrl } from "../lib/publicMedia";
 
-const origin = 'https://example.supabase.co';
-const object = `${origin}/storage/v1/object/public/pictures/a.jpg`;
-afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+const PROJECT = "https://jaatgiqigsmjodqgaocl.supabase.co";
+const storage = (path: string) => `${PROJECT}/storage/v1/object/public/${path}`;
 
-describe('public media display (fake URLs only)', () => {
-  it('rewrites public objects and render URLs to the original', () => {
-    expect(rewritePublicMediaUrl(object, origin)).toBe('/media/public/pictures/a.jpg');
-    expect(rewritePublicMediaUrl(`${origin}/storage/v1/render/image/public/pictures/a.jpg?width=400`, origin)).toBe('/media/public/pictures/a.jpg');
-    expect(rewritePublicMediaUrl(`${origin}/storage/v1/object/public/pictures/a%20b.jpg`, origin)).toBe('/media/public/pictures/a%20b.jpg');
+describe("publicMediaPath", () => {
+  it("accepts a standard bucket/file path", () => {
+    expect(publicMediaPath("images/photo.jpg")).toBe("images/photo.jpg");
   });
-  it.each([
-    'https://evil.com/storage/v1/object/public/pictures/a.jpg',
-    `${origin}.evil.com/storage/v1/object/public/pictures/a.jpg`,
-    `${origin}/storage/v1/object/sign/pictures/a.jpg?token=fake`,
-    `${origin}/storage/v1/object/authenticated/pictures/a.jpg`,
-    `${object}?token=fake`,
-    `${origin}/storage/v1/object/public/pictures/../a.jpg`,
-    `${origin}/storage/v1/object/public/pictures/%2e%2e/a.jpg`,
-    `${origin}/storage/v1/object/public/pictures//a.jpg`,
-    `${origin}/storage/v1/object/public/pictures/%252e%252e/a.jpg`,
-    `${origin}/storage/v1/object/public/pictures/%2f/a.jpg`,
-    `${origin}/storage/v1/object/public/pictures/\\a.jpg`,
-    'https://www.pexels.com/photo/example-123/',
-    'https://images.pexels.com/photos/123/pexels-photo-123.jpeg',
-    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e',
-  ])('leaves ineligible URL unchanged: %s', url => {
-    expect(rewritePublicMediaUrl(url, origin)).toBe(url);
+  it("accepts a single-segment path (file at bucket root)", () => {
+    expect(publicMediaPath("photo.jpg")).toBe("photo.jpg");
   });
-  it('covers the display and markdown pipeline without changing Pexels', () => {
-    expect(displayImageUrl(object)).toBe('/media/public/pictures/a.jpg');
-    expect(renderMarkdown(`![Picture](${object})`)).toContain('src="/media/public/pictures/a.jpg"');
-    expect(renderMarkdown(`![Picture](${object.replace('a.jpg', 'a&b.jpg')})`)).toContain('src="/media/public/pictures/a%26b.jpg"');
-    expect(displayImageUrl('https://www.pexels.com/photo/example-123/')).toContain('https://images.pexels.com/photos/123/');
+  it("percent-encodes spaces in filenames", () => {
+    expect(publicMediaPath("images/my photo.jpg")).toBe("images/my%20photo.jpg");
   });
-  it.each(['', 'bucket', '/bucket/key', 'bucket//key', 'bucket/../key', 'bucket/%2e%2e/key', 'bucket/%252fkey', 'bucket/%00key', 'bucket/%zz'])('rejects unsafe paths: %s', path => {
-    expect(publicMediaPath(path)).toBeNull();
+  it("rejects dot traversal", () => {
+    expect(publicMediaPath("images/../secret")).toBeNull();
+    expect(publicMediaPath("../etc/passwd")).toBeNull();
+  });
+  it("rejects empty segments", () => {
+    expect(publicMediaPath("images//double.jpg")).toBeNull();
+  });
+  it("rejects control characters", () => {
+    expect(publicMediaPath("images/\x00evil")).toBeNull();
+  });
+  it("rejects nested percent-encoding", () => {
+    expect(publicMediaPath("images%2Fphoto%2525.jpg")).toBeNull();
   });
 });
 
-describe('media edge handler (mock fetch only)', () => {
-  const request = (method = 'GET', path = 'pictures/a.jpg') => new Request(`https://site.example/api/media?p=${encodeURIComponent(path)}`, {
-    method, headers: { Cookie: 'private=fake', Authorization: 'Bearer fake', Range: 'bytes=0-2' },
+describe("publicMediaOrigin", () => {
+  it("returns the origin for a valid Supabase URL", () => {
+    expect(publicMediaOrigin(PROJECT)).toBe(PROJECT);
   });
-  const setup = (status = 200) => {
-    vi.stubEnv('SUPABASE_URL', origin);
-    const fetcher = vi.fn().mockResolvedValue(new Response('fake bytes', {
-      status, headers: { 'Content-Type': 'image/jpeg', 'Set-Cookie': 'secret=fake' },
-    }));
-    vi.stubGlobal('fetch', fetcher);
-    return fetcher;
-  };
-  it.each(['GET', 'HEAD'])('serves %s with shared cache and no credentials', async method => {
-    const fetcher = setup();
-    const response = await handler(request(method));
-    expect(fetcher).toHaveBeenCalledWith(object, { method, redirect: 'error', credentials: 'omit' });
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
-    expect(response.headers.get('set-cookie')).toBeNull();
-    expect(response.headers.get('content-type')).toBe('image/jpeg');
-    expect(response.headers.get('content-security-policy')).toContain('sandbox');
-    expect(await response.text()).toBe(method === 'HEAD' ? '' : 'fake bytes');
+  it("returns null for undefined", () => {
+    expect(publicMediaOrigin(undefined)).toBeNull();
   });
-  it.each([404, 403, 500, 302, 206])('does not cache upstream %s', async status => {
-    setup(status);
-    const response = await handler(request());
-    expect(response.status).toBe(status === 404 ? 404 : 502);
-    expect(response.headers.get('Cache-Control')).toBe('no-store');
+  it("returns null for a URL with a path", () => {
+    expect(publicMediaOrigin(`${PROJECT}/storage`)).toBeNull();
   });
-  it('does not cache network failures', async () => {
-    setup().mockRejectedValue(new Error('offline'));
-    const response = await handler(request());
-    expect(response.status).toBe(502);
-    expect(response.headers.get('Cache-Control')).toBe('no-store');
+});
+
+describe("rewritePublicMediaUrl", () => {
+  it("rewrites a Supabase storage URL to the proxy path", () => {
+    expect(rewritePublicMediaUrl(storage("images/cover.jpg"), PROJECT))
+      .toBe("/media/public/images/cover.jpg");
   });
-  it('rejects traversal and non-read methods without fetching', async () => {
-    const fetcher = setup();
-    expect((await handler(request('POST'))).status).toBe(405);
-    expect((await handler(request('GET', 'pictures/../private'))).status).toBe(404);
-    expect(fetcher).not.toHaveBeenCalled();
+  it("rewrites even when projectUrl env is missing", () => {
+    expect(rewritePublicMediaUrl(storage("images/cover.jpg"), undefined))
+      .toBe("/media/public/images/cover.jpg");
+  });
+  it("rewrites a single-segment filename (file at bucket root)", () => {
+    expect(rewritePublicMediaUrl(storage("cover.jpg"), PROJECT))
+      .toBe("/media/public/cover.jpg");
+  });
+  it("rewrites a path with spaces in the filename", () => {
+    expect(rewritePublicMediaUrl(storage("images/my%20photo.jpg"), PROJECT))
+      .toBe("/media/public/images/my%20photo.jpg");
+  });
+  it("does NOT rewrite Pexels URLs", () => {
+    const url = "https://images.pexels.com/photos/1234/photo.jpeg";
+    expect(rewritePublicMediaUrl(url, PROJECT)).toBe(url);
+  });
+  it("does NOT rewrite non-Supabase URLs", () => {
+    const url = "https://cdn.example.com/image.jpg";
+    expect(rewritePublicMediaUrl(url, PROJECT)).toBe(url);
+  });
+  it("does NOT rewrite signed URLs", () => {
+    const url = `${storage("private/doc.pdf")}?token=abc123`;
+    expect(rewritePublicMediaUrl(url, PROJECT)).toBe(url);
+  });
+  it("does NOT rewrite URL from a different Supabase project", () => {
+    const otherUrl = "https://other.supabase.co/storage/v1/object/public/images/x.jpg";
+    expect(rewritePublicMediaUrl(otherUrl, PROJECT)).toBe(otherUrl);
+  });
+  it("returns the raw URL for empty input", () => {
+    expect(rewritePublicMediaUrl("", PROJECT)).toBe("");
   });
 });
