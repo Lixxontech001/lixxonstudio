@@ -202,6 +202,7 @@ export async function askOpenAiStyle(
     const text = extractOpenAiText(payload);
     return text ? { ok: true, text } : { ok: false, outcome: "empty" };
   } catch (err: unknown) {
+    console.error(`[askOpenAiStyle error:${slot.id}]`, err);
     if (err instanceof Error && err.name === "AbortError") {
       return { ok: false, outcome: "too_slow" };
     }

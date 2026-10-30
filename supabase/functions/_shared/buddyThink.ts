@@ -470,7 +470,11 @@ export async function callGemini(
       }
       const text = extractReplyText(payload);
       return text ? { ok: true, text } : { ok: false, outcome: "empty" };
-    } catch {
+    } catch (err: unknown) {
+      console.error('[callGemini error]', err);
+      if (err instanceof Error && err.name === "AbortError") {
+        return { ok: false, outcome: "too_slow" };
+      }
       return { ok: false, outcome: "unavailable" };
     } finally {
       clearTimeout(timer);

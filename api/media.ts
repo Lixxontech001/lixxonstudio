@@ -78,17 +78,20 @@ export default async function handler(req: Request): Promise<Response> {
 
   const origin = customOrigin || envOrigin;
   if (!origin) return fail(502);
+  const directStorageUrl = `${origin}/storage/v1/object/public/${targetPath}`;
 
   try {
-    const upstream = await fetch(`${origin}/storage/v1/object/public/${targetPath}`, {
+    const upstream = await fetch(directStorageUrl, {
       method: req.method,
-      redirect: 'error',
+      redirect: 'follow',
       credentials: 'omit',
     });
 
     if (upstream.status !== 200) {
       await upstream.body?.cancel();
-      return fail(upstream.status === 404 ? 404 : 502);
+      if (upstream.status === 404) return fail(404);
+      // Fallback directly to Supabase storage URL so the browser loads the image seamlessly
+      return Response.redirect(directStorageUrl, 302);
     }
 
     const contentType = inferContentType(targetPath, upstream.headers.get('content-type'));
@@ -110,7 +113,8 @@ export default async function handler(req: Request): Promise<Response> {
       status: 200,
       headers,
     });
-  } catch {
-    return fail(502);
+  } catch (err) {
+    console.error('[media-proxy error]', err);
+    return Response.redirect(directStorageUrl, 302);
   }
 }

@@ -1,4 +1,4 @@
-import { displayImageUrl } from '../../lib/images';
+import SmartImage from '../SmartImage';
 import { useState, useEffect } from 'react';
 import { ShoppingBag, Search, Heart, ArrowRight, ExternalLink } from 'lucide-react';
 import { Link } from '../../context/NavigationContext';
@@ -199,7 +199,7 @@ export function ProductCard({ product, onAddToCart, onToggleWishlist, isWishlist
       <Link to={product.slug ? { name: 'shop-product', slug: product.slug } : { name: 'shop' }} className="block">
         <div className="img-zoom aspect-square bg-taupe-light relative">
           {product.image_url && (
-            <img src={displayImageUrl(product.image_url)} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
+            <SmartImage src={product.image_url} alt={product.name} className="w-full h-full object-cover" sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" aspectRatio="1/1" />
           )}
           {product.is_sponsored && (
             <span className="absolute top-3 left-3 text-[9px] tracking-editorial uppercase text-white bg-charcoal/70 backdrop-blur-md px-2.5 py-1 rounded-full">

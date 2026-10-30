@@ -1,4 +1,4 @@
-import { displayImageUrl } from '../../lib/images';
+import SmartImage from '../SmartImage';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ExternalLink, Heart, Check, ShoppingBag, Download, FileText, BookOpen } from 'lucide-react';
 import {useNavigation} from '../../context/NavigationContext';
@@ -145,7 +145,7 @@ export default function ShopProductPage({ slug }: { slug: string }) {
           {/* Image */}
           <div className="rounded-sm overflow-hidden luxury-shadow-lg aspect-square bg-taupe-light">
             {product.image_url && (
-              <img src={displayImageUrl(product.image_url)} alt={product.name} className="w-full h-full object-cover" />
+              <SmartImage src={product.image_url} alt={product.name} className="w-full h-full object-cover" sizes="(max-width: 1024px) 100vw, 50vw" aspectRatio="1/1" priority />
             )}
           </div>
 
