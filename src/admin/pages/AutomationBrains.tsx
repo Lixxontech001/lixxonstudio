@@ -212,8 +212,8 @@ export default function AutomationBrains() {
                       className="mt-1 w-full border border-taupe/50 rounded px-3 py-2 text-sm"
                     />
                     {drafts[row.keyName]?.trim() && (
-                      <p className="mt-1.5 text-xs text-amber-800 font-medium flex items-center gap-1">
-                        <AlertTriangle size={12} className="shrink-0 text-amber-600" />
+                      <p className="mt-1 text-xs text-amber-800 font-medium flex items-center gap-1">
+                        <AlertTriangle size={12} className="shrink-0" />
                         Unsaved key in box. Click &ldquo;Save Key&rdquo; below to keep it.
                       </p>
                     )}
@@ -234,8 +234,8 @@ export default function AutomationBrains() {
                         className="mt-1 w-full border border-taupe/50 rounded px-3 py-2 text-sm"
                       />
                       {drafts[row.identifier.name]?.trim() && (
-                        <p className="mt-1.5 text-xs text-amber-800 font-medium flex items-center gap-1">
-                          <AlertTriangle size={12} className="shrink-0 text-amber-600" />
+                        <p className="mt-1 text-xs text-amber-800 font-medium flex items-center gap-1">
+                          <AlertTriangle size={12} className="shrink-0" />
                           Unsaved ID in box. Click &ldquo;Save Key&rdquo; below to keep it.
                         </p>
                       )}
@@ -252,9 +252,9 @@ export default function AutomationBrains() {
                     type="button"
                     onClick={() => void save(row)}
                     disabled={busy}
-                    className={`inline-flex items-center gap-2 rounded px-3 py-2 text-sm disabled:opacity-50 transition-colors ${
+                    className={`inline-flex items-center gap-2 rounded px-3 py-2 text-sm disabled:opacity-50 ${
                       hasDraft
-                        ? 'bg-bronze text-white font-medium ring-2 ring-bronze/30 hover:bg-bronze/90'
+                        ? 'bg-bronze text-white font-medium hover:bg-bronze/90'
                         : 'bg-charcoal text-white hover:bg-charcoal/90'
                     }`}
                   >

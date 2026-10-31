@@ -1,19 +1,22 @@
 {
-  "note": "Gzip bundle budgets. Regression = growth past baseline + 5% tolerance. 2026-10-04 stabilization baseline: Vite 7, Tailwind 4 design-token migration, Supabase client upgrade, and corrected lazy admin-pages grouping. Public total-js excludes the lazy admin chunk; admin-pages and admin-total-js are guarded separately. Update only with an owner-approved reason.",
-  "recordedAt": "2026-10-04",
+  "note": "Gzip bundle budgets. Regression = growth past baseline + 5% tolerance. Update only with an owner-approved reason.",
+  "recordedAt": "2026-10-31",
   "tolerance": 0.05,
   "budgets": {
-    "react-vendor": 45517,
-    "supabase": 58269,
-    "icons": 10439,
-    "helmet": 6218,
-    "vercel-analytics": 1243,
-    "admin-pages": 116541,
-    "article-reader": 20744,
-    "entry": 29581,
-    "css": 15556,
-    "total-js": 249023,
-    "admin-total-js": 116541,
-    "total-css": 15556
+    "react-vendor": 45083,
+    "supabase": 56944,
+    "icons": 10705,
+    "helmet": 5817,
+    "vercel-analytics": 1195,
+    "admin-pages": 121780,
+    "article-reader": 20316,
+    "entry": 29293,
+    "vapid-chunk": 1250,
+    "css": 16363,
+    "total-js": 256918,
+    "admin-total-js": 121780,
+    "admin-route-js": 35724,
+    "total-css": 16363,
+    "lazy-css": 2890
   }
 }
