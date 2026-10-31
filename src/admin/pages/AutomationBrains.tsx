@@ -66,7 +66,13 @@ export default function AutomationBrains() {
   const save = async (row: BrainRow) => {
     const pending = [row.keyName, row.identifier?.name]
       .filter((name): name is string => Boolean(name))
-      .map((name) => ({ name, value: drafts[name] || '' }))
+      .map((name) => {
+        const raw = drafts[name] || '';
+        const clean = name.includes('token') || name.includes('key')
+          ? raw.replace(/[\r\n\t\s]/g, '').replace(/^["']|["']$/g, '').trim()
+          : raw.trim();
+        return { name, value: clean };
+      })
       .filter((entry) => entry.value.length > 0);
     if (pending.length === 0) {
       setNotice({ tone: 'warning', message: `Paste the ${row.keyLabel.toLowerCase()} for ${row.slot.label} before saving. The value is never shown again after a save attempt.` });

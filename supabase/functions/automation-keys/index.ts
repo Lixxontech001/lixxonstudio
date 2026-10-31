@@ -395,9 +395,13 @@ Deno.serve(async (req: Request) => {
   let secret: string | null = null;
   try {
     const result = await sb.rpc("automation_secret_get_internal", { p_secret_name: name });
-    if (!result.error && typeof result.data === "string" && result.data.length > 0) secret = result.data;
-  } catch {
-    // Do not log provider, Vault, request, or credential errors.
+    if (!result.error && typeof result.data === "string" && result.data.length > 0) {
+      secret = result.data;
+    } else if (result.error) {
+      console.error(`[automation-keys] Vault read error for ${name}:`, result.error.message);
+    }
+  } catch (err) {
+    console.error(`[automation-keys] Vault RPC threw for ${name}:`, err);
   }
   if (!secret) {
     const status: AutomationKeyTestStatus = "unavailable";
@@ -408,8 +412,8 @@ Deno.serve(async (req: Request) => {
   let status: AutomationKeyTestStatus = "unavailable";
   try {
     status = await runKeyTest(sb, name, secret);
-  } catch {
-    // Provider, Vault and request errors are intentionally reduced to a safe status.
+  } catch (err) {
+    console.error(`[automation-keys] runKeyTest threw for ${name}:`, err);
   } finally {
     secret = null;
   }

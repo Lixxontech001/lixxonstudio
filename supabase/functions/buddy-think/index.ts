@@ -539,8 +539,12 @@ Deno.serve(async (req: Request) => {
   const readSecret = async (secretName: string): Promise<string | null> => {
     try {
       const { data, error } = await sb.rpc("automation_secret_get_internal", { p_secret_name: secretName });
+      if (error) {
+        console.error(`[buddy-think] Vault read error for ${secretName}:`, error.message);
+      }
       return !error && typeof data === "string" && data.length > 0 ? data : null;
-    } catch {
+    } catch (err) {
+      console.error(`[buddy-think] Vault RPC threw for ${secretName}:`, err);
       return null;
     }
   };

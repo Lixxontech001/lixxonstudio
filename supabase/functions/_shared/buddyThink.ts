@@ -425,17 +425,17 @@ export async function callGemini(
   input: { system: string; turns: GeminiTurn[]; json?: boolean },
   fetchImpl: typeof fetch = fetch,
 ): Promise<GeminiResult> {
-  const cleanKey = apiKey.trim().replace(/^["']|["']$/g, "").trim();
+  const cleanKey = apiKey.replace(/[\r\n\t\s]/g, "").replace(/^["']|["']$/g, "").trim();
   const envModel = typeof (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno !== "undefined"
     ? (globalThis as { Deno?: { env?: { get?: (k: string) => string | undefined } } }).Deno?.env?.get?.("BUDDY_GEMINI_MODEL")
     : undefined;
   const primaryModel = envModel?.trim() || BUDDY_GEMINI_MODEL;
   const fallbackCandidates = [
     "gemini-2.0-flash",
-    "gemini-1.5-pro",
     "gemini-1.5-flash",
-    "gemini-1.5-pro-latest",
+    "gemini-1.5-pro",
     "gemini-1.5-flash-latest",
+    "gemini-1.5-pro-latest",
     "gemini-2.0-flash-exp",
     "gemini-1.5-flash-8b",
   ];

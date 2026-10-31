@@ -76,11 +76,13 @@ export function buildProviderCheckRequest(name: string, secret: string): Provide
   switch (name) {
     case "openai_api_key":
       return { url: "https://api.openai.com/v1/models?limit=1", init: guardedGet(bearer) };
-    case "gemini_api_key":
+    case "gemini_api_key": {
+      const cleanSecret = secret.replace(/[\r\n\t\s]/g, "").replace(/^["']|["']$/g, "").trim();
       return {
-        url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-        init: guardedPost({ "x-goog-api-key": secret }, { contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 1 } }),
+        url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1",
+        init: guardedGet({ "x-goog-api-key": cleanSecret }),
       };
+    }
     case "anthropic_api_key":
       return {
         url: "https://api.anthropic.com/v1/models?limit=1",
@@ -194,7 +196,8 @@ export async function fetchProviderStatus(
       // The response is never consumed or returned to the caller.
     }
     return status;
-  } catch {
+  } catch (err: unknown) {
+    console.error(`[fetchProviderStatus error] ${request.url} threw:`, err);
     return "unavailable";
   } finally {
     clearTimeout(timeout);
