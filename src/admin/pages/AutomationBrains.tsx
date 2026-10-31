@@ -90,7 +90,7 @@ export default function AutomationBrains() {
           return;
         }
       }
-      setNotice({ tone: 'success', message: `${row.slot.label} saved. It cannot be shown again.` });
+      setNotice({ tone: 'success', message: `${row.slot.label} saved. Click Test to verify the connection.` });
       await refresh();
     } catch {
       setNotice({ tone: 'error', message: `Could not save the ${row.slot.label} entry. No value was kept in the form; check the connection and paste it again.` });
@@ -100,6 +100,14 @@ export default function AutomationBrains() {
   };
 
   const test = async (row: BrainRow) => {
+    const hasUnsavedDraft = Boolean(drafts[row.keyName]?.trim() || (row.identifier && drafts[row.identifier.name]?.trim()));
+    if (hasUnsavedDraft) {
+      setNotice({
+        tone: 'warning',
+        message: `You entered a new key for ${row.slot.label} that is not saved yet. Click "Save Key" first, then test.`,
+      });
+      return;
+    }
     if (!isSaved(row.keyName)) return;
     setBusyName(row.keyName);
     setNotice(null);
@@ -131,7 +139,7 @@ export default function AutomationBrains() {
         <div>
           <h1 className="font-serif text-2xl text-charcoal">Brains</h1>
           <p className="text-sm text-charcoal-muted mt-1">
-            Buddy tries these brains in this order and skips any with no saved key. Paste a key once. It is never shown again.
+            Buddy tries these brains in this order and skips any with no saved key. Paste a key once and click Save. It is never shown again.
             Test makes one read-only request and publishes nothing.
           </p>
         </div>
@@ -167,6 +175,7 @@ export default function AutomationBrains() {
             const saved = isSaved(row.keyName);
             const busy = busyName === row.keyName;
             const skipped = row.slot.access === 'skip';
+            const hasDraft = Boolean(drafts[row.keyName]?.trim() || (row.identifier && drafts[row.identifier.name]?.trim()));
             return (
               <li key={row.slot.id} className="border border-taupe/40 rounded-sm bg-white p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -174,15 +183,24 @@ export default function AutomationBrains() {
                     <h2 className="font-medium text-charcoal">{row.slot.order}. {row.slot.label}</h2>
                     <p className="text-sm text-charcoal-muted mt-1">{row.slot.purpose}</p>
                   </div>
-                  <span className={`shrink-0 inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded ${saved ? 'bg-green-50 text-green-800' : 'bg-taupe/20 text-charcoal-muted'}`}>
-                    {saved && <CheckCircle2 size={12} />}
-                    {saved ? 'Saved' : 'Not saved'}
-                  </span>
+                  {hasDraft ? (
+                    <span className="shrink-0 inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                      <AlertTriangle size={12} />
+                      Unsaved key
+                    </span>
+                  ) : (
+                    <span className={`shrink-0 inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded ${saved ? 'bg-green-50 text-green-800' : 'bg-taupe/20 text-charcoal-muted'}`}>
+                      {saved && <CheckCircle2 size={12} />}
+                      {saved ? 'Saved' : 'Not saved'}
+                    </span>
+                  )}
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="text-sm text-charcoal">
-                    {row.keyLabel}
+                  <div>
+                    <label htmlFor={`brain-key-${row.keyName}`} className="text-sm text-charcoal block">
+                      {row.keyLabel}
+                    </label>
                     <input
                       id={`brain-key-${row.keyName}`}
                       type="password"
@@ -193,10 +211,18 @@ export default function AutomationBrains() {
                       placeholder={saved ? 'Saved. Paste a new one to replace it.' : `Paste the ${row.keyLabel.toLowerCase()}`}
                       className="mt-1 w-full border border-taupe/50 rounded px-3 py-2 text-sm"
                     />
-                  </label>
+                    {drafts[row.keyName]?.trim() && (
+                      <p className="mt-1.5 text-xs text-amber-800 font-medium flex items-center gap-1">
+                        <AlertTriangle size={12} className="shrink-0 text-amber-600" />
+                        Unsaved key in box. Click &ldquo;Save Key&rdquo; below to keep it.
+                      </p>
+                    )}
+                  </div>
                   {row.identifier && (
-                    <label className="text-sm text-charcoal">
-                      {row.identifier.label}
+                    <div>
+                      <label htmlFor={`brain-key-${row.identifier.name}`} className="text-sm text-charcoal block">
+                        {row.identifier.label}
+                      </label>
                       <input
                         id={`brain-key-${row.identifier.name}`}
                         type="text"
@@ -207,7 +233,13 @@ export default function AutomationBrains() {
                         placeholder={isSaved(row.identifier.name) ? 'Saved. Paste a new one to replace it.' : 'Paste the account ID'}
                         className="mt-1 w-full border border-taupe/50 rounded px-3 py-2 text-sm"
                       />
-                    </label>
+                      {drafts[row.identifier.name]?.trim() && (
+                        <p className="mt-1.5 text-xs text-amber-800 font-medium flex items-center gap-1">
+                          <AlertTriangle size={12} className="shrink-0 text-amber-600" />
+                          Unsaved ID in box. Click &ldquo;Save Key&rdquo; below to keep it.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -220,15 +252,19 @@ export default function AutomationBrains() {
                     type="button"
                     onClick={() => void save(row)}
                     disabled={busy}
-                    className="inline-flex items-center gap-2 bg-charcoal text-white rounded px-3 py-2 text-sm disabled:opacity-50"
+                    className={`inline-flex items-center gap-2 rounded px-3 py-2 text-sm disabled:opacity-50 transition-colors ${
+                      hasDraft
+                        ? 'bg-bronze text-white font-medium ring-2 ring-bronze/30 hover:bg-bronze/90'
+                        : 'bg-charcoal text-white hover:bg-charcoal/90'
+                    }`}
                   >
                     {busy && <Loader2 size={14} className="animate-spin" />}
-                    Save
+                    {hasDraft ? 'Save Key' : 'Save'}
                   </button>
                   <button
                     type="button"
                     onClick={() => void test(row)}
-                    disabled={busy || !saved || !row.testable}
+                    disabled={busy || (!saved && !hasDraft) || !row.testable}
                     className="inline-flex items-center gap-2 border border-taupe/50 rounded px-3 py-2 text-sm text-charcoal hover:border-bronze disabled:opacity-50"
                   >
                     <FlaskConical size={14} />

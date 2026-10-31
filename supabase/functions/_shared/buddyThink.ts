@@ -445,7 +445,6 @@ export async function callGemini(
   ];
 
   const contents = sanitizeGeminiContents(input.turns);
-  let hadRateLimit = false;
 
   for (const model of modelsToTry) {
     const controller = new AbortController();
@@ -481,10 +480,8 @@ export async function callGemini(
         continue;
       }
       if (response.status === 429) {
-        // Rate limited on this specific model; try next model before giving up
         await discardBody(response);
-        hadRateLimit = true;
-        continue;
+        return { ok: false, outcome: "rate_limited" };
       }
       if (!response.ok) {
         try {
@@ -512,9 +509,6 @@ export async function callGemini(
     }
   }
 
-  if (hadRateLimit) {
-    return { ok: false, outcome: "rate_limited" };
-  }
   return { ok: false, outcome: "unavailable" };
 }
 
