@@ -14,6 +14,24 @@ function env(...names: string[]): string | undefined {
   return undefined;
 }
 
+function fallbackSitemap(site: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${site}/</loc><lastmod>${today}</lastmod><priority>1.0</priority></url>
+  <url><loc>${site}/shop</loc><lastmod>${today}</lastmod><priority>0.9</priority></url>
+  <url><loc>${site}/collections</loc><lastmod>${today}</lastmod><priority>0.8</priority></url>
+  <url><loc>${site}/series</loc><lastmod>${today}</lastmod><priority>0.8</priority></url>
+  <url><loc>${site}/glossary</loc><lastmod>${today}</lastmod><priority>0.8</priority></url>
+  <url><loc>${site}/weekly-digest</loc><lastmod>${today}</lastmod><priority>0.8</priority></url>
+  <url><loc>${site}/about</loc><lastmod>${today}</lastmod><priority>0.7</priority></url>
+  <url><loc>${site}/contact</loc><lastmod>${today}</lastmod><priority>0.7</priority></url>
+  <url><loc>${site}/gift-cards</loc><lastmod>${today}</lastmod><priority>0.7</priority></url>
+  <url><loc>${site}/privacy</loc><lastmod>${today}</lastmod><priority>0.3</priority></url>
+  <url><loc>${site}/terms</loc><lastmod>${today}</lastmod><priority>0.3</priority></url>
+</urlset>`;
+}
+
 export default async function handler(req: Request): Promise<Response> {
   const base = env(
     'VITE_SUPABASE_URL',
@@ -34,12 +52,35 @@ export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const type = url.searchParams.get('type') || 'sitemap';
   const path = url.searchParams.get('path') || '/';
-  if (!base || !ALLOWED.has(type)) return new Response('Not found', { status: 404 });
+
+  if (!ALLOWED.has(type)) return new Response('Not found', { status: 404 });
+  if (!base) {
+    if (type === 'sitemap') {
+      return new Response(fallbackSitemap(url.origin), {
+        status: 200,
+        headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+      });
+    }
+    return new Response('Not found', { status: 404 });
+  }
+
   const target = `${base}/functions/v1/feeds?type=${type}&path=${encodeURIComponent(path)}`;
   let r: Response;
   try {
     r = await fetch(target, { headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
+    if (!r.ok && type === 'sitemap') {
+      return new Response(fallbackSitemap(url.origin), {
+        status: 200,
+        headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' },
+      });
+    }
   } catch {
+    if (type === 'sitemap') {
+      return new Response(fallbackSitemap(url.origin), {
+        status: 200,
+        headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' },
+      });
+    }
     // Supabase unreachable — answer crawlers with a clean error instead of an unhandled stack trace.
     return new Response('Upstream feed unavailable', { status: 502, headers: { 'Cache-Control': 'no-store' } });
   }

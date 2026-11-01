@@ -1,5 +1,25 @@
+# Lixxon Studio — Robots & Crawlers Configuration
+# https://lixxonstudio.vercel.app
+
 User-agent: *
 Allow: /
+Allow: /blog/
+Allow: /category/
+Allow: /shop/
+Allow: /collections/
+Allow: /series/
+Allow: /glossary
+Allow: /weekly-digest
+Allow: /about
+Allow: /contact
+Allow: /gift-cards
+Allow: /assets/
+Allow: /favicon.png
+Allow: /apple-touch-icon.png
+Allow: /manifest.webmanifest
+Allow: /google*.html
+
+# Private, admin & transaction paths
 Disallow: /admin
 Disallow: /admin/
 Disallow: /account
@@ -8,5 +28,40 @@ Disallow: /shop/cart
 Disallow: /shop/checkout
 Disallow: /search
 Disallow: /api/
+Disallow: /buddy
+Disallow: /buddy/
+Disallow: /newsletter/confirm
+Disallow: /newsletter/unsubscribe
 
+# Major Search Engine Crawlers
+User-agent: Googlebot
+Allow: /
+Allow: /blog/
+Allow: /shop/
+Allow: /assets/
+Allow: /google*.html
+Disallow: /admin/
+Disallow: /account/
+Disallow: /shop/cart
+Disallow: /shop/checkout
+Disallow: /search
+Disallow: /api/
+
+User-agent: Googlebot-Image
+Allow: /assets/
+Allow: /media/
+Allow: /favicon.png
+Allow: /apple-touch-icon.png
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+Disallow: /account/
+Disallow: /shop/cart
+Disallow: /shop/checkout
+Disallow: /search
+Disallow: /api/
+
+# Feeds & Sitemaps
 Sitemap: https://lixxonstudio.vercel.app/sitemap.xml
+Sitemap: https://lixxonstudio.vercel.app/rss.xml
