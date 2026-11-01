@@ -49,7 +49,7 @@ function fallbackRss(site: string): string {
     <guid isPermaLink="true">${site}</guid>
     <pubDate>${now}</pubDate>
     <description>A daily digital magazine covering skincare science, intentional style, and minimalist wellness.</description>
-    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" type="image/jpeg" />
+    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" length="0" type="image/jpeg" />
     <media:content url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" medium="image" />
   </item>
   <item>
@@ -58,7 +58,7 @@ function fallbackRss(site: string): string {
     <guid isPermaLink="true">${site}/shop</guid>
     <pubDate>${now}</pubDate>
     <description>Digital guides and curated essentials from Lixxon Studio. Skincare routines, style guides, and wellness resources.</description>
-    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" type="image/jpeg" />
+    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" length="0" type="image/jpeg" />
     <media:content url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" medium="image" />
   </item>
 </channel>

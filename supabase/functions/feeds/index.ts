@@ -57,7 +57,7 @@ ${(authors || []).map((a) => u(`/author/${encodeURIComponent(a.slug)}`, null, "0
   ${cat}
   <description>${escapeHtml(p.excerpt || "")}</description>
   <content:encoded><![CDATA[${contentHtml}]]></content:encoded>
-  ${img ? `<enclosure url="${img}" type="image/jpeg" />` : ""}
+  ${img ? `<enclosure url="${img}" length="0" type="image/jpeg" />` : ""}
   ${img ? `<media:content url="${img}" medium="image" />` : ""}
 </item>`;
     }).join("\n");
