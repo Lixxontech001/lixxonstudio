@@ -75,7 +75,8 @@ export default function SEO() {
       image = product.image_url || `${SITE_URL}/api/og?title=${encodeURIComponent(product.name)}`;
       url = `${SITE_URL}/shop/product/${route.slug}`;
       ogType = 'product';
-      productMeta = { price: product.price_usd, currency: 'USD' };
+      const priceVal = product.price_cents ? product.price_cents / 100 : (product.price ? parseFloat(product.price.replace(/[^0-9.]/g, '')) || undefined : undefined);
+      productMeta = { price: priceVal, currency: product.currency || 'USD' };
     } else {
       title = `Shop | ${SITE_NAME}`;
       url = `${SITE_URL}/shop/product/${route.slug}`;
