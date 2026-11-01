@@ -446,101 +446,78 @@ export async function callGemini(
 
   const contents = sanitizeGeminiContents(input.turns);
 
-  let hadForbidden = false;
-  let hadRateLimit = false;
-
   for (const model of modelsToTry) {
-    const attempts = input.json ? [true, false] : [false];
-    for (const withJsonMime of attempts) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-      try {
-        const generationConfig = withJsonMime
-          ? { temperature: 0.4, maxOutputTokens: 900, responseMimeType: "application/json" }
-          : { temperature: 0.4, maxOutputTokens: 700 };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+    try {
+      const response = await fetchImpl(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
+        method: "POST",
+        redirect: "error",
+        cache: "no-store",
+        referrerPolicy: "no-referrer",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", Accept: "application/json", "x-goog-api-key": cleanKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: input.system }] },
+          contents,
+          generationConfig: input.json
+            ? { temperature: 0.4, maxOutputTokens: 900, responseMimeType: "application/json" }
+            : { temperature: 0.4, maxOutputTokens: 700 },
+        }),
+      });
 
-        const response = await fetchImpl(`${GEMINI_API_BASE}/models/${model}:generateContent`, {
-          method: "POST",
-          redirect: "error",
-          cache: "no-store",
-          referrerPolicy: "no-referrer",
-          signal: controller.signal,
-          headers: { "Content-Type": "application/json", Accept: "application/json", "x-goog-api-key": cleanKey },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: input.system }] },
-            contents,
-            generationConfig,
-          }),
-        });
-
-        if (response.status === 401) {
-          try {
-            const errText = await response.text();
-            console.error(`[callGemini error] Model ${model} returned 401:`, errText);
-          } catch {
-            await discardBody(response);
-          }
-          return { ok: false, outcome: "rejected" };
-        }
-
-        if (response.status === 403) {
-          hadForbidden = true;
-          try {
-            const errText = await response.text();
-            console.error(`[callGemini error] Model ${model} returned 403:`, errText);
-          } catch {
-            await discardBody(response);
-          }
-          break; // move to next model
-        }
-
-        if (response.status === 429) {
-          hadRateLimit = true;
-          await discardBody(response);
-          break; // move to next model
-        }
-
-        if (response.status === 400 || response.status === 404 || response.status === 422) {
-          try {
-            const errText = await response.text();
-            console.error(`[callGemini error] Model ${model} (jsonMime=${withJsonMime}) returned ${response.status}:`, errText);
-          } catch {
-            await discardBody(response);
-          }
-          // If withJsonMime was true, the loop will try without responseMimeType
-          continue;
-        }
-
-        if (!response.ok) {
-          try {
-            const errText = await response.text();
-            console.error(`[callGemini error] Model ${model} returned status ${response.status}:`, errText);
-          } catch {
-            await discardBody(response);
-          }
-          break;
-        }
-
-        let payload: unknown;
+      if (response.status === 401 || response.status === 403) {
         try {
-          payload = await response.json();
+          const errText = await response.text();
+          console.error(`[callGemini error] Model ${model} returned ${response.status}:`, errText);
         } catch {
-          continue;
+          await discardBody(response);
         }
-        const text = extractReplyText(payload);
-        if (text) return { ok: true, text };
-        // Empty text on this model, continue to fallback model
-      } catch (err: unknown) {
-        console.error(`[callGemini error] Model ${model} threw:`, err);
-        break;
-      } finally {
-        clearTimeout(timer);
+        return { ok: false, outcome: "rejected" };
       }
+
+      if (response.status === 429) {
+        await discardBody(response);
+        return { ok: false, outcome: "rate_limited" };
+      }
+
+      if (response.status === 400 || response.status === 404 || response.status === 422) {
+        try {
+          const errText = await response.text();
+          console.error(`[callGemini error] Model ${model} returned ${response.status}:`, errText);
+        } catch {
+          await discardBody(response);
+        }
+        continue;
+      }
+
+      if (!response.ok) {
+        try {
+          const errText = await response.text();
+          console.error(`[callGemini error] Model ${model} returned status ${response.status}:`, errText);
+        } catch {
+          await discardBody(response);
+        }
+        continue;
+      }
+
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        continue;
+      }
+      const text = extractReplyText(payload);
+      if (text) return { ok: true, text };
+      // Empty text on this model, continue to fallback model
+    } catch (err: unknown) {
+      console.error(`[callGemini error] Model ${model} threw:`, err);
+      continue;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
-  if (hadForbidden) return { ok: false, outcome: "rejected" };
-  if (hadRateLimit) return { ok: false, outcome: "rate_limited" };
   return { ok: false, outcome: "unavailable" };
 }
 
