@@ -152,13 +152,15 @@ export default function Footer() {
         <div>
           <p className="text-xs tracking-editorial uppercase text-white/40 mb-5">Legal</p>
           <ul className="space-y-3">
-            <li><Link to={{ name: 'privacy' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Privacy Policy</Link></li>
-            <li><Link to={{ name: 'terms' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Terms of Service</Link></li>
-            <li><Link to={{ name: 'newsletter-preferences' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Newsletter Preferences</Link></li>
             <li><Link to={{ name: 'bookmarks' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Bookmarks</Link></li>
             <li><Link to={{ name: 'reading-lists' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Reading Lists</Link></li>
             <li><Link to={{ name: 'reading-history' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Reading History</Link></li>
+            <li><Link to={{ name: 'achievements' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Reader Achievements</Link></li>
             <li><Link to={{ name: 'account' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">My Account</Link></li>
+            <li><a href="/feed.xml" target="_blank" rel="alternate" type="application/rss+xml" className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">RSS / XML Feed</a></li>
+            <li><Link to={{ name: 'privacy' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Privacy Policy</Link></li>
+            <li><Link to={{ name: 'terms' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Terms of Service</Link></li>
+            <li><Link to={{ name: 'newsletter-preferences' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Newsletter Preferences</Link></li>
           </ul>
         </div>
           </>
