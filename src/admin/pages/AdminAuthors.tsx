@@ -4,6 +4,7 @@ import { useAdminAuthors } from '../../hooks/useSupabase';
 import { Plus, Pencil, X } from 'lucide-react';
 import type { Author } from '../../lib/types';
 import { MarkdownField } from '../components/AdminEditorKit';
+import AdminImageUploadField from '../components/AdminImageUploadField';
 
 export default function AdminAuthors() {
   const { authors, loading } = useAdminAuthors();
@@ -126,10 +127,13 @@ export default function AdminAuthors() {
                 max={900}
                 hint="A concise editorial bio. It appears on the author page and article header."
               />
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Avatar URL</label>
-                <input type="text" value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://..." className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
-              </div>
+              <AdminImageUploadField
+                label="Author Avatar / Portrait"
+                value={avatarUrl}
+                onChange={setAvatarUrl}
+                folder="authors"
+                hint="Square portrait photo (recommended 400x400 or higher)."
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Twitter</label>

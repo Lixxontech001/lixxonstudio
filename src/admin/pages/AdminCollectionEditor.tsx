@@ -1,59 +1,134 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MarkdownField } from '../components/AdminEditorKit';
-import {ArrowLeft, Save, Plus, X} from 'lucide-react';
+import { ArrowLeft, Save, Plus, X, ExternalLink, Loader2, GripVertical, Check, Search, FileText } from 'lucide-react';
 import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
 import type { Post } from '../../lib/types';
+import AdminImageUploadField from '../components/AdminImageUploadField';
 
 interface CollectionForm {
-  title: string; slug: string; description: string; cover_image: string;
-  is_featured: boolean; is_active: boolean; sort_order: number;
+  title: string;
+  slug: string;
+  description: string;
+  cover_image: string;
+  is_featured: boolean;
+  is_active: boolean;
+  sort_order: number;
+}
+
+interface AttachedArticle {
+  id: string;
+  title: string;
+  slug?: string;
+  sort_order: number;
 }
 
 export default function AdminCollectionEditor({ collectionId, isNew }: { collectionId?: string; isNew?: boolean }) {
   const { navigate } = useNavigation();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [savedSuccess, setSavedSuccess] = useState(false);
 
   const [form, setForm] = useState<CollectionForm>({
-    title: '', slug: '', description: '', cover_image: '', is_featured: false, is_active: true, sort_order: 0,
+    title: '',
+    slug: '',
+    description: '',
+    cover_image: '',
+    is_featured: false,
+    is_active: true,
+    sort_order: 0,
   });
 
   const [articleSearch, setArticleSearch] = useState('');
-  const [searchResults, setSearchResults] = useState<Post[]>([]);
-  const [selectedArticles, setSelectedArticles] = useState<{ id: string; title: string; sort_order: number }[]>([]);
+  const [allAvailableArticles, setAllAvailableArticles] = useState<Post[]>([]);
+  const [loadingArticles, setLoadingArticles] = useState(false);
+  const [selectedArticles, setSelectedArticles] = useState<AttachedArticle[]>([]);
 
+  // Load existing collection details and items
   useEffect(() => {
     if (!isNew && collectionId) {
-      supabase.from('collections').select('*').eq('id', collectionId).maybeSingle().then(({ data }) => {
-        if (data) setForm({ title: data.title, slug: data.slug, description: data.description || '', cover_image: data.cover_image || '', is_featured: data.is_featured, is_active: data.is_active, sort_order: data.sort_order || 0 });
-      });
-      supabase.from('collection_items').select('post_id, sort_order, post:posts(id, title)').eq('collection_id', collectionId).order('sort_order').then(({ data }) => {
-        if (data) setSelectedArticles((data as unknown as { post_id: string; sort_order: number; post: { id: string; title: string } | null }[]).map((d) => ({ id: d.post_id, title: d.post?.title || 'Untitled', sort_order: d.sort_order })));
-      });
-    }
-  }, [collectionId, isNew]);
+      supabase
+        .from('collections')
+        .select('*')
+        .eq('id', collectionId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setForm({
+              title: data.title,
+              slug: data.slug,
+              description: data.description || '',
+              cover_image: data.cover_image || '',
+              is_featured: data.is_featured,
+              is_active: data.is_active,
+              sort_order: data.sort_order || 0,
+            });
+          }
+        });
 
-  const searchArticles = async (q: string) => {
-    setArticleSearch(q);
-    if (q.length < 2) { setSearchResults([]); return; }
-    const { data } = await supabase.from('posts').select('id, title').ilike('title', `%${q}%`).eq('status', 'published').limit(10);
-    setSearchResults((data || []) as Post[]);
-  };
+      supabase
+        .from('collection_items')
+        .select('post_id, sort_order, post:posts(id, title, slug)')
+        .eq('collection_id', collectionId)
+        .order('sort_order')
+        .then(({ data }) => {
+          if (data) {
+            setSelectedArticles(
+              (data as unknown as { post_id: string; sort_order: number; post: { id: string; title: string; slug?: string } | null }[])
+                .map(d => ({
+                  id: d.post_id,
+                  title: d.post?.title || 'Untitled',
+                  slug: d.post?.slug,
+                  sort_order: d.sort_order,
+                }))
+            );
+          }
+        });
+    }
+
+    // Load recent published articles for fast browsing
+    setLoadingArticles(true);
+    supabase
+      .from('posts')
+      .select('id, title, slug, status, excerpt, published_at')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false })
+      .limit(60)
+      .then(({ data }) => {
+        setAllAvailableArticles((data || []) as Post[]);
+        setLoadingArticles(false);
+      });
+  }, [collectionId, isNew]);
 
   const addArticle = (post: Post) => {
     if (selectedArticles.find(a => a.id === post.id)) return;
-    setSelectedArticles(prev => [...prev, { id: post.id, title: post.title, sort_order: prev.length }]);
-    setArticleSearch(''); setSearchResults([]);
+    setSelectedArticles(prev => [
+      ...prev,
+      { id: post.id, title: post.title, slug: post.slug, sort_order: prev.length },
+    ]);
   };
 
   const removeArticle = (id: string) => {
     setSelectedArticles(prev => prev.filter(a => a.id !== id).map((a, i) => ({ ...a, sort_order: i })));
   };
 
+  const moveArticle = (idx: number, dir: -1 | 1) => {
+    const list = [...selectedArticles];
+    const target = idx + dir;
+    if (target < 0 || target >= list.length) return;
+    [list[idx], list[target]] = [list[target], list[idx]];
+    setSelectedArticles(list.map((a, i) => ({ ...a, sort_order: i })));
+  };
+
   const handleSave = async () => {
-    setSaving(true); setError('');
-    const slug = form.slug || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!form.title.trim()) {
+      setError('Please provide a collection title');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    const slug = form.slug?.trim() || form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
     try {
       let id = collectionId;
       if (isNew) {
@@ -61,92 +136,326 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
         if (e) throw e;
         id = data.id;
       } else {
-        const { error: e } = await supabase.from('collections').update({ ...form, slug, updated_at: new Date().toISOString() }).eq('id', collectionId);
+        const { error: e } = await supabase
+          .from('collections')
+          .update({ ...form, slug, updated_at: new Date().toISOString() })
+          .eq('id', collectionId);
         if (e) throw e;
       }
 
       if (id) {
         await supabase.from('collection_items').delete().eq('collection_id', id);
         if (selectedArticles.length > 0) {
-          await supabase.from('collection_items').insert(selectedArticles.map(a => ({ collection_id: id, post_id: a.id, sort_order: a.sort_order })));
+          await supabase.from('collection_items').insert(
+            selectedArticles.map((a, i) => ({
+              collection_id: id,
+              post_id: a.id,
+              sort_order: i,
+            }))
+          );
         }
       }
-      setTimeout(() => navigate({ name: 'admin-collections' }), 800);
+
+      setSavedSuccess(true);
+      setTimeout(() => {
+        navigate({ name: 'admin-collections' });
+      }, 1000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save');
+      setError(e instanceof Error ? e.message : 'Failed to save collection');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
-  const inputClass = "w-full bg-white border border-taupe/50 px-3 py-2.5 text-sm text-charcoal rounded-sm focus:outline-none focus:border-bronze transition-colors";
-  const labelClass = "block text-[10px] tracking-editorial uppercase text-charcoal-muted mb-1.5";
+  // Filter available articles based on search
+  const filteredAvailableArticles = useMemo(() => {
+    const selectedIds = new Set(selectedArticles.map(a => a.id));
+    return allAvailableArticles
+      .filter(p => !selectedIds.has(p.id))
+      .filter(p => {
+        if (!articleSearch.trim()) return true;
+        const q = articleSearch.toLowerCase();
+        return p.title.toLowerCase().includes(q) || (p.slug && p.slug.toLowerCase().includes(q));
+      });
+  }, [allAvailableArticles, selectedArticles, articleSearch]);
+
+  const inputClass =
+    'w-full bg-white border border-taupe/60 px-3 py-2.5 text-sm text-charcoal rounded-sm focus:outline-none focus:border-bronze transition-colors';
+  const labelClass = 'block text-[11px] font-medium tracking-editorial uppercase text-charcoal-muted mb-1.5';
 
   return (
-    <div>
-      <button onClick={() => navigate({ name: 'admin-collections' })} className="inline-flex items-center gap-2 text-xs tracking-editorial uppercase text-charcoal-muted hover:text-bronze transition-colors mb-6">
-        <ArrowLeft size={14} /> Back to Collections
-      </button>
-      <h1 className="font-serif text-3xl text-charcoal font-light mb-8">{isNew ? 'New Collection' : 'Edit Collection'}</h1>
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-sm mb-6">{error}</div>}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => navigate({ name: 'admin-collections' })}
+          className="inline-flex items-center gap-2 text-xs tracking-editorial uppercase text-charcoal-muted hover:text-bronze transition-colors"
+        >
+          <ArrowLeft size={14} /> Back to Collections
+        </button>
+        {form.slug && !isNew && (
+          <a
+            href={`/collections/${form.slug}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-bronze hover:underline"
+          >
+            <ExternalLink size={13} /> View on Public Site
+          </a>
+        )}
+      </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div><label className={labelClass}>Title</label><input className={inputClass} value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} /></div>
-          <div><label className={labelClass}>Slug</label><input className={inputClass} value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value }))} /></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-taupe/30 pb-4">
+        <div>
+          <h1 className="font-serif text-3xl text-charcoal font-light">
+            {isNew ? 'New Curated Collection' : 'Edit Collection'}
+          </h1>
+          <p className="text-sm text-charcoal-muted mt-1">
+            Thematic collections gather curated articles into a branded reader journey.
+          </p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="inline-flex items-center gap-2 px-6 py-2.5 bg-bronze text-white text-xs tracking-editorial uppercase font-medium rounded-sm hover:bg-bronze-dark transition-all disabled:opacity-60 shadow-sm"
+        >
+          {saving ? <Loader2 size={15} className="animate-spin" /> : savedSuccess ? <Check size={15} /> : <Save size={15} />}
+          {saving ? 'Saving…' : savedSuccess ? 'Saved!' : 'Save Collection'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-2 gap-8">
+        {/* Left Column: Collection Metadata */}
+        <div className="space-y-5 bg-white p-6 rounded-md border border-taupe/40 shadow-sm">
+          <div>
+            <label className={labelClass}>Collection Title *</label>
+            <input
+              required
+              className={inputClass}
+              value={form.title}
+              onChange={e => {
+                const t = e.target.value;
+                setForm(p => ({
+                  ...p,
+                  title: t,
+                  slug: isNew ? t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : p.slug,
+                }));
+              }}
+              placeholder="e.g. The Barrier Repair Edit"
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>URL Slug (/collections/:slug)</label>
+            <input
+              className={`${inputClass} font-mono`}
+              value={form.slug}
+              onChange={e => setForm(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') }))}
+              placeholder="barrier-repair-edit"
+            />
+          </div>
+
           <div>
             <MarkdownField
-              label="Description (shown on the collection page and in search)"
+              label="Editorial Introduction & Description"
               value={form.description}
               onChange={v => setForm(p => ({ ...p, description: v }))}
               rows={4}
-              min={120}
               max={1200}
-              hint="A couple of sentences: what this edit is, who it is for, what is inside."
+              hint="Describe the focus of this curated collection for readers and search engines."
             />
           </div>
-          <div><label className={labelClass}>Cover Image URL</label><input className={inputClass} value={form.cover_image} onChange={e => setForm(p => ({ ...p, cover_image: e.target.value }))} /></div>
-          <div><label className={labelClass}>Sort Order</label><input type="number" className={inputClass} value={form.sort_order} onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} /></div>
-          <div className="space-y-2 pt-2">
-            <label className="flex items-center gap-3 text-sm text-charcoal"><input type="checkbox" checked={form.is_featured} onChange={e => setForm(p => ({ ...p, is_featured: e.target.checked }))} className="accent-bronze" /> Featured</label>
-            <label className="flex items-center gap-3 text-sm text-charcoal"><input type="checkbox" checked={form.is_active} onChange={e => setForm(p => ({ ...p, is_active: e.target.checked }))} className="accent-bronze" /> Active</label>
+
+          <AdminImageUploadField
+            label="Collection Cover Image"
+            value={form.cover_image}
+            onChange={url => setForm(p => ({ ...p, cover_image: url }))}
+            folder="collections"
+            hint="A distinctive cover image displayed on the collection card and page header."
+          />
+
+          <div>
+            <label className={labelClass}>Sort Priority (Higher values appear first)</label>
+            <input
+              type="number"
+              className={inputClass}
+              value={form.sort_order}
+              onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))}
+            />
+          </div>
+
+          <div className="pt-2 border-t border-taupe/20 space-y-2.5">
+            <label className="flex items-center gap-3 text-sm text-charcoal cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.is_featured}
+                onChange={e => setForm(p => ({ ...p, is_featured: e.target.checked }))}
+                className="accent-bronze w-4 h-4"
+              />
+              <span>Featured Collection (highlighted on homepage &amp; shop)</span>
+            </label>
+            <label className="flex items-center gap-3 text-sm text-charcoal cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={e => setForm(p => ({ ...p, is_active: e.target.checked }))}
+                className="accent-bronze w-4 h-4"
+              />
+              <span>Active (visible to visitors)</span>
+            </label>
           </div>
         </div>
 
-        <div>
-          <label className={labelClass}>Articles in this collection</label>
-          <div className="relative mb-4">
-            <input type="text" value={articleSearch} onChange={e => searchArticles(e.target.value)} placeholder="Search articles to add..." className={inputClass} />
-            {searchResults.length > 0 && (
-              <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-taupe/50 rounded-sm shadow-lg max-h-48 overflow-y-auto">
-                {searchResults.map(p => (
-                  <button key={p.id} onClick={() => addArticle(p)} className="w-full text-left px-3 py-2 text-sm text-charcoal hover:bg-taupe-light/40 flex items-center gap-2">
-                    <Plus size={14} className="text-bronze" /> {p.title}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="space-y-2">
-            {selectedArticles.length === 0 ? (
-              <p className="text-sm text-charcoal-muted italic">No articles added yet. Search above to add articles to this collection.</p>
-            ) : (
-              selectedArticles.map((a, i) => (
-                <div key={a.id} className="flex items-center gap-3 bg-white border border-taupe/30 rounded-sm px-3 py-2">
-                  <span className="text-xs text-bronze w-6">{String(i + 1).padStart(2, '0')}</span>
-                  <span className="text-sm text-charcoal flex-1 truncate">{a.title}</span>
-                  <button onClick={() => removeArticle(a.id)} className="text-charcoal-muted hover:text-red-600 transition-colors"><X size={14} /></button>
+        {/* Right Column: Attached Articles Management */}
+        <div className="space-y-5 bg-white p-6 rounded-md border border-taupe/40 shadow-sm flex flex-col">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className={labelClass}>Articles in This Collection ({selectedArticles.length})</h2>
+              {selectedArticles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedArticles([])}
+                  className="text-[11px] text-red-600 hover:underline"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-charcoal-muted mb-4">
+              Curate the exact reading journey. Use the arrows to reorder articles.
+            </p>
+
+            {/* List of currently selected articles */}
+            <div className="space-y-2 mb-6 max-h-72 overflow-y-auto">
+              {selectedArticles.length === 0 ? (
+                <div className="p-6 border border-dashed border-taupe/50 rounded text-center">
+                  <FileText size={20} className="text-charcoal-muted mx-auto mb-2" />
+                  <p className="text-xs text-charcoal-muted italic">
+                    No articles attached yet. Pick from the available articles below.
+                  </p>
                 </div>
-              ))
-            )}
+              ) : (
+                selectedArticles.map((a, i) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center gap-3 bg-taupe-light/30 border border-taupe/30 rounded-sm px-3.5 py-2.5 group"
+                  >
+                    <span className="text-xs font-mono font-bold text-bronze w-6">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-sm text-charcoal flex-1 truncate font-medium">{a.title}</span>
+                    <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        disabled={i === 0}
+                        onClick={() => moveArticle(i, -1)}
+                        className="p-1 text-charcoal-muted hover:text-bronze disabled:opacity-20"
+                        title="Move up"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={i === selectedArticles.length - 1}
+                        onClick={() => moveArticle(i, 1)}
+                        className="p-1 text-charcoal-muted hover:text-bronze disabled:opacity-20"
+                        title="Move down"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeArticle(a.id)}
+                        className="p-1 text-charcoal-muted hover:text-red-600 ml-1"
+                        title="Remove from collection"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Article Picker Search & Instant Browser */}
+          <div className="pt-4 border-t border-taupe/30 flex-1 flex flex-col">
+            <label className={labelClass}>Add Articles to Collection</label>
+            <div className="relative mb-3">
+              <Search size={14} className="absolute left-3 top-3 text-charcoal-muted" />
+              <input
+                type="text"
+                value={articleSearch}
+                onChange={e => setArticleSearch(e.target.value)}
+                placeholder="Filter available published articles…"
+                className={`${inputClass} pl-9`}
+              />
+              {articleSearch && (
+                <button
+                  type="button"
+                  onClick={() => setArticleSearch('')}
+                  className="absolute right-3 top-3 text-charcoal-muted hover:text-charcoal"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Scrollable list of available published articles */}
+            <div className="border border-taupe/30 rounded max-h-60 overflow-y-auto divide-y divide-taupe/15 flex-1">
+              {loadingArticles ? (
+                <div className="py-6 text-center text-xs text-charcoal-muted flex items-center justify-center gap-2">
+                  <Loader2 size={14} className="animate-spin text-bronze" /> Loading published articles…
+                </div>
+              ) : filteredAvailableArticles.length === 0 ? (
+                <div className="py-6 text-center text-xs text-charcoal-muted">
+                  {allAvailableArticles.length === 0
+                    ? 'No published articles found in the database.'
+                    : 'All matching articles are already added to this collection.'}
+                </div>
+              ) : (
+                filteredAvailableArticles.map(p => (
+                  <div
+                    key={p.id}
+                    className="p-2.5 flex items-center justify-between gap-3 hover:bg-taupe-light/30 transition-colors"
+                  >
+                    <span className="text-xs text-charcoal font-medium truncate flex-1">{p.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => addArticle(p)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-taupe hover:border-bronze hover:text-bronze text-charcoal text-xs rounded transition-colors whitespace-nowrap"
+                    >
+                      <Plus size={12} className="text-bronze" /> Add
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-4 mt-8 pt-6 border-t border-taupe/30">
-        <button onClick={handleSave} disabled={saving} className="inline-flex items-center gap-2 px-6 py-3 bg-bronze text-white text-xs tracking-editorial uppercase font-medium rounded-sm hover:bg-bronze-dark transition-all disabled:opacity-60">
-          <Save size={16} /> {saving ? 'Saving...' : 'Save Collection'}
+      <div className="flex items-center gap-4 pt-6 border-t border-taupe/30">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="inline-flex items-center gap-2 px-8 py-3 bg-bronze text-white text-xs tracking-editorial uppercase font-medium rounded-sm hover:bg-bronze-dark transition-all disabled:opacity-60 shadow-sm"
+        >
+          {saving ? <Loader2 size={16} className="animate-spin" /> : savedSuccess ? <Check size={16} /> : <Save size={16} />}
+          {saving ? 'Saving Collection…' : savedSuccess ? 'Saved!' : 'Save Collection'}
         </button>
-        <button onClick={() => navigate({ name: 'admin-collections' })} className="text-xs text-charcoal-muted hover:text-charcoal tracking-editorial uppercase ml-auto">Cancel</button>
+        <button
+          onClick={() => navigate({ name: 'admin-collections' })}
+          className="text-xs text-charcoal-muted hover:text-charcoal tracking-editorial uppercase ml-auto"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );

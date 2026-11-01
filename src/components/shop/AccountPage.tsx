@@ -1,6 +1,8 @@
 import { ArrowRight, Download, Package, Heart, LogOut, Bookmark, History, Award, Settings, type LucideIcon } from 'lucide-react';
 import { Link, useNavigation } from '../../context/NavigationContext';
 import { useCustomerOrders, useDownloadEntitlements } from '../../hooks/useCommerce';
+import { useBadges } from '../../hooks/useV3';
+import { useReadingHistory } from '../../hooks/useFeatures';
 import { useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../../context/AuthContext';
@@ -16,6 +18,8 @@ function AccountInner() {
   const { navigate } = useNavigation();
   const { orders } = useCustomerOrders(email);
   const { entitlements } = useDownloadEntitlements(email);
+  const { badges } = useBadges();
+  const { history } = useReadingHistory();
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -37,8 +41,8 @@ function AccountInner() {
           <AccountCard label="Downloads" count={entitlements.length} icon={Download} onClick={() => navigate({ name: 'account-downloads' })} />
           <AccountCard label="Wishlist" icon={Heart} onClick={() => navigate({ name: 'wishlist' })} />
           <AccountCard label="Bookmarks" icon={Bookmark} onClick={() => navigate({ name: 'bookmarks' })} />
-          <AccountCard label="Reading history" icon={History} onClick={() => navigate({ name: 'reading-history' })} />
-          <AccountCard label="Achievements" icon={Award} onClick={() => navigate({ name: 'reading-history' })} />
+          <AccountCard label="Reading history" count={history.length} icon={History} onClick={() => navigate({ name: 'reading-history' })} />
+          <AccountCard label="Achievements" count={badges.length} icon={Award} onClick={() => navigate({ name: 'achievements' })} />
           <AccountCard label="Reading lists" icon={Settings} onClick={() => navigate({ name: 'reading-lists' })} />
           <AccountCard label="Newsletter" icon={ArrowRight} onClick={() => navigate({ name: 'newsletter-preferences' })} />
         </div>

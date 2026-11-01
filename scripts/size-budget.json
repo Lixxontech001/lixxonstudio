@@ -1,22 +1,22 @@
 {
   "note": "Gzip bundle budgets. Regression = growth past baseline + 5% tolerance. Update only with an owner-approved reason.",
-  "recordedAt": "2026-10-31",
+  "recordedAt": "2026-11-01",
   "tolerance": 0.05,
   "budgets": {
     "react-vendor": 45083,
     "supabase": 56944,
-    "icons": 10705,
+    "icons": 10984,
     "helmet": 5817,
     "vercel-analytics": 1195,
-    "admin-pages": 121780,
-    "article-reader": 20316,
-    "entry": 29293,
+    "admin-pages": 127172,
+    "article-reader": 20727,
+    "entry": 30103,
     "vapid-chunk": 1250,
-    "css": 16363,
-    "total-js": 256918,
-    "admin-total-js": 121780,
-    "admin-route-js": 35724,
-    "total-css": 16363,
+    "css": 16585,
+    "total-js": 265015,
+    "admin-total-js": 127172,
+    "admin-route-js": 35711,
+    "total-css": 16585,
     "lazy-css": 2890
   }
 }

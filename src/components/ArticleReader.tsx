@@ -1,5 +1,4 @@
-import { displayImageUrl } from '../lib/images';
-import {useEffect, useState, useMemo, useRef} from 'react';
+import { useEffect, useState, useMemo, useRef, lazy, Suspense } from 'react';
 import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { usePostBySlug, usePosts } from '../hooks/useSupabase';
@@ -39,6 +38,9 @@ import AskEditor from './article/AskEditor';
 import ShareQuote from './article/ShareQuote';
 import ArticleFaq from './article/ArticleFaq';
 
+const ArticleReadingBar = lazy(() => import('./article/ArticleReadingBar'));
+const EditorialTransparencyBadge = lazy(() => import('./article/EditorialTransparencyBadge'));
+
 export default function ArticleReader({ slug }: { slug: string }) {
   const { post, loading, error, retry } = usePostBySlug(slug);
   const { posts } = usePosts();
@@ -47,6 +49,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState('');
   const [bookmarked, setBookmarked] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   const proseRef = useRef<HTMLDivElement>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const { theme, toggleTheme } = useTheme();
@@ -309,10 +312,22 @@ export default function ArticleReader({ slug }: { slug: string }) {
       </Helmet>
       <ShareQuote postId={post.id} title={post.title} url={articleUrl} />
 
-      {/* Reading Progress Bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 h-[3px] bg-taupe/20">
-        <div className="h-full bg-bronze transition-all duration-100" style={{ width: `${progress}%` }} />
-      </div>
+      <Suspense fallback={null}>
+        <ArticleReadingBar
+          title={post.title}
+          authorName={post.author?.name}
+          categoryName={post.category?.name}
+          categorySlug={post.category?.slug}
+          progress={progress}
+          timeRemaining={timeRemaining}
+          bookmarked={bookmarked}
+          onToggleBookmark={toggleBookmark}
+          headings={headings}
+          activeHeading={activeHeading}
+          focusMode={focusMode}
+          onToggleFocusMode={() => setFocusMode(!focusMode)}
+        />
+      </Suspense>
 
       {/* Article Header */}
       <div className="container-narrow pt-12 pb-8">
@@ -388,9 +403,10 @@ export default function ArticleReader({ slug }: { slug: string }) {
 
       {/* Article Body + Sidebar */}
       <div className="container-wide relative">
-        <div className="flex gap-8 lg:gap-16 max-w-4xl mx-auto">
+        <div className={`flex gap-8 lg:gap-16 ${focusMode ? 'max-w-3xl' : 'max-w-4xl'} mx-auto`}>
           {/* Sticky Social Share */}
-          <div className="hidden lg:flex flex-col items-center gap-3 sticky top-32 self-start flex-shrink-0">
+          {!focusMode && (
+            <div className="hidden lg:flex flex-col items-center gap-3 sticky top-32 self-start flex-shrink-0">
             <p className="text-[9px] tracking-editorial uppercase text-charcoal-muted/50 [writing-mode:vertical-lr] rotate-180 mb-2">Share</p>
             <a href={`https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`} target="_blank" rel="noopener noreferrer" onClick={() => trackSocialShare(post.id, 'twitter')} className="w-10 h-10 rounded-full border border-taupe flex items-center justify-center text-charcoal hover:bg-charcoal hover:text-white transition-all duration-300" aria-label="Share on X">
               <Twitter size={14} strokeWidth={1.5} />
@@ -412,6 +428,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
               <Bookmark size={14} strokeWidth={1.5} fill={bookmarked ? 'currentColor' : 'none'} />
             </button>
           </div>
+          )}
 
           {/* Content + TOC */}
           <div className="flex-1 min-w-0">
@@ -443,7 +460,24 @@ export default function ArticleReader({ slug }: { slug: string }) {
 
             <SeriesNav seriesId={post.series_id} currentPostId={post.id} />
             <KeyTakeaways items={post.takeaways} />
-            <div ref={proseRef} className={`article-prose max-w-none font-${fontSize}`} dangerouslySetInnerHTML={{ __html: renderContent(post.content) }} />
+            <Suspense fallback={null}>
+              <EditorialTransparencyBadge
+                authorName={post.author?.name}
+                categoryName={post.category?.name}
+                publishedAt={post.published_at}
+              />
+            </Suspense>
+            <div
+              ref={proseRef}
+              className={`article-prose max-w-none ${
+                fontSize === 'small'
+                  ? 'text-sm md:text-base leading-relaxed'
+                  : fontSize === 'large'
+                  ? 'text-xl md:text-2xl leading-loose'
+                  : 'text-base md:text-lg leading-relaxed'
+              }`}
+              dangerouslySetInnerHTML={{ __html: renderContent(post.content) }}
+            />
             <ArticleFaq faq={post.faq} />
             <SeriesNav seriesId={post.series_id} currentPostId={post.id} variant="bottom" />
 

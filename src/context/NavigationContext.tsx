@@ -46,6 +46,7 @@ export type Route =
   | { name: 'admin-analytics' }
   | { name: 'admin-sponsored' }
   | { name: 'reading-history' }
+  | { name: 'achievements' }
   | { name: 'bookmarks' }
   | { name: 'author'; slug: string }
   | { name: 'tag'; tag: string; page: number }
@@ -110,6 +111,7 @@ function parsePath(): Route {
   if (parts[0] === 'product' && parts[1]) return { name: 'product', slug: decodeURIComponent(parts[1]) };
   if (parts[0] === 'search') return { name: 'search', query: params.get('q') || '', page: parseInt(params.get('page') || '1', 10) };
   if (parts[0] === 'reading-history') return { name: 'reading-history' };
+  if (parts[0] === 'achievements') return { name: 'achievements' };
   if (parts[0] === 'bookmarks') return { name: 'bookmarks' };
   if (parts[0] === 'author' && parts[1]) return { name: 'author', slug: decodeURIComponent(parts[1]) };
   if (parts[0] === 'tag' && parts[1]) return { name: 'tag', tag: decodeURIComponent(parts[1]), page: parseInt(params.get('page') || '1', 10) };
@@ -143,6 +145,7 @@ function parsePath(): Route {
     if (parts[1] === 'downloads') return { name: 'account-downloads' };
     if (parts[1] === 'profile') return { name: 'account-profile' };
     if (parts[1] === 'refunds') return { name: 'account-refunds' };
+    if (parts[1] === 'achievements') return { name: 'achievements' };
     return { name: 'account' };
   }
   if (parts[0] === 'collections') {
@@ -263,6 +266,7 @@ export function routeToPath(route: Route): string {
     case 'admin-analytics': return '/admin/analytics';
     case 'admin-sponsored': return '/admin/sponsored';
     case 'reading-history': return '/reading-history';
+    case 'achievements': return '/account/achievements';
     case 'bookmarks': return '/bookmarks';
     case 'author': return `/author/${encodeURIComponent(route.slug)}`;
     case 'tag': {

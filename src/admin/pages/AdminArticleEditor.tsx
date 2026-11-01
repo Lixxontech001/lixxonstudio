@@ -18,6 +18,7 @@ import {
   type QualityReport, type QualityIssue, type RevisionRow,
 } from '../components/AdminEditorKit';
 import GuideLink from '../components/GuideLink';
+import AdminImageUploadField from '../components/AdminImageUploadField';
 
 interface AdminArticleEditorProps {
   postId?: string;
@@ -919,13 +920,16 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
               </div>
             </SideSection>
 
-            <SideSection title="Cover image" icon={ImageIcon} defaultOpen={false}>
-              <input value={state.cover_image} onChange={e => update('cover_image', e.target.value)} placeholder="Image URL" className="w-full border border-gray-200 px-3 py-2 rounded text-sm" />
-              <input id="cover-alt" value={state.cover_image_alt} onChange={e => update('cover_image_alt', e.target.value)} placeholder="Alt text for accessibility" className="w-full border border-gray-200 px-3 py-2 rounded text-sm" />
-              <button onClick={() => setMediaPickerMode('cover')} className="w-full inline-flex items-center justify-center gap-2 text-sm text-bronze border border-bronze/30 py-2 rounded hover:bg-bronze/5">
-                <ImageIcon size={14} /> Choose from media library
-              </button>
-              {state.cover_image && <img src={state.cover_image} alt={state.cover_image_alt || ''} className="rounded border border-gray-200" />}
+            <SideSection title="Cover image" icon={ImageIcon} defaultOpen={true}>
+              <AdminImageUploadField
+                label="Article Main Cover"
+                value={state.cover_image}
+                onChange={url => update('cover_image', url)}
+                altText={state.cover_image_alt}
+                onAltChange={alt => update('cover_image_alt', alt)}
+                folder="articles"
+                hint="Landscape 16:9 or 4:3 high-res image for article hero, RSS feeds, and social cards."
+              />
             </SideSection>
 
             <SideSection title="Reader extras" icon={Calculator} defaultOpen={false}>

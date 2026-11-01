@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from 'react';
-import { useNavigation } from '../context/NavigationContext';
+import { useNavigation, routeToPath } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, FileText, FolderTree, Users, MessageSquare, Film,
@@ -129,7 +129,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
-      <aside className="lg:w-60 bg-gray-900 text-white flex-shrink-0 lg:min-h-screen sticky top-0 z-30">
+      <aside className="lg:w-64 bg-gray-900 text-white flex-shrink-0 lg:h-screen lg:sticky lg:top-0 lg:overflow-y-auto z-30 flex flex-col justify-between border-r border-gray-800">
         <div className="p-5 border-b border-gray-800">
           <div className="flex items-center gap-2">
             <PenLine size={18} strokeWidth={1.5} className="text-bronze" />
@@ -145,7 +145,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           )}
         </div>
 
-        <nav className="p-3 space-y-1 overflow-x-auto lg:overflow-x-hidden flex lg:flex-col gap-0.5">
+        <nav className="p-3 space-y-1 overflow-x-auto lg:overflow-y-auto flex-1 flex lg:flex-col gap-0.5">
           {sections.map(section => {
             const isExpanded = expandedSections.has(section.title);
             return (
@@ -160,21 +160,31 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 <div className={`lg:${isExpanded ? 'block' : 'hidden'} flex lg:block gap-0.5`}>
                   {section.items.map(item => {
                     const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+                    const itemHref = item.href || routeToPath(item.route as never);
                     const isActive = route.name === item.route.name || (item.href !== undefined && currentPath === item.href);
                     const Icon = item.icon;
                     return (
-                      <button
+                      <a
                         key={item.route.name}
-                        type="button"
-                        onClick={() => item.href ? window.location.assign(item.href) : navigate(item.route as never)}
+                        href={itemHref}
+                        onClick={(e) => {
+                          if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+                            e.preventDefault();
+                            if (item.href) {
+                              window.location.assign(item.href);
+                            } else {
+                              navigate(item.route as never);
+                            }
+                          }
+                        }}
                         aria-current={isActive ? 'page' : undefined}
                         className={`flex min-h-11 items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors whitespace-nowrap ${
-                          isActive ? 'bg-bronze text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                          isActive ? 'bg-bronze text-white font-medium shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                         }`}
                       >
                         <Icon size={16} strokeWidth={1.5} />
                         {item.label}
-                      </button>
+                      </a>
                     );
                   })}
                 </div>
@@ -194,13 +204,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="p-3 mt-auto border-t border-gray-800 hidden lg:block">
-          <button
-            onClick={() => navigate({ name: 'home', page: 1 })}
+          <a
+            href="/"
+            onClick={(e) => {
+              if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+                e.preventDefault();
+                navigate({ name: 'home', page: 1 });
+              }
+            }}
             className="flex items-center gap-3 px-3 py-2.5 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors w-full"
           >
             <ExternalLink size={16} strokeWidth={1.5} />
             View Site
-          </button>
+          </a>
           <button
             onClick={handleSignOut}
             className="flex items-center gap-3 px-3 py-2.5 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors w-full"
@@ -211,7 +227,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 min-h-screen overflow-y-auto">
         <div className="max-w-6xl mx-auto p-6 lg:p-10">
           {children}
         </div>

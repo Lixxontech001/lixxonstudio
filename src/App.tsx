@@ -41,6 +41,7 @@ const AccountDownloadsPage = lazyWithRetry(() => import('./components/shop/Accou
 const CollectionsPage = lazyWithRetry(() => import('./components/shop/CollectionsPage'));
 const CollectionDetailPage = lazyWithRetry(() => import('./components/shop/CollectionDetailPage'));
 const ReadingHistoryPage = lazyWithRetry(() => import('./components/ReadingHistoryPage'));
+const AchievementsPage = lazyWithRetry(() => import('./components/AchievementsPage'));
 const BookmarksPage = lazyWithRetry(() => import('./components/BookmarksPage'));
 const AuthorPage = lazyWithRetry(() => import('./components/AuthorPage'));
 const TagPage = lazyWithRetry(() => import('./components/TagPage'));
@@ -185,6 +186,8 @@ function AppContent() {
         return <CollectionDetailPage slug={route.slug} />;
       case 'reading-history':
         return <ReadingHistoryPage />;
+      case 'achievements':
+        return <AchievementsPage />;
       case 'bookmarks':
         return <BookmarksPage />;
       case 'author':

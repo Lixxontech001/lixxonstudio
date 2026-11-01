@@ -4,6 +4,7 @@ import { useCategories } from '../../hooks/useSupabase';
 import { Plus, Pencil, Trash2, X, FolderTree } from 'lucide-react';
 import type { Category } from '../../lib/types';
 import { MarkdownField } from '../components/AdminEditorKit';
+import AdminImageUploadField from '../components/AdminImageUploadField';
 
 export default function AdminCategories() {
   const { categories, loading } = useCategories();
@@ -128,10 +129,13 @@ export default function AdminCategories() {
                 <label className="block text-xs text-gray-500 mb-1">Sort Order</label>
                 <input type="number" value={sortOrder} onChange={e => setSortOrder(parseInt(e.target.value) || 0)} className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Banner Image URL</label>
-                <input type="text" value={bannerImage} onChange={e => setBannerImage(e.target.value)} placeholder="https://..." className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />
-              </div>
+              <AdminImageUploadField
+                label="Category Header / Banner Image"
+                value={bannerImage}
+                onChange={setBannerImage}
+                folder="categories"
+                hint="Wide banner image shown at the top of this category hub page."
+              />
               <div>
                 <label className="block text-xs text-gray-500 mb-1">SEO Title (optional)</label>
                 <input type="text" value={seoTitle} onChange={e => setSeoTitle(e.target.value)} className="w-full border border-gray-200 px-3 py-2.5 rounded text-sm focus:outline-none focus:border-bronze" />

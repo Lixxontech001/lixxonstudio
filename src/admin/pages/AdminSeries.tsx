@@ -1,105 +1,605 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Layers, Plus, Trash2, Pencil, Loader2, GripVertical, X } from 'lucide-react';
+import { useEffect, useState, useMemo, type FormEvent } from 'react';
+import {
+  Layers, Plus, Trash2, Pencil, Loader2, GripVertical, X,
+  ExternalLink, Search, Check, ChevronDown, ChevronUp, FileText, ArrowUpDown, Filter, BookOpen
+} from 'lucide-react';
 import { supabase, rows } from '../../lib/supabaseClient';
 import type { ArticleSeries } from '../../lib/types';
 import { MarkdownField } from '../components/AdminEditorKit';
+import AdminImageUploadField from '../components/AdminImageUploadField';
 
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-type Part = { id: string; title: string; series_order: number | null; status: string };
+
+interface Part {
+  id: string;
+  title: string;
+  slug?: string;
+  series_order: number | null;
+  status: string;
+  published_at?: string;
+}
+
+interface AvailablePost {
+  id: string;
+  title: string;
+  slug?: string;
+  series_id: string | null;
+  series_order: number | null;
+  status: string;
+  created_at?: string;
+}
 
 export default function AdminSeries() {
   const [series, setSeries] = useState<ArticleSeries[]>([]);
   const [parts, setParts] = useState<Record<string, Part[]>>({});
+  const [allPosts, setAllPosts] = useState<AvailablePost[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
   const [editing, setEditing] = useState<Partial<ArticleSeries> | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [results, setResults] = useState<Part[]>([]);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'unassigned'>('all');
+  const [showAddDrawer, setShowAddDrawer] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setFeedbackMsg(msg);
+    setTimeout(() => setFeedbackMsg(null), 3500);
+  };
 
   const load = async () => {
     const { data } = await supabase.from('article_series').select('*').order('created_at', { ascending: false });
-    setSeries(rows(data));
-    const { data: p } = await supabase.from('posts').select('id, title, series_id, series_order, status').not('series_id', 'is', null).order('series_order');
+    const sList = rows<ArticleSeries>(data);
+    setSeries(sList);
+    if (!open && sList.length > 0) {
+      setOpen(sList[0].id);
+    }
+
+    const { data: p } = await supabase
+      .from('posts')
+      .select('id, title, slug, series_id, series_order, status, published_at')
+      .not('series_id', 'is', null)
+      .order('series_order', { ascending: true });
+
     const map: Record<string, Part[]> = {};
-    rows<Part & { series_id: string }>(p).forEach(x => { (map[x.series_id] ||= []).push(x); });
+    rows<Part & { series_id: string }>(p).forEach(x => {
+      (map[x.series_id] ||= []).push(x);
+    });
     setParts(map);
   };
-  useEffect(() => { load(); }, []);
+
+  const loadAllPosts = async () => {
+    setLoadingPosts(true);
+    try {
+      const { data } = await supabase
+        .from('posts')
+        .select('id, title, slug, series_id, series_order, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      setAllPosts(rows<AvailablePost>(data));
+    } catch {
+      // ignore
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
   useEffect(() => {
-    if (!search.trim()) { setResults([]); return; }
-    const t = setTimeout(async () => { const { data } = await supabase.from('posts').select('id, title, series_order, status').ilike('title', `%${search.trim()}%`).is('series_id', null).limit(8); setResults(rows(data)); }, 250);
-    return () => clearTimeout(t);
-  }, [search]);
+    load();
+    loadAllPosts();
+  }, []);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!editing?.title?.trim()) return;
     setSaving(true);
-    const payload = { title: editing.title.trim(), slug: editing.slug?.trim() || slugify(editing.title), description: editing.description || null, cover_image: editing.cover_image || null, is_active: editing.is_active ?? true };
-    if (editing.id) await supabase.from('article_series').update(payload).eq('id', editing.id); else await supabase.from('article_series').insert(payload);
-    setSaving(false); setEditing(null); load();
+    const payload = {
+      title: editing.title.trim(),
+      slug: editing.slug?.trim() || slugify(editing.title),
+      description: editing.description || null,
+      cover_image: editing.cover_image || null,
+      is_active: editing.is_active ?? true,
+    };
+
+    try {
+      if (editing.id) {
+        await supabase.from('article_series').update(payload).eq('id', editing.id);
+        showToast('Series updated successfully');
+      } else {
+        await supabase.from('article_series').insert(payload);
+        showToast('New series created successfully');
+      }
+      setEditing(null);
+      await load();
+    } catch (err) {
+      showToast('Error saving series: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setSaving(false);
+    }
   };
-  const addPart = async (seriesId: string, postId: string) => { const n = (parts[seriesId]?.length || 0) + 1; await supabase.from('posts').update({ series_id: seriesId, series_order: n }).eq('id', postId); setSearch(''); load(); };
-  const removePart = async (postId: string) => { await supabase.from('posts').update({ series_id: null, series_order: null }).eq('id', postId); load(); };
+
+  const addPart = async (seriesId: string, postId: string) => {
+    const currentList = parts[seriesId] || [];
+    const n = currentList.length + 1;
+    await supabase.from('posts').update({ series_id: seriesId, series_order: n }).eq('id', postId);
+    showToast('Guide added to series');
+    await load();
+    await loadAllPosts();
+  };
+
+  const removePart = async (postId: string) => {
+    await supabase.from('posts').update({ series_id: null, series_order: null }).eq('id', postId);
+    showToast('Article removed from series');
+    await load();
+    await loadAllPosts();
+  };
+
   const move = async (seriesId: string, idx: number, dir: -1 | 1) => {
-    const list = [...(parts[seriesId] || [])]; const j = idx + dir; if (j < 0 || j >= list.length) return;
+    const list = [...(parts[seriesId] || [])];
+    const j = idx + dir;
+    if (j < 0 || j >= list.length) return;
     [list[idx], list[j]] = [list[j], list[idx]];
+    setParts(prev => ({ ...prev, [seriesId]: list }));
     await Promise.all(list.map((p, i) => supabase.from('posts').update({ series_order: i + 1 }).eq('id', p.id)));
     load();
   };
-  const remove = async (s: ArticleSeries) => { if (!confirm(`Delete series “${s.title}”? Articles stay published.`)) return; await supabase.from('article_series').delete().eq('id', s.id); load(); };
+
+  const setManualOrder = async (seriesId: string, postId: string, newOrder: number) => {
+    if (isNaN(newOrder) || newOrder < 1) return;
+    await supabase.from('posts').update({ series_order: newOrder }).eq('id', postId);
+    load();
+  };
+
+  const remove = async (s: ArticleSeries) => {
+    if (!confirm(`Delete series “${s.title}”? All articles stay published and are merely unlinked.`)) return;
+    await supabase.from('posts').update({ series_id: null, series_order: null }).eq('series_id', s.id);
+    await supabase.from('article_series').delete().eq('id', s.id);
+    showToast('Series deleted');
+    load();
+    loadAllPosts();
+  };
+
+  // Filter available posts for the current series
+  const filteredAvailablePosts = useMemo(() => {
+    return allPosts.filter(p => {
+      // Exclude posts already in this series
+      const isAlreadyInThisSeries = open ? (parts[open] || []).some(item => item.id === p.id) : false;
+      if (isAlreadyInThisSeries) return false;
+
+      // Status filter
+      if (statusFilter === 'published' && p.status !== 'published') return false;
+      if (statusFilter === 'draft' && p.status !== 'draft') return false;
+      if (statusFilter === 'unassigned' && p.series_id) return false;
+
+      // Search filter
+      if (searchFilter.trim()) {
+        const q = searchFilter.toLowerCase();
+        return p.title.toLowerCase().includes(q) || (p.slug && p.slug.toLowerCase().includes(q));
+      }
+
+      return true;
+    });
+  }, [allPosts, open, parts, statusFilter, searchFilter]);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div><h1 className="font-serif text-2xl text-charcoal flex items-center gap-2"><Layers size={20} className="text-bronze" /> Series</h1><p className="text-sm text-charcoal-muted mt-1">Group multi-part guides; readers get part navigation and a /series page.</p></div>
-        <button onClick={() => setEditing({ title: '', description: '', is_active: true })} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-sm rounded-sm hover:bg-bronze"><Plus size={14} /> New series</button>
+    <div className="space-y-6">
+      {/* Toast Feedback */}
+      {feedbackMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-charcoal text-white text-xs px-4 py-2.5 rounded-sm shadow-xl flex items-center gap-2 animate-fade-in border border-bronze/40">
+          <Check size={14} className="text-bronze" /> {feedbackMsg}
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-3xl text-charcoal flex items-center gap-2">
+            <Layers size={24} className="text-bronze" /> Editorial Series
+          </h1>
+          <p className="text-sm text-charcoal-muted mt-1">
+            Curate multi-part comprehensive guides. Readers get linear step navigation, part indexes, and dedicated hub pages.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <a
+            href="/series"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-taupe text-charcoal text-xs tracking-editorial uppercase rounded-sm hover:border-bronze transition-colors"
+          >
+            <ExternalLink size={13} /> View /series
+          </a>
+          <button
+            onClick={() => setEditing({ title: '', slug: '', description: '', cover_image: '', is_active: true })}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-xs tracking-editorial uppercase rounded-sm hover:bg-bronze transition-colors"
+          >
+            <Plus size={14} /> New Series
+          </button>
+        </div>
       </div>
+
+      {/* Series Editor Form */}
       {editing && (
-        <form onSubmit={save} className="bg-white rounded-sm p-6 border border-taupe/30 mb-6 grid gap-4">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <label className="text-xs text-charcoal-muted uppercase tracking-wide">Title<input required value={editing.title || ''} onChange={e => setEditing(x => ({ ...x, title: e.target.value }))} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
-            <label className="text-xs text-charcoal-muted uppercase tracking-wide">Slug<input value={editing.slug || ''} onChange={e => setEditing(x => ({ ...x, slug: e.target.value }))} placeholder={slugify(editing.title || '') || 'auto'} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
+        <form onSubmit={save} className="bg-white rounded-md p-6 border border-taupe/40 shadow-sm space-y-5 animate-fade-in">
+          <div className="flex items-center justify-between border-b border-taupe/20 pb-3">
+            <h2 className="font-serif text-lg text-charcoal font-medium">
+              {editing.id ? 'Edit Series Information' : 'Create New Editorial Series'}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setEditing(null)}
+              className="text-charcoal-muted hover:text-charcoal p-1"
+            >
+              <X size={18} />
+            </button>
           </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] tracking-editorial uppercase text-charcoal-muted mb-1">
+                Series Title *
+              </label>
+              <input
+                required
+                value={editing.title || ''}
+                onChange={e => {
+                  const t = e.target.value;
+                  setEditing(x => ({ ...x, title: t, slug: x?.slug || slugify(t) }));
+                }}
+                placeholder="e.g. The Clean Beauty Formulation Blueprint"
+                className="w-full border border-taupe/60 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] tracking-editorial uppercase text-charcoal-muted mb-1">
+                URL Slug (/series/:slug)
+              </label>
+              <input
+                value={editing.slug || ''}
+                onChange={e => setEditing(x => ({ ...x, slug: slugify(e.target.value) }))}
+                placeholder="clean-beauty-formulation"
+                className="w-full border border-taupe/60 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze font-mono bg-white"
+              />
+            </div>
+          </div>
+
           <MarkdownField
-            label="Description"
+            label="Series Editorial Synopsis / Description"
             value={editing.description || ''}
             onChange={v => setEditing(x => ({ ...x, description: v }))}
             rows={3}
-            max={600}
-            hint="Explain the promise of this series in one or two sentences."
+            max={800}
+            hint="Explain what this series teaches, who it is for, and the learning journey readers will take."
           />
-          <label className="text-xs text-charcoal-muted uppercase tracking-wide">Cover image URL<input value={editing.cover_image || ''} onChange={e => setEditing(x => ({ ...x, cover_image: e.target.value }))} className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze normal-case" /></label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editing.is_active ?? true} onChange={e => setEditing(x => ({ ...x, is_active: e.target.checked }))} /> Visible to readers</label>
-          <div className="flex gap-2"><button disabled={saving} className="px-4 py-2 bg-bronze text-white text-sm rounded-sm disabled:opacity-60">{saving ? <Loader2 size={14} className="animate-spin" /> : 'Save'}</button><button type="button" onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-charcoal-muted">Cancel</button></div>
+
+          <AdminImageUploadField
+            label="Series Cover Image"
+            value={editing.cover_image || ''}
+            onChange={url => setEditing(x => ({ ...x, cover_image: url }))}
+            folder="series"
+            hint="Recommended high-resolution landscape image (1600x900 or 1200x800) for series hero cards."
+          />
+
+          <div className="flex items-center gap-3 pt-2">
+            <label className="flex items-center gap-2 text-sm cursor-pointer text-charcoal">
+              <input
+                type="checkbox"
+                checked={editing.is_active ?? true}
+                onChange={e => setEditing(x => ({ ...x, is_active: e.target.checked }))}
+                className="accent-bronze w-4 h-4"
+              />
+              <span>Visible to readers on the website and feeds</span>
+            </label>
+          </div>
+
+          <div className="flex items-center gap-3 pt-3 border-t border-taupe/20">
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-bronze text-white text-xs tracking-editorial uppercase rounded-sm hover:bg-bronze-dark disabled:opacity-50 transition-all font-medium"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {editing.id ? 'Save Changes' : 'Create Series'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(null)}
+              className="px-4 py-2.5 text-xs text-charcoal-muted hover:text-charcoal tracking-editorial uppercase"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
+
+      {/* Series List & Parts Management */}
       <div className="space-y-4">
-        {series.map(s => (
-          <div key={s.id} className="bg-white rounded-sm border border-taupe/30">
-            <div className="p-4 flex items-center gap-3">
-              <button onClick={() => setOpen(open === s.id ? null : s.id)} className="flex-1 text-left"><p className="font-medium text-charcoal">{s.title} <span className="text-xs text-charcoal-muted ml-2">/{s.slug} · {(parts[s.id] || []).length} parts{!s.is_active && ' · hidden'}</span></p></button>
-              <button onClick={() => setEditing(s)} className="p-2 text-charcoal-muted hover:text-bronze" aria-label="Edit"><Pencil size={14} /></button>
-              <button onClick={() => remove(s)} className="p-2 text-charcoal-muted hover:text-red-600" aria-label="Delete"><Trash2 size={14} /></button>
-            </div>
-            {open === s.id && (
-              <div className="border-t border-taupe/20 p-4">
-                <ol className="space-y-2 mb-4">
-                  {(parts[s.id] || []).map((p, i) => (
-                    <li key={p.id} className="flex items-center gap-2 text-sm">
-                      <GripVertical size={14} className="text-charcoal-muted" /><span className="w-6 text-charcoal-muted">{i + 1}.</span><span className="flex-1">{p.title} {p.status !== 'published' && <span className="text-xs text-amber-600">({p.status})</span>}</span>
-                      <button onClick={() => move(s.id, i, -1)} className="px-2 text-charcoal-muted hover:text-bronze" aria-label="Move up">↑</button><button onClick={() => move(s.id, i, 1)} className="px-2 text-charcoal-muted hover:text-bronze" aria-label="Move down">↓</button>
-                      <button onClick={() => removePart(p.id)} className="p-1 text-charcoal-muted hover:text-red-600" aria-label="Remove from series"><X size={14} /></button>
-                    </li>
-                  ))}
-                </ol>
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Add an article by title…" className="w-full border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze" />
-                {results.length > 0 && <ul className="mt-2 border border-taupe/30 rounded-sm divide-y divide-taupe/20">{results.map(r => <li key={r.id}><button onClick={() => addPart(s.id, r.id)} className="w-full text-left px-3 py-2 text-sm hover:bg-taupe-light/50">{r.title}</button></li>)}</ul>}
-              </div>
-            )}
+        {series.length === 0 ? (
+          <div className="bg-white rounded-md border border-taupe/30 p-12 text-center">
+            <Layers size={36} className="text-taupe mx-auto mb-3" />
+            <h3 className="font-serif text-lg text-charcoal mb-1">No series created yet</h3>
+            <p className="text-sm text-charcoal-muted mb-4 max-w-md mx-auto">
+              Group multi-part editorial guides and tutorials into structured, numbered reading paths.
+            </p>
+            <button
+              onClick={() => setEditing({ title: '', is_active: true })}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-xs tracking-editorial uppercase rounded-sm hover:bg-bronze transition-colors"
+            >
+              <Plus size={14} /> Create Your First Series
+            </button>
           </div>
-        ))}
-        {series.length === 0 && <p className="p-8 text-center text-sm text-charcoal-muted bg-white rounded-sm border border-taupe/30">No series yet.</p>}
+        ) : (
+          series.map(s => {
+            const seriesParts = parts[s.id] || [];
+            const isOpen = open === s.id;
+            const isAdding = showAddDrawer === s.id;
+
+            return (
+              <div key={s.id} className="bg-white rounded-md border border-taupe/30 shadow-sm overflow-hidden transition-all">
+                {/* Series Banner Bar */}
+                <div className="p-4 flex items-center gap-4 bg-white hover:bg-taupe-light/20 transition-colors">
+                  {s.cover_image ? (
+                    <img src={s.cover_image} alt="" className="w-14 h-14 rounded-sm object-cover border border-taupe/30 flex-shrink-0" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-sm bg-taupe-light flex items-center justify-center text-bronze flex-shrink-0">
+                      <BookOpen size={20} strokeWidth={1.5} />
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-serif text-lg text-charcoal font-medium truncate">{s.title}</h3>
+                      {!s.is_active && (
+                        <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                          Draft / Hidden
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-charcoal-muted mt-1">
+                      <span className="font-mono text-bronze">/series/{s.slug}</span>
+                      <span>·</span>
+                      <span className="font-medium text-charcoal">{seriesParts.length} {seriesParts.length === 1 ? 'Part' : 'Parts'}</span>
+                      {s.description && (
+                        <>
+                          <span>·</span>
+                          <span className="truncate max-w-xs text-gray-500">{s.description}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <a
+                      href={`/series/${s.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-2 text-charcoal-muted hover:text-bronze"
+                      title="View public series page"
+                    >
+                      <ExternalLink size={15} />
+                    </a>
+                    <button
+                      onClick={() => setEditing(s)}
+                      className="p-2 text-charcoal-muted hover:text-bronze"
+                      title="Edit series info"
+                      aria-label="Edit series details"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => remove(s)}
+                      className="p-2 text-charcoal-muted hover:text-red-600"
+                      title="Delete series"
+                      aria-label="Delete series"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                    <button
+                      onClick={() => setOpen(isOpen ? null : s.id)}
+                      className="p-2 text-charcoal-muted hover:text-charcoal ml-1"
+                      aria-label={isOpen ? 'Collapse series' : 'Expand series'}
+                    >
+                      {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Series Content & Part List */}
+                {isOpen && (
+                  <div className="border-t border-taupe/20 bg-taupe-light/10 p-5 space-y-5">
+                    {/* Header of parts section */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-medium tracking-editorial uppercase text-charcoal">
+                          Series Reading Order ({seriesParts.length} Articles)
+                        </h4>
+                        <p className="text-xs text-charcoal-muted mt-0.5">
+                          Articles are ordered linearly from first to last guide.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddDrawer(isAdding ? null : s.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bronze text-white text-xs font-medium rounded-sm hover:bg-bronze-dark transition-colors self-start"
+                      >
+                        <Plus size={13} /> {isAdding ? 'Close Article Picker' : 'Add Articles / Guides'}
+                      </button>
+                    </div>
+
+                    {/* Articles list */}
+                    {seriesParts.length === 0 ? (
+                      <div className="bg-white rounded border border-dashed border-taupe/40 p-8 text-center">
+                        <FileText size={24} className="text-charcoal-muted mx-auto mb-2" />
+                        <p className="text-xs text-charcoal font-medium">No articles assigned to this series yet</p>
+                        <p className="text-[11px] text-charcoal-muted mt-1">
+                          Click “Add Articles / Guides” above to attach existing articles or guides into this series.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded border border-taupe/30 divide-y divide-taupe/20">
+                        {seriesParts.map((p, i) => (
+                          <div key={p.id} className="p-3.5 flex items-center gap-3 hover:bg-taupe-light/20 transition-colors">
+                            <span className="w-8 h-8 rounded-full bg-bronze/10 text-bronze flex items-center justify-center font-mono text-xs font-bold flex-shrink-0">
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={`/admin/articles/edit/${p.id}`}
+                                  className="font-medium text-sm text-charcoal hover:text-bronze truncate transition-colors"
+                                  title="Open article in editor"
+                                >
+                                  {p.title}
+                                </a>
+                                {p.status !== 'published' && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium">
+                                    {p.status}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-charcoal-muted flex items-center gap-2 mt-0.5">
+                                <span>Part {i + 1} of {seriesParts.length}</span>
+                                {p.slug && <span>· <span className="font-mono">/blog/{p.slug}</span></span>}
+                              </div>
+                            </div>
+
+                            {/* Order adjustment */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={i === 0}
+                                onClick={() => move(s.id, i, -1)}
+                                className="p-1.5 text-charcoal-muted hover:text-bronze disabled:opacity-20 rounded"
+                                title="Move Part Up"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                disabled={i === seriesParts.length - 1}
+                                onClick={() => move(s.id, i, 1)}
+                                className="p-1.5 text-charcoal-muted hover:text-bronze disabled:opacity-20 rounded"
+                                title="Move Part Down"
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removePart(p.id)}
+                                className="p-1.5 text-charcoal-muted hover:text-red-600 rounded ml-2"
+                                title="Remove from this series"
+                              >
+                                <X size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Article Selector Drawer */}
+                    {isAdding && (
+                      <div className="bg-white border border-bronze/40 rounded-md p-4 space-y-4 shadow-md animate-fade-in">
+                        <div className="flex items-center justify-between border-b border-taupe/20 pb-2">
+                          <div className="flex items-center gap-2">
+                            <Plus size={16} className="text-bronze" />
+                            <h5 className="font-serif text-sm font-medium text-charcoal">
+                              Select Articles to Add to “{s.title}”
+                            </h5>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddDrawer(null)}
+                            className="text-charcoal-muted hover:text-charcoal text-xs"
+                          >
+                            Close
+                          </button>
+                        </div>
+
+                        {/* Search & Filter Controls */}
+                        <div className="grid sm:grid-cols-3 gap-2">
+                          <div className="sm:col-span-2 relative">
+                            <Search size={14} className="absolute left-3 top-3 text-charcoal-muted" />
+                            <input
+                              type="text"
+                              value={searchFilter}
+                              onChange={e => setSearchFilter(e.target.value)}
+                              placeholder="Search by article title or slug…"
+                              className="w-full pl-9 pr-3 py-2 border border-taupe/60 text-xs rounded-sm focus:outline-none focus:border-bronze bg-white"
+                            />
+                            {searchFilter && (
+                              <button
+                                type="button"
+                                onClick={() => setSearchFilter('')}
+                                className="absolute right-2.5 top-2.5 text-charcoal-muted hover:text-charcoal"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                          <div>
+                            <select
+                              value={statusFilter}
+                              onChange={e => setStatusFilter(e.target.value as never)}
+                              className="w-full border border-taupe/60 px-3 py-2 text-xs rounded-sm focus:outline-none focus:border-bronze bg-white"
+                            >
+                              <option value="all">All Statuses</option>
+                              <option value="published">Published Only</option>
+                              <option value="draft">Drafts Only</option>
+                              <option value="unassigned">Unassigned Only</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Available Post Items List */}
+                        <div className="max-h-64 overflow-y-auto border border-taupe/30 rounded divide-y divide-taupe/15">
+                          {loadingPosts ? (
+                            <div className="py-8 text-center text-xs text-charcoal-muted flex items-center justify-center gap-2">
+                              <Loader2 size={14} className="animate-spin text-bronze" /> Loading available articles…
+                            </div>
+                          ) : filteredAvailablePosts.length === 0 ? (
+                            <div className="py-8 text-center text-xs text-charcoal-muted">
+                              No matching articles found. Try adjusting your search query or filter.
+                            </div>
+                          ) : (
+                            filteredAvailablePosts.map(post => (
+                              <div
+                                key={post.id}
+                                className="p-3 flex items-center justify-between gap-3 hover:bg-taupe-light/30 transition-colors"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium text-charcoal truncate">{post.title}</p>
+                                  <div className="flex items-center gap-2 text-[10px] text-charcoal-muted mt-0.5">
+                                    <span className={post.status === 'published' ? 'text-green-600' : 'text-amber-600'}>
+                                      {post.status}
+                                    </span>
+                                    {post.series_id && (
+                                      <span className="text-charcoal-muted">
+                                        (Assigned to another series)
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => addPart(s.id, post.id)}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-charcoal text-white hover:bg-bronze text-[11px] rounded transition-colors whitespace-nowrap"
+                                >
+                                  <Plus size={12} /> Add to Series
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
