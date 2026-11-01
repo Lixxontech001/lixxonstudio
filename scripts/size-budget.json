@@ -8,15 +8,15 @@
     "icons": 10984,
     "helmet": 5817,
     "vercel-analytics": 1195,
-    "admin-pages": 127172,
-    "article-reader": 20727,
-    "entry": 30103,
+    "admin-pages": 128453,
+    "article-reader": 20730,
+    "entry": 30111,
     "vapid-chunk": 1250,
-    "css": 16585,
-    "total-js": 265015,
-    "admin-total-js": 127172,
-    "admin-route-js": 35711,
-    "total-css": 16585,
+    "css": 16707,
+    "total-js": 265112,
+    "admin-total-js": 128453,
+    "admin-route-js": 35726,
+    "total-css": 16707,
     "lazy-css": 2890
   }
 }

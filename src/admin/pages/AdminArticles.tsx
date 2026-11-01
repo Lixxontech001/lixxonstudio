@@ -19,7 +19,7 @@ export default function AdminArticles() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const { posts, totalPages, loading } = useAdminPosts(page, { status: statusFilter, category: categoryFilter, search });
+  const { posts, totalPages, loading, refetch } = useAdminPosts(page, { status: statusFilter, category: categoryFilter, search });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkTag, setBulkTag] = useState('');
@@ -39,13 +39,13 @@ export default function AdminArticles() {
     else if (action === 'feature' || action === 'unfeature') await supabase.from('posts').update({ featured: action === 'feature' }).in('id', ids);
     else await supabase.from('posts').update({ status: action === 'publish' ? 'published' : action === 'draft' ? 'draft' : 'archived', ...(action === 'publish' ? { published_at: new Date().toISOString() } : {}) }).in('id', ids);
     setBulkBusy(false); setSelected(new Set());
-    window.location.reload();
+    refetch();
   };
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
     await supabase.from('posts').delete().eq('id', id);
-    window.location.reload();
+    refetch();
   };
 
   const handleDuplicate = async (post: typeof posts[0]) => {
@@ -73,12 +73,18 @@ export default function AdminArticles() {
           <h1 className="font-serif text-2xl text-gray-900">Articles</h1>
           <p className="text-gray-500 text-sm mt-1">Manage all editorial content</p>
         </div>
-        <button
-          onClick={() => navigate({ name: 'admin-article-new' })}
-          className="inline-flex items-center gap-2 bg-bronze text-white px-4 py-2.5 rounded text-sm font-medium hover:bg-bronze-dark transition-colors"
+        <a
+          href="/admin/articles/new"
+          onClick={e => {
+            if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+              e.preventDefault();
+              navigate({ name: 'admin-article-new' });
+            }
+          }}
+          className="inline-flex items-center gap-2 bg-bronze text-white px-4 py-2.5 rounded text-sm font-medium hover:bg-bronze-dark transition-colors shadow-sm"
         >
           <Plus size={16} /> New Article
-        </button>
+        </a>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6">
@@ -153,10 +159,19 @@ export default function AdminArticles() {
                 <tr key={post.id} className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${selected.has(post.id) ? 'bg-bronze/5' : ''}`}>
                   <td className="px-4 py-3"><input type="checkbox" checked={selected.has(post.id)} onChange={() => toggleOne(post.id)} aria-label={`Select ${post.title}`} /></td>
                   <td className="px-5 py-3">
-                    <button onClick={() => navigate({ name: 'admin-article-edit', id: post.id })} className="text-left">
-                      <p className="font-medium text-gray-900 hover:text-bronze transition-colors">{post.title}</p>
+                    <a
+                      href={`/admin/articles/${post.id}`}
+                      onClick={e => {
+                        if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                          e.preventDefault();
+                          navigate({ name: 'admin-article-edit', id: post.id });
+                        }
+                      }}
+                      className="text-left block group"
+                    >
+                      <p className="font-medium text-gray-900 group-hover:text-bronze transition-colors">{post.title}</p>
                       {post.featured && <span className="text-xs text-bronze">Featured</span>}
-                    </button>
+                    </a>
                   </td>
                   <td className="px-5 py-3 text-gray-600 hidden md:table-cell">{post.category?.name || '—'}</td>
                   <td className="px-5 py-3">
@@ -167,12 +182,28 @@ export default function AdminArticles() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => navigate({ name: 'admin-article-edit', id: post.id })} className="p-1.5 text-gray-400 hover:text-bronze transition-colors" title="Edit">
+                      <a
+                        href={`/admin/articles/${post.id}`}
+                        onClick={e => {
+                          if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                            e.preventDefault();
+                            navigate({ name: 'admin-article-edit', id: post.id });
+                          }
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-bronze transition-colors"
+                        title="Edit Article"
+                      >
                         <Pencil size={15} />
-                      </button>
-                      <button onClick={() => navigate({ name: 'article', slug: post.slug })} className="p-1.5 text-gray-400 hover:text-bronze transition-colors" title="View">
+                      </a>
+                      <a
+                        href={`/article/${post.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-1.5 text-gray-400 hover:text-bronze transition-colors"
+                        title="View Public Article"
+                      >
                         <Eye size={15} />
-                      </button>
+                      </a>
                       <button onClick={() => handleDuplicate(post)} className="p-1.5 text-gray-400 hover:text-bronze transition-colors" title="Duplicate">
                         <Copy size={15} />
                       </button>

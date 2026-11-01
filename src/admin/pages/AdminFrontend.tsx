@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { invalidateSiteConfig } from '../../hooks/useSiteConfig';
 import { Panel, Btn, Notice, Loading, useAdminAction } from '../components/ui';
+import { AdminImageUploadField } from '../components/AdminImageUploadField';
 
 type SettingRow = { key: string; value: Record<string, unknown>; is_public: boolean; updated_at: string };
 type Dict = Record<string, Record<string, unknown>>;
@@ -314,12 +315,27 @@ function SeoEditor({ value, onSave, busy, disabled }: { value: Record<string, un
   return (
     <>
       <p className="text-xs text-charcoal-muted mb-4">Applied when a page has no SEO data of its own.</p>
-      {fields.map(([k, label]) => (
-        <Row key={k}>
-          <label className="text-xs text-charcoal-muted w-48">{label}</label>
-          <input className={`${input} flex-1 min-w-[220px]`} value={draft[k] ?? ''} disabled={disabled} onChange={e => setDraft({ ...draft, [k]: e.target.value })} />
-        </Row>
-      ))}
+      {fields.map(([k, label]) => {
+        if (k === 'og_image') {
+          return (
+            <div key={k} className="py-2 mb-2">
+              <AdminImageUploadField
+                label="Default Social Share Image (OG Image)"
+                value={draft.og_image ?? ''}
+                onChange={url => setDraft(prev => ({ ...prev, og_image: url }))}
+                folder="site"
+                helperText="Global fallback preview image for social cards when sharing home or unassigned pages."
+              />
+            </div>
+          );
+        }
+        return (
+          <Row key={k}>
+            <label className="text-xs text-charcoal-muted w-48">{label}</label>
+            <input className={`${input} flex-1 min-w-[220px]`} value={draft[k] ?? ''} disabled={disabled} onChange={e => setDraft({ ...draft, [k]: e.target.value })} />
+          </Row>
+        );
+      })}
       <SaveBar onSave={() => onSave(draft)} busy={busy} disabled={disabled} />
     </>
   );

@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAdminAuthors } from '../../hooks/useSupabase';
-import { Plus, Pencil, X } from 'lucide-react';
+import { Plus, Pencil, X, ExternalLink } from 'lucide-react';
 import type { Author } from '../../lib/types';
 import { MarkdownField } from '../components/AdminEditorKit';
 import AdminImageUploadField from '../components/AdminImageUploadField';
 
 export default function AdminAuthors() {
-  const { authors, loading } = useAdminAuthors();
+  const { authors: initialAuthors, loading } = useAdminAuthors();
+  const [authors, setAuthors] = useState<Author[]>([]);
   const [editing, setEditing] = useState<Author | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -21,6 +22,15 @@ export default function AdminAuthors() {
   const [linkedin, setLinkedin] = useState('');
   const [website, setWebsite] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setAuthors(initialAuthors);
+  }, [initialAuthors]);
+
+  const refreshAuthors = async () => {
+    const { data } = await supabase.from('authors').select('*').order('created_at', { ascending: true });
+    if (data) setAuthors(data);
+  };
 
   const startEdit = (a: Author) => {
     setEditing(a);
@@ -57,12 +67,12 @@ export default function AdminAuthors() {
     } else {
       await supabase.from('authors').insert(payload);
     }
+    await refreshAuthors();
     setSaving(false);
     setShowForm(false);
-    window.location.reload();
   };
 
-  if (loading) return <div className="text-gray-400 text-sm">Loading...</div>;
+  if (loading && authors.length === 0) return <div className="text-gray-400 text-sm">Loading...</div>;
 
   return (
     <div>
@@ -92,7 +102,20 @@ export default function AdminAuthors() {
                 <p className="text-xs text-gray-500">{a.role || 'Contributor'}</p>
                 {!a.is_active && <span className="text-xs text-red-500">Inactive</span>}
               </div>
-              <button onClick={() => startEdit(a)} className="p-1.5 text-gray-400 hover:text-bronze"><Pencil size={14} /></button>
+              <div className="flex items-center gap-1">
+                {a.slug && (
+                  <a
+                    href={`/author/${a.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 text-gray-400 hover:text-bronze"
+                    title="View public profile"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                )}
+                <button onClick={() => startEdit(a)} className="p-1.5 text-gray-400 hover:text-bronze" title="Edit author profile"><Pencil size={14} /></button>
+              </div>
             </div>
             {a.bio && <p className="text-sm text-gray-600 mt-3 line-clamp-3">{a.bio}</p>}
           </div>

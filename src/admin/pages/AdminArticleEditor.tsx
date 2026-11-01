@@ -911,10 +911,13 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
                   <p className="text-xs text-gray-500">Social share (falls back to SEO title/description and the cover)</p>
                   <input value={state.og_title} onChange={e => update('og_title', e.target.value)} placeholder="Social title" className="w-full border border-gray-200 px-3 py-2 rounded text-sm" />
                   <textarea value={state.og_description} onChange={e => update('og_description', e.target.value)} rows={2} placeholder="Social description" className="w-full border border-gray-200 px-3 py-2 rounded text-sm" />
-                  <div className="flex gap-2">
-                    <input value={state.og_image} onChange={e => update('og_image', e.target.value)} placeholder="Social image URL" className="flex-1 border border-gray-200 px-3 py-2 rounded text-sm" />
-                    <button type="button" onClick={() => setMediaPickerMode('og')} className="px-2 border border-gray-200 rounded text-xs">Pick</button>
-                  </div>
+                  <AdminImageUploadField
+                    label="Social Share Image (OG)"
+                    value={state.og_image}
+                    onChange={url => update('og_image', url)}
+                    folder="social"
+                    helperText="Image used when article is shared on Twitter/X, LinkedIn, Facebook, Pinterest. Falls back to cover image."
+                  />
                   <SocialCardPreview title={state.og_title || state.seo_title || state.title} description={state.og_description || state.seo_description || state.excerpt} image={state.og_image || state.cover_image} />
                 </div>
               </div>

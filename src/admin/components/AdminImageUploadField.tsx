@@ -16,7 +16,7 @@ export interface AdminImageUploadFieldProps {
   required?: boolean;
 }
 
-export default function AdminImageUploadField({
+export function AdminImageUploadField({
   label,
   value,
   onChange,
@@ -307,3 +307,5 @@ export default function AdminImageUploadField({
     </div>
   );
 }
+
+export default AdminImageUploadField;

@@ -2,6 +2,7 @@ import type { MediaItem } from '../../lib/types';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ArrowLeft, Save, Upload, FileText, ExternalLink, Gauge, Sparkles } from 'lucide-react';
 import { MarkdownField, QualityPanel, ScoreRing, SearchPreview, SocialCardPreview, type QualityReport } from '../components/AdminEditorKit';
+import { AdminImageUploadField } from '../components/AdminImageUploadField';
 import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
 import { useShopCategories } from '../../hooks/useCommerce';
@@ -297,31 +298,14 @@ const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) =>
             />
           </div>
           <div className="lg:col-span-2">
-  <label className={labelClass}>Cover Image</label>
-  <div className="flex gap-3 items-center">
-    {form.image_url && (
-      <img src={form.image_url} alt="Preview" className="w-12 h-12 object-cover rounded border" />
-    )}
-    <input
-      id="product-image"
-      className={inputClass}
-      value={form.image_url}
-      onChange={e => update('image_url', e.target.value)}
-      placeholder="https://... or choose/upload below"
-    />
-    <label className="inline-flex items-center gap-1.5 px-3 py-2.5 bg-charcoal text-white text-xs tracking-editorial uppercase rounded-sm cursor-pointer hover:bg-bronze transition-colors whitespace-nowrap">
-      <Upload size={14} /> {uploadingImage ? 'Uploading...' : 'Upload Direct'}
-      <input type="file" accept="image/*" className="hidden" onChange={handleCoverImageUpload} />
-    </label>
-    <button
-      type="button"
-      onClick={openMediaPicker}
-      className="inline-flex items-center gap-1.5 px-3 py-2.5 border border-charcoal text-charcoal text-xs tracking-editorial uppercase rounded-sm hover:bg-charcoal hover:text-white transition-colors whitespace-nowrap"
-    >
-      Choose from Library
-    </button>
-  </div>
-</div>
+            <AdminImageUploadField
+              label="Cover Image"
+              value={form.image_url}
+              onChange={url => update('image_url', url)}
+              folder="products"
+              helperText="High-resolution hero shot of this product, book, guide, or gift."
+            />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className={labelClass}>Price</label><input id="product-price" className={inputClass} value={form.price} onChange={e => update('price', e.target.value)} placeholder="0.00" inputMode="decimal" /></div>
             <div><label className={labelClass}>Compare-at price <span className="normal-case">(optional)</span></label><input id="product-compare-price" className={inputClass} value={form.compare_price} onChange={e => update('compare_price', e.target.value)} placeholder="0.00" inputMode="decimal" /></div>
@@ -504,9 +488,13 @@ const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) =>
               description={form.og_description || form.seo_description || form.description}
               image={form.og_image || form.image_url}
             />
-            <div className="flex gap-2">
-              <input className={inputClass} value={form.og_image} onChange={e => update('og_image', e.target.value)} placeholder="Social image URL (falls back to the cover)" />
-            </div>
+            <AdminImageUploadField
+              label="Social Card Image (OG)"
+              value={form.og_image}
+              onChange={url => update('og_image', url)}
+              folder="social"
+              helperText="Image used when shared on social platforms. Falls back to cover image if left blank."
+            />
             <button type="button" onClick={() => { update('og_title', form.og_title || form.name); update('og_description', form.og_description || form.description.slice(0, 160)); update('seo_title', form.seo_title || form.name); update('seo_description', form.seo_description || form.description.slice(0, 155)); }} className="text-xs text-bronze hover:underline">Fill empty SEO fields from the listing</button>
           </div>
         </div>

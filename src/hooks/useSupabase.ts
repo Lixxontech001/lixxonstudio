@@ -349,10 +349,13 @@ function generateFingerprint(): string {
 
 // ==================== ADMIN HOOKS ====================
 
-export function useAdminPosts(page: number, filters: { status?: string; category?: string; search?: string }) {
+export function useAdminPosts(page: number, filters: { status?: string; category?: string; search?: string; refreshKey?: number }) {
   const [posts, setPosts] = useState<PostWithRelations[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [internalRefetch, setInternalRefetch] = useState(0);
+
+  const refetch = useCallback(() => setInternalRefetch(k => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -387,13 +390,14 @@ export function useAdminPosts(page: number, filters: { status?: string; category
     };
     fetchPosts();
     return () => { cancelled = true; };
-  }, [page, filters.status, filters.category, filters.search]);
+  }, [page, filters.status, filters.category, filters.search, filters.refreshKey, internalRefetch]);
 
   return {
     posts,
     total,
     totalPages: Math.max(1, Math.ceil(total / 15)),
     loading,
+    refetch,
   };
 }
 
