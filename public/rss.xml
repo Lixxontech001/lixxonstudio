@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel>
+  <title>Lixxon Studio</title>
+  <link>https://lixxonstudio.vercel.app</link>
+  <atom:link href="https://lixxonstudio.vercel.app/rss.xml" rel="self" type="application/rss+xml"/>
+  <description>Skincare science, intentional style and minimalist wellness.</description>
+  <language>en</language>
+  <lastBuildDate>Sun, 01 Nov 2026 12:00:00 GMT</lastBuildDate>
+  <item>
+    <title>Lixxon Studio — Skincare, Style &amp; Minimalist Wellness</title>
+    <link>https://lixxonstudio.vercel.app</link>
+    <guid isPermaLink="true">https://lixxonstudio.vercel.app</guid>
+    <pubDate>Sun, 01 Nov 2026 12:00:00 GMT</pubDate>
+    <description>A daily digital magazine covering skincare science, intentional style, and minimalist wellness. Expert-written, beautifully edited.</description>
+    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" type="image/jpeg" />
+    <media:content url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" medium="image" />
+  </item>
+  <item>
+    <title>Curated Essentials &amp; Digital Guides</title>
+    <link>https://lixxonstudio.vercel.app/shop</link>
+    <guid isPermaLink="true">https://lixxonstudio.vercel.app/shop</guid>
+    <pubDate>Sun, 01 Nov 2026 12:00:00 GMT</pubDate>
+    <description>Digital guides and curated essentials from Lixxon Studio. Skincare routines, style guides, and wellness resources.</description>
+    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" type="image/jpeg" />
+    <media:content url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" medium="image" />
+  </item>
+  <item>
+    <title>Editorial Series: Guides Worth Reading in Order</title>
+    <link>https://lixxonstudio.vercel.app/series</link>
+    <guid isPermaLink="true">https://lixxonstudio.vercel.app/series</guid>
+    <pubDate>Sun, 01 Nov 2026 12:00:00 GMT</pubDate>
+    <description>Multi-part editorial guides from Lixxon Studio, exploring skincare formulation science and intentional lifestyle design.</description>
+    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" type="image/jpeg" />
+    <media:content url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" medium="image" />
+  </item>
+  <item>
+    <title>Skincare &amp; Beauty Formulation Glossary</title>
+    <link>https://lixxonstudio.vercel.app/glossary</link>
+    <guid isPermaLink="true">https://lixxonstudio.vercel.app/glossary</guid>
+    <pubDate>Sun, 01 Nov 2026 12:00:00 GMT</pubDate>
+    <description>A transparent, science-backed glossary of skincare actives, clinical ingredients, and formulation terms.</description>
+    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" type="image/jpeg" />
+    <media:content url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" medium="image" />
+  </item>
+</channel>
+</rss>

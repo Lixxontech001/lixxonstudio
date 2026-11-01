@@ -32,6 +32,39 @@ function fallbackSitemap(site: string): string {
 </urlset>`;
 }
 
+function fallbackRss(site: string): string {
+  const now = new Date().toUTCString();
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel>
+  <title>Lixxon Studio</title>
+  <link>${site}</link>
+  <atom:link href="${site}/rss.xml" rel="self" type="application/rss+xml"/>
+  <description>Skincare science, intentional style and minimalist wellness.</description>
+  <language>en</language>
+  <lastBuildDate>${now}</lastBuildDate>
+  <item>
+    <title>Lixxon Studio — Skincare, Style &amp; Minimalist Wellness</title>
+    <link>${site}</link>
+    <guid isPermaLink="true">${site}</guid>
+    <pubDate>${now}</pubDate>
+    <description>A daily digital magazine covering skincare science, intentional style, and minimalist wellness.</description>
+    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" type="image/jpeg" />
+    <media:content url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" medium="image" />
+  </item>
+  <item>
+    <title>Curated Essentials &amp; Digital Guides</title>
+    <link>${site}/shop</link>
+    <guid isPermaLink="true">${site}/shop</guid>
+    <pubDate>${now}</pubDate>
+    <description>Digital guides and curated essentials from Lixxon Studio. Skincare routines, style guides, and wellness resources.</description>
+    <enclosure url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" type="image/jpeg" />
+    <media:content url="https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&amp;cs=tinysrgb&amp;w=1200" medium="image" />
+  </item>
+</channel>
+</rss>`;
+}
+
 export default async function handler(req: Request): Promise<Response> {
   const base = env(
     'VITE_SUPABASE_URL',
@@ -50,15 +83,24 @@ export default async function handler(req: Request): Promise<Response> {
       'VITE_SUPABASE_KEY',
     ) || '';
   const url = new URL(req.url);
-  const type = url.searchParams.get('type') || 'sitemap';
+  let type = url.searchParams.get('type') || 'sitemap';
+  if (type === 'feed') type = 'rss';
   const path = url.searchParams.get('path') || '/';
 
-  if (!ALLOWED.has(type)) return new Response('Not found', { status: 404 });
+  const isRss = type === 'rss';
+  const isSitemap = type === 'sitemap';
+
   if (!base) {
-    if (type === 'sitemap') {
+    if (isSitemap) {
       return new Response(fallbackSitemap(url.origin), {
         status: 200,
         headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+      });
+    }
+    if (isRss) {
+      return new Response(fallbackRss(url.origin), {
+        status: 200,
+        headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
       });
     }
     return new Response('Not found', { status: 404 });
@@ -68,20 +110,33 @@ export default async function handler(req: Request): Promise<Response> {
   let r: Response;
   try {
     r = await fetch(target, { headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
-    if (!r.ok && type === 'sitemap') {
-      return new Response(fallbackSitemap(url.origin), {
-        status: 200,
-        headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' },
-      });
+    if (!r.ok) {
+      if (isSitemap) {
+        return new Response(fallbackSitemap(url.origin), {
+          status: 200,
+          headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' },
+        });
+      }
+      if (isRss) {
+        return new Response(fallbackRss(url.origin), {
+          status: 200,
+          headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' },
+        });
+      }
     }
   } catch {
-    if (type === 'sitemap') {
+    if (isSitemap) {
       return new Response(fallbackSitemap(url.origin), {
         status: 200,
         headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' },
       });
     }
-    // Supabase unreachable — answer crawlers with a clean error instead of an unhandled stack trace.
+    if (isRss) {
+      return new Response(fallbackRss(url.origin), {
+        status: 200,
+        headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' },
+      });
+    }
     return new Response('Upstream feed unavailable', { status: 502, headers: { 'Cache-Control': 'no-store' } });
   }
   const headers = new Headers(r.headers);

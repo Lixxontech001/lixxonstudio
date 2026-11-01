@@ -64,4 +64,5 @@ Disallow: /api/
 
 # Feeds & Sitemaps
 Sitemap: https://lixxonstudio.vercel.app/sitemap.xml
+Sitemap: https://lixxonstudio.vercel.app/feed.xml
 Sitemap: https://lixxonstudio.vercel.app/rss.xml

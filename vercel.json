@@ -21,12 +21,21 @@
     },
     { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    {
+      "source": "/(.*)\\.xml",
+      "headers": [
+        { "key": "Content-Type", "value": "application/xml; charset=utf-8" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    },
     { "source": "/admin(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
     { "source": "/account(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
   ],
   "rewrites": [
     { "source": "/media/public/:path*", "destination": "/api/media?p=:path*" },
     { "source": "/sitemap.xml", "destination": "/api/feeds?type=sitemap" },
+    { "source": "/feed.xml", "destination": "/api/feeds?type=rss" },
+    { "source": "/feeds.xml", "destination": "/api/feeds?type=rss" },
     { "source": "/rss.xml", "destination": "/api/feeds?type=rss" },
     { "source": "/feed", "destination": "/api/feeds?type=rss" },
     { "source": "/podcast.xml", "destination": "/api/feeds?type=podcast" },
@@ -60,6 +69,6 @@
       "has": [{ "type": "header", "key": "user-agent", "value": ".*(bot|crawl|spider|slurp|flipboard|facebookexternalhit|facebot|twitterbot|xbot|linkedinbot|whatsapp|telegrambot|discordbot|slackbot|pinterest|redditbot|tumblr|embedly|quora|outbrain|vkshare|w3c_validator|skypeuripreview|applebot|duckduckbot|baiduspider|yandex|google-inspectiontool|lighthouse|chrome-lighthouse).*" }],
       "destination": "/api/feeds?type=prerender&path=/author/:slug"
     },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|.*\\.xml|.*\\.txt|.*\\.html|.*\\.webmanifest).*)", "destination": "/index.html" }
   ]
 }
