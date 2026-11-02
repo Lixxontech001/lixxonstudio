@@ -12,6 +12,20 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// Fallback dummy WebSocket implementation for Node.js runtimes lacking global WebSocket
+if (typeof globalThis.WebSocket === 'undefined') {
+  class DummyWebSocket {
+    constructor() {
+      this.readyState = 3; // CLOSED
+    }
+    addEventListener() {}
+    removeEventListener() {}
+    send() {}
+    close() {}
+  }
+  globalThis.WebSocket = DummyWebSocket;
+}
+
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || '').trim();
 
