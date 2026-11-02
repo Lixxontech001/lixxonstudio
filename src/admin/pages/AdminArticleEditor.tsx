@@ -926,7 +926,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
                     label="Social Share Image (OG)"
                     value={state.og_image}
                     onChange={url => update('og_image', url)}
-                    folder="social"
+                    folder="articles"
                     helperText="Image used when article is shared on Twitter/X, LinkedIn, Facebook, Pinterest. Falls back to cover image."
                   />
                   <SocialCardPreview title={state.og_title || state.seo_title || state.title} description={state.og_description || state.seo_description || state.excerpt} image={state.og_image || state.cover_image} />

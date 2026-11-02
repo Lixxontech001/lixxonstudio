@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, type RefObject } from 'react';
-import { Maximize2, X, Check, Copy, ArrowUpRight, Clock, BookmarkCheck } from 'lucide-react';
+import { useState, useEffect, type RefObject } from 'react';
+import { X, ArrowUpRight, BookmarkCheck } from 'lucide-react';
 
 interface ArticleEnhancementsProps {
   postId: string;
@@ -18,13 +18,6 @@ export default function ArticleEnhancements({
   // Resume reading prompt state
   const [savedPos, setSavedPos] = useState<number | null>(null);
   const [showResumeBanner, setShowResumeBanner] = useState(false);
-
-  // Finish-by estimated time
-  const finishTime = (() => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() + Math.max(1, Math.round(readingTimeMinutes)));
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  })();
 
   // Check saved position on load
   useEffect(() => {
