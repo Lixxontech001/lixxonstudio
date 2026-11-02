@@ -47,7 +47,7 @@ export default function SeriesPage({ slug }: { slug: string }) {
       <Helmet>
         <title>{series.title} | Lixxon Studio</title>
         <meta name="description" content={series.description || series.title} />
-        <script type="application/ld+json">{JSON.stringify({ '@context': 'https://schema.org', '@type': 'ItemList', name: series.title, itemListElement: posts.map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: `${window.location.origin}/blog/${p.slug}`, name: p.title })) })}</script>
+        <script type="application/ld+json">{JSON.stringify({ '@context': 'https://schema.org', '@type': 'ItemList', name: series.title, itemListElement: posts.map((p, i) => ({ '@type': 'ListItem', position: i + 1, url: `${window.location.origin}/article/${p.slug}`, name: p.title })) })}</script>
       </Helmet>
       <header className="mb-12">
         <Link to={{ name: 'series-index' }} className="text-[11px] tracking-editorial uppercase text-bronze hover:underline">← All series</Link>

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { MarkdownField } from '../components/AdminEditorKit';
-import { FileText, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
+import { FileText, Plus, Trash2, Copy, Loader2, ArrowUpRight } from 'lucide-react';
 import { useContentTemplates } from '../../hooks/usePlatform';
+import { useNavigation } from '../../context/NavigationContext';
 
 export default function AdminContentTemplates() {
   const { templates, loading, saveTemplate, deleteTemplate } = useContentTemplates();
+  const { navigate } = useNavigation();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -96,6 +98,15 @@ export default function AdminContentTemplates() {
               {t.category && <span className="text-[10px] tracking-editorial uppercase text-bronze">{t.category}</span>}
               {t.description && <p className="text-xs text-charcoal-muted mt-2 leading-relaxed">{t.description}</p>}
               <pre className="text-xs text-charcoal-muted/70 mt-3 line-clamp-4 font-mono whitespace-pre-wrap">{t.content}</pre>
+              <button
+                onClick={() => {
+                  sessionStorage.setItem('lixxon_draft_template', t.content);
+                  navigate({ name: 'admin-article-new' });
+                }}
+                className="mt-3.5 w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 bg-taupe-light/50 text-charcoal text-xs font-medium rounded-xs hover:bg-bronze hover:text-white transition-all tracking-editorial uppercase text-[10px]"
+              >
+                <Plus size={12} /> Use In New Article
+              </button>
             </div>
           ))}
         </div>

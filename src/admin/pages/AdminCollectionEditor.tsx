@@ -40,9 +40,38 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
   });
 
   const [articleSearch, setArticleSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft'>('all');
   const [allAvailableArticles, setAllAvailableArticles] = useState<Post[]>([]);
   const [loadingArticles, setLoadingArticles] = useState(false);
   const [selectedArticles, setSelectedArticles] = useState<AttachedArticle[]>([]);
+
+  const loadArticles = async (searchQuery = '', status = 'all') => {
+    setLoadingArticles(true);
+    try {
+      let query = supabase
+        .from('posts')
+        .select('id, title, slug, status, excerpt, published_at')
+        .order('published_at', { ascending: false })
+        .limit(200);
+
+      if (status !== 'all') {
+        query = query.eq('status', status);
+      }
+
+      if (searchQuery.trim()) {
+        query = query.ilike('title', `%${searchQuery.trim()}%`);
+      }
+
+      const { data, error } = await query;
+      if (!error && data) {
+        setAllAvailableArticles(data as Post[]);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingArticles(false);
+    }
+  };
 
   // Load existing collection details and items
   useEffect(() => {
@@ -86,18 +115,7 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
         });
     }
 
-    // Load recent published articles for fast browsing
-    setLoadingArticles(true);
-    supabase
-      .from('posts')
-      .select('id, title, slug, status, excerpt, published_at')
-      .eq('status', 'published')
-      .order('published_at', { ascending: false })
-      .limit(60)
-      .then(({ data }) => {
-        setAllAvailableArticles((data || []) as Post[]);
-        setLoadingArticles(false);
-      });
+    loadArticles('', 'all');
   }, [collectionId, isNew]);
 
   const addArticle = (post: Post) => {
@@ -386,37 +404,72 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
 
           {/* Article Picker Search & Instant Browser */}
           <div className="pt-4 border-t border-taupe/30 flex-1 flex flex-col">
-            <label className={labelClass}>Add Articles to Collection</label>
-            <div className="relative mb-3">
-              <Search size={14} className="absolute left-3 top-3 text-charcoal-muted" />
-              <input
-                type="text"
-                value={articleSearch}
-                onChange={e => setArticleSearch(e.target.value)}
-                placeholder="Filter available published articles…"
-                className={`${inputClass} pl-9`}
-              />
-              {articleSearch && (
+            <div className="flex items-center justify-between mb-2">
+              <label className={labelClass}>Add Articles to Collection</label>
+              {filteredAvailableArticles.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setArticleSearch('')}
-                  className="absolute right-3 top-3 text-charcoal-muted hover:text-charcoal"
+                  onClick={() => {
+                    filteredAvailableArticles.forEach(p => addArticle(p));
+                  }}
+                  className="text-[11px] text-bronze hover:underline font-medium"
                 >
-                  <X size={14} />
+                  + Add All Filtered ({filteredAvailableArticles.length})
                 </button>
               )}
+            </div>
+            <div className="flex gap-2 mb-3">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-3 text-charcoal-muted" />
+                <input
+                  type="text"
+                  value={articleSearch}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setArticleSearch(val);
+                    loadArticles(val, statusFilter);
+                  }}
+                  placeholder="Search articles by title or keyword…"
+                  className={`${inputClass} pl-9`}
+                />
+                {articleSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setArticleSearch('');
+                      loadArticles('', statusFilter);
+                    }}
+                    className="absolute right-3 top-3 text-charcoal-muted hover:text-charcoal"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <select
+                value={statusFilter}
+                onChange={e => {
+                  const s = e.target.value as 'all' | 'published' | 'draft';
+                  setStatusFilter(s);
+                  loadArticles(articleSearch, s);
+                }}
+                className="bg-white border border-taupe/60 px-3 py-2 text-xs rounded-sm focus:outline-none focus:border-bronze"
+              >
+                <option value="all">All Statuses</option>
+                <option value="published">Published</option>
+                <option value="draft">Drafts</option>
+              </select>
             </div>
 
             {/* Scrollable list of available published articles */}
             <div className="border border-taupe/30 rounded max-h-60 overflow-y-auto divide-y divide-taupe/15 flex-1">
               {loadingArticles ? (
                 <div className="py-6 text-center text-xs text-charcoal-muted flex items-center justify-center gap-2">
-                  <Loader2 size={14} className="animate-spin text-bronze" /> Loading published articles…
+                  <Loader2 size={14} className="animate-spin text-bronze" /> Loading articles…
                 </div>
               ) : filteredAvailableArticles.length === 0 ? (
                 <div className="py-6 text-center text-xs text-charcoal-muted">
                   {allAvailableArticles.length === 0
-                    ? 'No published articles found in the database.'
+                    ? 'No articles found matching query.'
                     : 'All matching articles are already added to this collection.'}
                 </div>
               ) : (
@@ -425,7 +478,12 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
                     key={p.id}
                     className="p-2.5 flex items-center justify-between gap-3 hover:bg-taupe-light/30 transition-colors"
                   >
-                    <span className="text-xs text-charcoal font-medium truncate flex-1">{p.title}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-charcoal font-medium truncate">{p.title}</p>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${p.status === 'published' ? 'text-green-700 bg-green-50' : 'text-amber-700 bg-amber-50'}`}>
+                        {p.status}
+                      </span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => addArticle(p)}

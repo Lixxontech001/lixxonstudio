@@ -106,7 +106,7 @@ function parsePath(): Route {
   const params = new URLSearchParams(window.location.search);
 
   if (parts.length === 0) return { name: 'home', page: parseInt(params.get('page') || '1', 10) };
-  if (parts[0] === 'blog' && parts[1]) return { name: 'article', slug: decodeURIComponent(parts[1]) };
+  if ((parts[0] === 'blog' || parts[0] === 'article') && parts[1]) return { name: 'article', slug: decodeURIComponent(parts[1]) };
   if (parts[0] === 'category' && parts[1]) return { name: 'category', slug: decodeURIComponent(parts[1]), page: parseInt(params.get('page') || '1', 10) };
   if (parts[0] === 'product' && parts[1]) return { name: 'product', slug: decodeURIComponent(parts[1]) };
   if (parts[0] === 'search') return { name: 'search', query: params.get('q') || '', page: parseInt(params.get('page') || '1', 10) };
@@ -154,9 +154,12 @@ function parsePath(): Route {
   }
   if (parts[0] === 'admin') {
     if (parts[1] === 'login') return { name: 'admin-login' };
-    if (parts[1] === 'articles' && parts[2] === 'new') return { name: 'admin-article-new' };
-    if (parts[1] === 'articles' && parts[2] === 'edit' && parts[3]) return { name: 'admin-article-edit', id: parts[3] };
-    if (parts[1] === 'articles') return { name: 'admin-articles' };
+    if (parts[1] === 'articles') {
+      if (parts[2] === 'new') return { name: 'admin-article-new' };
+      if (parts[2] === 'edit' && parts[3]) return { name: 'admin-article-edit', id: parts[3] };
+      if (parts[2]) return { name: 'admin-article-edit', id: parts[2] };
+      return { name: 'admin-articles' };
+    }
     if (parts[1] === 'categories') return { name: 'admin-categories' };
     if (parts[1] === 'authors') return { name: 'admin-authors' };
     if (parts[1] === 'comments') return { name: 'admin-comments' };
@@ -164,14 +167,20 @@ function parsePath(): Route {
     if (parts[1] === 'featured') return { name: 'admin-featured' };
     if (parts[1] === 'messages') return { name: 'admin-messages' };
     if (parts[1] === 'settings') return { name: 'admin-settings' };
-    if (parts[1] === 'products' && parts[2] === 'new') return { name: 'admin-product-new' };
-    if (parts[1] === 'products' && parts[2] === 'edit' && parts[3]) return { name: 'admin-product-edit', id: parts[3] };
-    if (parts[1] === 'products') return { name: 'admin-products' };
+    if (parts[1] === 'products') {
+      if (parts[2] === 'new') return { name: 'admin-product-new' };
+      if (parts[2] === 'edit' && parts[3]) return { name: 'admin-product-edit', id: parts[3] };
+      if (parts[2]) return { name: 'admin-product-edit', id: parts[2] };
+      return { name: 'admin-products' };
+    }
     if (parts[1] === 'orders') return { name: 'admin-orders' };
     if (parts[1] === 'customers') return { name: 'admin-customers' };
-    if (parts[1] === 'collections' && parts[2] === 'new') return { name: 'admin-collection-new' };
-    if (parts[1] === 'collections' && parts[2] === 'edit' && parts[3]) return { name: 'admin-collection-edit', id: parts[3] };
-    if (parts[1] === 'collections') return { name: 'admin-collections' };
+    if (parts[1] === 'collections') {
+      if (parts[2] === 'new') return { name: 'admin-collection-new' };
+      if (parts[2] === 'edit' && parts[3]) return { name: 'admin-collection-edit', id: parts[3] };
+      if (parts[2]) return { name: 'admin-collection-edit', id: parts[2] };
+      return { name: 'admin-collections' };
+    }
     if (parts[1] === 'newsletter') return { name: 'admin-newsletter' };
     if (parts[1] === 'analytics') return { name: 'admin-analytics' };
     if (parts[1] === 'sponsored') return { name: 'admin-sponsored' };

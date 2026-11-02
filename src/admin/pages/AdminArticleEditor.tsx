@@ -223,6 +223,17 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
   }, [post]);
 
   useEffect(() => {
+    if (isNew) {
+      const draftTpl = sessionStorage.getItem('lixxon_draft_template');
+      if (draftTpl) {
+        sessionStorage.removeItem('lixxon_draft_template');
+        setState(s => ({ ...s, content: draftTpl }));
+        setNotice('Loaded template structure into new draft.');
+      }
+    }
+  }, [isNew]);
+
+  useEffect(() => {
     if (!currentPostId) return;
     supabase.from('related_articles').select('related_post_id').eq('post_id', currentPostId).order('sort_order')
       .then(({ data }) => { if (data) setRelatedIds(data.map(r => r.related_post_id)); });
@@ -548,7 +559,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
   const pct = (v: { impressions: number; clicks: number }) => v.impressions ? `${Math.round((v.clicks / v.impressions) * 100)}%` : '–';
 
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://lixxonstudio.com';
-  const previewUrl = `${siteUrl}/blog/${state.slug || slugify(state.title) || 'draft'}`;
+  const previewUrl = `${siteUrl}/article/${state.slug || slugify(state.title) || 'draft'}`;
 
   if (loading && !isNew) return <div className="text-gray-400 text-sm">Loading article…</div>;
 

@@ -68,15 +68,23 @@ export default function AdminSeries() {
     setParts(map);
   };
 
-  const loadAllPosts = async () => {
+  const loadAllPosts = async (query = '') => {
     setLoadingPosts(true);
     try {
-      const { data } = await supabase
+      let q = supabase
         .from('posts')
         .select('id, title, slug, series_id, series_order, status, created_at')
         .order('created_at', { ascending: false })
-        .limit(100);
-      setAllPosts(rows<AvailablePost>(data));
+        .limit(300);
+
+      if (query.trim()) {
+        q = q.ilike('title', `%${query.trim()}%`);
+      }
+
+      const { data, error } = await q;
+      if (!error && data) {
+        setAllPosts(rows<AvailablePost>(data));
+      }
     } catch {
       // ignore
     } finally {
@@ -103,11 +111,20 @@ export default function AdminSeries() {
 
     try {
       if (editing.id) {
-        await supabase.from('article_series').update(payload).eq('id', editing.id);
+        const { error } = await supabase.from('article_series').update(payload).eq('id', editing.id);
+        if (error) throw error;
         showToast('Series updated successfully');
       } else {
-        await supabase.from('article_series').insert(payload);
-        showToast('New series created successfully');
+        const { data, error } = await supabase.from('article_series').insert(payload).select().single();
+        if (error) throw error;
+        showToast('New series created! You can now add guides to it.');
+        if (data) {
+          setEditing(data as ArticleSeries);
+          setOpen(data.id);
+          setShowAddDrawer(data.id);
+          await load();
+          return;
+        }
       }
       setEditing(null);
       await load();
@@ -119,29 +136,46 @@ export default function AdminSeries() {
   };
 
   const addPart = async (seriesId: string, postId: string) => {
-    const currentList = parts[seriesId] || [];
-    const n = currentList.length + 1;
-    await supabase.from('posts').update({ series_id: seriesId, series_order: n }).eq('id', postId);
-    showToast('Guide added to series');
-    await load();
-    await loadAllPosts();
+    try {
+      const currentList = parts[seriesId] || [];
+      const n = currentList.length + 1;
+      const { error } = await supabase.from('posts').update({ series_id: seriesId, series_order: n }).eq('id', postId);
+      if (error) throw error;
+      showToast('Guide added to series');
+      await load();
+      await loadAllPosts(searchFilter);
+    } catch (err) {
+      showToast('Error adding guide: ' + (err instanceof Error ? err.message : String(err)));
+    }
   };
 
   const removePart = async (postId: string) => {
-    await supabase.from('posts').update({ series_id: null, series_order: null }).eq('id', postId);
-    showToast('Article removed from series');
-    await load();
-    await loadAllPosts();
+    try {
+      const { error } = await supabase.from('posts').update({ series_id: null, series_order: null }).eq('id', postId);
+      if (error) throw error;
+      showToast('Article removed from series');
+      await load();
+      await loadAllPosts(searchFilter);
+    } catch (err) {
+      showToast('Error removing article: ' + (err instanceof Error ? err.message : String(err)));
+    }
   };
 
   const move = async (seriesId: string, idx: number, dir: -1 | 1) => {
-    const list = [...(parts[seriesId] || [])];
-    const j = idx + dir;
-    if (j < 0 || j >= list.length) return;
-    [list[idx], list[j]] = [list[j], list[idx]];
-    setParts(prev => ({ ...prev, [seriesId]: list }));
-    await Promise.all(list.map((p, i) => supabase.from('posts').update({ series_order: i + 1 }).eq('id', p.id)));
-    load();
+    try {
+      const list = [...(parts[seriesId] || [])];
+      const j = idx + dir;
+      if (j < 0 || j >= list.length) return;
+      [list[idx], list[j]] = [list[j], list[idx]];
+      setParts(prev => ({ ...prev, [seriesId]: list }));
+      for (let i = 0; i < list.length; i++) {
+        await supabase.from('posts').update({ series_order: i + 1 }).eq('id', list[i].id);
+      }
+      showToast('Order updated');
+      load();
+    } catch (err) {
+      showToast('Error reordering: ' + (err instanceof Error ? err.message : String(err)));
+    }
   };
 
   const setManualOrder = async (seriesId: string, postId: string, newOrder: number) => {
@@ -156,14 +190,15 @@ export default function AdminSeries() {
     await supabase.from('article_series').delete().eq('id', s.id);
     showToast('Series deleted');
     load();
-    loadAllPosts();
+    loadAllPosts(searchFilter);
   };
 
-  // Filter available posts for the current series
+  // Filter available posts for the current active series
+  const activeSeriesId = showAddDrawer || editing?.id || open;
   const filteredAvailablePosts = useMemo(() => {
     return allPosts.filter(p => {
-      // Exclude posts already in this series
-      const isAlreadyInThisSeries = open ? (parts[open] || []).some(item => item.id === p.id) : false;
+      // Exclude posts already in this active series
+      const isAlreadyInThisSeries = activeSeriesId ? (parts[activeSeriesId] || []).some(item => item.id === p.id) : false;
       if (isAlreadyInThisSeries) return false;
 
       // Status filter
@@ -179,7 +214,7 @@ export default function AdminSeries() {
 
       return true;
     });
-  }, [allPosts, open, parts, statusFilter, searchFilter]);
+  }, [allPosts, activeSeriesId, parts, statusFilter, searchFilter]);
 
   return (
     <div className="space-y-6">
@@ -291,6 +326,136 @@ export default function AdminSeries() {
               <span>Visible to readers on the website and feeds</span>
             </label>
           </div>
+
+          {editing.id && (
+            <div className="pt-5 border-t border-taupe/30 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-medium tracking-editorial uppercase text-charcoal flex items-center gap-2">
+                    <FileText size={14} className="text-bronze" /> Guides in this Series ({(parts[editing.id] || []).length})
+                  </h3>
+                  <p className="text-xs text-charcoal-muted mt-0.5">
+                    Articles will be presented to readers in this sequential reading order.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddDrawer(showAddDrawer === editing.id ? null : editing.id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bronze text-white text-xs font-medium rounded-sm hover:bg-bronze-dark transition-colors self-start"
+                >
+                  <Plus size={13} /> {showAddDrawer === editing.id ? 'Close Guide Picker' : 'Add Guides to this Series'}
+                </button>
+              </div>
+
+              {/* Parts list inside edit form */}
+              {(parts[editing.id] || []).length === 0 ? (
+                <div className="bg-taupe-light/20 rounded border border-dashed border-taupe/40 p-6 text-center">
+                  <p className="text-xs text-charcoal font-medium">No guides attached to this series yet.</p>
+                  <p className="text-[11px] text-charcoal-muted mt-1">Click “Add Guides to this Series” above to pick from your published and draft articles.</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded border border-taupe/30 divide-y divide-taupe/20 max-h-64 overflow-y-auto">
+                  {(parts[editing.id] || []).map((p, i) => (
+                    <div key={p.id} className="p-3 flex items-center gap-3 hover:bg-taupe-light/20">
+                      <span className="w-7 h-7 rounded-full bg-bronze/10 text-bronze flex items-center justify-center font-mono text-xs font-bold flex-shrink-0">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-xs text-charcoal truncate">{p.title}</p>
+                        <p className="text-[10px] text-charcoal-muted">Part {i + 1} of {(parts[editing.id!] || []).length}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={i === 0}
+                          onClick={() => move(editing.id!, i, -1)}
+                          className="p-1.5 text-charcoal-muted hover:text-bronze disabled:opacity-20 rounded"
+                          title="Move up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          disabled={i === (parts[editing.id!] || []).length - 1}
+                          onClick={() => move(editing.id!, i, 1)}
+                          className="p-1.5 text-charcoal-muted hover:text-bronze disabled:opacity-20 rounded"
+                          title="Move down"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removePart(p.id)}
+                          className="p-1.5 text-charcoal-muted hover:text-red-600 rounded ml-1"
+                          title="Remove from series"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Drawer inside edit form */}
+              {showAddDrawer === editing.id && (
+                <div className="bg-taupe-light/20 border border-bronze/40 rounded-md p-4 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-taupe/20">
+                    <p className="text-xs font-semibold text-charcoal">Select Articles to Add</p>
+                    <button type="button" onClick={() => setShowAddDrawer(null)} className="text-xs text-charcoal-muted hover:text-charcoal"><X size={13} /></button>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search size={13} className="absolute left-2.5 top-2.5 text-charcoal-muted" />
+                      <input
+                        type="text"
+                        value={searchFilter}
+                        onChange={e => {
+                          setSearchFilter(e.target.value);
+                          loadAllPosts(e.target.value);
+                        }}
+                        placeholder="Search articles by title..."
+                        className="w-full pl-8 pr-3 py-1.5 text-xs border border-taupe/60 rounded bg-white focus:outline-none focus:border-bronze"
+                      />
+                    </div>
+                    <select
+                      value={statusFilter}
+                      onChange={e => setStatusFilter(e.target.value as never)}
+                      className="border border-taupe/60 px-2 py-1.5 text-xs rounded bg-white"
+                    >
+                      <option value="all">All</option>
+                      <option value="published">Published</option>
+                      <option value="draft">Drafts</option>
+                      <option value="unassigned">Unassigned Only</option>
+                    </select>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto border border-taupe/30 rounded bg-white divide-y divide-taupe/15">
+                    {loadingPosts ? (
+                      <div className="py-6 text-center text-xs text-charcoal-muted"><Loader2 size={13} className="animate-spin inline mr-1" /> Loading articles...</div>
+                    ) : filteredAvailablePosts.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-charcoal-muted">No matching articles found.</div>
+                    ) : (
+                      filteredAvailablePosts.map(post => (
+                        <div key={post.id} className="p-2.5 flex items-center justify-between gap-2 hover:bg-taupe-light/30">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-charcoal truncate">{post.title}</p>
+                            <span className="text-[10px] text-charcoal-muted capitalize">{post.status}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => addPart(editing.id!, post.id)}
+                            className="px-2.5 py-1 bg-charcoal text-white hover:bg-bronze text-[10px] rounded transition-colors whitespace-nowrap"
+                          >
+                            + Add
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-3 pt-3 border-t border-taupe/20">
             <button

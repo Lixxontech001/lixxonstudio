@@ -73,12 +73,18 @@ export default function AdminDashboard() {
           </p>
         </div>
         {can('content.write') && (
-          <button
-            onClick={() => navigate({ name: 'admin-article-new' })}
+          <a
+            href="/admin/articles/new"
+            onClick={e => {
+              if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                e.preventDefault();
+                navigate({ name: 'admin-article-new' });
+              }
+            }}
             className="inline-flex items-center gap-2 bg-bronze text-white px-4 py-2.5 rounded text-sm font-medium hover:bg-bronze-dark transition-colors"
           >
             <Plus size={16} /> New Article
-          </button>
+          </a>
         )}
       </div>
 
@@ -87,15 +93,25 @@ export default function AdminDashboard() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {shortcuts.map(s => {
               const Icon = s.icon;
+              const href = `/admin/${s.route.replace('admin-', '')}`;
               return (
-                <button key={s.route} onClick={() => navigate({ name: s.route } as never)}
-                  className="flex items-center gap-3 text-left border border-taupe/30 rounded-sm px-4 py-3 hover:border-bronze transition-colors">
+                <a
+                  key={s.route}
+                  href={href}
+                  onClick={e => {
+                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                      e.preventDefault();
+                      navigate({ name: s.route } as never);
+                    }
+                  }}
+                  className="flex items-center gap-3 text-left border border-taupe/30 rounded-sm px-4 py-3 hover:border-bronze transition-colors group"
+                >
                   <Icon size={18} className="text-bronze flex-shrink-0" strokeWidth={1.5} />
                   <span className="min-w-0">
-                    <span className="block text-sm text-charcoal">{s.label}</span>
+                    <span className="block text-sm text-charcoal group-hover:text-bronze transition-colors">{s.label}</span>
                     <span className="block text-[11px] text-charcoal-muted">{s.hint}</span>
                   </span>
-                </button>
+                </a>
               );
             })}
           </div>
@@ -167,26 +183,44 @@ export default function AdminDashboard() {
             <p className="text-gray-400 text-sm p-6 text-center">No articles yet</p>
           ) : (
             recentArticles.map(post => (
-              <button
+              <a
                 key={post.id}
-                onClick={() => navigate({ name: 'admin-article-edit', id: post.id })}
-                className="flex items-center justify-between w-full px-5 py-3.5 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors text-left"
+                href={`/admin/articles/${post.id}`}
+                onClick={e => {
+                  if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                    e.preventDefault();
+                    navigate({ name: 'admin-article-edit', id: post.id });
+                  }
+                }}
+                className="flex items-center justify-between w-full px-5 py-3.5 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors text-left group"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 truncate">{post.title}</p>
+                  <p className="text-sm font-medium text-gray-900 group-hover:text-bronze transition-colors truncate">{post.title}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {post.category?.name || 'Uncategorized'} · {new Date(post.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full ml-3 flex-shrink-0 ${
-                  post.status === 'published' ? 'bg-green-50 text-green-700' :
-                  post.status === 'draft' ? 'bg-amber-50 text-amber-700' :
-                  post.status === 'scheduled' ? 'bg-blue-50 text-blue-700' :
-                  'bg-gray-100 text-gray-600'
-                }`}>
-                  {post.status}
-                </span>
-              </button>
+                <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    post.status === 'published' ? 'bg-green-50 text-green-700' :
+                    post.status === 'draft' ? 'bg-amber-50 text-amber-700' :
+                    post.status === 'scheduled' ? 'bg-blue-50 text-blue-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {post.status}
+                  </span>
+                  <a
+                    href={`/article/${post.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-xs text-charcoal-muted hover:text-bronze p-1"
+                    title="View public article"
+                  >
+                    ↗
+                  </a>
+                </div>
+              </a>
             ))
           )}
         </div>
@@ -213,7 +247,18 @@ export default function AdminDashboard() {
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-900">Recent Orders</p>
-                <button onClick={() => navigate({ name: 'admin-orders' })} className="text-xs text-bronze hover:underline">View all</button>
+                <a
+                  href="/admin/orders"
+                  onClick={e => {
+                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                      e.preventDefault();
+                      navigate({ name: 'admin-orders' });
+                    }
+                  }}
+                  className="text-xs text-bronze hover:underline"
+                >
+                  View all
+                </a>
               </div>
               {recentOrders.map(o => (
                 <div key={o.id} className="flex items-center justify-between px-5 py-3 border-b border-gray-100 last:border-0">

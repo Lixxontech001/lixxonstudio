@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, ShieldCheck, ArrowUpRight } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import type { SponsoredContent, Post } from '../../lib/types';
 
@@ -115,7 +115,27 @@ export default function AdminSponsored() {
           {sponsored.map(s => (
             <div key={s.id} className="bg-white rounded-sm border border-taupe/30 p-5 flex items-start gap-4">
               <div className="flex-1">
-                <p className="font-serif text-lg text-charcoal">{s.post?.title || 'Article removed'}</p>
+                {s.post ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a
+                      href={`/article/${s.post.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-serif text-lg text-charcoal hover:text-bronze transition-colors inline-flex items-center gap-1.5"
+                    >
+                      {s.post.title}
+                      <ArrowUpRight size={14} className="text-bronze flex-shrink-0" />
+                    </a>
+                    <a
+                      href={`/admin/articles/${s.post.id}`}
+                      className="text-[10px] tracking-editorial uppercase bg-taupe-light/50 px-2 py-0.5 rounded text-charcoal-muted hover:text-bronze ml-2"
+                    >
+                      Edit
+                    </a>
+                  </div>
+                ) : (
+                  <p className="font-serif text-lg text-charcoal-muted italic">Article removed</p>
+                )}
                 <p className="text-sm text-charcoal-muted mt-1">Sponsor: {s.sponsor_name}</p>
                 {s.campaign_name && <p className="text-xs text-charcoal-muted">Campaign: {s.campaign_name}</p>}
                 <div className="flex items-center gap-3 mt-2 text-xs text-charcoal-muted">
