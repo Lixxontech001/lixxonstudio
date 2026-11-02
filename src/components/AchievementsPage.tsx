@@ -1,12 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import {
-  Award, Flame, BookOpen, Bookmark, Star, ShieldCheck, CheckCircle2,
-  Lock, ArrowRight, Share2, History, Trophy, Sparkles, User, ExternalLink
+  CheckCircle2, Lock, ArrowRight, Share2, History, Trophy, Sparkles, User, ExternalLink
 } from 'lucide-react';
-import { Link, useNavigation } from '../context/NavigationContext';
-import { useAuth } from '../context/AuthContext';
-import { useBadges, BADGES, useProfile } from '../hooks/useV3';
+import { Link } from '../context/NavigationContext';
+import { useBadges, useProfile } from '../hooks/useV3';
 import { useReadingHistory } from '../hooks/useFeatures';
 import CustomerGate from './shop/CustomerGate';
 
@@ -123,8 +121,6 @@ export default function AchievementsPage() {
 }
 
 function AchievementsInner() {
-  const { user } = useAuth();
-  const { navigate } = useNavigation();
   const { badges } = useBadges();
   const { profile } = useProfile();
   const { history } = useReadingHistory();

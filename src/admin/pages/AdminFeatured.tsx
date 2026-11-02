@@ -9,6 +9,8 @@ export default function AdminFeatured() {
   const { navigate } = useNavigation();
   const [localPosts, setLocalPosts] = useState(posts);
   const [activeFilter, setActiveFilter] = useState<'all' | 'featured' | 'editors_pick'>('all');
+  const [search, setSearch] = useState('');
+  const [updating, setUpdating] = useState<string | null>(null);
 
   // Keep in sync with posts initially
   useState(() => {

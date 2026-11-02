@@ -27,7 +27,7 @@ import { useToast } from '../context/ToastContext';
 import { Helmet } from 'react-helmet-async';
 import type { PostWithRelations } from '../lib/types';
 import { renderMarkdown } from '../lib/markdown';
-import { normalizeImageUrl } from '../lib/images';
+import { normalizeImageUrl, displayImageUrl } from '../lib/images';
 import SmartImage from './SmartImage';
 import { useGlossary } from '../hooks/useGlossary';
 import { useNavigation } from '../context/NavigationContext';
@@ -555,13 +555,13 @@ export default function ArticleReader({ slug }: { slug: string }) {
           <div className="container-narrow mt-12 pt-10 border-t border-taupe/50">
             <div className="flex flex-col sm:flex-row gap-5 items-start">
               {post.author.avatar_url && (
-                <Link to={{ name: 'author', slug: post.author.slug, page: 1 }} className="group flex-shrink-0">
+                <Link to={{ name: 'author', slug: post.author.slug }} className="group flex-shrink-0">
                   <img src={displayImageUrl(post.author.avatar_url)} alt={post.author.name} className="w-16 h-16 rounded-full object-cover group-hover:ring-2 ring-bronze transition-all" loading="lazy" />
                 </Link>
               )}
               <div>
                 <p className="text-[10px] tracking-editorial uppercase text-bronze mb-1">Written By</p>
-                <Link to={{ name: 'author', slug: post.author.slug, page: 1 }} className="hover:text-bronze transition-colors">
+                <Link to={{ name: 'author', slug: post.author.slug }} className="hover:text-bronze transition-colors">
                   <h4 className="font-serif text-xl text-charcoal">{post.author.name}</h4>
                 </Link>
                 {post.author.role && <p className="text-sm text-charcoal-muted mt-0.5">{post.author.role}</p>}

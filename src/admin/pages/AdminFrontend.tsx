@@ -323,7 +323,7 @@ function SeoEditor({ value, onSave, busy, disabled }: { value: Record<string, un
                 label="Default Social Share Image (OG Image)"
                 value={draft.og_image ?? ''}
                 onChange={url => setDraft(prev => ({ ...prev, og_image: url }))}
-                folder="site"
+                folder="branding"
                 helperText="Global fallback preview image for social cards when sharing home or unassigned pages."
               />
             </div>

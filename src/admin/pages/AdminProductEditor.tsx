@@ -1,4 +1,3 @@
-import type { MediaItem } from '../../lib/types';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ArrowLeft, Save, Upload, FileText, ExternalLink, Gauge, Sparkles } from 'lucide-react';
 import { MarkdownField, QualityPanel, ScoreRing, SearchPreview, SocialCardPreview, type QualityReport } from '../components/AdminEditorKit';
@@ -7,7 +6,6 @@ import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
 import { useShopCategories } from '../../hooks/useCommerce';
 import { useAuth } from '../../context/AuthContext';
-import { optimizeAdminImage } from '../../lib/imageUpload';
 
 interface FormData {
   name: string; brand: string; description: string; image_url: string;
@@ -43,48 +41,6 @@ export default function AdminProductEditor({ productId, isNew }: { productId?: s
   });
 
   // Add these state variables near the top of AdminProductEditor
-const [showMediaPicker, setShowMediaPicker] = useState(false);
-const [mediaList, setMediaList] = useState<MediaItem[]>([]);
-const [uploadingImage, setUploadingImage] = useState(false);
-
-// Function to fetch media library items when picker opens
-const openMediaPicker = async () => {
-  setShowMediaPicker(true);
-  const { data } = await supabase.from('media').select('*').order('created_at', { ascending: false });
-  if (data) setMediaList(data);
-};
-
-// Function for direct cover image upload
-const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  setUploadingImage(true);
-  try {
-    const { blob, width, height, contentType, extension } = await optimizeAdminImage(file, 1600, 0.78);
-    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
-    const path = `media/${fileName}`;
-    const { error: uploadError } = await supabase.storage.from('media').upload(path, blob, { contentType, cacheControl: '31536000' });
-    if (uploadError) throw new Error(uploadError.message);
-
-    const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
-    const publicUrl = urlData.publicUrl;
-    await supabase.from('media').insert({
-      url: publicUrl,
-      title: file.name,
-      file_name: file.name,
-      file_size: blob.size,
-      mime_type: contentType,
-      width: width || null,
-      height: height || null,
-    });
-    update('image_url', publicUrl);
-  } catch (uploadError) {
-    setError(`Upload failed: ${uploadError instanceof Error ? uploadError.message : 'Could not optimize this image.'}`);
-  } finally {
-    setUploadingImage(false);
-    e.target.value = '';
-  }
-};
   
   useEffect(() => {
     if (!isNew && productId) {
@@ -492,7 +448,7 @@ const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) =>
               label="Social Card Image (OG)"
               value={form.og_image}
               onChange={url => update('og_image', url)}
-              folder="social"
+              folder="products"
               helperText="Image used when shared on social platforms. Falls back to cover image if left blank."
             />
             <button type="button" onClick={() => { update('og_title', form.og_title || form.name); update('og_description', form.og_description || form.description.slice(0, 160)); update('seo_title', form.seo_title || form.name); update('seo_description', form.seo_description || form.description.slice(0, 155)); }} className="text-xs text-bronze hover:underline">Fill empty SEO fields from the listing</button>
@@ -511,32 +467,6 @@ const handleCoverImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) =>
         <button onClick={() => navigate({ name: 'admin-products' })} className="text-xs text-charcoal-muted hover:text-charcoal tracking-editorial uppercase ml-auto">Cancel</button>
       </div>
       
-{showMediaPicker && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowMediaPicker(false)}>
-    <div className="bg-white rounded-md max-w-3xl w-full max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-      <div className="p-4 border-b flex justify-between items-center">
-        <h3 className="font-medium text-sm text-charcoal uppercase tracking-editorial">Select Image from Media Library</h3>
-        <button onClick={() => setShowMediaPicker(false)} className="text-gray-400 hover:text-charcoal">✕</button>
-      </div>
-      <div className="p-4 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-        {mediaList.map(item => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => {
-              update('image_url', item.url);
-              setShowMediaPicker(false);
-            }}
-            className="group aspect-square rounded overflow-hidden border border-gray-200 hover:border-bronze focus:outline-none relative"
-          >
-            <img src={item.url} alt={item.alt_text || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-          </button>
-        ))}
-      </div>
-    </div>
-  </div>
-)}
-      
-    </div>
+</div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MarkdownField } from '../components/AdminEditorKit';
-import { FileText, Plus, Trash2, Copy, Loader2, ArrowUpRight } from 'lucide-react';
+import { FileText, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
 import { useContentTemplates } from '../../hooks/usePlatform';
 import { useNavigation } from '../../context/NavigationContext';
 

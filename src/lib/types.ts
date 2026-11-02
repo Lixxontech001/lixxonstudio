@@ -194,7 +194,7 @@ export interface Comment {
   content: string;
   is_visible: boolean;
   is_approved: boolean;
-  admin_reply: boolean;
+  admin_reply?: string | null;
   created_at: string;
   replies?: Comment[];
 }

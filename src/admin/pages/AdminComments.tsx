@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAdminComments } from '../../hooks/useSupabase';
-import { Check, X, Trash2, MessageSquare, ExternalLink, Reply, ShieldCheck, Clock, EyeOff, Send } from 'lucide-react';
+import { Check, Trash2, MessageSquare, ExternalLink, Reply, ShieldCheck, Clock, EyeOff, Send } from 'lucide-react';
 
 export default function AdminComments() {
   const [page, setPage] = useState(1);
@@ -213,7 +213,7 @@ export default function AdminComments() {
                       type="button"
                       onClick={() => {
                         setReplyingId(replyingId === comment.id ? null : comment.id);
-                        setReplyText(comment.admin_reply || '');
+                        setReplyText(typeof comment.admin_reply === 'string' ? comment.admin_reply : '');
                       }}
                       className="text-xs text-charcoal-muted hover:text-bronze flex items-center gap-1 ml-2 transition-colors"
                     >

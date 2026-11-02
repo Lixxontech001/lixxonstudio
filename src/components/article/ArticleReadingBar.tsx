@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Bookmark, Share2, List, Maximize2, Minimize2, Check, ArrowUp } from 'lucide-react';
-import { Link } from '../../context/NavigationContext';
 
 export interface ArticleReadingBarProps {
   title: string;
@@ -21,7 +20,6 @@ export default function ArticleReadingBar({
   title,
   authorName,
   categoryName,
-  categorySlug,
   progress,
   timeRemaining,
   bookmarked,

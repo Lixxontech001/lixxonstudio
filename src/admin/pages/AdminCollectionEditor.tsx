@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MarkdownField } from '../components/AdminEditorKit';
-import { ArrowLeft, Save, Plus, X, ExternalLink, Loader2, GripVertical, Check, Search, FileText } from 'lucide-react';
+import { ArrowLeft, Save, Plus, X, ExternalLink, Loader2, Check, Search, FileText } from 'lucide-react';
 import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
 import type { Post } from '../../lib/types';

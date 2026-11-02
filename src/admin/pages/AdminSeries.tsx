@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, type FormEvent } from 'react';
 import {
-  Layers, Plus, Trash2, Pencil, Loader2, GripVertical, X,
-  ExternalLink, Search, Check, ChevronDown, ChevronUp, FileText, ArrowUpDown, Filter, BookOpen
+  Layers, Plus, Trash2, Pencil, Loader2, X,
+  ExternalLink, Search, Check, ChevronDown, ChevronUp, FileText, BookOpen
 } from 'lucide-react';
 import { supabase, rows } from '../../lib/supabaseClient';
 import type { ArticleSeries } from '../../lib/types';
@@ -178,11 +178,7 @@ export default function AdminSeries() {
     }
   };
 
-  const setManualOrder = async (seriesId: string, postId: string, newOrder: number) => {
-    if (isNaN(newOrder) || newOrder < 1) return;
-    await supabase.from('posts').update({ series_order: newOrder }).eq('id', postId);
-    load();
-  };
+
 
   const remove = async (s: ArticleSeries) => {
     if (!confirm(`Delete series “${s.title}”? All articles stay published and are merely unlinked.`)) return;
@@ -340,7 +336,7 @@ export default function AdminSeries() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowAddDrawer(showAddDrawer === editing.id ? null : editing.id)}
+                  onClick={() => setShowAddDrawer(showAddDrawer === editing.id ? null : (editing.id || null))}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bronze text-white text-xs font-medium rounded-sm hover:bg-bronze-dark transition-colors self-start"
                 >
                   <Plus size={13} /> {showAddDrawer === editing.id ? 'Close Guide Picker' : 'Add Guides to this Series'}

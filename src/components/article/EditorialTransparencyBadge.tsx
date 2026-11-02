@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldCheck, Info, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Link } from '../../context/NavigationContext';
 
 export interface EditorialTransparencyBadgeProps {
@@ -46,6 +46,7 @@ export default function EditorialTransparencyBadge({
 
       {expanded && (
         <div className="mt-4 pt-4 border-t border-taupe/30 space-y-2.5 text-[11px] text-charcoal-muted leading-relaxed animate-fade-in">
+          <p className="font-medium text-charcoal">Editorial oversight for {categoryName} led by {authorName}{publishedAt ? ` • Published ${new Date(publishedAt).toLocaleDateString()}` : ''}.</p>
           <div className="grid sm:grid-cols-3 gap-3">
             <div className="bg-white/80 p-2.5 rounded border border-taupe/20">
               <span className="font-semibold text-charcoal flex items-center gap-1 mb-1">

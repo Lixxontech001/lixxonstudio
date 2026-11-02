@@ -504,12 +504,12 @@ export function useAdminPromoCodes() {
 
 // ==================== ADMIN: PRODUCT REVIEWS MODERATION ====================
 export function useAdminProductReviews() {
-  const [reviews, setReviews] = useState<{ id: string; product_id: string; customer_email: string; author_name: string; rating: number; content: string | null; is_approved: boolean; created_at: string; product: { name: string } | null }[]>([]);
+  const [reviews, setReviews] = useState<{ id: string; product_id: string; customer_email: string; author_name: string; rating: number; content: string | null; is_approved: boolean; created_at: string; product: { name: string; slug?: string } | null }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('admin_reviews').select('*, product:products(name)').order('created_at', { ascending: false });
+    const { data } = await supabase.from('admin_reviews').select('*, product:products(name, slug)').order('created_at', { ascending: false });
     setReviews((data || []) as typeof reviews);
     setLoading(false);
   }, []);

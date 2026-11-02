@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Share2, Plus, Edit2, Trash2, Send, CheckCircle2, XCircle,
   AlertCircle, Loader2, ChevronDown, ChevronUp, RefreshCw,
-  Globe, MessageSquare, Radio, ExternalLink, ShieldCheck, X
+  Globe, Radio, ShieldCheck, X
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useToast } from '../../context/ToastContext';
@@ -283,7 +283,6 @@ export default function SyndicationManager() {
 
   const handleTestDispatch = async (dest: SyndicationDestination) => {
     setTestingId(dest.id);
-    let success = false;
     let detail = '';
 
     try {
@@ -307,7 +306,6 @@ export default function SyndicationManager() {
             }),
           });
           if (!res.ok) throw new Error(`Discord returned HTTP ${res.status}`);
-          success = true;
           detail = 'Discord webhook payload delivered.';
           break;
         }
@@ -327,7 +325,6 @@ export default function SyndicationManager() {
           });
           const data = await res.json();
           if (!res.ok || !data.ok) throw new Error(data.description || `Telegram error ${res.status}`);
-          success = true;
           detail = 'Telegram message posted to channel.';
           break;
         }
@@ -346,7 +343,6 @@ export default function SyndicationManager() {
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.message || `Bluesky auth HTTP ${res.status}`);
-          success = true;
           detail = `Authenticated as @${dest.config.handle}`;
           break;
         }
@@ -360,7 +356,6 @@ export default function SyndicationManager() {
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || `Mastodon HTTP ${res.status}`);
-          success = true;
           detail = `Verified account @${data.username || 'user'}`;
           break;
         }
@@ -373,7 +368,6 @@ export default function SyndicationManager() {
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.errors?.[0]?.message || `Medium HTTP ${res.status}`);
-          success = true;
           detail = `Verified Medium author: ${data.data?.name || data.data?.username}`;
           break;
         }
@@ -381,7 +375,6 @@ export default function SyndicationManager() {
         case 'flipboard': {
           if (!dest.config.magazine_url) throw new Error('Missing Flipboard Magazine URL');
           if (!dest.config.flipboard_session) throw new Error('Missing Flipboard session cookie');
-          success = true;
           detail = 'Magazine URL & Session format validated.';
           break;
         }
@@ -389,7 +382,6 @@ export default function SyndicationManager() {
         case 'tumblr': {
           if (!dest.config.blog_identifier) throw new Error('Missing Tumblr Blog Identifier');
           if (!dest.config.consumer_key) throw new Error('Missing Tumblr Consumer Key');
-          success = true;
           detail = `Blog identifier ${dest.config.blog_identifier} validated.`;
           break;
         }
@@ -397,7 +389,6 @@ export default function SyndicationManager() {
         case 'substack': {
           if (!dest.config.subdomain) throw new Error('Missing Substack Subdomain');
           if (!dest.config.connect_sid) throw new Error('Missing Substack connect.sid cookie');
-          success = true;
           detail = `Substack ${dest.config.subdomain}.substack.com validated.`;
           break;
         }
