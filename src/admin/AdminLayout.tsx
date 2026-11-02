@@ -3,6 +3,7 @@ import { useNavigation, routeToPath } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, FileText, FolderTree, Users, MessageSquare, Film,
+  Radio,
   Image, Star, Settings, LogOut, PenLine, ExternalLink,
   ShoppingBag, Package, UserCircle, FolderHeart, Mail,
   BarChart3, ShieldCheck, ChevronDown, ChevronRight, Inbox,
@@ -86,6 +87,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Sponsored', route: { name: 'admin-sponsored' }, icon: ShieldCheck },
       { label: 'Polls', route: { name: 'admin-polls' }, icon: BarChart3 },
       { label: 'Social Shares', route: { name: 'admin-social-shares' }, icon: Share2 },
+      { label: 'Syndication', route: { name: 'admin-syndication' }, href: '/admin/syndication', icon: Radio },
     ],
   },
   {

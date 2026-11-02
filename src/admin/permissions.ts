@@ -35,6 +35,7 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   'admin-sponsored': 'marketing.campaigns',
   'admin-polls': 'marketing.campaigns',
   'admin-social-shares': 'marketing.campaigns',
+  'admin-syndication': 'marketing.campaigns',
   'admin-content-templates': 'content.write',
   'admin-products': 'commerce.pricing',
   'admin-product-new': 'commerce.pricing',

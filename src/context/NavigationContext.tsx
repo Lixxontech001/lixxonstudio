@@ -91,6 +91,7 @@ export type Route =
   | { name: 'admin-feedback' }
   | { name: 'admin-social-shares' }
   | { name: 'admin-subscribers-prefs' }
+  | { name: 'admin-syndication' }
   | { name: 'notFound' };
 
 interface NavigationContextType {
@@ -210,6 +211,7 @@ function parsePath(): Route {
     if (parts[1] === 'feedback') return { name: 'admin-feedback' };
     if (parts[1] === 'social-shares') return { name: 'admin-social-shares' };
     if (parts[1] === 'subscribers-prefs') return { name: 'admin-subscribers-prefs' };
+    if (parts[1] === 'syndication') return { name: 'admin-syndication' };
     if (parts[1] === 'dashboard' || !parts[1]) return { name: 'admin-dashboard' };
     return { name: 'admin-dashboard' };
   }
@@ -323,6 +325,7 @@ export function routeToPath(route: Route): string {
     case 'admin-feedback': return '/admin/feedback';
     case 'admin-social-shares': return '/admin/social-shares';
     case 'admin-subscribers-prefs': return '/admin/subscribers-prefs';
+    case 'admin-syndication': return '/admin/syndication';
     case 'notFound': return '/not-found';
   }
 }
