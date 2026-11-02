@@ -42,7 +42,7 @@ export default function AdminQuestions() {
           {items.map(q => (
             <div key={q.id} className="bg-white rounded-sm border border-taupe/30 p-5">
               <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
-                <p className="text-xs text-charcoal-muted">{q.author_name} · {q.author_email} · {new Date(q.created_at).toLocaleString()} {q.post && <>· on <a href={`/blog/${q.post.slug}`} target="_blank" rel="noreferrer" className="text-bronze hover:underline">{q.post.title}</a></>}</p>
+                <p className="text-xs text-charcoal-muted">{q.author_name} · {q.author_email} · {new Date(q.created_at).toLocaleString()} {q.post && <>· on <a href={`/article/${q.post.slug}`} target="_blank" rel="noreferrer" className="text-bronze hover:underline">{q.post.title}</a></>}</p>
                 <div className="flex items-center gap-1">
                   {q.answer && <button onClick={() => toggle(q)} className={`p-1.5 ${q.is_public ? 'text-green-600' : 'text-charcoal-muted'}`} title={q.is_public ? 'Public — click to hide' : 'Hidden — click to publish'}>{q.is_public ? <Eye size={14} /> : <EyeOff size={14} />}</button>}
                   <button onClick={() => remove(q)} className="p-1.5 text-charcoal-muted hover:text-red-600" aria-label="Delete"><Trash2 size={14} /></button>

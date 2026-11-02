@@ -1,4 +1,4 @@
-import {Star, Trash2, Check, X} from 'lucide-react';
+import { Star, Trash2, Check, X, ExternalLink } from 'lucide-react';
 import { useAdminProductReviews } from '../../hooks/usePlatform';
 
 export default function AdminReviews() {
@@ -7,7 +7,7 @@ export default function AdminReviews() {
   return (
     <div>
       <h1 className="font-serif text-2xl text-charcoal mb-1">Product Reviews</h1>
-      <p className="text-sm text-charcoal-muted mb-6">Moderate customer reviews.</p>
+      <p className="text-sm text-charcoal-muted mb-6">Moderate customer reviews and feedback.</p>
 
       {loading ? (
         <div className="text-center py-12 text-charcoal-muted text-sm">Loading...</div>
@@ -20,7 +20,15 @@ export default function AdminReviews() {
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <span className="text-sm font-medium text-charcoal">{r.author_name}</span>
-                  <span className="text-xs text-charcoal-muted ml-2">on {r.product?.name || 'Unknown product'}</span>
+                  <span className="text-xs text-charcoal-muted ml-2">
+                    on {r.product?.slug ? (
+                      <a href={`/product/${r.product.slug}`} target="_blank" rel="noreferrer" className="text-bronze hover:underline inline-flex items-center gap-0.5">
+                        {r.product.name} <ExternalLink size={10} />
+                      </a>
+                    ) : (
+                      r.product?.name || 'Product'
+                    )}
+                  </span>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${r.is_approved ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
                   {r.is_approved ? 'Approved' : 'Pending'}

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { MarkdownField } from '../components/AdminEditorKit';
-import { BookA, Plus, Trash2, Pencil, Loader2, Search } from 'lucide-react';
+import { BookA, Plus, Trash2, Pencil, Loader2, Search, ExternalLink } from 'lucide-react';
 import { supabase, rows } from '../../lib/supabaseClient';
 import type { GlossaryTerm } from '../../lib/types';
 import ExportButton from '../components/ExportButton';
@@ -35,9 +35,17 @@ export default function AdminGlossary() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div><h1 className="font-serif text-2xl text-charcoal flex items-center gap-2"><BookA size={20} className="text-bronze" /> Glossary</h1><p className="text-sm text-charcoal-muted mt-1">{terms.length} terms · powers hover definitions inside articles and the public /glossary page.</p></div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <a
+            href="/glossary"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 border border-taupe/50 text-charcoal text-xs uppercase tracking-editorial rounded-sm hover:border-bronze hover:text-bronze transition-colors"
+          >
+            <ExternalLink size={13} /> View Public Glossary
+          </a>
           <ExportButton filename="glossary" load={async () => terms as unknown as Record<string, unknown>[]} columns={['term', 'category', 'definition']} />
-          <button onClick={() => setEditing({ term: '', definition: '', category: '' })} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-sm rounded-sm hover:bg-bronze"><Plus size={14} /> New term</button>
+          <button onClick={() => setEditing({ term: '', definition: '', category: '' })} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-xs uppercase tracking-editorial rounded-sm hover:bg-bronze transition-colors"><Plus size={14} /> New term</button>
         </div>
       </div>
       {editing && (

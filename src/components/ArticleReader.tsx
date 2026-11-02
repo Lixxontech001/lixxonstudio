@@ -40,6 +40,7 @@ import ArticleFaq from './article/ArticleFaq';
 
 const ArticleReadingBar = lazy(() => import('./article/ArticleReadingBar'));
 const EditorialTransparencyBadge = lazy(() => import('./article/EditorialTransparencyBadge'));
+const ArticleEnhancements = lazy(() => import('./article/ArticleEnhancements'));
 
 export default function ArticleReader({ slug }: { slug: string }) {
   const { post, loading, error, retry } = usePostBySlug(slug);
@@ -326,6 +327,14 @@ export default function ArticleReader({ slug }: { slug: string }) {
           activeHeading={activeHeading}
           focusMode={focusMode}
           onToggleFocusMode={() => setFocusMode(!focusMode)}
+        />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <ArticleEnhancements
+          postId={post.id}
+          containerRef={proseRef}
+          readingTimeMinutes={post.reading_time_minutes || 5}
         />
       </Suspense>
 

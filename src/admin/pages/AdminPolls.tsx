@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { BarChart3, Trash2, Power, Plus, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BarChart3, Trash2, Power, Plus, Loader2, ExternalLink } from 'lucide-react';
 import { useAdminPolls } from '../../hooks/usePlatform';
-
+import { supabase } from '../../lib/supabaseClient';
 
 export default function AdminPolls() {
   const { polls, loading, toggle, remove, create } = useAdminPolls();
@@ -9,7 +9,19 @@ export default function AdminPolls() {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [postId, setPostId] = useState('');
+  const [articles, setArticles] = useState<{ id: string; title: string; slug?: string }[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from('posts')
+      .select('id, title, slug')
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(({ data }) => {
+        if (data) setArticles(data);
+      });
+  }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,9 +38,9 @@ export default function AdminPolls() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-serif text-2xl text-charcoal">Article Polls</h1>
-          <p className="text-sm text-charcoal-muted mt-1">Manage reader polls attached to articles.</p>
+          <p className="text-sm text-charcoal-muted mt-1">Manage interactive reader polls attached to editorial stories.</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-sm rounded-sm hover:bg-bronze transition-all">
+        <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-xs uppercase tracking-editorial rounded-sm hover:bg-bronze transition-all">
           <Plus size={14} /> New Poll
         </button>
       </div>
@@ -36,8 +48,20 @@ export default function AdminPolls() {
       {showForm && (
         <form onSubmit={handleCreate} className="bg-white rounded-sm p-6 border border-taupe/30 mb-6 space-y-4">
           <div>
-            <label className="text-xs text-charcoal-muted uppercase tracking-wide">Post ID</label>
-            <input value={postId} onChange={e => setPostId(e.target.value)} placeholder="UUID of the article" required className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze" />
+            <label className="text-xs text-charcoal-muted uppercase tracking-wide">Attach to Article</label>
+            <select
+              value={postId}
+              onChange={e => setPostId(e.target.value)}
+              required
+              className="w-full mt-1 border border-taupe/50 px-3 py-2 text-sm rounded-sm focus:outline-none focus:border-bronze bg-white"
+            >
+              <option value="">Select an editorial article…</option>
+              {articles.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.title}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="text-xs text-charcoal-muted uppercase tracking-wide">Question</label>
@@ -75,7 +99,15 @@ export default function AdminPolls() {
                     <BarChart3 size={14} className="text-bronze" />
                     <span className="text-sm font-medium text-charcoal">{p.question}</span>
                   </div>
-                  <p className="text-xs text-charcoal-muted ml-5">On: {p.post?.title || 'Unknown article'}</p>
+                  <p className="text-xs text-charcoal-muted ml-5">
+                    On: {p.post?.slug ? (
+                      <a href={`/article/${p.post.slug}`} target="_blank" rel="noreferrer" className="text-bronze hover:underline inline-flex items-center gap-1 font-medium">
+                        {p.post.title} <ExternalLink size={11} />
+                      </a>
+                    ) : (
+                      p.post?.title || 'Editorial article'
+                    )}
+                  </p>
                   <div className="flex flex-wrap gap-2 mt-2 ml-5">
                     {p.options.map((o, i) => <span key={i} className="text-xs bg-taupe-light/60 px-2 py-1 rounded-full text-charcoal-muted">{o}</span>)}
                   </div>

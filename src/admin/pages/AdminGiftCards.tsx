@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import {Plus, Trash2, Loader2} from 'lucide-react';
+import { Plus, Trash2, Loader2, ExternalLink } from 'lucide-react';
 import { useAdminGiftCards } from '../../hooks/usePlatform';
 
 export default function AdminGiftCards() {
@@ -29,14 +29,24 @@ export default function AdminGiftCards() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="font-serif text-2xl text-charcoal">Gift Cards</h1>
-          <p className="text-sm text-charcoal-muted mt-1">Create and manage gift card codes.</p>
+          <p className="text-sm text-charcoal-muted mt-1">Issue and manage digital gift card vouchers.</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-sm rounded-sm hover:bg-bronze transition-all">
-          <Plus size={14} /> New Gift Card
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/gift-cards"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 border border-taupe/50 text-charcoal text-xs uppercase tracking-editorial rounded-sm hover:border-bronze hover:text-bronze transition-colors"
+          >
+            <ExternalLink size={13} /> View Public Page
+          </a>
+          <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center gap-2 px-4 py-2 bg-charcoal text-white text-xs uppercase tracking-editorial rounded-sm hover:bg-bronze transition-all">
+            <Plus size={14} /> New Gift Card
+          </button>
+        </div>
       </div>
 
       {showForm && (

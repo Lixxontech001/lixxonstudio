@@ -450,10 +450,13 @@ export function useAdminAuthors() {
 
 export type AdminComment = Comment & { post: { title: string; slug: string } | null };
 
-export function useAdminComments(page: number) {
+export function useAdminComments(page: number, filter: 'all' | 'pending' | 'approved' | 'hidden' = 'all') {
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refetchKey, setRefetchKey] = useState(0);
+
+  const refetch = useCallback(() => setRefetchKey(k => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -461,11 +464,21 @@ export function useAdminComments(page: number) {
       setLoading(true);
       const from = (page - 1) * 20;
       const to = from + 19;
-      const { data, count } = await supabase
+      let query = supabase
         .from('admin_comments')
         .select('*, post:posts(title,slug)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to);
+
+      if (filter === 'pending') {
+        query = query.eq('is_approved', false);
+      } else if (filter === 'approved') {
+        query = query.eq('is_approved', true);
+      } else if (filter === 'hidden') {
+        query = query.eq('is_visible', false);
+      }
+
+      const { data, count } = await query;
       if (cancelled) return;
       setComments((data || []) as unknown as AdminComment[]);
       setTotal(count || 0);
@@ -473,13 +486,15 @@ export function useAdminComments(page: number) {
     };
     fetchComments();
     return () => { cancelled = true; };
-  }, [page]);
+  }, [page, filter, refetchKey]);
 
   return {
     comments,
     total,
     totalPages: Math.max(1, Math.ceil(total / 20)),
     loading,
+    refetch,
+    setComments,
   };
 }
 
