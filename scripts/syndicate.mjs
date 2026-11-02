@@ -12,12 +12,13 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_KEY || '').trim();
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('[syndicate] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Cannot run syndication.');
-  process.exit(1);
+  console.warn('[syndicate] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.');
+  console.warn('[syndicate] Please ensure these secrets are added in GitHub repository settings. Skipping execution.');
+  process.exit(0);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
