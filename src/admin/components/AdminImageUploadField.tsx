@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect, type DragEvent, type ChangeEvent } from 'react';
-import { Upload, Image as ImageIcon, X, Link2, Check, Loader2, Trash2, FolderOpen } from 'lucide-react';
+import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from 'react';
+import { Upload, X, Link2, Loader2, Trash2, FolderOpen } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { optimizeAdminImage } from '../../lib/imageUpload';
 import { MediaPicker } from './AdminEditorKit';
@@ -12,6 +12,7 @@ export interface AdminImageUploadFieldProps {
   onAltChange?: (alt: string) => void;
   folder?: 'series' | 'collections' | 'categories' | 'authors' | 'articles' | 'products' | 'general' | 'branding';
   hint?: string;
+  helperText?: string;
   className?: string;
   required?: boolean;
 }
@@ -24,6 +25,7 @@ export function AdminImageUploadField({
   onAltChange,
   folder = 'general',
   hint,
+  helperText,
   className = '',
   required = false,
 }: AdminImageUploadFieldProps) {
@@ -32,14 +34,12 @@ export function AdminImageUploadField({
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [mediaItems, setMediaItems] = useState<{ id: string; url: string; alt_text?: string | null; title?: string | null; file_name?: string | null }[]>([]);
-  const [loadingMedia, setLoadingMedia] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load existing media items when picker is opened
   const openMediaLibrary = async () => {
     setShowMediaPicker(true);
-    setLoadingMedia(true);
     try {
       const { data } = await supabase.from('media').select('id, url, alt_text, title, file_name').order('created_at', { ascending: false }).limit(60);
       if (Array.isArray(data)) {
@@ -47,8 +47,6 @@ export function AdminImageUploadField({
       }
     } catch {
       // ignore
-    } finally {
-      setLoadingMedia(false);
     }
   };
 
@@ -290,7 +288,7 @@ export function AdminImageUploadField({
         </div>
       )}
 
-      {hint && <p className="text-[11px] text-charcoal-muted mt-1">{hint}</p>}
+      {(hint || helperText) && <p className="text-[11px] text-charcoal-muted mt-1">{hint || helperText}</p>}
 
       {/* Media Picker modal */}
       <MediaPicker

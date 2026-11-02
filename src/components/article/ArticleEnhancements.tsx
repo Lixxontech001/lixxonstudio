@@ -10,7 +10,6 @@ interface ArticleEnhancementsProps {
 export default function ArticleEnhancements({
   postId,
   containerRef,
-  readingTimeMinutes = 5,
 }: ArticleEnhancementsProps) {
   // Lightbox state
   const [lightboxImg, setLightboxImg] = useState<{ src: string; alt?: string } | null>(null);
