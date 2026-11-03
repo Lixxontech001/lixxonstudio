@@ -3,7 +3,7 @@ import { useNavigation, routeToPath } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, FileText, FolderTree, Users, MessageSquare, Film,
-  Radio,
+  Radio, Flame, Bell,
   Image, Star, Settings, LogOut, PenLine, ExternalLink,
   ShoppingBag, Package, UserCircle, FolderHeart, Mail,
   BarChart3, ShieldCheck, ChevronDown, ChevronRight, Inbox,
@@ -59,6 +59,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Messages', route: { name: 'admin-messages' }, icon: Inbox },
       { label: 'Media', route: { name: 'admin-media' }, icon: Image },
       { label: 'Featured', route: { name: 'admin-featured' }, icon: Star },
+      { label: 'Trending Hub', route: { name: 'admin-trending' }, href: '/admin/trending', icon: Flame },
       { label: 'Series', route: { name: 'admin-series' }, icon: Layers },
       { label: 'Glossary', route: { name: 'admin-glossary' }, icon: BookA },
       { label: 'Reader Questions', route: { name: 'admin-questions' }, icon: MessageCircleQuestion },
@@ -88,6 +89,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Polls', route: { name: 'admin-polls' }, icon: BarChart3 },
       { label: 'Social Shares', route: { name: 'admin-social-shares' }, icon: Share2 },
       { label: 'Syndication', route: { name: 'admin-syndication' }, href: '/admin/syndication', icon: Radio },
+      { label: 'Announcements', route: { name: 'admin-announcements' }, href: '/admin/announcements', icon: Bell },
     ],
   },
   {

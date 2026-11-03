@@ -12,6 +12,7 @@ import {FeedSkeleton} from './components/Skeletons';
 import CartDrawer from './components/shop/CartDrawer';
 import CookieConsent from './components/CookieConsent';
 import FeedbackWidget from './components/FeedbackWidget';
+import AnnouncementEngine from './components/AnnouncementEngine';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
@@ -59,6 +60,7 @@ const AccountProfilePage = lazyWithRetry(() => import('./components/shop/Account
 const AccountRefundsPage = lazyWithRetry(() => import('./components/shop/AccountRefundsPage'));
 const ReaderProfilePage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage'));
 const SharedListPage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage').then(m => ({ default: m.SharedListPage })));
+const TrendingPage = lazyWithRetry(() => import('./components/pages/TrendingPage'));
 const AdminApp = lazyWithRetry(() => import('./admin/AdminApp'));
 const BuddyEntry = lazyWithRetry(() => import('./buddy/BuddyEntry'));
 
@@ -224,6 +226,8 @@ function AppContent() {
         return <ReaderProfilePage handle={route.handle} />;
       case 'shared-list':
         return <SharedListPage token={route.token} />;
+      case 'trending':
+        return <TrendingPage />;
       case 'notFound':
         return <NotFoundPage />;
       default:
@@ -250,6 +254,7 @@ function AppContent() {
       <CartDrawer />
       <CookieConsent />
       <FeedbackWidget />
+      <AnnouncementEngine />
       <ShortcutsHelp />
       <Analytics />
     </MaintenanceGate>

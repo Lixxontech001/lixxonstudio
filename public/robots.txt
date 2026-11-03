@@ -9,6 +9,7 @@ Allow: /shop/
 Allow: /collections/
 Allow: /series/
 Allow: /glossary
+Allow: /trending
 Allow: /weekly-digest
 Allow: /about
 Allow: /contact

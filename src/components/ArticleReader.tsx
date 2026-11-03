@@ -37,6 +37,7 @@ import SeriesNav from './article/SeriesNav';
 import AskEditor from './article/AskEditor';
 import ShareQuote from './article/ShareQuote';
 import ArticleFaq from './article/ArticleFaq';
+import { recordTelemetry } from '../lib/telemetry';
 
 const ArticleReadingBar = lazy(() => import('./article/ArticleReadingBar'));
 const EditorialTransparencyBadge = lazy(() => import('./article/EditorialTransparencyBadge'));
@@ -52,6 +53,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
   const [bookmarked, setBookmarked] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const proseRef = useRef<HTMLDivElement>(null);
+  const milestonesRef = useRef<Set<number>>(new Set());
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const { theme, toggleTheme } = useTheme();
   const { showToast } = useToast();
@@ -120,7 +122,19 @@ export default function ArticleReader({ slug }: { slug: string }) {
       const rect = article.getBoundingClientRect();
       const total = rect.height - window.innerHeight;
       const scrolled = Math.max(0, -rect.top);
-      setProgress(Math.min(100, (scrolled / total) * 100));
+      const pct = total > 0 ? (scrolled / total) * 100 : 0;
+      setProgress(Math.min(100, pct));
+      [25, 50, 75, 100].forEach(m => {
+        if (pct >= m && !milestonesRef.current.has(m) && post) {
+          milestonesRef.current.add(m);
+          recordTelemetry({
+            formType: 'toast',
+            eventType: 'scroll_depth',
+            pagePath: `/blog/${post.slug}`,
+            metadata: { depth: m, post_id: post.id, slug: post.slug },
+          });
+        }
+      });
 
       const headings = document.querySelectorAll('.article-prose h2');
       let current = '';

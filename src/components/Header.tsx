@@ -87,6 +87,9 @@ export default function Header() {
             <Link to={{ name: 'home', page: 1 }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'home' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
               Home
             </Link>
+            <Link to={{ name: 'trending' }} className={`text-xs tracking-editorial uppercase font-medium transition-colors duration-300 ${route.name === 'trending' ? 'text-bronze' : 'text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light'}`}>
+              Trending
+            </Link>
             {dbMenu.length > 0 && dbMenu.map(item => (
               <a key={`${item.label}-${item.href}`} href={item.href}
                 className="text-xs tracking-editorial uppercase font-medium transition-colors duration-300 text-charcoal hover:text-bronze dark:text-white/80 dark:hover:text-bronze-light">
@@ -284,6 +287,9 @@ export default function Header() {
           <nav className="flex flex-col p-6 gap-1 overflow-y-auto">
             <Link to={{ name: 'home', page: 1 }} className="text-left py-3 font-serif text-2xl text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/90 dark:hover:text-bronze-light" onClick={() => setMobileOpen(false)}>
               Home
+            </Link>
+            <Link to={{ name: 'trending' }} className="text-left py-3 font-serif text-2xl text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/90 dark:hover:text-bronze-light" onClick={() => setMobileOpen(false)}>
+              Trending
             </Link>
             {navCategories.map(cat => (
               <Link

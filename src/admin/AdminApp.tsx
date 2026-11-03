@@ -53,6 +53,8 @@ const AdminArticleEditor = lazy(() => import('./pages/AdminArticleEditor'));
 const AdminProductEditor = lazy(() => import('./pages/AdminProductEditor'));
 const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor'));
 const SyndicationManager = lazy(() => import('../components/admin/SyndicationManager'));
+const AdminTrending = lazy(() => import('./pages/AdminTrending'));
+const AdminAnnouncements = lazy(() => import('./pages/AdminAnnouncements'));
 const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
 const AutomationBrains = lazy(() => import('./pages/AutomationBrains'));
 const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
@@ -207,6 +209,8 @@ export default function AdminApp() {
       case 'admin-feedback': return <AdminFeedback />;
       case 'admin-social-shares': return <AdminSocialShares />;
       case 'admin-syndication': return <LazyPage><SyndicationManager /></LazyPage>;
+      case 'admin-trending': return <LazyPage><AdminTrending /></LazyPage>;
+      case 'admin-announcements': return <LazyPage><AdminAnnouncements /></LazyPage>;
       case 'admin-subscribers-prefs': return <AdminSubscribersPrefs />;
       case 'admin-glossary': return <AdminGlossary />;
       case 'admin-series': return <AdminSeries />;

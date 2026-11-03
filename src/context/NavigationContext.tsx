@@ -92,6 +92,9 @@ export type Route =
   | { name: 'admin-social-shares' }
   | { name: 'admin-subscribers-prefs' }
   | { name: 'admin-syndication' }
+  | { name: 'trending'; category?: string }
+  | { name: 'admin-trending' }
+  | { name: 'admin-announcements' }
   | { name: 'notFound' };
 
 interface NavigationContextType {
@@ -125,6 +128,7 @@ function parsePath(): Route {
   if (parts[0] === 'series' && parts[1]) return { name: 'series', slug: decodeURIComponent(parts[1]) };
   if (parts[0] === 'series') return { name: 'series-index' };
   if (parts[0] === 'glossary') return { name: 'glossary' };
+  if (parts[0] === 'trending') return { name: 'trending', category: params.get('category') || undefined };
   if (parts[0] === 'reader' && parts[1]) return { name: 'reader', handle: decodeURIComponent(parts[1]) };
   if (parts[0] === 'list' && parts[1]) return { name: 'shared-list', token: parts[1] };
   if (parts[0] === 'newsletter' && parts[1] === 'confirm') return { name: 'newsletter-confirm', token: params.get('token') || '' };
@@ -212,6 +216,8 @@ function parsePath(): Route {
     if (parts[1] === 'social-shares') return { name: 'admin-social-shares' };
     if (parts[1] === 'subscribers-prefs') return { name: 'admin-subscribers-prefs' };
     if (parts[1] === 'syndication') return { name: 'admin-syndication' };
+    if (parts[1] === 'trending') return { name: 'admin-trending' };
+    if (parts[1] === 'announcements') return { name: 'admin-announcements' };
     if (parts[1] === 'dashboard' || !parts[1]) return { name: 'admin-dashboard' };
     return { name: 'admin-dashboard' };
   }
@@ -326,6 +332,9 @@ export function routeToPath(route: Route): string {
     case 'admin-social-shares': return '/admin/social-shares';
     case 'admin-subscribers-prefs': return '/admin/subscribers-prefs';
     case 'admin-syndication': return '/admin/syndication';
+    case 'trending': return route.category ? `/trending?category=${encodeURIComponent(route.category)}` : '/trending';
+    case 'admin-trending': return '/admin/trending';
+    case 'admin-announcements': return '/admin/announcements';
     case 'notFound': return '/not-found';
   }
 }

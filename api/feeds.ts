@@ -21,6 +21,7 @@ function fallbackSitemap(site: string): string {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${site}/</loc><lastmod>${today}</lastmod><priority>1.0</priority></url>
   <url><loc>${site}/shop</loc><lastmod>${today}</lastmod><priority>0.9</priority></url>
+  <url><loc>${site}/trending</loc><lastmod>${today}</lastmod><priority>0.9</priority></url>
   <url><loc>${site}/collections</loc><lastmod>${today}</lastmod><priority>0.8</priority></url>
   <url><loc>${site}/series</loc><lastmod>${today}</lastmod><priority>0.8</priority></url>
   <url><loc>${site}/glossary</loc><lastmod>${today}</lastmod><priority>0.8</priority></url>
