@@ -3,6 +3,8 @@
 // in vercel.json; the Supabase URL comes from the same env var the frontend uses.
 export const config = { runtime: 'edge' };
 
+const ALLOWED = new Set(['sitemap', 'rss', 'prerender', 'podcast']);
+
 
 /** Read a process env var, trying each name in order. */
 function env(...names: string[]): string | undefined {
@@ -84,6 +86,7 @@ export default async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   let type = url.searchParams.get('type') || 'sitemap';
   if (type === 'feed') type = 'rss';
+  if (!ALLOWED.has(type)) return new Response('Not found', { status: 404 });
   const path = url.searchParams.get('path') || '/';
 
   const isRss = type === 'rss';
