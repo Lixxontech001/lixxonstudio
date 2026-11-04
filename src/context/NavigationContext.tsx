@@ -95,6 +95,10 @@ export type Route =
   | { name: 'trending'; category?: string }
   | { name: 'admin-trending' }
   | { name: 'admin-announcements' }
+  | { name: 'vault' }
+  | { name: 'admin-notifications' }
+  | { name: 'salon'; tab?: string }
+  | { name: 'admin-salon' }
   | { name: 'notFound' };
 
 interface NavigationContextType {
@@ -115,7 +119,8 @@ function parsePath(): Route {
   if (parts[0] === 'product' && parts[1]) return { name: 'product', slug: decodeURIComponent(parts[1]) };
   if (parts[0] === 'search') return { name: 'search', query: params.get('q') || '', page: parseInt(params.get('page') || '1', 10) };
   if (parts[0] === 'reading-history') return { name: 'reading-history' };
-  if (parts[0] === 'achievements') return { name: 'achievements' };
+  if (parts[0] === 'salon') return { name: 'salon', tab: params.get('tab') || undefined };
+  if (parts[0] === 'achievements') return { name: 'salon', tab: params.get('tab') || undefined };
   if (parts[0] === 'bookmarks') return { name: 'bookmarks' };
   if (parts[0] === 'author' && parts[1]) return { name: 'author', slug: decodeURIComponent(parts[1]) };
   if (parts[0] === 'tag' && parts[1]) return { name: 'tag', tag: decodeURIComponent(parts[1]), page: parseInt(params.get('page') || '1', 10) };
@@ -128,6 +133,7 @@ function parsePath(): Route {
   if (parts[0] === 'series' && parts[1]) return { name: 'series', slug: decodeURIComponent(parts[1]) };
   if (parts[0] === 'series') return { name: 'series-index' };
   if (parts[0] === 'glossary') return { name: 'glossary' };
+  if (parts[0] === 'vault') return { name: 'vault' };
   if (parts[0] === 'trending') return { name: 'trending', category: params.get('category') || undefined };
   if (parts[0] === 'reader' && parts[1]) return { name: 'reader', handle: decodeURIComponent(parts[1]) };
   if (parts[0] === 'list' && parts[1]) return { name: 'shared-list', token: parts[1] };
@@ -218,6 +224,8 @@ function parsePath(): Route {
     if (parts[1] === 'syndication') return { name: 'admin-syndication' };
     if (parts[1] === 'trending') return { name: 'admin-trending' };
     if (parts[1] === 'announcements') return { name: 'admin-announcements' };
+    if (parts[1] === 'notifications') return { name: 'admin-notifications' };
+    if (parts[1] === 'salon') return { name: 'admin-salon' };
     if (parts[1] === 'dashboard' || !parts[1]) return { name: 'admin-dashboard' };
     return { name: 'admin-dashboard' };
   }
@@ -335,6 +343,10 @@ export function routeToPath(route: Route): string {
     case 'trending': return route.category ? `/trending?category=${encodeURIComponent(route.category)}` : '/trending';
     case 'admin-trending': return '/admin/trending';
     case 'admin-announcements': return '/admin/announcements';
+    case 'vault': return '/vault';
+    case 'admin-notifications': return '/admin/notifications';
+    case 'salon': return route.tab ? `/salon?tab=${encodeURIComponent(route.tab)}` : '/salon';
+    case 'admin-salon': return '/admin/salon';
     case 'notFound': return '/not-found';
   }
 }

@@ -31,6 +31,8 @@ export const ROUTE_PERMISSIONS: Record<string, string> = {
   'admin-messages': 'content.moderate',
   'admin-feedback': 'content.moderate',
   'admin-trending': 'content.write',
+  'admin-salon': 'content.write',
+  'admin-notifications': 'marketing.campaigns',
   'admin-announcements': 'marketing.campaigns',
   'admin-newsletter': 'marketing.newsletter',
   'admin-subscribers-prefs': 'marketing.newsletter',

@@ -43,7 +43,7 @@ const AccountDownloadsPage = lazyWithRetry(() => import('./components/shop/Accou
 const CollectionsPage = lazyWithRetry(() => import('./components/shop/CollectionsPage'));
 const CollectionDetailPage = lazyWithRetry(() => import('./components/shop/CollectionDetailPage'));
 const ReadingHistoryPage = lazyWithRetry(() => import('./components/ReadingHistoryPage'));
-const AchievementsPage = lazyWithRetry(() => import('./components/AchievementsPage'));
+const SalonHubPage = lazyWithRetry(() => import('./components/pages/SalonHubPage'));
 const BookmarksPage = lazyWithRetry(() => import('./components/BookmarksPage'));
 const AuthorPage = lazyWithRetry(() => import('./components/AuthorPage'));
 const TagPage = lazyWithRetry(() => import('./components/TagPage'));
@@ -63,6 +63,11 @@ const ReaderProfilePage = lazyWithRetry(() => import('./components/pages/ReaderP
 const SharedListPage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage').then(m => ({ default: m.SharedListPage })));
 const TrendingPage = lazyWithRetry(() => import('./components/pages/TrendingPage'));
 const ProductCompareDock = lazyWithRetry(() => import('./components/shop/ProductCompareDock'));
+const VaultPage = lazyWithRetry(() => import('./components/pages/VaultPage'));
+const FloatingAchievementBadge = lazyWithRetry(() => import('./components/achievements/FloatingAchievementBadge'));
+const SalonPrivilegesModal = lazyWithRetry(() => import('./components/achievements/SalonPrivilegesModal'));
+const FormulationAnalyzerModal = lazyWithRetry(() => import('./components/achievements/FormulationAnalyzerModal'));
+const NotificationCenterModal = lazyWithRetry(() => import('./components/notifications/NotificationCenterModal'));
 const AdminApp = lazyWithRetry(() => import('./admin/AdminApp'));
 const BuddyEntry = lazyWithRetry(() => import('./buddy/BuddyEntry'));
 
@@ -96,6 +101,29 @@ function LazyFallback() {
 
 function AppContent() {
   const { route } = useNavigation();
+  const [salonOpen, setSalonOpen] = useState(false);
+  const [analyzerOpen, setAnalyzerOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenSalon = () => setSalonOpen(true);
+    const handleOpenNotif = () => setNotifOpen(true);
+    const handleOpenAnalyzer = () => setAnalyzerOpen(true);
+
+    window.addEventListener('lixxon:open_salon', handleOpenSalon);
+    window.addEventListener('lixxon:open_notifications', handleOpenNotif);
+    window.addEventListener('lixxon:open_analyzer', handleOpenAnalyzer);
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('open_notifications') === 'true') setNotifOpen(true);
+    if (params.get('open_salon') === 'true') setSalonOpen(true);
+
+    return () => {
+      window.removeEventListener('lixxon:open_salon', handleOpenSalon);
+      window.removeEventListener('lixxon:open_notifications', handleOpenNotif);
+      window.removeEventListener('lixxon:open_analyzer', handleOpenAnalyzer);
+    };
+  }, []);
   const routeKey = routeToPath(route);
   const pathname = window.location.pathname;
   const buddySurface = isBuddyPwaPath(pathname);
@@ -190,8 +218,9 @@ function AppContent() {
         return <CollectionDetailPage slug={route.slug} />;
       case 'reading-history':
         return <ReadingHistoryPage />;
+      case 'salon':
       case 'achievements':
-        return <AchievementsPage />;
+        return <SalonHubPage />;
       case 'bookmarks':
         return <BookmarksPage />;
       case 'author':
@@ -228,6 +257,8 @@ function AppContent() {
         return <ReaderProfilePage handle={route.handle} />;
       case 'shared-list':
         return <SharedListPage token={route.token} />;
+      case 'vault':
+        return <VaultPage />;
       case 'trending':
         return <TrendingPage />;
       case 'notFound':
@@ -258,6 +289,14 @@ function AppContent() {
       <FeedbackWidget />
       <AnnouncementEngine />
       <Suspense fallback={null}><ProductCompareDock /></Suspense>
+      {!route.name.startsWith('admin-') && (
+        <Suspense fallback={null}>
+          <FloatingAchievementBadge onOpenSalon={() => setSalonOpen(true)} />
+          <SalonPrivilegesModal isOpen={salonOpen} onClose={() => setSalonOpen(false)} onOpenAnalyzer={() => setAnalyzerOpen(true)} />
+          <FormulationAnalyzerModal isOpen={analyzerOpen} onClose={() => setAnalyzerOpen(false)} />
+          <NotificationCenterModal isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
+        </Suspense>
+      )}
       <ShortcutsHelp />
       <Analytics />
     </MaintenanceGate>

@@ -6,7 +6,7 @@ import { useAdminRpc, Panel, Notice, Empty } from '../components/ui';
 import LivePanel from '../components/LivePanel';
 import {
   FileText, CheckCircle, Clock, Calendar, FolderTree, MessageSquare, Plus, Package, DollarSign,
-  HeartPulse, Lightbulb, Database, KeyRound, Palette, TrendingUp, Gauge, Flame, Sparkles,
+  HeartPulse, Lightbulb, Database, KeyRound, Palette, TrendingUp, Gauge, Flame, Sparkles, Bell, Trophy,
 } from 'lucide-react';
 
 type HealthSummary = { last: { taken_at: string; critical: number; warning: number; info: number; ok: number } | null; checks: { key: string; label: string; severity: string; detail: string }[]; trend: unknown[] };
@@ -55,6 +55,8 @@ export default function AdminDashboard() {
 
   const shortcuts = [
     { label: 'Trending Hub', hint: 'lead articles & radar', route: 'admin-trending', icon: Flame },
+    { label: 'Salon Studio', hint: 'protocols & reader ranks', route: 'admin-salon', icon: Trophy },
+    { label: 'Push Alerts', hint: 'web push & broadcasts', route: 'admin-notifications', icon: Bell },
     { label: 'Announcements', hint: 'campaigns & modals', route: 'admin-announcements', icon: Sparkles },
     can('team.read') && { label: 'Team & access', hint: `${adminAccess?.role_label || 'role'}${isFounder ? ' · super admin' : ''}`, route: 'admin-access', icon: KeyRound },
     can('ops.health') && { label: 'Health & issues', hint: `${issues.length} open`, route: 'admin-health', icon: HeartPulse },

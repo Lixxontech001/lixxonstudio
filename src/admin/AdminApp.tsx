@@ -55,6 +55,8 @@ const AdminCollectionEditor = lazy(() => import('./pages/AdminCollectionEditor')
 const SyndicationManager = lazy(() => import('../components/admin/SyndicationManager'));
 const AdminTrending = lazy(() => import('./pages/AdminTrending'));
 const AdminAnnouncements = lazy(() => import('./pages/AdminAnnouncements'));
+const AdminNotifications = lazy(() => import('./pages/AdminNotifications'));
+const AdminSalon = lazy(() => import('./pages/AdminSalon'));
 const AutomationKeys = lazy(() => import('./pages/AutomationKeys'));
 const AutomationBrains = lazy(() => import('./pages/AutomationBrains'));
 const AutomationCheck = lazy(() => import('./pages/AutomationCheck'));
@@ -211,6 +213,8 @@ export default function AdminApp() {
       case 'admin-syndication': return <LazyPage><SyndicationManager /></LazyPage>;
       case 'admin-trending': return <LazyPage><AdminTrending /></LazyPage>;
       case 'admin-announcements': return <LazyPage><AdminAnnouncements /></LazyPage>;
+      case 'admin-notifications': return <LazyPage><AdminNotifications /></LazyPage>;
+      case 'admin-salon': return <LazyPage><AdminSalon /></LazyPage>;
       case 'admin-subscribers-prefs': return <AdminSubscribersPrefs />;
       case 'admin-glossary': return <AdminGlossary />;
       case 'admin-series': return <AdminSeries />;

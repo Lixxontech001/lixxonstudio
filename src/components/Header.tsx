@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Menu, X, ShoppingBag, Heart, User, Moon, Sun, Bookmark, Clock, Calendar, List } from 'lucide-react';
+import { Search, Menu, X, ShoppingBag, Heart, User, Moon, Sun, Bookmark, Clock, Calendar, List, Bell, Trophy, Sparkles } from 'lucide-react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useNavigation, Link } from '../context/NavigationContext';
 import { useCategories } from '../hooks/useSupabase';
@@ -8,6 +8,8 @@ import { useWishlist } from '../context/WishlistContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLiveSearch } from '../hooks/useFeatures';
 import { useSiteConfig } from '../hooks/useSiteConfig';
+import { useNotifications } from '../hooks/useNotifications';
+import { useAchievements } from '../hooks/useAchievements';
 import Logo from './Logo';
 
 const announcementText = 'DAILY GLOW RESET • SKINCARE, STYLE & MINIMALIST WELLNESS';
@@ -18,6 +20,8 @@ export default function Header() {
   const { count: cartCount, openCart } = useCart();
   const { count: wishlistCount } = useWishlist();
   const { theme, toggleTheme } = useTheme();
+  const { unreadCount } = useNotifications();
+  const { points } = useAchievements();
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -165,6 +169,28 @@ export default function Header() {
             >
               <Search size={18} strokeWidth={1.5} />
               <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono text-charcoal-muted bg-taupe-light/80 rounded border border-taupe/40 dark:bg-white/10 dark:text-white/40 dark:border-white/10">⌘K</kbd>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('lixxon:open_salon'))}
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs text-charcoal hover:text-bronze px-2 py-1 rounded-sm border border-taupe/30 hover:border-bronze transition-colors dark:text-white/80 dark:border-white/10"
+              title="The Lixxon Salon - Privileges & Formulations"
+            >
+              <Trophy size={14} className="text-bronze" />
+              <span className="font-mono text-[11px] font-semibold text-bronze">{points} pts</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('lixxon:open_notifications'))}
+              className="relative text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/80 dark:hover:text-bronze-light"
+              aria-label="Notifications"
+            >
+              <Bell size={18} strokeWidth={1.5} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[9px] font-semibold rounded-full w-4 h-4 flex items-center justify-center animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
             <Link to={{ name: 'bookmarks' }} className="relative text-charcoal hover:text-bronze transition-colors duration-300 hidden sm:block dark:text-white/80 dark:hover:text-bronze-light" ariaLabel="Bookmarks">
               <Bookmark size={18} strokeWidth={1.5} />
@@ -330,6 +356,25 @@ export default function Header() {
             <Link to={{ name: 'contact' }} className="text-left py-3 font-serif text-2xl text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/90 dark:hover:text-bronze-light" onClick={() => setMobileOpen(false)}>
               Contact
             </Link>
+            <Link to={{ name: 'vault' }} className="text-left py-3 font-serif text-2xl text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/90 dark:hover:text-bronze-light flex items-center gap-2" onClick={() => setMobileOpen(false)}>
+              <Sparkles size={20} className="text-bronze" /> The Secret Vault
+            </Link>
+            <button
+              type="button"
+              onClick={() => { setMobileOpen(false); window.dispatchEvent(new CustomEvent('lixxon:open_salon')); }}
+              className="text-left py-3 font-serif text-2xl text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/90 dark:hover:text-bronze-light flex items-center justify-between"
+            >
+              <span className="flex items-center gap-2"><Trophy size={20} className="text-bronze" /> Salon Privileges</span>
+              <span className="text-xs font-mono text-bronze bg-bronze/10 px-2.5 py-0.5 rounded-full">{points} pts</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMobileOpen(false); window.dispatchEvent(new CustomEvent('lixxon:open_notifications')); }}
+              className="text-left py-3 font-serif text-2xl text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/90 dark:hover:text-bronze-light flex items-center justify-between"
+            >
+              <span className="flex items-center gap-2"><Bell size={20} className="text-bronze" /> Notifications</span>
+              {unreadCount > 0 && <span className="text-xs font-mono text-white bg-red-600 px-2 py-0.5 rounded-full">{unreadCount}</span>}
+            </button>
             <div className="h-[1px] bg-taupe/40 dark:bg-white/10 my-2" />
             <Link to={{ name: 'bookmarks' }} className="text-left py-3 font-serif text-xl text-charcoal hover:text-bronze transition-colors duration-300 flex items-center gap-3 dark:text-white/90 dark:hover:text-bronze-light" onClick={() => setMobileOpen(false)}>
               <Bookmark size={18} strokeWidth={1.5} /> Bookmarks
