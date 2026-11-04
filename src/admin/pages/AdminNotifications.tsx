@@ -246,7 +246,7 @@ export default function AdminNotifications() {
                 >
                   <option value="editorial">Editorial Story</option>
                   <option value="breaking">Breaking Update</option>
-                  <option value="vault">The Secret Vault</option>
+                  <option value="exclusive">The Secret Archives</option>
                   <option value="drop">Studio Drop / Shop</option>
                   <option value="digest">Weekly Digest</option>
                 </select>
@@ -276,7 +276,7 @@ export default function AdminNotifications() {
                 type="text"
                 value={actionUrl}
                 onChange={e => setActionUrl(e.target.value)}
-                placeholder="/trending or /vault or /article/your-slug"
+                placeholder="/trending or /salon or /article/your-slug"
                 className="w-full bg-taupe-light/20 border border-taupe/50 p-2.5 text-xs text-charcoal rounded-sm focus:outline-none focus:border-bronze"
               />
             </div>

@@ -2,7 +2,7 @@ export interface BroadcastNotification {
   id: string;
   title: string;
   body: string;
-  category: 'editorial' | 'breaking' | 'drop' | 'digest' | 'system' | 'vault';
+  category: 'editorial' | 'breaking' | 'drop' | 'digest' | 'system' | 'exclusive' | 'vault';
   icon_url?: string | null;
   image_url?: string | null;
   action_url: string;

@@ -263,7 +263,7 @@ export default function AdminSalon() {
         <Panel title="Grant VIP Privilege Points" icon={<Trophy size={16} className="text-bronze" />}>
           <form onSubmit={handleGrantPoints} className="space-y-4">
             <p className="text-xs text-charcoal-muted">
-              Manually boost an active reader's reputation points to fast-track their tier (e.g. unlock The Secret Vault or Bespoke Briefings).
+              Manually boost an active reader's reputation points to fast-track their tier (e.g. unlock The Secret Archives or Bespoke Briefings).
             </p>
 
             <div>
@@ -290,7 +290,7 @@ export default function AdminSalon() {
                 className="w-full px-3 py-2 border border-taupe/40 rounded-sm text-sm focus:outline-hidden focus:border-bronze"
               >
                 <option value={100}>+100 Points (Bronze Level)</option>
-                <option value={250}>+250 Points (Fast-Track to Silver Scholar & Vault)</option>
+                <option value={250}>+250 Points (Fast-Track to Silver Scholar & Archives)</option>
                 <option value={500}>+500 Points (Fast-Track to Gold Connoisseur)</option>
                 <option value={1000}>+1000 Points (Direct Platinum Luminary)</option>
               </select>

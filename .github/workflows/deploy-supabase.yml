@@ -47,7 +47,7 @@ jobs:
           for k in FLW_SECRET_KEY FLW_WEBHOOK_HASH INTERNAL_FN_SECRET RATE_LIMIT_SALT RESEND_API_KEY EMAIL_FROM ADMIN_NOTIFY_EMAIL SITE_URL CHECKOUT_CURRENCY EMAIL_DAILY_CAP; do
             v="${!k}"; [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> .secrets.env
           done
-          if [ -s .secrets.env ]; then supabase secrets set --env-file .secrets.env; else echo "no function secrets provided"; fi
+          if [ -s .secrets.env ]; then supabase secrets set --env-file .secrets.env --yes; else echo "no function secrets provided"; fi
       - name: Seed private scheduler credentials in Supabase Vault
         if: ${{ github.event_name == 'push' || inputs.what == 'all' || inputs.what == 'migrations' || inputs.what == 'secrets' }}
         env:
