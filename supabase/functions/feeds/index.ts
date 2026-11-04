@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     ]);
     const u = (loc: string, lastmod?: string | null, pri = "0.6") => `<url><loc>${site}${loc}</loc>${lastmod ? `<lastmod>${new Date(lastmod).toISOString().slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
     const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${u("/", null, "1.0")}${u("/shop", null, "0.9")}${u("/collections", null, "0.8")}${u("/series", null, "0.8")}${u("/glossary", null, "0.8")}${u("/weekly-digest", null, "0.8")}${u("/about", null, "0.7")}${u("/contact", null, "0.7")}${u("/gift-cards", null, "0.7")}${u("/privacy", null, "0.3")}${u("/terms", null, "0.3")}
+${u("/", null, "1.0")}${u("/shop", null, "0.9")}${u("/trending", null, "0.9")}${u("/collections", null, "0.8")}${u("/series", null, "0.8")}${u("/glossary", null, "0.8")}${u("/weekly-digest", null, "0.8")}${u("/about", null, "0.7")}${u("/contact", null, "0.7")}${u("/gift-cards", null, "0.7")}${u("/privacy", null, "0.3")}${u("/terms", null, "0.3")}
 ${(posts || []).map((p) => u(`/blog/${encodeURIComponent(p.slug)}`, p.updated_at || p.published_at, "0.8")).join("")}
 ${(cats || []).map((c) => u(`/category/${encodeURIComponent(c.slug)}`, null, "0.7")).join("")}
 ${(products || []).map((p) => u(`/shop/product/${encodeURIComponent(p.slug)}`, p.updated_at, "0.7")).join("")}

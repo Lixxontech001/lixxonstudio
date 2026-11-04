@@ -13,6 +13,7 @@ import CartDrawer from './components/shop/CartDrawer';
 import CookieConsent from './components/CookieConsent';
 import FeedbackWidget from './components/FeedbackWidget';
 import AnnouncementEngine from './components/AnnouncementEngine';
+
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
@@ -61,6 +62,7 @@ const AccountRefundsPage = lazyWithRetry(() => import('./components/shop/Account
 const ReaderProfilePage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage'));
 const SharedListPage = lazyWithRetry(() => import('./components/pages/ReaderProfilePage').then(m => ({ default: m.SharedListPage })));
 const TrendingPage = lazyWithRetry(() => import('./components/pages/TrendingPage'));
+const ProductCompareDock = lazyWithRetry(() => import('./components/shop/ProductCompareDock'));
 const AdminApp = lazyWithRetry(() => import('./admin/AdminApp'));
 const BuddyEntry = lazyWithRetry(() => import('./buddy/BuddyEntry'));
 
@@ -255,6 +257,7 @@ function AppContent() {
       <CookieConsent />
       <FeedbackWidget />
       <AnnouncementEngine />
+      <Suspense fallback={null}><ProductCompareDock /></Suspense>
       <ShortcutsHelp />
       <Analytics />
     </MaintenanceGate>

@@ -1,16 +1,53 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-export interface FunnelMetrics {
+export interface CampaignMetrics {
   impressions: number;
   clicks: number;
   dismissals: number;
   ctr: number;
   avgDwellTime: number;
-  form1Impressions: number;
-  form1Clicks: number;
-  form2Impressions: number;
-  form2Clicks: number;
+  modalImpressions: number;
+  modalClicks: number;
+  modalCtr: number;
+  toastImpressions: number;
+  toastClicks: number;
+  toastCtr: number;
+}
+
+export interface TrafficMetrics {
+  totalViews: number;
+  viewsToday: number;
+  views7d: number;
+  views30d: number;
+  velocityLabel: string;
+  topArticles: { title: string; slug: string; views: number }[];
+}
+
+export interface ShareBreakdown {
+  platform: string;
+  count: number;
+  percentage: number;
+}
+
+export interface FeedbackSummary {
+  totalCount: number;
+  averageRating: number;
+  unreadCount: number;
+  praiseCount: number;
+  bugCount: number;
+  ideaCount: number;
+  questionCount: number;
+  ratingDistribution: { stars: number; count: number; percentage: number }[];
+}
+
+export interface TrendingSummary {
+  totalItems: number;
+  totalUpvotes: number;
+  totalViews: number;
+  totalClicks: number;
+  topStoryTitle: string | null;
+  categoryBreakdown: { category: string; count: number }[];
 }
 
 export interface GrowthRecommendation {
@@ -27,143 +64,406 @@ export interface GrowthRecommendation {
 
 export function useExecutiveAnalytics() {
   const [loading, setLoading] = useState(true);
-  const [funnel, setFunnel] = useState<FunnelMetrics>({
-    impressions: 1420,
-    clicks: 218,
-    dismissals: 460,
-    ctr: 15.3,
-    avgDwellTime: 46,
-    form1Impressions: 890,
-    form1Clicks: 142,
-    form2Impressions: 530,
-    form2Clicks: 76,
+  const [error, setError] = useState<string | null>(null);
+
+  const [campaignMetrics, setCampaignMetrics] = useState<CampaignMetrics>({
+    impressions: 0,
+    clicks: 0,
+    dismissals: 0,
+    ctr: 0,
+    avgDwellTime: 0,
+    modalImpressions: 0,
+    modalClicks: 0,
+    modalCtr: 0,
+    toastImpressions: 0,
+    toastClicks: 0,
+    toastCtr: 0,
   });
 
-  const [scrollDistribution] = useState<{ depth: string; readers: number; percentage: number }[]>([
-    { depth: '25% Depth', readers: 4120, percentage: 100 },
-    { depth: '50% Depth', readers: 3290, percentage: 79.8 },
-    { depth: '75% Depth', readers: 2470, percentage: 59.9 },
-    { depth: '100% Complete', readers: 1680, percentage: 40.7 },
-  ]);
+  const [trafficMetrics, setTrafficMetrics] = useState<TrafficMetrics>({
+    totalViews: 0,
+    viewsToday: 0,
+    views7d: 0,
+    views30d: 0,
+    velocityLabel: 'Stable',
+    topArticles: [],
+  });
 
-  const [topReferrals] = useState<{ source: string; visits: number; share: string }[]>([
-    { source: 'Flipboard Magazine', visits: 1840, share: '36%' },
-    { source: 'Direct Editorial / RSS', visits: 1320, share: '26%' },
-    { source: 'Google Organic Search', visits: 1150, share: '22%' },
-    { source: 'Bluesky & Fediverse', visits: 810, share: '16%' },
-  ]);
+  const [socialShares, setSocialShares] = useState<ShareBreakdown[]>([]);
+  const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary>({
+    totalCount: 0,
+    averageRating: 0,
+    unreadCount: 0,
+    praiseCount: 0,
+    bugCount: 0,
+    ideaCount: 0,
+    questionCount: 0,
+    ratingDistribution: [],
+  });
+
+  const [trendingSummary, setTrendingSummary] = useState<TrendingSummary>({
+    totalItems: 0,
+    totalUpvotes: 0,
+    totalViews: 0,
+    totalClicks: 0,
+    topStoryTitle: null,
+    categoryBreakdown: [],
+  });
 
   const [recommendations, setRecommendations] = useState<GrowthRecommendation[]>([]);
 
-  const fetchAnalytics = useCallback(async () => {
+  const fetchRealAnalytics = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Query announcement_events from Supabase
-      const { data: events, error } = await supabase
-        .from('announcement_events')
-        .select('*')
-        .limit(500);
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      if (!error && Array.isArray(events) && events.length > 0) {
-        let impressions = 0;
-        let clicks = 0;
-        let dismissals = 0;
-        let dwellSum = 0;
-        let dwellCount = 0;
-        let form1Imp = 0;
-        let form1Clk = 0;
-        let form2Imp = 0;
-        let form2Clk = 0;
+      // Parallel queries across real database tables
+      const [
+        announcementEventsRes,
+        articleViewsTotalRes,
+        articleViewsTodayRes,
+        articleViews7dRes,
+        articleViews30dRes,
+        topViewsRes,
+        socialSharesRes,
+        feedbackRes,
+        trendingRes,
+      ] = await Promise.all([
+        // 1. Announcement Events
+        supabase.from('announcement_events').select('event_type, form_type, dwell_seconds').limit(2000),
 
-        for (const ev of events) {
-          if (ev.event_type === 'impression') {
-            impressions++;
-            if (ev.form_type === 'modal') form1Imp++;
-            else form2Imp++;
-          } else if (ev.event_type === 'click_button1' || ev.event_type === 'click_button2') {
-            clicks++;
-            if (ev.form_type === 'modal') form1Clk++;
-            else form2Clk++;
-            if (ev.dwell_seconds) {
-              dwellSum += ev.dwell_seconds;
-              dwellCount++;
-            }
-          } else if (ev.event_type === 'dismiss') {
-            dismissals++;
+        // 2. Article Views (Counts & Time Windows)
+        supabase.from('article_views').select('*', { count: 'exact', head: true }),
+        supabase.from('article_views').select('*', { count: 'exact', head: true }).gte('created_at', oneDayAgo),
+        supabase.from('article_views').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo),
+        supabase.from('article_views').select('*', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo),
+
+        // 3. Top Viewed Articles
+        supabase.from('article_views').select('post_id, post:posts(title, slug)').order('created_at', { ascending: false }).limit(600),
+
+        // 4. Social Shares by Platform
+        supabase.from('social_shares').select('platform, created_at').limit(1000),
+
+        // 5. Site Feedback
+        supabase.from('site_feedback').select('category, rating, status, created_at').limit(1000),
+
+        // 6. Trending Items
+        supabase.from('trending_items').select('title, category, upvotes, views_count, clicks_count, is_pinned, is_archived').eq('is_archived', false),
+      ]);
+
+      // --- Process Announcement Events ---
+      const events = announcementEventsRes.data || [];
+      let impressions = 0;
+      let clicks = 0;
+      let dismissals = 0;
+      let dwellSum = 0;
+      let dwellCount = 0;
+      let modalImp = 0;
+      let modalClk = 0;
+      let toastImp = 0;
+      let toastClk = 0;
+
+      for (const ev of events) {
+        if (ev.event_type === 'impression') {
+          impressions++;
+          if (ev.form_type === 'modal') modalImp++;
+          else toastImp++;
+        } else if (ev.event_type === 'click_button1' || ev.event_type === 'click_button2') {
+          clicks++;
+          if (ev.form_type === 'modal') modalClk++;
+          else toastClk++;
+          if (ev.dwell_seconds && ev.dwell_seconds > 0) {
+            dwellSum += ev.dwell_seconds;
+            dwellCount++;
           }
+        } else if (ev.event_type === 'dismiss') {
+          dismissals++;
         }
+      }
 
-        const calculatedCtr = impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(1)) : 0;
-        const avgDwell = dwellCount > 0 ? Math.round(dwellSum / dwellCount) : 42;
+      const totalCtr = impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(1)) : 0;
+      const modalCtr = modalImp > 0 ? Number(((modalClk / modalImp) * 100).toFixed(1)) : 0;
+      const toastCtr = toastImp > 0 ? Number(((toastClk / toastImp) * 100).toFixed(1)) : 0;
+      const avgDwellTime = dwellCount > 0 ? Math.round(dwellSum / dwellCount) : 0;
 
-        setFunnel({
-          impressions: Math.max(impressions, 1),
-          clicks,
-          dismissals,
-          ctr: calculatedCtr,
-          avgDwellTime: avgDwell,
-          form1Impressions: form1Imp,
-          form1Clicks: form1Clk,
-          form2Impressions: form2Imp,
-          form2Clicks: form2Clk,
+      const computedCampaign: CampaignMetrics = {
+        impressions,
+        clicks,
+        dismissals,
+        ctr: totalCtr,
+        avgDwellTime,
+        modalImpressions: modalImp,
+        modalClicks: modalClk,
+        modalCtr,
+        toastImpressions: toastImp,
+        toastClicks: toastClk,
+        toastCtr,
+      };
+      setCampaignMetrics(computedCampaign);
+
+      // --- Process Traffic Metrics ---
+      const totalViews = articleViewsTotalRes.count || 0;
+      const viewsToday = articleViewsTodayRes.count || 0;
+      const views7d = articleViews7dRes.count || 0;
+      const views30d = articleViews30dRes.count || 0;
+
+      // Calculate velocity label
+      const avgDaily7d = views7d / 7;
+      let velocityLabel = 'Steady';
+      if (viewsToday > avgDaily7d * 1.4 && viewsToday > 5) {
+        velocityLabel = 'Surging (+40%)';
+      } else if (viewsToday < avgDaily7d * 0.7 && avgDaily7d > 5) {
+        velocityLabel = 'Moderating';
+      } else if (viewsToday > 0) {
+        velocityLabel = 'Active';
+      } else {
+        velocityLabel = 'Awaiting Visits';
+      }
+
+      // Top Articles calculation
+      interface RawViewRow {
+        post_id: string;
+        post?: { title: string; slug: string } | null;
+      }
+      const rawTop = (topViewsRes.data || []) as unknown as RawViewRow[];
+      const viewMap = new Map<string, { title: string; slug: string; views: number }>();
+      rawTop.forEach(r => {
+        if (!r.post_id || !r.post) return;
+        const exist = viewMap.get(r.post_id);
+        if (exist) {
+          exist.views++;
+        } else {
+          viewMap.set(r.post_id, { title: r.post.title, slug: r.post.slug, views: 1 });
+        }
+      });
+      const topArticles = Array.from(viewMap.values())
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 5);
+
+      setTrafficMetrics({
+        totalViews,
+        viewsToday,
+        views7d,
+        views30d,
+        velocityLabel,
+        topArticles,
+      });
+
+      // --- Process Social Shares ---
+      const shares = socialSharesRes.data || [];
+      const platformMap = new Map<string, number>();
+      shares.forEach(s => {
+        const plat = (s.platform || 'direct').toLowerCase();
+        platformMap.set(plat, (platformMap.get(plat) || 0) + 1);
+      });
+      const totalSharesCount = shares.length;
+      const shareBreakdown: ShareBreakdown[] = Array.from(platformMap.entries())
+        .map(([platform, count]) => ({
+          platform: platform.charAt(0).toUpperCase() + platform.slice(1),
+          count,
+          percentage: totalSharesCount > 0 ? Number(((count / totalSharesCount) * 100).toFixed(1)) : 0,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+      setSocialShares(shareBreakdown);
+
+      // --- Process Site Feedback ---
+      const fbList = feedbackRes.data || [];
+      let totalRatingSum = 0;
+      let ratedCount = 0;
+      let unread = 0;
+      let praise = 0;
+      let bug = 0;
+      let idea = 0;
+      let question = 0;
+      const starCounts = [0, 0, 0, 0, 0]; // 1 to 5 stars
+
+      for (const fb of fbList) {
+        if (fb.status === 'unread') unread++;
+        if (fb.category === 'praise') praise++;
+        else if (fb.category === 'bug') bug++;
+        else if (fb.category === 'idea') idea++;
+        else if (fb.category === 'question') question++;
+
+        if (fb.rating && fb.rating >= 1 && fb.rating <= 5) {
+          totalRatingSum += fb.rating;
+          ratedCount++;
+          starCounts[fb.rating - 1]++;
+        }
+      }
+
+      const averageRating = ratedCount > 0 ? Number((totalRatingSum / ratedCount).toFixed(1)) : 0;
+      const ratingDistribution = [5, 4, 3, 2, 1].map(stars => ({
+        stars,
+        count: starCounts[stars - 1],
+        percentage: ratedCount > 0 ? Number(((starCounts[stars - 1] / ratedCount) * 100).toFixed(1)) : 0,
+      }));
+
+      setFeedbackSummary({
+        totalCount: fbList.length,
+        averageRating,
+        unreadCount: unread,
+        praiseCount: praise,
+        bugCount: bug,
+        ideaCount: idea,
+        questionCount: question,
+        ratingDistribution,
+      });
+
+      // --- Process Trending Items ---
+      const trends = trendingRes.data || [];
+      let tUpvotes = 0;
+      let tViews = 0;
+      let tClicks = 0;
+      const catCountMap = new Map<string, number>();
+      let topStory: string | null = null;
+      let maxEngagement = -1;
+
+      for (const t of trends) {
+        tUpvotes += t.upvotes || 0;
+        tViews += t.views_count || 0;
+        tClicks += t.clicks_count || 0;
+        const cat = t.category || 'others';
+        catCountMap.set(cat, (catCountMap.get(cat) || 0) + 1);
+
+        const score = (t.upvotes || 0) * 3 + (t.clicks_count || 0) * 2 + (t.views_count || 0);
+        if (score > maxEngagement) {
+          maxEngagement = score;
+          topStory = t.title;
+        }
+      }
+
+      const catBreakdown = Array.from(catCountMap.entries()).map(([category, count]) => ({
+        category: category.charAt(0).toUpperCase() + category.slice(1),
+        count,
+      }));
+
+      setTrendingSummary({
+        totalItems: trends.length,
+        totalUpvotes: tUpvotes,
+        totalViews: tViews,
+        totalClicks: tClicks,
+        topStoryTitle: topStory,
+        categoryBreakdown: catBreakdown,
+      });
+
+      // --- Generate Real Heuristic AI Recommendations ---
+      const generatedRecs: GrowthRecommendation[] = [];
+
+      // 1. Modality CTR comparison
+      if (modalImp > 10 && toastImp > 10) {
+        if (toastCtr > modalCtr * 1.25) {
+          generatedRecs.push({
+            id: 'rec_toast_preference',
+            priority: 'high',
+            title: 'Ambient Toast Outperforming Modal',
+            observation: `Toast CTR (${toastCtr}%) is higher than Modal CTR (${modalCtr}%). Readers prefer ambient engagement.`,
+            actionDirective: 'Transition primary lead campaigns to ambient toast modality to maximize reader retention.',
+            presetAction: {
+              type: 'switch_modality',
+              label: 'Default to Toast Modality',
+            },
+          });
+        } else if (modalCtr > toastCtr * 1.25) {
+          generatedRecs.push({
+            id: 'rec_modal_lead',
+            priority: 'medium',
+            title: 'High-Impact Focus Modal Dominance',
+            observation: `Modal CTR (${modalCtr}%) exceeds Toast CTR (${toastCtr}%). Readers are converting on center-screen announcements.`,
+            actionDirective: 'Deploy center-screen focus modals for high-priority editorial dispatches and seasonal capsules.',
+          });
+        }
+      } else if (impressions === 0) {
+        generatedRecs.push({
+          id: 'rec_no_campaigns',
+          priority: 'high',
+          title: 'No Announcement Campaign Telemetry',
+          observation: 'Zero announcement impressions have been recorded in the active period.',
+          actionDirective: 'Activate a campaign in Admin → Announcements to engage readers and test retention formats.',
         });
       }
 
-      // Generate strategic Autonomous Growth Advisor directives
-      const directives: GrowthRecommendation[] = [
-        {
-          id: 'rec-1',
-          priority: 'high',
-          title: 'High-Retention Scroll Depth Opportunity',
-          observation: '79.8% of readers reach 50% scroll depth on skincare articles, but ambient toasts trigger only at 100% page footer.',
-          actionDirective: 'Trigger Form 2 Ambient Toasts at 55% scroll depth to capture attentive readers before drop-off.',
-          presetAction: {
-            type: 'adjust_trigger',
-            label: 'Set Trigger to 55% Scroll',
-          },
-        },
-        {
-          id: 'rec-2',
-          priority: 'high',
-          title: 'Trending Science Debates Outperform Spotlights',
-          observation: 'Community debate items in the Trending Hub generate 3.4x more reader dwell time than standard affiliate spotlights.',
-          actionDirective: 'Feature a Trending Debate card prominently in the Homepage Secondary Grid to drive editorial engagement.',
-          presetAction: {
-            type: 'feature_debate',
-            label: 'Pin Debate to Hero',
-          },
-        },
-        {
-          id: 'rec-3',
-          priority: 'medium',
-          title: 'Modal vs. Toast Conversion Divergence',
-          observation: 'Form 1 Focus Modal converts at 16.0% CTR on desktop but causes 31% higher immediate dismissals on mobile devices.',
-          actionDirective: 'Configure mobile viewports to prioritize non-intrusive Form 2 Ambient Toasts.',
-          presetAction: {
-            type: 'switch_modality',
-            label: 'Auto-Switch Modality for Mobile',
-          },
-        },
-      ];
+      // 2. Feedback Sentiment Alert
+      if (feedbackRes.data && feedbackRes.data.length > 0) {
+        if (averageRating > 0 && averageRating < 4.0) {
+          generatedRecs.push({
+            id: 'rec_rating_alert',
+            priority: 'high',
+            title: 'Reader Satisfaction Optimization',
+            observation: `Average reader satisfaction rating is currently ${averageRating}/5.0 based on ${ratedCount} reviews.`,
+            actionDirective: 'Inspect the Feedback Inbox for recurring user concerns or bug reports to protect brand sentiment.',
+          });
+        }
+        if (unread > 0) {
+          generatedRecs.push({
+            id: 'rec_unread_feedback',
+            priority: 'medium',
+            title: `${unread} Unread Reader Inquiry in Inbox`,
+            observation: 'Readers have submitted actionable feedback that has not yet been reviewed or resolved.',
+            actionDirective: 'Review submissions in Admin → Feedback Inbox and use the direct reply shortcut.',
+          });
+        }
+      }
 
-      setRecommendations(directives);
-    } catch (err) {
-      console.error('[useExecutiveAnalytics] Error loading analytics:', err);
+      // 3. Trending Coverage
+      if (trends.length === 0) {
+        generatedRecs.push({
+          id: 'rec_feature_trending',
+          priority: 'medium',
+          title: 'Curate Pinned Lead Story in Trending Hub',
+          observation: 'No custom editorial articles are currently curated in the Trending Index.',
+          actionDirective: 'Select high-performing published articles in Admin → Trending Hub to establish the #01 Hero showcase.',
+        });
+      } else {
+        const hasPinned = trends.some(t => t.is_pinned);
+        if (!hasPinned) {
+          generatedRecs.push({
+            id: 'rec_pin_hero',
+            priority: 'medium',
+            title: 'Pin Lead #01 Trending Story',
+            observation: 'The Trending Index has curated items but none are explicitly pinned as the #01 Hero Showcase.',
+            actionDirective: 'Pin your top editorial story in Admin → Trending Hub to elevate homepage and hub presence.',
+          });
+        }
+      }
+
+      // 4. Traffic Velocity directive
+      if (viewsToday > 0 && views7d > 0) {
+        generatedRecs.push({
+          id: 'rec_traffic_momentum',
+          priority: 'low',
+          title: `Traffic Velocity: ${velocityLabel}`,
+          observation: `${viewsToday.toLocaleString()} views today across published articles (${views7d.toLocaleString()} over 7 days).`,
+          actionDirective: 'Leverage traffic momentum by scheduling fresh editorial content in the queue.',
+        });
+      }
+
+      setRecommendations(generatedRecs);
+    } catch (err: unknown) {
+      console.error('[useExecutiveAnalytics] Error loading real telemetry:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load executive analytics');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchAnalytics();
-  }, [fetchAnalytics]);
+    fetchRealAnalytics();
+  }, [fetchRealAnalytics]);
 
   return {
     loading,
-    funnel,
-    scrollDistribution,
-    topReferrals,
+    error,
+    campaignMetrics,
+    trafficMetrics,
+    socialShares,
+    feedbackSummary,
+    trendingSummary,
     recommendations,
-    refetch: fetchAnalytics,
+    refetch: fetchRealAnalytics,
   };
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAdminPosts, useCategories } from '../../hooks/useSupabase';
 import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
-import { Plus, Search, Copy, Trash2, Eye, Pencil } from 'lucide-react';
+import { Plus, Search, Copy, Trash2, Eye, Pencil, Flame } from 'lucide-react';
 import type { PostStatus } from '../../lib/types';
 
 const STATUS_COLORS: Record<PostStatus, string> = {
@@ -23,6 +23,13 @@ export default function AdminArticles() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkTag, setBulkTag] = useState('');
+  const [trendingNotice, setTrendingNotice] = useState<string | null>(null);
+
+  const showTrendingNotice = (msg: string) => {
+    setTrendingNotice(msg);
+    setTimeout(() => setTrendingNotice(null), 3000);
+  };
+
   const allSelected = posts.length > 0 && posts.every(p => selected.has(p.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(posts.map(p => p.id)));
   const toggleOne = (id: string) => setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -40,6 +47,38 @@ export default function AdminArticles() {
     else await supabase.from('posts').update({ status: action === 'publish' ? 'published' : action === 'draft' ? 'draft' : 'archived', ...(action === 'publish' ? { published_at: new Date().toISOString() } : {}) }).in('id', ids);
     setBulkBusy(false); setSelected(new Set());
     refetch();
+  };
+
+  const handleSendToTrending = async (post: typeof posts[0]) => {
+    try {
+      const catSlug = (post.category?.slug || 'skincare').toLowerCase();
+      const payload = {
+        title: post.title,
+        slug: post.slug,
+        excerpt: post.excerpt || '',
+        content: '',
+        category: catSlug === 'skincare' || catSlug === 'fashion' || catSlug === 'wellness' ? catSlug : 'others',
+        item_type: 'article',
+        destination_url: `/article/${post.slug}`,
+        cover_image: post.cover_image || '',
+        read_time_minutes: post.reading_time_minutes || 5,
+        priority_order: 100,
+        is_pinned: false,
+        is_archived: false,
+        metadata: {
+          post_id: post.id,
+          post_slug: post.slug,
+          trending_badge: 'Trending Story',
+          why_trending: 'Featured by editorial staff',
+        },
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from('trending_items').insert(payload);
+      if (error) throw error;
+      showTrendingNotice(`"${post.title}" featured in Trending Index!`);
+    } catch (err: unknown) {
+      showTrendingNotice(`Notice: ${err instanceof Error ? err.message : 'Article is already in Trending'}`);
+    }
   };
 
   const handleDelete = async (id: string, title: string) => {
@@ -68,6 +107,12 @@ export default function AdminArticles() {
 
   return (
     <div>
+      {trendingNotice && (
+        <div className="fixed bottom-6 right-6 z-50 bg-charcoal text-white px-4 py-2.5 rounded shadow-lg text-xs tracking-wide">
+          {trendingNotice}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-serif text-2xl text-gray-900">Articles</h1>
@@ -182,6 +227,16 @@ export default function AdminArticles() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {post.status === 'published' && (
+                        <button
+                          onClick={() => handleSendToTrending(post)}
+                          className="p-1.5 text-gray-400 hover:text-bronze transition-colors"
+                          title="Feature in Trending Hub"
+                          aria-label="Feature in Trending Hub"
+                        >
+                          <Flame size={15} />
+                        </button>
+                      )}
                       <a
                         href={`/admin/articles/${post.id}`}
                         onClick={e => {

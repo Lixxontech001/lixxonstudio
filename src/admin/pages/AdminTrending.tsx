@@ -1,12 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Flame, Plus, Edit2, Archive, Trash2, Eye, MousePointerClick,
-  Pin, X,
-  ArrowUp, ArrowDown, ExternalLink, RefreshCw
+  Pin, X, ArrowUp, ArrowDown, ExternalLink, RefreshCw, BookOpen,
+  Search, Check, Sparkles
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import AdminImageUploadField from '../components/AdminImageUploadField';
 import type { TrendingItem, TrendingCategory, TrendingItemType } from '../../types/trending';
+
+interface PublishedArticleOption {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  cover_image: string | null;
+  reading_time_minutes: number | null;
+  category?: { name: string; slug: string } | null;
+  author?: { name: string; avatar_url: string | null; role: string | null } | null;
+}
 
 export default function AdminTrending() {
   const [items, setItems] = useState<TrendingItem[]>([]);
@@ -16,6 +27,12 @@ export default function AdminTrending() {
   const [editingItem, setEditingItem] = useState<Partial<TrendingItem> | null>(null);
   const [saving, setSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Article Picker state
+  const [showArticlePicker, setShowArticlePicker] = useState(false);
+  const [availableArticles, setAvailableArticles] = useState<PublishedArticleOption[]>([]);
+  const [articlesLoading, setArticlesLoading] = useState(false);
+  const [articleSearch, setArticleSearch] = useState('');
 
   const showNotification = (msg: string) => {
     setToastMsg(msg);
@@ -53,6 +70,24 @@ export default function AdminTrending() {
     loadTrending();
   }, [loadTrending]);
 
+  const loadArticlesForPicker = async () => {
+    setArticlesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('id, title, slug, excerpt, cover_image, reading_time_minutes, category:categories(name, slug), author:authors(name, avatar_url, role)')
+        .eq('status', 'published')
+        .order('published_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setAvailableArticles((data || []) as unknown as PublishedArticleOption[]);
+    } catch (err) {
+      console.warn('[AdminTrending] Error loading articles for picker:', err);
+    } finally {
+      setArticlesLoading(false);
+    }
+  };
+
   const handleOpenNew = () => {
     setEditingItem({
       title: '',
@@ -60,21 +95,53 @@ export default function AdminTrending() {
       excerpt: '',
       content: '',
       category: 'skincare',
-      item_type: 'product',
+      item_type: 'article',
       destination_url: '',
       cover_image: '',
-      read_time_minutes: 3,
+      read_time_minutes: 5,
       priority_order: items.length > 0 ? (items[0].priority_order || 0) + 10 : 10,
       is_pinned: false,
       is_archived: false,
       metadata: {
-        brand: '',
-        badge: 'NEW RADAR',
-        why_trending: '',
-        rating_score: 95,
-        price: '',
+        post_id: '',
+        post_slug: '',
+        author_name: 'Staff Editor',
+        trending_badge: 'Trending #1',
+        why_trending: 'Editorially highlighted story',
       },
     });
+  };
+
+  const handleSelectArticle = (art: PublishedArticleOption) => {
+    const catSlug = (art.category?.slug || 'skincare').toLowerCase();
+    const categoryNormalized: TrendingCategory =
+      catSlug === 'skincare' ? 'skincare' :
+      catSlug === 'fashion' ? 'fashion' :
+      catSlug === 'wellness' ? 'wellness' : 'others';
+
+    setEditingItem(prev => ({
+      ...prev,
+      title: art.title,
+      slug: art.slug,
+      excerpt: art.excerpt || '',
+      category: categoryNormalized,
+      item_type: 'article',
+      destination_url: `/article/${art.slug}`,
+      cover_image: art.cover_image || '',
+      read_time_minutes: art.reading_time_minutes || 5,
+      metadata: {
+        ...(prev?.metadata || {}),
+        post_id: art.id,
+        post_slug: art.slug,
+        author_name: art.author?.name || 'Staff Editor',
+        author_avatar: art.author?.avatar_url || '',
+        author_role: art.author?.role || 'Contributor',
+        trending_badge: prev?.metadata?.trending_badge || 'Viral Story',
+        why_trending: prev?.metadata?.why_trending || 'Featured editorial deep dive',
+      },
+    }));
+    setShowArticlePicker(false);
+    showNotification(`Populated details from "${art.title}"`);
   };
 
   const handleEdit = (item: TrendingItem) => {
@@ -133,11 +200,11 @@ export default function AdminTrending() {
         excerpt: editingItem.excerpt?.trim() || '',
         content: editingItem.content?.trim() || '',
         category: (editingItem.category as TrendingCategory) || 'all',
-        item_type: (editingItem.item_type as TrendingItemType) || 'update',
+        item_type: (editingItem.item_type as TrendingItemType) || 'article',
         metadata: editingItem.metadata || {},
-        destination_url: editingItem.destination_url?.trim() || '',
+        destination_url: editingItem.destination_url?.trim() || (editingItem.item_type === 'article' && editingItem.metadata?.post_slug ? `/article/${editingItem.metadata.post_slug}` : ''),
         cover_image: editingItem.cover_image || '',
-        read_time_minutes: Number(editingItem.read_time_minutes) || 3,
+        read_time_minutes: Number(editingItem.read_time_minutes) || 5,
         priority_order: Number(editingItem.priority_order) || 0,
         is_pinned: Boolean(editingItem.is_pinned),
         is_archived: Boolean(editingItem.is_archived),
@@ -165,6 +232,12 @@ export default function AdminTrending() {
     }
   };
 
+  const filteredPickerArticles = availableArticles.filter(art => {
+    if (!articleSearch.trim()) return true;
+    const q = articleSearch.toLowerCase();
+    return art.title.toLowerCase().includes(q) || art.slug.toLowerCase().includes(q);
+  });
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Toast */}
@@ -182,7 +255,7 @@ export default function AdminTrending() {
             <h1 className="font-serif text-2xl sm:text-3xl text-charcoal">Trending Hub Engine</h1>
           </div>
           <p className="text-sm text-charcoal-muted mt-1">
-            Curate, prioritize, and monitor reader engagement on the live Trending Radar.
+            Curate and feature primary editorial articles and cultural radar highlights on the live Trending Index.
           </p>
         </div>
 
@@ -199,22 +272,24 @@ export default function AdminTrending() {
             onClick={handleOpenNew}
             className="inline-flex items-center gap-2 px-4 py-2 bg-bronze text-white text-xs tracking-editorial uppercase font-medium rounded-sm hover:bg-bronze-dark transition-colors shadow-sm"
           >
-            <Plus size={15} />
-            <span>New Trending Item</span>
+            <Plus size={16} />
+            <span>Feature New Article</span>
           </button>
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-sm border border-gray-200 mb-6">
+      {/* Filter and Statistics Bar */}
+      <div className="bg-white border border-gray-200 rounded-sm p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-editorial text-gray-500 font-medium">Category:</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-editorial">Filter:</span>
           {['all', 'skincare', 'fashion', 'wellness', 'others'].map(cat => (
             <button
               key={cat}
               onClick={() => setFilterCategory(cat)}
-              className={`px-3 py-1 text-xs rounded-full uppercase tracking-editorial font-medium transition-colors ${
-                filterCategory === cat ? 'bg-charcoal text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
+                filterCategory === cat
+                  ? 'bg-bronze text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {cat}
@@ -222,129 +297,165 @@ export default function AdminTrending() {
           ))}
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={e => setShowArchived(e.target.checked)}
-            className="rounded text-bronze focus:ring-bronze"
-          />
-          <span>Show Archived Items</span>
-        </label>
+        <div className="flex items-center gap-4 text-xs text-gray-600">
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={e => setShowArchived(e.target.checked)}
+              className="accent-bronze"
+            />
+            <span>Show Archived</span>
+          </label>
+          <span className="text-gray-300">|</span>
+          <span>{items.length} Curated Entries</span>
+        </div>
       </div>
 
-      {/* Items Table */}
-      <div className="bg-white rounded-sm border border-gray-200 overflow-hidden shadow-sm">
+      {/* Main List Table */}
+      <div className="bg-white border border-gray-200 rounded-sm overflow-hidden shadow-sm">
         {loading ? (
-          <div className="py-20 text-center text-sm text-gray-400">Loading trending index...</div>
+          <div className="p-12 text-center text-sm text-gray-500">Loading trending radar entries...</div>
         ) : items.length === 0 ? (
-          <div className="py-20 text-center text-sm text-gray-500">
-            No trending items match the active filter.
+          <div className="p-12 text-center">
+            <Flame size={32} className="mx-auto text-gray-400 mb-3" />
+            <p className="font-serif text-lg text-gray-800 mb-1">No custom entries found</p>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
+              Your public Trending page automatically streams real published articles. You can feature specific articles or cultural spotlights here.
+            </p>
+            <button
+              onClick={handleOpenNew}
+              className="px-4 py-2 bg-bronze text-white text-xs uppercase tracking-editorial rounded-sm hover:bg-bronze-dark transition-colors"
+            >
+              Feature First Article
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-editorial">
-                  <th className="py-3 px-4">Item</th>
-                  <th className="py-3 px-3">Type</th>
-                  <th className="py-3 px-3">Category</th>
-                  <th className="py-3 px-3">Priority / Rank</th>
-                  <th className="py-3 px-3">Engagement (Votes / Views / Clicks)</th>
+                <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-editorial text-[10px]">
+                  <th className="py-3 px-4">Priority / Pin</th>
+                  <th className="py-3 px-4">Entry / Headline</th>
+                  <th className="py-3 px-4">Format</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4">Engagement</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {items.map(item => (
-                  <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
-                    {/* Item title and excerpt */}
-                    <td className="py-3 px-4 max-w-xs">
-                      <div className="flex items-center gap-2">
+                  <tr
+                    key={item.id}
+                    className={`hover:bg-gray-50 transition-colors ${
+                      item.is_archived ? 'opacity-50 bg-gray-50/50' : ''
+                    }`}
+                  >
+                    {/* Priority & Pin */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1.5">
                         {item.is_pinned && (
-                          <span title="Pinned to top" className="text-bronze flex-shrink-0">
-                            <Pin size={13} className="fill-bronze" />
+                          <span
+                            className="p-1 text-bronze bg-bronze/10 rounded"
+                            title="Pinned to Lead Top"
+                          >
+                            <Pin size={12} />
                           </span>
                         )}
-                        <span className="font-medium text-gray-900 text-sm truncate">{item.title}</span>
-                      </div>
-                      <p className="text-gray-500 text-[11px] truncate mt-0.5">{item.excerpt}</p>
-                    </td>
-
-                    {/* Archetype */}
-                    <td className="py-3 px-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-editorial bg-gray-100 text-gray-700">
-                        {item.item_type}
-                      </span>
-                    </td>
-
-                    {/* Category */}
-                    <td className="py-3 px-3">
-                      <span className="text-gray-600 uppercase tracking-editorial font-medium">{item.category}</span>
-                    </td>
-
-                    {/* Priority adjustment */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-gray-900 w-8">{item.priority_order}</span>
-                        <div className="flex flex-col">
+                        <span className="font-mono text-gray-700 font-semibold">
+                          {item.priority_order || 0}
+                        </span>
+                        <div className="flex flex-col ml-1">
                           <button
                             onClick={() => handleAdjustPriority(item, 5)}
-                            className="text-gray-400 hover:text-gray-800 p-0.5"
-                            title="Increase rank"
-                            aria-label={`Increase priority for ${item.title}`}
+                            className="text-gray-400 hover:text-gray-700"
+                            title="Increase Priority"
                           >
-                            <ArrowUp size={12} />
+                            <ArrowUp size={11} />
                           </button>
                           <button
                             onClick={() => handleAdjustPriority(item, -5)}
-                            className="text-gray-400 hover:text-gray-800 p-0.5"
-                            title="Decrease rank"
-                            aria-label={`Decrease priority for ${item.title}`}
+                            className="text-gray-400 hover:text-gray-700"
+                            title="Decrease Priority"
                           >
-                            <ArrowDown size={12} />
+                            <ArrowDown size={11} />
                           </button>
                         </div>
                       </div>
                     </td>
 
+                    {/* Title & Excerpt */}
+                    <td className="py-3 px-4 max-w-sm">
+                      <div className="flex items-start gap-3">
+                        {item.cover_image && (
+                          <img
+                            src={item.cover_image}
+                            alt=""
+                            className="w-12 h-10 object-cover rounded-sm border border-gray-200 flex-shrink-0"
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-900 text-xs line-clamp-1">
+                            {item.title}
+                          </p>
+                          <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                            {item.excerpt}
+                          </p>
+                          {item.metadata?.why_trending && (
+                            <span className="inline-block text-[10px] text-bronze mt-0.5 italic">
+                              Angle: {item.metadata.why_trending}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Format */}
+                    <td className="py-3 px-4">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider bg-gray-100 text-gray-700">
+                        {item.item_type === 'article' && <BookOpen size={10} className="text-bronze" />}
+                        {item.item_type}
+                      </span>
+                    </td>
+
+                    {/* Category */}
+                    <td className="py-3 px-4 capitalize text-gray-600 font-medium">
+                      {item.category}
+                    </td>
+
                     {/* Counters */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-4 text-gray-600">
-                        <span className="inline-flex items-center gap-1" title="Upvotes">
-                          <Flame size={13} className="text-orange-500" />
-                          <strong className="text-gray-900">{item.upvotes}</strong>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3 text-gray-600">
+                        <span className="flex items-center gap-1" title="Upvotes">
+                          <Flame size={12} className="text-bronze" /> {item.upvotes}
                         </span>
-                        <span className="inline-flex items-center gap-1" title="Views">
-                          <Eye size={13} className="text-blue-500" />
-                          <span>{item.views_count}</span>
+                        <span className="flex items-center gap-1" title="Views">
+                          <Eye size={12} /> {item.views_count}
                         </span>
-                        <span className="inline-flex items-center gap-1" title="Outbound clicks">
-                          <MousePointerClick size={13} className="text-bronze" />
-                          <span>{item.clicks_count}</span>
+                        <span className="flex items-center gap-1" title="Clicks">
+                          <MousePointerClick size={12} /> {item.clicks_count}
                         </span>
                       </div>
                     </td>
 
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
-                      <div className="inline-flex items-center gap-2">
+                      <div className="flex items-center justify-end gap-1">
                         {item.destination_url && (
                           <a
                             href={item.destination_url}
                             target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors"
-                            title="Preview destination link"
-                            aria-label="Preview destination link"
+                            rel="noreferrer"
+                            className="p-1.5 text-gray-400 hover:text-gray-700"
+                            title="View Link"
                           >
                             <ExternalLink size={14} />
                           </a>
                         )}
                         <button
                           onClick={() => handleEdit(item)}
-                          className="p-1.5 text-gray-500 hover:text-bronze transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-bronze transition-colors"
                           title="Edit"
-                          aria-label={`Edit ${item.title}`}
                         >
                           <Edit2 size={14} />
                         </button>
@@ -354,7 +465,6 @@ export default function AdminTrending() {
                             item.is_archived ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-700'
                           }`}
                           title={item.is_archived ? 'Restore' : 'Archive'}
-                          aria-label={item.is_archived ? 'Restore' : 'Archive'}
                         >
                           <Archive size={14} />
                         </button>
@@ -362,7 +472,6 @@ export default function AdminTrending() {
                           onClick={() => handleDelete(item.id)}
                           className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
                           title="Delete"
-                          aria-label={`Delete ${item.title}`}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -381,9 +490,12 @@ export default function AdminTrending() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white rounded-sm border border-gray-200 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-8">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-              <h2 className="font-serif text-lg text-gray-900">
-                {editingItem.id ? 'Edit Trending Entry' : 'Create Trending Entry'}
-              </h2>
+              <div className="flex items-center gap-2">
+                <Flame size={18} className="text-bronze" />
+                <h2 className="font-serif text-lg text-gray-900">
+                  {editingItem.id ? 'Edit Trending Entry' : 'Feature Article / Cultural Spotlight'}
+                </h2>
+              </div>
               <button
                 onClick={() => setEditingItem(null)}
                 className="text-gray-400 hover:text-gray-700"
@@ -394,11 +506,30 @@ export default function AdminTrending() {
             </div>
 
             <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 text-xs text-gray-700">
+              {/* Top Quick Action: Select Published Article */}
+              <div className="bg-bronze/5 border border-bronze/20 p-4 rounded-sm flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 text-xs">Feature an existing published article?</p>
+                  <p className="text-[11px] text-gray-500">Pick from your live editorial catalogue to auto-fill details.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    loadArticlesForPicker();
+                    setShowArticlePicker(true);
+                  }}
+                  className="px-3 py-1.5 bg-bronze text-white text-xs uppercase tracking-editorial font-medium rounded-sm hover:bg-bronze-dark transition-colors flex items-center gap-1.5 shadow-sm"
+                >
+                  <BookOpen size={13} />
+                  <span>Select Article</span>
+                </button>
+              </div>
+
               {/* Title & Slug */}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
-                    Title *
+                    Article Title *
                   </label>
                   <input
                     type="text"
@@ -406,19 +537,19 @@ export default function AdminTrending() {
                     value={editingItem.title || ''}
                     onChange={e => setEditingItem({ ...editingItem, title: e.target.value })}
                     className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
-                    placeholder="e.g. Copper Peptide Rapid Barrier Ampoule"
+                    placeholder="e.g. The Barrier Repair Masterclass"
                   />
                 </div>
                 <div>
                   <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
-                    Slug (Auto-generated if empty)
+                    Slug
                   </label>
                   <input
                     type="text"
                     value={editingItem.slug || ''}
                     onChange={e => setEditingItem({ ...editingItem, slug: e.target.value })}
                     className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
-                    placeholder="copper-peptide-ampoule"
+                    placeholder="barrier-repair-masterclass"
                   />
                 </div>
               </div>
@@ -444,19 +575,20 @@ export default function AdminTrending() {
                 </div>
                 <div>
                   <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
-                    Card Archetype
+                    Content Format
                   </label>
                   <select
-                    value={editingItem.item_type || 'product'}
+                    value={editingItem.item_type || 'article'}
                     onChange={e =>
                       setEditingItem({ ...editingItem, item_type: e.target.value as TrendingItemType })
                     }
-                    className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
+                    className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm font-medium"
                   >
+                    <option value="article">Editorial Article (Primary)</option>
                     <option value="product">Product Spotlight</option>
-                    <option value="debate">Community Discussion & Debate</option>
-                    <option value="ingredient">Ingredient & Science Argument</option>
-                    <option value="update">Editorial Breaking Update</option>
+                    <option value="debate">Community Discussion / Debate</option>
+                    <option value="ingredient">Science / Clinical Argument</option>
+                    <option value="update">Editorial Breaking Wire</option>
                   </select>
                 </div>
               </div>
@@ -464,236 +596,101 @@ export default function AdminTrending() {
               {/* Excerpt */}
               <div>
                 <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
-                  Excerpt / Summary
+                  Excerpt / Editorial Synopsis *
                 </label>
                 <textarea
                   rows={2}
+                  required
                   value={editingItem.excerpt || ''}
                   onChange={e => setEditingItem({ ...editingItem, excerpt: e.target.value })}
                   className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
-                  placeholder="Key briefing sentence displayed prominently on the card..."
+                  placeholder="Compelling 2-sentence summary of the story..."
                 />
               </div>
 
-              {/* Archetype Specific Fields */}
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-sm space-y-4">
-                <h3 className="font-serif text-sm font-medium text-gray-900 border-b border-gray-200 pb-2">
-                  Archetype Metadata ({editingItem.item_type})
-                </h3>
+              {/* Article Specific Metadata Controls */}
+              <div className="bg-gray-50 border border-gray-200 p-4 rounded-sm space-y-3">
+                <div className="flex items-center gap-2 mb-2 text-gray-800 font-medium">
+                  <Sparkles size={14} className="text-bronze" />
+                  <span>Trending Badges & Editorial Hook</span>
+                </div>
 
-                {editingItem.item_type === 'product' && (
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Brand Name</label>
-                      <input
-                        type="text"
-                        value={editingItem.metadata?.brand || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, brand: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. Biologique Lab"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Heat Score (0-100)</label>
-                      <input
-                        type="number"
-                        value={editingItem.metadata?.rating_score || 95}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, rating_score: Number(e.target.value) },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-gray-600 mb-1 font-medium">Why it's trending</label>
-                      <input
-                        type="text"
-                        value={editingItem.metadata?.why_trending || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, why_trending: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. Viral barrier rescue protocol after tretinoin irritation."
-                      />
-                    </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-gray-600 mb-1">Trending Badge</label>
+                    <input
+                      type="text"
+                      value={editingItem.metadata?.trending_badge || ''}
+                      onChange={e =>
+                        setEditingItem({
+                          ...editingItem,
+                          metadata: { ...editingItem.metadata, trending_badge: e.target.value },
+                        })
+                      }
+                      placeholder="e.g. Trending #1, Viral Story, Editor's Pick"
+                      className="w-full border border-gray-300 p-2 rounded-sm bg-white"
+                    />
                   </div>
-                )}
+                  <div>
+                    <label className="block text-gray-600 mb-1">Why It's Trending (Angle)</label>
+                    <input
+                      type="text"
+                      value={editingItem.metadata?.why_trending || ''}
+                      onChange={e =>
+                        setEditingItem({
+                          ...editingItem,
+                          metadata: { ...editingItem.metadata, why_trending: e.target.value },
+                        })
+                      }
+                      placeholder="e.g. Over 4,200 readers engaged in discussion"
+                      className="w-full border border-gray-300 p-2 rounded-sm bg-white"
+                    />
+                  </div>
+                </div>
 
-                {editingItem.item_type === 'debate' && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Topic Headline</label>
-                      <input
-                        type="text"
-                        value={editingItem.metadata?.topic_headline || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, topic_headline: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. Double cleansing vs. natural microbiome balance"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Counter-Arguments</label>
-                      <textarea
-                        rows={2}
-                        value={editingItem.metadata?.counter_arguments || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, counter_arguments: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. Some argue it strips lipid balance while others claim SPF removal requires oil."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Community Takeaway</label>
-                      <input
-                        type="text"
-                        value={editingItem.metadata?.community_takeaway || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, community_takeaway: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. Limit to PM routines and emulsify thoroughly."
-                      />
-                    </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-gray-600 mb-1">Author Byline</label>
+                    <input
+                      type="text"
+                      value={editingItem.metadata?.author_name || ''}
+                      onChange={e =>
+                        setEditingItem({
+                          ...editingItem,
+                          metadata: { ...editingItem.metadata, author_name: e.target.value },
+                        })
+                      }
+                      placeholder="e.g. Emma Vance"
+                      className="w-full border border-gray-300 p-2 rounded-sm bg-white"
+                    />
                   </div>
-                )}
-
-                {editingItem.item_type === 'ingredient' && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">The Controversy</label>
-                      <input
-                        type="text"
-                        value={editingItem.metadata?.controversy || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, controversy: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. Stability vs. Cellular Retinoic Receptor Binding"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Clinical Consensus</label>
-                      <textarea
-                        rows={2}
-                        value={editingItem.metadata?.consensus || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, consensus: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. Equal anti-aging transcription efficacy with 60% lower TEWL irritation."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Key Study Summary</label>
-                      <input
-                        type="text"
-                        value={editingItem.metadata?.study_summary || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, study_summary: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. 12-week randomized trial confirms non-inferior collagen synthesis."
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-gray-600 mb-1">Read Time (Minutes)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={editingItem.read_time_minutes || 5}
+                      onChange={e => setEditingItem({ ...editingItem, read_time_minutes: Number(e.target.value) })}
+                      className="w-full border border-gray-300 p-2 rounded-sm bg-white"
+                    />
                   </div>
-                )}
-
-                {editingItem.item_type === 'update' && (
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Source Attribution Name</label>
-                      <input
-                        type="text"
-                        value={editingItem.metadata?.source_name || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, source_name: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. International Fragrance Association"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-600 mb-1 font-medium">Timestamp Label</label>
-                      <input
-                        type="text"
-                        value={editingItem.metadata?.timestamp_label || ''}
-                        onChange={e =>
-                          setEditingItem({
-                            ...editingItem,
-                            metadata: { ...editingItem.metadata, timestamp_label: e.target.value },
-                          })
-                        }
-                        className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. 2 hours ago / Just Verified"
-                      />
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
 
-              {/* Destination URL */}
-              <div>
-                <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
-                  Destination Link (Shop, Article, or External)
-                </label>
-                <input
-                  type="text"
-                  value={editingItem.destination_url || ''}
-                  onChange={e => setEditingItem({ ...editingItem, destination_url: e.target.value })}
-                  className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
-                  placeholder="e.g. /shop or https://pubmed.ncbi.nlm.nih.gov/..."
-                />
-              </div>
-
-              {/* Image Upload */}
+              {/* Cover Image Upload */}
               <AdminImageUploadField
-                label="Cover Image / Visual"
+                label="Cover Image"
                 value={editingItem.cover_image || ''}
                 onChange={url => setEditingItem({ ...editingItem, cover_image: url })}
-                folder="general"
-                hint="Upload or pick an image from media library"
+                folder="articles"
               />
 
-              {/* Priority & Toggles */}
-              <div className="grid sm:grid-cols-3 gap-4 pt-2">
+              {/* Priority & Pinned Controls */}
+              <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-gray-200">
                 <div>
                   <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
-                    Priority Rank
+                    Priority Rank (Higher = Top of Leaderboard)
                   </label>
                   <input
                     type="number"
@@ -701,63 +698,126 @@ export default function AdminTrending() {
                     onChange={e =>
                       setEditingItem({ ...editingItem, priority_order: Number(e.target.value) })
                     }
-                    className="w-full border border-gray-300 p-2.5 rounded-sm"
+                    className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
-                    Read Time (Mins)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={editingItem.read_time_minutes || 3}
-                    onChange={e =>
-                      setEditingItem({ ...editingItem, read_time_minutes: Number(e.target.value) })
-                    }
-                    className="w-full border border-gray-300 p-2.5 rounded-sm"
-                  />
-                </div>
-                <div className="flex flex-col justify-center space-y-2 pt-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="flex flex-col justify-center">
+                  <label className="flex items-center gap-2 cursor-pointer mt-4">
                     <input
                       type="checkbox"
                       checked={Boolean(editingItem.is_pinned)}
-                      onChange={e => setEditingItem({ ...editingItem, is_pinned: e.target.checked })}
-                      className="rounded text-bronze focus:ring-bronze"
+                      onChange={e =>
+                        setEditingItem({ ...editingItem, is_pinned: e.target.checked })
+                      }
+                      className="h-4 w-4 accent-bronze"
                     />
-                    <span className="font-medium text-gray-800">Pin to Top</span>
+                    <span className="font-medium text-gray-900">Pin as #01 Hero Story</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(editingItem.is_archived)}
-                      onChange={e => setEditingItem({ ...editingItem, is_archived: e.target.checked })}
-                      className="rounded text-bronze focus:ring-bronze"
-                    />
-                    <span className="font-medium text-gray-800">Archived</span>
-                  </label>
+                  <span className="text-[11px] text-gray-500 ml-6">
+                    Displays in the giant magazine hero banner at top of Trending Index.
+                  </span>
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* Action Buttons */}
               <div className="pt-4 border-t border-gray-200 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setEditingItem(null)}
-                  className="px-4 py-2 border border-gray-300 text-gray-600 rounded-sm hover:bg-gray-50 uppercase tracking-editorial text-xs"
+                  className="px-4 py-2 border border-gray-300 rounded-sm hover:bg-gray-50 text-gray-700 font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2 bg-bronze text-white rounded-sm hover:bg-bronze-dark uppercase tracking-editorial text-xs font-medium transition-colors shadow-sm disabled:opacity-50"
+                  className="px-6 py-2 bg-bronze text-white text-xs uppercase tracking-editorial font-medium rounded-sm hover:bg-bronze-dark transition-colors shadow-sm disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : editingItem.id ? 'Update Entry' : 'Create Entry'}
+                  {saving ? 'Saving...' : editingItem.id ? 'Update Story' : 'Publish to Trending'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Published Article Picker Drawer / Modal */}
+      {showArticlePicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-sm border border-gray-200 shadow-2xl max-w-xl w-full max-h-[80vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+              <div className="flex items-center gap-2">
+                <BookOpen size={18} className="text-bronze" />
+                <h3 className="font-serif text-base text-gray-900">Select Published Article</h3>
+              </div>
+              <button
+                onClick={() => setShowArticlePicker(false)}
+                className="text-gray-400 hover:text-gray-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-gray-200">
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={articleSearch}
+                  onChange={e => setArticleSearch(e.target.value)}
+                  placeholder="Search articles by title or slug..."
+                  className="w-full border border-gray-300 pl-9 pr-3 py-2 text-xs rounded-sm focus:border-bronze focus:outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-2 flex-1">
+              {articlesLoading ? (
+                <p className="text-center py-8 text-xs text-gray-500">Loading published articles...</p>
+              ) : filteredPickerArticles.length === 0 ? (
+                <p className="text-center py-8 text-xs text-gray-500">No matching articles found.</p>
+              ) : (
+                filteredPickerArticles.map(art => (
+                  <div
+                    key={art.id}
+                    onClick={() => handleSelectArticle(art)}
+                    className="p-3 border border-gray-100 hover:border-bronze hover:bg-bronze/5 rounded-sm flex items-center gap-3 cursor-pointer transition-all group"
+                  >
+                    {art.cover_image ? (
+                      <img
+                        src={art.cover_image}
+                        alt=""
+                        className="w-12 h-12 object-cover rounded-sm flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-100 rounded-sm flex items-center justify-center flex-shrink-0 text-gray-400">
+                        <BookOpen size={16} />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-900 group-hover:text-bronze transition-colors line-clamp-1">
+                        {art.title}
+                      </p>
+                      <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                        {art.category?.name || 'Editorial'} · By {art.author?.name || 'Staff'} · {art.reading_time_minutes || 5} min read
+                      </p>
+                    </div>
+                    <Check size={16} className="text-gray-300 group-hover:text-bronze flex-shrink-0" />
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowArticlePicker(false)}
+                className="px-4 py-1.5 border border-gray-300 text-xs text-gray-600 rounded-sm hover:bg-gray-100"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

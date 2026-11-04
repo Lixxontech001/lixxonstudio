@@ -256,3 +256,4 @@ insert into public.announcements (
   5
 )
 on conflict do nothing;
+

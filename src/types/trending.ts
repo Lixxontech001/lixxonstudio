@@ -1,7 +1,18 @@
 export type TrendingCategory = 'all' | 'skincare' | 'fashion' | 'wellness' | 'others';
-export type TrendingItemType = 'product' | 'debate' | 'ingredient' | 'update';
+export type TrendingItemType = 'article' | 'product' | 'debate' | 'ingredient' | 'update';
 
 export interface TrendingMetadata {
+  // Article specific
+  post_id?: string;
+  post_slug?: string;
+  author_name?: string;
+  author_avatar?: string;
+  author_role?: string;
+  published_date?: string;
+  trending_rank?: number;
+  trending_badge?: string;
+  article_tags?: string[];
+
   // Product spotlight
   brand?: string;
   badge?: string;
@@ -50,3 +61,4 @@ export interface TrendingItem {
   created_at: string;
   updated_at?: string;
 }
+

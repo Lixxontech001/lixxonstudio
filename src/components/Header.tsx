@@ -49,6 +49,19 @@ export default function Header() {
     }
   }, [searchOpen]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen(prev => !prev);
+      } else if (e.key === 'Escape' && searchOpen) {
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [searchOpen]);
+
   const navCategories = categories.filter(c => c.slug !== 'about');
   const isActive = (slug: string) => route.name === 'category' && route.slug === slug;
 
@@ -151,6 +164,7 @@ export default function Header() {
               aria-label="Search"
             >
               <Search size={18} strokeWidth={1.5} />
+              <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono text-charcoal-muted bg-taupe-light/80 rounded border border-taupe/40 dark:bg-white/10 dark:text-white/40 dark:border-white/10">⌘K</kbd>
             </button>
             <Link to={{ name: 'bookmarks' }} className="relative text-charcoal hover:text-bronze transition-colors duration-300 hidden sm:block dark:text-white/80 dark:hover:text-bronze-light" ariaLabel="Bookmarks">
               <Bookmark size={18} strokeWidth={1.5} />

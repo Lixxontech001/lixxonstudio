@@ -85,3 +85,4 @@ export function markAnnouncementDismissed(announcementId: string): void {
     // ignore
   }
 }
+

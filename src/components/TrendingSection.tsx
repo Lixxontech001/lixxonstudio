@@ -40,10 +40,19 @@ export default function TrendingSection({ posts }: { posts: PostWithRelations[] 
 
   return (
     <section className="container-wide py-16">
-      <div className="flex items-center gap-3 mb-10">
-        <Flame size={18} strokeWidth={1.5} className="text-bronze" />
-        <p className="text-[10px] tracking-ultra-wide uppercase text-bronze">Trending Now</p>
-        <div className="flex-1 h-[1px] bg-taupe" />
+      <div className="flex items-center justify-between gap-3 mb-10">
+        <div className="flex items-center gap-3">
+          <Flame size={18} strokeWidth={1.5} className="text-bronze" />
+          <p className="text-[10px] tracking-ultra-wide uppercase text-bronze">Trending Now</p>
+        </div>
+        <div className="flex-1 h-[1px] bg-taupe/40 mx-4 hidden sm:block" />
+        <Link
+          to={{ name: 'trending' }}
+          className="text-xs tracking-editorial uppercase font-medium text-bronze hover:text-charcoal transition-colors flex items-center gap-1.5 flex-shrink-0 group"
+        >
+          <span>Explore Full Index</span>
+          <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
+        </Link>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">

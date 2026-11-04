@@ -110,6 +110,11 @@ export default function Footer() {
         <div>
           <p className="text-xs tracking-editorial uppercase text-white/40 mb-5">Explore</p>
           <ul className="space-y-3">
+            <li>
+              <Link to={{ name: 'trending' }} className="text-white/80 font-medium text-sm hover:text-bronze transition-colors duration-300">
+                Trending Hub
+              </Link>
+            </li>
             {navItems.map(item => (
               <li key={item.slug}>
                 <Link to={{ name: 'category', slug: item.slug, page: 1 }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">
@@ -150,7 +155,7 @@ export default function Footer() {
         </div>
 
         <div>
-          <p className="text-xs tracking-editorial uppercase text-white/40 mb-5">Legal</p>
+          <p className="text-xs tracking-editorial uppercase text-white/40 mb-5">Reader Lounge</p>
           <ul className="space-y-3">
             <li><Link to={{ name: 'bookmarks' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Bookmarks</Link></li>
             <li><Link to={{ name: 'reading-lists' }} className="text-white/60 text-sm hover:text-bronze transition-colors duration-300">Reading Lists</Link></li>

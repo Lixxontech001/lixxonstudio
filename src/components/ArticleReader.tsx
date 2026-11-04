@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef, lazy, Suspense } from 'react';
-import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash } from 'lucide-react';
+import { Clock, Calendar, ArrowLeft, Twitter, Link2, Check, Printer, List, Sparkles, Facebook, Linkedin, Share2, Bookmark, Moon, Sun, Hash, Flame, X, ArrowRight } from 'lucide-react';
 import { Link } from '../context/NavigationContext';
 import { usePostBySlug, usePosts } from '../hooks/useSupabase';
 import { useRelatedPosts } from '../hooks/useSearch';
@@ -52,6 +52,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
   const [activeHeading, setActiveHeading] = useState('');
   const [bookmarked, setBookmarked] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [nextPeekDismissed, setNextPeekDismissed] = useState(false);
   const proseRef = useRef<HTMLDivElement>(null);
   const milestonesRef = useRef<Set<number>>(new Set());
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
@@ -643,6 +644,48 @@ export default function ArticleReader({ slug }: { slug: string }) {
             </div>
           </div>
         </section>
+      )}
+      {/* Floating Up Next in Trending Peek Drawer */}
+      {progress >= 60 && !nextPeekDismissed && recommended.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-40 max-w-sm w-full bg-white/95 backdrop-blur-md border border-taupe/60 rounded-sm luxury-shadow-lg p-4 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="flex items-center justify-between mb-2">
+            <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-editorial font-bold text-bronze">
+              <Flame size={12} className="text-bronze" /> Up Next in Trending
+            </span>
+            <button
+              onClick={() => setNextPeekDismissed(true)}
+              className="p-1 text-charcoal-muted hover:text-charcoal transition-colors"
+              aria-label="Dismiss up next"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <Link
+            to={{ name: 'article', slug: recommended[0].slug }}
+            className="group block"
+          >
+            <h4 className="font-serif text-sm font-medium text-charcoal group-hover:text-bronze line-clamp-2 leading-snug transition-colors">
+              {recommended[0].title}
+            </h4>
+            <p className="text-[11px] text-charcoal-muted mt-1 flex items-center gap-2">
+              <span>{recommended[0].category?.name || 'Editorial'}</span>
+              <span>·</span>
+              <span>{recommended[0].reading_time_minutes} min read</span>
+            </p>
+          </Link>
+          <div className="mt-3 pt-2 border-t border-taupe/30 flex items-center justify-between text-xs">
+            <Link
+              to={{ name: 'article', slug: recommended[0].slug }}
+              className="text-[11px] uppercase tracking-editorial font-medium text-bronze hover:text-charcoal flex items-center gap-1 transition-colors"
+            >
+              <span>Read Next Story</span>
+              <ArrowRight size={12} />
+            </Link>
+            <span className="text-[10px] text-charcoal-muted">
+              {timeRemaining ? `~${timeRemaining}m left` : ''}
+            </span>
+          </div>
+        </div>
       )}
     </article>
   );

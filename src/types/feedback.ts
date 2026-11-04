@@ -16,3 +16,4 @@ export interface SiteFeedback {
   created_at: string;
   updated_at?: string;
 }
+
