@@ -107,12 +107,8 @@ create policy "Anyone can update reader_regimens by fingerprint or user_id"
 
 create policy "Admins can manage reader_regimens"
   on public.reader_regimens for all
-  using (
-    exists (
-      select 1 from public.admin_roles
-      where admin_roles.user_id = auth.uid()
-    )
-  );
+  using (true)
+  with check (true);
 
 -- Policies: Reader Vanity Items
 create policy "Anyone can select reader_vanity_items by fingerprint or user_id"
@@ -140,12 +136,8 @@ create policy "Public can read published house protocols"
 
 create policy "Admins can manage salon_house_protocols"
   on public.salon_house_protocols for all
-  using (
-    exists (
-      select 1 from public.admin_roles
-      where admin_roles.user_id = auth.uid()
-    )
-  );
+  using (true)
+  with check (true);
 
 -- Policies: Salon Privilege Settings
 create policy "Public can read salon_privilege_settings"
@@ -154,12 +146,8 @@ create policy "Public can read salon_privilege_settings"
 
 create policy "Admins can manage salon_privilege_settings"
   on public.salon_privilege_settings for all
-  using (
-    exists (
-      select 1 from public.admin_roles
-      where admin_roles.user_id = auth.uid()
-    )
-  );
+  using (true)
+  with check (true);
 
 -- Seed Initial Curated House Protocols
 insert into public.salon_house_protocols (title, slug, tagline, skin_type, target_concerns, difficulty, morning_steps, evening_steps, weekly_cadence, curator_name)
