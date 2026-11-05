@@ -32,6 +32,7 @@ import SmartImage from './SmartImage';
 import { useGlossary } from '../hooks/useGlossary';
 import { useNavigation } from '../context/NavigationContext';
 import { useCloudBookmarks, pickHeadline, trackHeadline, useSiteSettings } from '../hooks/useV3';
+import { awardPoints, unlockBadge } from '../lib/achievements';
 import KeyTakeaways from './article/KeyTakeaways';
 import SeriesNav from './article/SeriesNav';
 import AskEditor from './article/AskEditor';
@@ -113,6 +114,23 @@ export default function ArticleReader({ slug }: { slug: string }) {
       setTimeRemaining(post.reading_time_minutes);
       const hl = pickHeadline(post);
       if (post.alt_title) trackHeadline(post.id, hl.variant, 'click');
+
+      // Award reading reputation points once per post per browser session
+      try {
+        const readKey = `lixxon_read_${post.id}`;
+        if (!sessionStorage.getItem(readKey)) {
+          sessionStorage.setItem(readKey, '1');
+          awardPoints(15, `Read: ${post.title}`);
+          unlockBadge('first_read');
+          const totalReadCount = parseInt(localStorage.getItem('lixxon_total_read_count') || '0', 10) + 1;
+          localStorage.setItem('lixxon_total_read_count', String(totalReadCount));
+          if (totalReadCount >= 10) {
+            unlockBadge('ten_articles');
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
   }, [post, recordReadingDay]);
 
@@ -134,6 +152,10 @@ export default function ArticleReader({ slug }: { slug: string }) {
             pagePath: `/blog/${post.slug}`,
             metadata: { depth: m, post_id: post.id, slug: post.slug },
           });
+          if (m === 100) {
+            awardPoints(25, 'Completed longform deep dive');
+            unlockBadge('deep_dive_scholar');
+          }
         }
       });
 
@@ -269,7 +291,11 @@ export default function ArticleReader({ slug }: { slug: string }) {
         localStorage.setItem('lixxon_bookmarks', JSON.stringify(saved));
       }
       setBookmarked(true);
-      showToast('Article saved to bookmarks', 'success');
+      showToast('Article saved to bookmarks (+10 pts)', 'success');
+      awardPoints(10, `Bookmarked: ${post.title}`);
+      if (saved.length >= 5) {
+        unlockBadge('curator_elite');
+      }
     }
   };
 
