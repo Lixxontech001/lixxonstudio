@@ -334,7 +334,8 @@ export default function SiteSettingsPanel() {
               <option value="USD">USD ($ United States Dollar)</option>
               <option value="GBP">GBP (£ British Pound)</option>
               <option value="EUR">EUR (€ Euro)</option>
-              <option value="NGN">NGN (₦ Nigerian Naira)</option>
+              <option value="CAD">CAD (CA$ Canadian Dollar)</option>
+              <option value="AUD">AUD (A$ Australian Dollar)</option>
             </select>
           </div>
           <div>
