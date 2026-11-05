@@ -181,7 +181,7 @@ True beauty is rooted in restraint. By auditing cleansing frequency, shortening 
     'https://images.pexels.com/photos/3785147/pexels-photo-3785147.jpeg?auto=compress&cs=tinysrgb&w=1200',
     v_skincare_cat,
     v_author_id,
-    now() - interval '2 days',
+    now() - interval '14 days',
     9,
     false,
     true,
@@ -194,6 +194,7 @@ True beauty is rooted in restraint. By auditing cleansing frequency, shortening 
     content = EXCLUDED.content,
     cover_image = EXCLUDED.cover_image,
     reading_time_minutes = EXCLUDED.reading_time_minutes,
+    published_at = EXCLUDED.published_at,
     status = 'published';
 
   -- 2. ARTICLE 2: Retinol vs. Granactive Retinoid (HPR): The 2026 Consensus
@@ -334,7 +335,7 @@ The scientific verdict on Hydroxypinacolone Retinoate has decisively evolved fro
     'https://images.pexels.com/photos/3685530/pexels-photo-3685530.jpeg?auto=compress&cs=tinysrgb&w=1200',
     v_wellness_cat,
     v_author_id,
-    now() - interval '3 days',
+    now() - interval '15 days',
     10,
     false,
     true,
@@ -347,6 +348,7 @@ The scientific verdict on Hydroxypinacolone Retinoate has decisively evolved fro
     content = EXCLUDED.content,
     cover_image = EXCLUDED.cover_image,
     reading_time_minutes = EXCLUDED.reading_time_minutes,
+    published_at = EXCLUDED.published_at,
     status = 'published';
 
   -- 3. ARTICLE 3: Copper Peptide Rapid Barrier Ampoule: The Cellular Blueprint
@@ -474,7 +476,7 @@ In an era dominated by harsh stripping actives and over-exfoliation culture, **G
     'https://images.pexels.com/photos/3373736/pexels-photo-3373736.jpeg?auto=compress&cs=tinysrgb&w=1200',
     v_skincare_cat,
     v_author_id,
-    now() - interval '4 days',
+    now() - interval '16 days',
     8,
     true,
     true,
@@ -487,6 +489,7 @@ In an era dominated by harsh stripping actives and over-exfoliation culture, **G
     content = EXCLUDED.content,
     cover_image = EXCLUDED.cover_image,
     reading_time_minutes = EXCLUDED.reading_time_minutes,
+    published_at = EXCLUDED.published_at,
     status = 'published';
 
   -- Update trending_items destination URLs to link directly to their new articles
@@ -509,3 +512,4 @@ In an era dominated by harsh stripping actives and over-exfoliation culture, **G
   WHERE slug = 'copper-peptide-rapid-barrier-ampoule';
 
 END $$;
+
