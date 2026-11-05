@@ -256,9 +256,10 @@ export function unlockBadge(badgeKey: string): boolean {
 }
 
 export function getReaderRank(points: number): { rank: ReaderRank; progress: number } {
+  const safePoints = Number.isFinite(points) ? Math.max(0, points) : 50;
   let matchedRank = RANKS[0];
   for (const r of RANKS) {
-    if (points >= r.minPoints) {
+    if (safePoints >= r.minPoints) {
       matchedRank = r;
     }
   }
@@ -266,9 +267,9 @@ export function getReaderRank(points: number): { rank: ReaderRank; progress: num
   let progress = 100;
   if (matchedRank.nextTierPoints) {
     const span = matchedRank.nextTierPoints - matchedRank.minPoints;
-    const currentInTier = points - matchedRank.minPoints;
+    const currentInTier = safePoints - matchedRank.minPoints;
     progress = Math.min(100, Math.max(0, Math.round((currentInTier / span) * 100)));
   }
 
-  return { rank: matchedRank, progress };
+  return { rank: matchedRank || RANKS[0], progress: Number.isFinite(progress) ? progress : 0 };
 }

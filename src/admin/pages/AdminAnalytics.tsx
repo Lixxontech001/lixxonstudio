@@ -83,7 +83,7 @@ export default function AdminAnalytics() {
         </div>
       )}
 
-      {/* Autonomous Growth Advisor & Diagnostic Engine */}
+      {/* Strategic Growth Intelligence & Diagnostics Engine */}
       <div className="bg-gradient-to-r from-amber-50/70 via-white to-orange-50/60 border border-amber-200/80 rounded-sm p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2.5">
@@ -91,14 +91,14 @@ export default function AdminAnalytics() {
               <Sparkles size={18} />
             </span>
             <div>
-              <h2 className="font-serif text-lg text-charcoal font-medium">Autonomous Growth Advisor</h2>
+              <h2 className="font-serif text-lg text-charcoal font-medium">Strategic Growth Intelligence</h2>
               <p className="text-xs text-charcoal-muted">
-                Real-time algorithmic analysis of live reader telemetry, conversion bottlenecks, and brand engagement.
+                Real-time analysis of live reader telemetry, conversion bottlenecks, and brand engagement.
               </p>
             </div>
           </div>
           <span className="text-[10px] uppercase tracking-editorial px-2.5 py-1 bg-amber-100 text-amber-900 rounded-full font-bold">
-            Live AI Diagnostics
+            Live Platform Diagnostics
           </span>
         </div>
 

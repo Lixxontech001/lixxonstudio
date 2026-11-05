@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, Component, type ReactNode } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { Analytics } from '@vercel/analytics/react';
 import { useNavigation, routeToPath } from './context/NavigationContext';
@@ -88,6 +88,13 @@ function GA4() {
       <script dangerouslySetInnerHTML={{ __html: `window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', '${GA_MEASUREMENT_ID}');` }} />
     </>
   );
+}
+
+class SafeIsland extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err: Error) { console.debug('[safe-island] isolated:', err); }
+  render() { return this.state.hasError ? null : this.props.children; }
 }
 
 function LazyFallback() {
@@ -285,17 +292,19 @@ function AppContent() {
       <Footer />
       <BackToTop />
       <CartDrawer />
-      <CookieConsent />
-      <FeedbackWidget />
-      <AnnouncementEngine />
-      <Suspense fallback={null}><ProductCompareDock /></Suspense>
+      <SafeIsland><CookieConsent /></SafeIsland>
+      <SafeIsland><FeedbackWidget /></SafeIsland>
+      <SafeIsland><AnnouncementEngine /></SafeIsland>
+      <SafeIsland><Suspense fallback={null}><ProductCompareDock /></Suspense></SafeIsland>
       {!route.name.startsWith('admin-') && (
-        <Suspense fallback={null}>
-          <FloatingAchievementBadge onOpenSalon={() => setSalonOpen(true)} />
-          <SalonPrivilegesModal isOpen={salonOpen} onClose={() => setSalonOpen(false)} onOpenAnalyzer={() => setAnalyzerOpen(true)} />
-          <FormulationAnalyzerModal isOpen={analyzerOpen} onClose={() => setAnalyzerOpen(false)} />
-          <NotificationCenterModal isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
-        </Suspense>
+        <SafeIsland>
+          <Suspense fallback={null}>
+            <FloatingAchievementBadge onOpenSalon={() => setSalonOpen(true)} />
+            <SalonPrivilegesModal isOpen={salonOpen} onClose={() => setSalonOpen(false)} onOpenAnalyzer={() => setAnalyzerOpen(true)} />
+            <FormulationAnalyzerModal isOpen={analyzerOpen} onClose={() => setAnalyzerOpen(false)} />
+            <NotificationCenterModal isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
+          </Suspense>
+        </SafeIsland>
       )}
       <ShortcutsHelp />
       <Analytics />

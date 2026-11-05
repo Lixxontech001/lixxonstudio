@@ -15,7 +15,9 @@ export function useNotifications() {
   const [readIds, setReadIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem(READ_STORAGE_KEY);
-      return new Set(raw ? JSON.parse(raw) : []);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed : []);
     } catch {
       return new Set();
     }
@@ -58,40 +60,61 @@ export function useNotifications() {
   useEffect(() => {
     fetchNotifications();
 
-    // Listen for realtime broadcasts
-    const channel = supabase
-      .channel('broadcast-notifications-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'broadcast_notifications' },
-        () => {
-          fetchNotifications();
-        }
-      )
-      .subscribe();
+    // Listen for realtime broadcasts defensively
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      if (supabase && typeof supabase.channel === 'function') {
+        channel = supabase
+          .channel('broadcast-notifications-realtime')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'broadcast_notifications' },
+            () => {
+              fetchNotifications();
+            }
+          )
+          .subscribe();
+      }
+    } catch {
+      // Realtime connection optional
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        if (channel && supabase && typeof supabase.removeChannel === 'function') {
+          supabase.removeChannel(channel);
+        }
+      } catch {
+        // Ignore
+      }
     };
   }, [fetchNotifications]);
 
-  // Check existing push subscription on service worker
+  // Check existing push subscription on service worker defensively
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.ready.then(async reg => {
-        const sub = await reg.pushManager.getSubscription();
-        setIsSubscribed(Boolean(sub));
-        try {
-          localStorage.setItem(PUSH_SUB_KEY, sub ? 'true' : 'false');
-        } catch {
-          // Ignore
-        }
-      }).then(null, () => undefined);
+      try {
+        navigator.serviceWorker.ready
+          .then(async reg => {
+            if (!reg || !reg.pushManager) return;
+            const sub = await reg.pushManager.getSubscription();
+            setIsSubscribed(Boolean(sub));
+            try {
+              localStorage.setItem(PUSH_SUB_KEY, sub ? 'true' : 'false');
+            } catch {
+              // Ignore
+            }
+          })
+          .catch(() => undefined);
+      } catch {
+        // Ignore
+      }
     }
   }, []);
 
   const unreadCount = useMemo(() => {
-    return notifications.filter(n => !readIds.has(n.id)).length;
+    if (!Array.isArray(notifications)) return 0;
+    return notifications.filter(n => n && n.id && !readIds.has(n.id)).length;
   }, [notifications, readIds]);
 
   const markAsRead = useCallback((id: string) => {

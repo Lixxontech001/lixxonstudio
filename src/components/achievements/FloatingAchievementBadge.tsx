@@ -33,7 +33,7 @@ export default function FloatingAchievementBadge({ onOpenSalon }: FloatingAchiev
         title="Open Reader Privileges & Points"
         aria-label="Open Reader Privileges & Points"
       >
-        <span className="text-base">{rank.badge}</span>
+        <span className="text-base">{rank?.badge || '🥉'}</span>
       </button>
     );
   }
@@ -57,13 +57,13 @@ export default function FloatingAchievementBadge({ onOpenSalon }: FloatingAchiev
           onClick={onOpenSalon}
           className="flex items-center gap-2 text-left"
         >
-          <span className="text-base flex-shrink-0">{rank.badge}</span>
+          <span className="text-base flex-shrink-0">{rank?.badge || '🥉'}</span>
           <div className="flex flex-col">
             <span className="text-[10px] tracking-editorial uppercase text-bronze-light font-medium leading-none">
-              {rank.title}
+              {rank?.title || 'Reader'}
             </span>
             <span className="text-xs font-serif font-medium text-white/90 leading-tight">
-              {points.toLocaleString()} pts
+              {(points || 0).toLocaleString()} pts
             </span>
           </div>
         </button>
