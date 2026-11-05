@@ -29,6 +29,9 @@ export default function AdminNotifications() {
   const [priority, setPriority] = useState<'standard' | 'high' | 'urgent'>('high');
   const [actionUrl, setActionUrl] = useState('/trending');
   const [buttonLabel, setButtonLabel] = useState('Read Story');
+  const [actionType, setActionType] = useState<'link' | 'function'>('link');
+  const [actionFunction, setActionFunction] = useState<string>('enable_notifications');
+  const [promoCode, setPromoCode] = useState<string>('GLOW20');
   const [imageUrl, setImageUrl] = useState('');
   const [segment, setSegment] = useState<BroadcastNotification['segment']>('all');
   const [deviceFilter, setDeviceFilter] = useState<'all' | 'mobile' | 'desktop'>('all');
@@ -124,6 +127,12 @@ export default function AdminNotifications() {
     );
   };
 
+  const getEffectiveActionUrl = () => {
+    if (actionType === 'link') return actionUrl.trim() || '/';
+    if (actionFunction === 'copy_promo_code') return `fn:copy_promo_code:${promoCode.trim()}`;
+    return `fn:${actionFunction}`;
+  };
+
   // Test send to the admin's current browser
   const handleTestDispatch = async () => {
     if (!title.trim() || !body.trim()) {
@@ -131,6 +140,7 @@ export default function AdminNotifications() {
       return;
     }
 
+    const effectiveUrl = getEffectiveActionUrl();
     setTestSending(true);
     try {
       if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -143,27 +153,62 @@ export default function AdminNotifications() {
           }
         }
 
-        // Test display via native notification
-        new Notification(`[PREVIEW] ${title.trim()}`, {
-          body: body.trim(),
-          icon: imageUrl || '/icon-192.png',
-          badge: '/icon-192.png',
-          data: { url: actionUrl.trim() || '/' },
-        });
+        let delivered = false;
 
-        // Test display via service worker if available
+        // Priority 1: Service Worker (supported by all mobile browsers and PWA)
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(reg => {
-            if (reg.showNotification) {
-              reg.showNotification(`[PREVIEW] ${title.trim()}`, {
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            if (reg && reg.showNotification) {
+              await reg.showNotification(`[TEST PREVIEW] ${title.trim()}`, {
                 body: body.trim(),
                 icon: imageUrl || '/icon-192.png',
                 badge: '/icon-192.png',
-                data: { url: actionUrl.trim() || '/' },
-              });
+                tag: `lixxon-preview-${Date.now()}`,
+                data: { url: effectiveUrl },
+              } as NotificationOptions & { vibrate?: number[] });
+              delivered = true;
             }
-          }).catch(() => undefined);
+          } catch (swErr) {
+            console.warn('SW test notification notice:', swErr);
+          }
         }
+
+        // Priority 2: In-document Notification fallback
+        if (!delivered) {
+          try {
+            new Notification(`[TEST PREVIEW] ${title.trim()}`, {
+              body: body.trim(),
+              icon: imageUrl || '/icon-192.png',
+              badge: '/icon-192.png',
+              data: { url: effectiveUrl },
+            });
+            delivered = true;
+          } catch {
+            // Document constructor not permitted in this context
+          }
+        }
+
+        // 3. Dispatch real-time local event so notification badge pulses immediately
+        const previewItem: BroadcastNotification = {
+          id: `test_${Date.now()}`,
+          title: `[TEST PREVIEW] ${title.trim()}`,
+          body: body.trim(),
+          category,
+          action_url: effectiveUrl,
+          image_url: imageUrl.trim() || null,
+          segment: 'all',
+          status: 'sent',
+          sent_count: 1,
+          delivered_count: 1,
+          click_count: 0,
+          read_count: 0,
+          action_count: 0,
+          created_at: new Date().toISOString(),
+          sent_at: new Date().toISOString(),
+        };
+        window.dispatchEvent(new CustomEvent('lixxon:broadcast_dispatched', { detail: previewItem }));
+        localStorage.setItem('lixxon_latest_broadcast_ts', String(Date.now()));
 
         setDispatchSuccess('Test notification dispatched directly to your device screen!');
       } else {
@@ -186,12 +231,13 @@ export default function AdminNotifications() {
     setDispatchError(null);
 
     const estimatedDeliveries = Math.max(1, subscriberCount);
+    const effectiveUrl = getEffectiveActionUrl();
     const newBroadcast: BroadcastNotification = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `notif_${Date.now()}`,
       title: title.trim(),
       body: body.trim(),
       category,
-      action_url: actionUrl.trim() || '/',
+      action_url: effectiveUrl,
       image_url: imageUrl.trim() || null,
       segment,
       status: 'sent',
@@ -271,10 +317,22 @@ export default function AdminNotifications() {
             body: newBroadcast.body,
             icon: newBroadcast.image_url || '/icon-192.png',
             badge: '/icon-192.png',
+            tag: `broadcast-${newBroadcast.id}`,
             data: { url: newBroadcast.action_url },
-          });
+          } as NotificationOptions & { vibrate?: number[] });
         }
       }).catch(() => undefined);
+    }
+
+    // 6. Broadcast event locally & cross-tab so reader notification icon badge updates in realtime without reload
+    window.dispatchEvent(new CustomEvent('lixxon:broadcast_dispatched', { detail: newBroadcast }));
+    localStorage.setItem('lixxon_latest_broadcast_ts', String(Date.now()));
+    try {
+      const bc = new BroadcastChannel('lixxon_notifications_channel');
+      bc.postMessage({ type: 'NEW_BROADCAST', payload: newBroadcast });
+      bc.close();
+    } catch {
+      // ignore
     }
 
     // 6. Provide clear, professional confirmation message
@@ -580,33 +638,119 @@ export default function AdminNotifications() {
                 </div>
               </div>
 
-              {/* Destination URL & CTA Label */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-medium tracking-editorial uppercase text-charcoal-muted mb-1.5">
-                    Destination URL
+              {/* Action Trigger Type & Configuration */}
+              <div className="space-y-3 p-3.5 bg-taupe-light/20 border border-taupe/40 rounded-sm">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-medium tracking-editorial uppercase text-charcoal-muted">
+                    Action Type &amp; Functional Triggers
                   </label>
-                  <input
-                    type="text"
-                    value={actionUrl}
-                    onChange={e => setActionUrl(e.target.value)}
-                    placeholder="/trending, /salon, or /article/your-slug"
-                    className="w-full bg-taupe-light/20 border border-taupe/50 p-2.5 text-xs text-charcoal rounded-sm focus:outline-none focus:border-bronze"
-                  />
+                  <div className="inline-flex rounded border border-taupe/40 bg-white p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setActionType('link')}
+                      className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors ${actionType === 'link' ? 'bg-charcoal text-white' : 'text-charcoal-muted hover:text-charcoal'}`}
+                    >
+                      Web Link / URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionType('function');
+                        setButtonLabel('Enable Push Notifications');
+                      }}
+                      className={`px-2.5 py-1 text-[11px] font-medium rounded transition-colors ${actionType === 'function' ? 'bg-charcoal text-white' : 'text-charcoal-muted hover:text-charcoal'}`}
+                    >
+                      System Action Trigger
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-medium tracking-editorial uppercase text-charcoal-muted mb-1.5">
-                    Action Button Label
-                  </label>
-                  <input
-                    type="text"
-                    value={buttonLabel}
-                    onChange={e => setButtonLabel(e.target.value)}
-                    placeholder="e.g. Read Story, Open Salon, View Drop"
-                    className="w-full bg-taupe-light/20 border border-taupe/50 p-2.5 text-xs text-charcoal rounded-sm focus:outline-none focus:border-bronze"
-                  />
-                </div>
+                {actionType === 'link' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-editorial text-charcoal-muted mb-1">
+                        Destination Path or URL
+                      </label>
+                      <input
+                        type="text"
+                        value={actionUrl}
+                        onChange={e => setActionUrl(e.target.value)}
+                        placeholder="/trending, /salon, or /article/your-slug"
+                        className="w-full bg-white border border-taupe/50 p-2 text-xs text-charcoal rounded-sm focus:outline-none focus:border-bronze"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-editorial text-charcoal-muted mb-1">
+                        Button Label
+                      </label>
+                      <input
+                        type="text"
+                        value={buttonLabel}
+                        onChange={e => setButtonLabel(e.target.value)}
+                        placeholder="e.g. Read Story, Open Salon"
+                        className="w-full bg-white border border-taupe/50 p-2 text-xs text-charcoal rounded-sm focus:outline-none focus:border-bronze"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-editorial text-charcoal-muted mb-1">
+                        Select Functional Action Trigger
+                      </label>
+                      <select
+                        value={actionFunction}
+                        onChange={e => {
+                          const fn = e.target.value;
+                          setActionFunction(fn);
+                          if (fn === 'enable_notifications') setButtonLabel('Enable Notifications Now');
+                          else if (fn === 'open_salon') setButtonLabel('Access Salon Protocol');
+                          else if (fn === 'open_search') setButtonLabel('Search Studio');
+                          else if (fn === 'open_formulation_analyzer') setButtonLabel('Launch Analyzer');
+                          else if (fn === 'copy_promo_code') setButtonLabel(`Copy Code (${promoCode})`);
+                        }}
+                        className="w-full bg-white border border-taupe/50 p-2 text-xs text-charcoal rounded-sm focus:outline-none focus:border-bronze"
+                      >
+                        <option value="enable_notifications">Prompt &amp; Enable Push Notifications</option>
+                        <option value="open_salon">Access Salon House Protocol &amp; Privileges</option>
+                        <option value="open_search">Open Instant Search Drawer</option>
+                        <option value="open_formulation_analyzer">Launch Formulation Analyzer</option>
+                        <option value="copy_promo_code">Copy Exclusive Promo Code to Clipboard</option>
+                      </select>
+                    </div>
+
+                    {actionFunction === 'copy_promo_code' ? (
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-editorial text-charcoal-muted mb-1">
+                          Promo Code to Copy
+                        </label>
+                        <input
+                          type="text"
+                          value={promoCode}
+                          onChange={e => {
+                            const val = e.target.value.toUpperCase();
+                            setPromoCode(val);
+                            setButtonLabel(`Copy Code (${val})`);
+                          }}
+                          placeholder="e.g. VIP25"
+                          className="w-full bg-white border border-taupe/50 p-2 text-xs font-mono font-bold text-charcoal rounded-sm focus:outline-none focus:border-bronze"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-editorial text-charcoal-muted mb-1">
+                          Button CTA Text
+                        </label>
+                        <input
+                          type="text"
+                          value={buttonLabel}
+                          onChange={e => setButtonLabel(e.target.value)}
+                          className="w-full bg-white border border-taupe/50 p-2 text-xs text-charcoal rounded-sm focus:outline-none focus:border-bronze"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Media Upload */}

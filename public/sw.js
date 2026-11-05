@@ -99,7 +99,8 @@ self.addEventListener('push', (e) => {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const target = safePath(e.notification.data && e.notification.data.url);
+  const rawUrl = (e.notification.data && e.notification.data.url) || '/';
+  const target = rawUrl.startsWith('fn:') ? '/trending' : safePath(rawUrl);
   e.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

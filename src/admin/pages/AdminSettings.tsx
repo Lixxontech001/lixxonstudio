@@ -23,8 +23,8 @@ export default function AdminSettings() {
   return (
     <div className="max-w-3xl">
       <div className="mb-8">
-        <h1 className="font-serif text-3xl text-charcoal font-light">Settings</h1>
-        <p className="text-sm text-charcoal-muted mt-1">Site configuration, payment setup, and admin guide</p>
+        <h1 className="font-serif text-3xl text-charcoal dark:text-white font-light">Settings</h1>
+        <p className="text-sm text-charcoal-muted dark:text-gray-400 mt-1">Site configuration, payment setup, and admin guide</p>
       </div>
 
       <SiteSettingsPanel />
@@ -37,7 +37,7 @@ export default function AdminSettings() {
       <SearchSynonymsPanel />
 
       {/* ==================== PAYMENT CONFIGURATION ==================== */}
-      <div className="bg-white border border-taupe/30 rounded-sm p-6 mb-6">
+      <div className="bg-white dark:bg-[#161616] border border-taupe/30 dark:border-white/10 rounded-sm p-6 mb-6">
         <h3 className="text-sm font-medium text-charcoal mb-4 flex items-center gap-2">
           <CreditCard size={16} className="text-bronze" /> Flutterwave Payment Configuration
         </h3>
@@ -110,7 +110,7 @@ export default function AdminSettings() {
       </div>
 
       {/* ==================== ADMIN GUIDE ==================== */}
-      <div className="bg-white border border-taupe/30 rounded-sm p-6 mb-6">
+      <div className="bg-white dark:bg-[#161616] border border-taupe/30 dark:border-white/10 rounded-sm p-6 mb-6">
         <h3 className="text-sm font-medium text-charcoal mb-4 flex items-center gap-2">
           <BookOpen size={16} className="text-bronze" /> Admin Panel Guide
         </h3>

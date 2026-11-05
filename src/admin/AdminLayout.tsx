@@ -134,7 +134,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-[#FDFBF7] dark:bg-[#0E0E0E] text-charcoal dark:text-[#E8E2D9] flex flex-col lg:flex-row transition-colors duration-300">
       <aside className="lg:w-64 bg-gray-900 text-white flex-shrink-0 lg:h-screen lg:sticky lg:top-0 lg:overflow-y-auto z-30 flex flex-col justify-between border-r border-gray-800">
         <div className="p-5 border-b border-gray-800">
           <div className="flex items-center gap-2">
@@ -233,7 +233,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 min-h-screen overflow-y-auto">
+      <main className="flex-1 min-w-0 min-h-screen overflow-y-auto bg-[#FDFBF7] dark:bg-[#0E0E0E] text-charcoal dark:text-[#E8E2D9] transition-colors duration-300">
         <div className="max-w-6xl mx-auto p-6 lg:p-10">
           {children}
         </div>

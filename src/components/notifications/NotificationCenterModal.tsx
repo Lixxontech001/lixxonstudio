@@ -44,12 +44,44 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
     recordClick(notif.id, notif.action_url);
     onClose();
 
-    // Determine target route or external
     const target = notif.action_url || '/';
+
+    // Handle functional action triggers
+    if (target.startsWith('fn:')) {
+      const fnName = target.replace('fn:', '');
+      if (fnName === 'enable_notifications') {
+        subscribeToPush();
+        return;
+      }
+      if (fnName === 'open_salon') {
+        navigate({ name: 'salon' as never });
+        return;
+      }
+      if (fnName === 'open_search') {
+        window.dispatchEvent(new CustomEvent('lixxon:open_search'));
+        return;
+      }
+      if (fnName.startsWith('copy_promo_code:')) {
+        const code = fnName.replace('copy_promo_code:', '');
+        if (navigator?.clipboard) {
+          navigator.clipboard.writeText(code);
+          alert(`Exclusive code "${code}" copied to your clipboard!`);
+        }
+        return;
+      }
+      if (fnName === 'open_formulation_analyzer') {
+        navigate({ name: 'formulation' as never });
+        return;
+      }
+    }
+
+    // Determine target route or external
     if (target.startsWith('http')) {
       window.open(target, '_blank', 'noopener,noreferrer');
     } else if (target === '/trending') {
       navigate({ name: 'trending' });
+    } else if (target === '/salon') {
+      navigate({ name: 'salon' as never });
     } else if (target === '/vault') {
       navigate({ name: 'vault' });
     } else if (target === '/shop') {

@@ -377,14 +377,24 @@ export default function AdminAnnouncements() {
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-600 font-medium mb-1">Button 1 Target URL</label>
+                    <label className="block text-gray-600 font-medium mb-1">Button 1 Target URL / Action</label>
                     <input
                       type="text"
                       value={editingCampaign.button1_url || ''}
                       onChange={e => setEditingCampaign({ ...editingCampaign, button1_url: e.target.value })}
                       className="w-full border border-gray-300 p-2 rounded-sm"
-                      placeholder="e.g. /collections or https://..."
+                      placeholder="e.g. /collections, or fn:enable_notifications"
                     />
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
+                      <span className="text-gray-400">Quick Actions:</span>
+                      <button type="button" onClick={() => setEditingCampaign({ ...editingCampaign, button1_url: 'fn:enable_notifications', button1_label: 'Enable Phone Notifications' })} className="text-bronze hover:underline font-medium">Enable Push</button>
+                      <span className="text-gray-300">·</span>
+                      <button type="button" onClick={() => setEditingCampaign({ ...editingCampaign, button1_url: 'fn:open_salon', button1_label: 'Salon Lounge' })} className="text-bronze hover:underline font-medium">Salon</button>
+                      <span className="text-gray-300">·</span>
+                      <button type="button" onClick={() => setEditingCampaign({ ...editingCampaign, button1_url: 'fn:copy_promo_code:LIXXON20', button1_label: 'Copy 20% Promo' })} className="text-bronze hover:underline font-medium">Copy Promo</button>
+                      <span className="text-gray-300">·</span>
+                      <button type="button" onClick={() => setEditingCampaign({ ...editingCampaign, button1_url: 'fn:open_formulation_analyzer', button1_label: 'Formulation Tool' })} className="text-bronze hover:underline font-medium">Analyzer</button>
+                    </div>
                   </div>
                 </div>
 
@@ -402,14 +412,20 @@ export default function AdminAnnouncements() {
                       />
                     </div>
                     <div>
-                      <label className="block text-gray-600 font-medium mb-1">Button 2 Target URL</label>
+                      <label className="block text-gray-600 font-medium mb-1">Button 2 Target URL / Action</label>
                       <input
                         type="text"
                         value={editingCampaign.button2_url || ''}
                         onChange={e => setEditingCampaign({ ...editingCampaign, button2_url: e.target.value })}
                         className="w-full border border-gray-300 p-2 rounded-sm"
-                        placeholder="e.g. /trending"
+                        placeholder="e.g. /trending, or fn:enable_notifications"
                       />
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px]">
+                        <span className="text-gray-400">Quick Actions:</span>
+                        <button type="button" onClick={() => setEditingCampaign({ ...editingCampaign, button2_url: 'fn:enable_notifications', button2_label: 'Enable Alerts' })} className="text-bronze hover:underline font-medium">Enable Push</button>
+                        <span className="text-gray-300">·</span>
+                        <button type="button" onClick={() => setEditingCampaign({ ...editingCampaign, button2_url: 'fn:open_search', button2_label: 'Search Catalog' })} className="text-bronze hover:underline font-medium">Search</button>
+                      </div>
                     </div>
                   </div>
                 )}

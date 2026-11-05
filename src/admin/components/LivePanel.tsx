@@ -35,14 +35,14 @@ export default function LivePanel() {
 
   const Icon = ({ k }: { k: Ev['kind'] }) => k === 'order' ? <ShoppingBag size={12} className="text-green-600" /> : k === 'comment' ? <MessageSquare size={12} className="text-blue-600" /> : <Eye size={12} className="text-charcoal-muted" />;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5">
+    <div className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-white/10 rounded-lg p-5 transition-colors">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-gray-900 flex items-center gap-2"><Radio size={14} className="text-red-500 animate-pulse" /> Live today</h2>
-        <div className="flex gap-4 text-xs text-gray-500"><span><strong className="text-gray-900">{today.orders}</strong> paid orders</span><span><strong className="text-gray-900">${today.revenue.toFixed(2)}</strong> revenue</span><span><strong className="text-gray-900">{today.views}</strong> views</span></div>
+        <h2 className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2"><Radio size={14} className="text-red-500 animate-pulse" /> Live today</h2>
+        <div className="flex gap-4 text-xs text-gray-500 dark:text-gray-400"><span><strong className="text-gray-900 dark:text-white">{today.orders}</strong> paid orders</span><span><strong className="text-gray-900 dark:text-white">${today.revenue.toFixed(2)}</strong> revenue</span><span><strong className="text-gray-900 dark:text-white">{today.views}</strong> views</span></div>
       </div>
       <ul className="space-y-1.5 max-h-56 overflow-y-auto text-xs">
-        {events.length === 0 && <li className="text-gray-400">Waiting for activity… this updates in real time while the tab is open.</li>}
-        {events.map(e => <li key={e.id} className="flex items-center gap-2 text-gray-600"><Icon k={e.kind} /><span className="flex-1 truncate">{e.text}</span><time className="text-gray-400">{new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></li>)}
+        {events.length === 0 && <li className="text-gray-400 dark:text-gray-500">Waiting for activity… this updates in real time while the tab is open.</li>}
+        {events.map(e => <li key={e.id} className="flex items-center gap-2 text-gray-600 dark:text-gray-300"><Icon k={e.kind} /><span className="flex-1 truncate">{e.text}</span><time className="text-gray-400 dark:text-gray-500">{new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></li>)}
       </ul>
     </div>
   );

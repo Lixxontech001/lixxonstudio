@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MarkdownField } from '../components/AdminEditorKit';
-import { ArrowLeft, Save, Plus, X, ExternalLink, Loader2, Check, Search, FileText } from 'lucide-react';
+import { ArrowLeft, Save, Plus, X, ExternalLink, Loader2, Check, Search, FileText, Sparkles } from 'lucide-react';
 import { useNavigation } from '../../context/NavigationContext';
 import { supabase } from '../../lib/supabaseClient';
 import type { Post } from '../../lib/types';
@@ -21,6 +21,22 @@ interface AttachedArticle {
   title: string;
   slug?: string;
   sort_order: number;
+}
+
+function computeArticleRelevance(postTitle: string, postSlug: string | undefined, targetTitle: string, targetDesc?: string) {
+  const stopWords = new Set(['the', 'and', 'a', 'to', 'of', 'in', 'for', 'with', 'on', 'at', 'from', 'by', 'about', 'as', 'into', 'like', 'through', 'after', 'over', 'between', 'out', 'against', 'during', 'without', 'before', 'under', 'around', 'among', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'how', 'what', 'why', 'when', 'where', 'guide', 'part', 'collection', 'edit']);
+  const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+  const targetTokens = new Set([...tokenize(targetTitle), ...tokenize(targetDesc || '')]);
+  const postTokens = tokenize(postTitle + ' ' + (postSlug || ''));
+  const matchedWords: string[] = [];
+  let score = 0;
+  for (const t of postTokens) {
+    if (targetTokens.has(t) && !matchedWords.includes(t)) {
+      matchedWords.push(t);
+      score += 28;
+    }
+  }
+  return { score: Math.min(99, Math.max(15, score)), matchedWords };
 }
 
 export default function AdminCollectionEditor({ collectionId, isNew }: { collectionId?: string; isNew?: boolean }) {
@@ -459,6 +475,56 @@ export default function AdminCollectionEditor({ collectionId, isNew }: { collect
                 <option value="draft">Drafts</option>
               </select>
             </div>
+
+            {/* Smart Suggested Articles for this Collection */}
+            {(() => {
+              const suggestions = filteredAvailableArticles
+                .map(p => {
+                  const rel = computeArticleRelevance(p.title, p.slug, form.title, form.description || '');
+                  return { ...p, score: rel.score, matchedWords: rel.matchedWords };
+                })
+                .filter(p => p.matchedWords.length > 0)
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 3);
+
+              if (suggestions.length === 0 || articleSearch.trim()) return null;
+
+              return (
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded p-3 mb-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-amber-900">
+                    <Sparkles size={14} className="text-bronze" />
+                    <span>Suggested Articles for “{form.title || 'Collection'}”</span>
+                    <span className="text-[10px] text-amber-700/80 font-normal ml-auto">
+                      Based on theme &amp; keyword affinity
+                    </span>
+                  </div>
+                  <div className="divide-y divide-amber-200/50">
+                    {suggestions.map(p => (
+                      <div key={`col-rec-${p.id}`} className="py-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-medium text-charcoal truncate">{p.title}</p>
+                            <span className="px-1.5 py-0.5 text-[9px] rounded-full bg-bronze/10 text-bronze font-bold">
+                              {p.score}% match
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-charcoal-muted mt-0.5">
+                            Matched keywords: {p.matchedWords.join(', ')}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addArticle(p)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-bronze text-white hover:bg-bronze-dark text-[11px] rounded transition-colors whitespace-nowrap font-medium shadow-xs"
+                        >
+                          <Plus size={11} /> Add to Collection
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Scrollable list of available published articles */}
             <div className="border border-taupe/30 rounded max-h-60 overflow-y-auto divide-y divide-taupe/15 flex-1">

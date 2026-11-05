@@ -60,7 +60,60 @@ export function useNotifications() {
   useEffect(() => {
     fetchNotifications();
 
-    // Listen for realtime broadcasts defensively
+    // 1. Instant local custom event listener
+    const handleDispatched = (e: Event) => {
+      const customEvent = e as CustomEvent<BroadcastNotification>;
+      if (customEvent.detail && customEvent.detail.id) {
+        setNotifications(prev => {
+          if (prev.some(n => n.id === customEvent.detail.id)) return prev;
+          return [customEvent.detail, ...prev];
+        });
+      }
+      fetchNotifications();
+    };
+    window.addEventListener('lixxon:broadcast_dispatched', handleDispatched);
+
+    // 2. Cross-tab storage synchronization
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'lixxon_latest_broadcast_ts' || e.key === READ_STORAGE_KEY) {
+        if (e.key === READ_STORAGE_KEY && e.newValue) {
+          try {
+            setReadIds(new Set(JSON.parse(e.newValue)));
+          } catch {
+            // ignore
+          }
+        }
+        fetchNotifications();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // 3. BroadcastChannel cross-tab synchronization
+    let bc: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        bc = new BroadcastChannel('lixxon_notifications_channel');
+        bc.onmessage = (msg) => {
+          if (msg.data?.type === 'NEW_BROADCAST') {
+            if (msg.data.payload) {
+              setNotifications(prev => [msg.data.payload, ...prev.filter(x => x.id !== msg.data.payload.id)]);
+            }
+            fetchNotifications();
+          }
+        };
+      } catch {
+        // ignore
+      }
+    }
+
+    // 4. Gentle poll every 12 seconds when document is visible
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchNotifications();
+      }
+    }, 12000);
+
+    // 5. Database realtime subscription
     let channel: ReturnType<typeof supabase.channel> | null = null;
     try {
       if (supabase && typeof supabase.channel === 'function') {
@@ -80,6 +133,12 @@ export function useNotifications() {
     }
 
     return () => {
+      window.removeEventListener('lixxon:broadcast_dispatched', handleDispatched);
+      window.removeEventListener('storage', handleStorage);
+      clearInterval(interval);
+      if (bc) {
+        try { bc.close(); } catch { /* ignore */ }
+      }
       try {
         if (channel && supabase && typeof supabase.removeChannel === 'function') {
           supabase.removeChannel(channel);

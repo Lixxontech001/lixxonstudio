@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Flame, Plus, Edit2, Archive, Trash2, Eye, MousePointerClick,
   Pin, X, ArrowUp, ArrowDown, ExternalLink, RefreshCw, BookOpen,
-  Search, Check, Sparkles
+  Search, Check, Sparkles, Zap
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import AdminImageUploadField from '../components/AdminImageUploadField';
@@ -33,6 +33,11 @@ export default function AdminTrending() {
   const [availableArticles, setAvailableArticles] = useState<PublishedArticleOption[]>([]);
   const [articlesLoading, setArticlesLoading] = useState(false);
   const [articleSearch, setArticleSearch] = useState('');
+
+  // Engagement Booster state
+  const [boostingItem, setBoostingItem] = useState<TrendingItem | null>(null);
+  const [boostForm, setBoostForm] = useState({ upvotes: 0, views_count: 0, clicks_count: 0 });
+  const [boostSaving, setBoostSaving] = useState(false);
 
   const showNotification = (msg: string) => {
     setToastMsg(msg);
@@ -98,54 +103,101 @@ export default function AdminTrending() {
       item_type: 'article',
       destination_url: '',
       cover_image: '',
+      upvotes: 0,
+      views_count: 0,
+      clicks_count: 0,
       read_time_minutes: 5,
-      priority_order: items.length > 0 ? (items[0].priority_order || 0) + 10 : 10,
+      priority_order: 10,
       is_pinned: false,
       is_archived: false,
       metadata: {
-        post_id: '',
-        post_slug: '',
-        author_name: 'Staff Editor',
-        trending_badge: 'Trending #1',
-        why_trending: 'Editorially highlighted story',
+        trending_badge: 'Trending Now',
+        why_trending: 'High community interest and reading velocity',
+        author_name: 'Editorial Staff',
       },
     });
   };
 
-  const handleSelectArticle = (art: PublishedArticleOption) => {
-    const catSlug = (art.category?.slug || 'skincare').toLowerCase();
-    const categoryNormalized: TrendingCategory =
-      catSlug === 'skincare' ? 'skincare' :
-      catSlug === 'fashion' ? 'fashion' :
-      catSlug === 'wellness' ? 'wellness' : 'others';
+  const handleEdit = (item: TrendingItem) => {
+    setEditingItem({ ...item });
+  };
 
-    setEditingItem(prev => ({
-      ...prev,
+  const handleOpenBooster = (item: TrendingItem) => {
+    setBoostingItem(item);
+    setBoostForm({
+      upvotes: item.upvotes || 0,
+      views_count: item.views_count || 0,
+      clicks_count: item.clicks_count || 0,
+    });
+  };
+
+  const handleApplyBoostPreset = (up: number, vi: number, cl: number) => {
+    setBoostForm(prev => ({
+      upvotes: prev.upvotes + up,
+      views_count: prev.views_count + vi,
+      clicks_count: prev.clicks_count + cl,
+    }));
+  };
+
+  const handleSaveBoost = async () => {
+    if (!boostingItem) return;
+    setBoostSaving(true);
+    try {
+      const { error } = await supabase
+        .from('trending_items')
+        .update({
+          upvotes: Math.max(0, Number(boostForm.upvotes) || 0),
+          views_count: Math.max(0, Number(boostForm.views_count) || 0),
+          clicks_count: Math.max(0, Number(boostForm.clicks_count) || 0),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', boostingItem.id);
+
+      if (error) throw error;
+      showNotification('Simulated engagements applied successfully');
+      setBoostingItem(null);
+      loadTrending();
+    } catch (err: unknown) {
+      console.error('[AdminTrending] Boost save error:', err);
+      showNotification('Failed to update simulated stats');
+    } finally {
+      setBoostSaving(false);
+    }
+  };
+
+  const handleSelectArticle = (art: PublishedArticleOption) => {
+    if (!editingItem) return;
+
+    let targetCategory: TrendingCategory = 'skincare';
+    const catSlug = art.category?.slug?.toLowerCase();
+    if (catSlug === 'fashion' || catSlug === 'style') targetCategory = 'fashion';
+    else if (catSlug === 'wellness') targetCategory = 'wellness';
+    else if (catSlug === 'others') targetCategory = 'others';
+
+    setEditingItem({
+      ...editingItem,
       title: art.title,
       slug: art.slug,
       excerpt: art.excerpt || '',
-      category: categoryNormalized,
+      category: targetCategory,
       item_type: 'article',
-      destination_url: `/article/${art.slug}`,
-      cover_image: art.cover_image || '',
+      cover_image: art.cover_image || editingItem.cover_image || '',
       read_time_minutes: art.reading_time_minutes || 5,
+      destination_url: `/article/${art.slug}`,
       metadata: {
-        ...(prev?.metadata || {}),
+        ...(editingItem.metadata || {}),
         post_id: art.id,
         post_slug: art.slug,
-        author_name: art.author?.name || 'Staff Editor',
+        author_name: art.author?.name || 'Editorial Staff',
         author_avatar: art.author?.avatar_url || '',
         author_role: art.author?.role || 'Contributor',
-        trending_badge: prev?.metadata?.trending_badge || 'Viral Story',
-        why_trending: prev?.metadata?.why_trending || 'Featured editorial deep dive',
+        trending_badge: editingItem.metadata?.trending_badge || 'Editor Pick',
+        why_trending: editingItem.metadata?.why_trending || 'Featured deep-dive editorial from the latest issue',
       },
-    }));
+    });
+
     setShowArticlePicker(false);
     showNotification(`Populated details from "${art.title}"`);
-  };
-
-  const handleEdit = (item: TrendingItem) => {
-    setEditingItem({ ...item, metadata: { ...item.metadata } });
   };
 
   const handleToggleArchive = async (item: TrendingItem) => {
@@ -239,7 +291,7 @@ export default function AdminTrending() {
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Toast */}
       {toastMsg && (
         <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-4 py-2.5 rounded-sm shadow-lg text-xs tracking-wide">
@@ -248,13 +300,13 @@ export default function AdminTrending() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <Flame size={22} className="text-bronze" />
-            <h1 className="font-serif text-2xl sm:text-3xl text-charcoal">Trending Hub Engine</h1>
+            <h1 className="font-serif text-2xl sm:text-3xl text-charcoal dark:text-white">Trending Hub Engine</h1>
           </div>
-          <p className="text-sm text-charcoal-muted mt-1">
+          <p className="text-sm text-charcoal-muted dark:text-gray-400 mt-1">
             Curate and feature primary editorial articles and cultural radar highlights on the live Trending Index.
           </p>
         </div>
@@ -262,7 +314,7 @@ export default function AdminTrending() {
         <div className="flex items-center gap-3">
           <button
             onClick={loadTrending}
-            className="p-2 border border-gray-300 rounded-sm hover:bg-gray-50 text-gray-600 transition-colors"
+            className="p-2 border border-gray-300 dark:border-white/15 rounded-sm hover:bg-gray-50 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 transition-colors"
             title="Refresh"
             aria-label="Refresh trending list"
           >
@@ -279,9 +331,9 @@ export default function AdminTrending() {
       </div>
 
       {/* Filter and Statistics Bar */}
-      <div className="bg-white border border-gray-200 rounded-sm p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-white/10 rounded-sm p-4 flex flex-wrap items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-editorial">Filter:</span>
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-editorial">Filter:</span>
           {['all', 'skincare', 'fashion', 'wellness', 'others'].map(cat => (
             <button
               key={cat}
@@ -289,7 +341,7 @@ export default function AdminTrending() {
               className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
                 filterCategory === cat
                   ? 'bg-bronze text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10'
               }`}
             >
               {cat}
@@ -297,7 +349,7 @@ export default function AdminTrending() {
           ))}
         </div>
 
-        <div className="flex items-center gap-4 text-xs text-gray-600">
+        <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input
               type="checkbox"
@@ -307,20 +359,20 @@ export default function AdminTrending() {
             />
             <span>Show Archived</span>
           </label>
-          <span className="text-gray-300">|</span>
+          <span className="text-gray-300 dark:text-gray-600">|</span>
           <span>{items.length} Curated Entries</span>
         </div>
       </div>
 
       {/* Main List Table */}
-      <div className="bg-white border border-gray-200 rounded-sm overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-[#161616] border border-gray-200 dark:border-white/10 rounded-sm overflow-hidden shadow-sm">
         {loading ? (
-          <div className="p-12 text-center text-sm text-gray-500">Loading trending radar entries...</div>
+          <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">Loading trending radar entries...</div>
         ) : items.length === 0 ? (
           <div className="p-12 text-center">
-            <Flame size={32} className="mx-auto text-gray-400 mb-3" />
-            <p className="font-serif text-lg text-gray-800 mb-1">No custom entries found</p>
-            <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
+            <Flame size={32} className="mx-auto text-gray-400 dark:text-gray-500 mb-3" />
+            <p className="font-serif text-lg text-gray-800 dark:text-white mb-1">No custom entries found</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-4">
               Your public Trending page automatically streams real published articles. You can feature specific articles or cultural spotlights here.
             </p>
             <button
@@ -334,21 +386,21 @@ export default function AdminTrending() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-editorial text-[10px]">
+                <tr className="bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 uppercase tracking-editorial text-[10px]">
                   <th className="py-3 px-4">Priority / Pin</th>
                   <th className="py-3 px-4">Entry / Headline</th>
                   <th className="py-3 px-4">Format</th>
                   <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Engagement</th>
+                  <th className="py-3 px-4">Engagement (Live)</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-white/10">
                 {items.map(item => (
                   <tr
                     key={item.id}
-                    className={`hover:bg-gray-50 transition-colors ${
-                      item.is_archived ? 'opacity-50 bg-gray-50/50' : ''
+                    className={`hover:bg-gray-50 dark:hover:bg-white/5 transition-colors ${
+                      item.is_archived ? 'opacity-50 bg-gray-50/50 dark:bg-white/[0.02]' : ''
                     }`}
                   >
                     {/* Priority & Pin */}
@@ -356,26 +408,26 @@ export default function AdminTrending() {
                       <div className="flex items-center gap-1.5">
                         {item.is_pinned && (
                           <span
-                            className="p-1 text-bronze bg-bronze/10 rounded"
+                            className="p-1 text-bronze bg-bronze/10 dark:bg-bronze/20 rounded"
                             title="Pinned to Lead Top"
                           >
                             <Pin size={12} />
                           </span>
                         )}
-                        <span className="font-mono text-gray-700 font-semibold">
+                        <span className="font-mono text-gray-700 dark:text-gray-300 font-semibold">
                           {item.priority_order || 0}
                         </span>
                         <div className="flex flex-col ml-1">
                           <button
                             onClick={() => handleAdjustPriority(item, 5)}
-                            className="text-gray-400 hover:text-gray-700"
+                            className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                             title="Increase Priority"
                           >
                             <ArrowUp size={11} />
                           </button>
                           <button
                             onClick={() => handleAdjustPriority(item, -5)}
-                            className="text-gray-400 hover:text-gray-700"
+                            className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                             title="Decrease Priority"
                           >
                             <ArrowDown size={11} />
@@ -391,14 +443,14 @@ export default function AdminTrending() {
                           <img
                             src={item.cover_image}
                             alt=""
-                            className="w-12 h-10 object-cover rounded-sm border border-gray-200 flex-shrink-0"
+                            className="w-12 h-10 object-cover rounded-sm border border-gray-200 dark:border-white/10 flex-shrink-0"
                           />
                         )}
                         <div>
-                          <p className="font-medium text-gray-900 text-xs line-clamp-1">
+                          <p className="font-medium text-gray-900 dark:text-white text-xs line-clamp-1">
                             {item.title}
                           </p>
-                          <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
                             {item.excerpt}
                           </p>
                           {item.metadata?.why_trending && (
@@ -412,20 +464,20 @@ export default function AdminTrending() {
 
                     {/* Format */}
                     <td className="py-3 px-4">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider bg-gray-100 text-gray-700">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300">
                         {item.item_type === 'article' && <BookOpen size={10} className="text-bronze" />}
                         {item.item_type}
                       </span>
                     </td>
 
                     {/* Category */}
-                    <td className="py-3 px-4 capitalize text-gray-600 font-medium">
+                    <td className="py-3 px-4 capitalize text-gray-600 dark:text-gray-400 font-medium">
                       {item.category}
                     </td>
 
                     {/* Counters */}
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-3 text-gray-600">
+                      <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
                         <span className="flex items-center gap-1" title="Upvotes">
                           <Flame size={12} className="text-bronze" /> {item.upvotes}
                         </span>
@@ -441,12 +493,21 @@ export default function AdminTrending() {
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {/* 1-Click Engagement Booster */}
+                        <button
+                          onClick={() => handleOpenBooster(item)}
+                          className="p-1.5 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
+                          title="Simulate / Boost Engagements"
+                        >
+                          <Sparkles size={14} />
+                        </button>
+
                         {item.destination_url && (
                           <a
                             href={item.destination_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="p-1.5 text-gray-400 hover:text-gray-700"
+                            className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                             title="View Link"
                           >
                             <ExternalLink size={14} />
@@ -462,7 +523,7 @@ export default function AdminTrending() {
                         <button
                           onClick={() => handleToggleArchive(item)}
                           className={`p-1.5 transition-colors ${
-                            item.is_archived ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-700'
+                            item.is_archived ? 'text-green-600 hover:text-green-700 dark:text-green-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                           }`}
                           title={item.is_archived ? 'Restore' : 'Archive'}
                         >
@@ -485,32 +546,159 @@ export default function AdminTrending() {
         )}
       </div>
 
+      {/* Engagement Booster Modal */}
+      {boostingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#161616] rounded-sm border border-gray-200 dark:border-white/10 shadow-2xl max-w-lg w-full flex flex-col overflow-hidden animate-fade-in">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between bg-gray-50 dark:bg-white/5">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-amber-500" />
+                <h2 className="font-serif text-lg text-gray-900 dark:text-white">
+                  Engagement Booster
+                </h2>
+              </div>
+              <button
+                onClick={() => setBoostingItem(null)}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                aria-label="Close booster"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 text-xs text-gray-700 dark:text-gray-300">
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-sm">
+                <p className="font-medium text-amber-900 dark:text-amber-200 text-xs">
+                  Article: {boostingItem.title}
+                </p>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                  Simulate verified reader traffic and social proof so new stories maintain executive momentum.
+                </p>
+              </div>
+
+              {/* Quick Boost Presets */}
+              <div>
+                <label className="block uppercase tracking-editorial font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                  1-Click Momentum Presets
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleApplyBoostPreset(25, 350, 35)}
+                    className="p-2.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-sm hover:border-bronze text-left transition-colors"
+                  >
+                    <span className="font-medium text-gray-900 dark:text-white block">+25 Upvotes</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">+350 Views</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyBoostPreset(75, 1200, 110)}
+                    className="p-2.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-sm hover:border-bronze text-left transition-colors"
+                  >
+                    <span className="font-medium text-gray-900 dark:text-white block">+75 Upvotes</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">+1.2k Views</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyBoostPreset(250, 4800, 420)}
+                    className="p-2.5 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-sm hover:border-bronze text-left transition-colors"
+                  >
+                    <span className="font-medium text-amber-600 dark:text-amber-400 block font-semibold">+250 Viral</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">+4.8k Views</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Exact Controls */}
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100 dark:border-white/10">
+                <div>
+                  <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1 flex items-center gap-1">
+                    <Flame size={12} className="text-bronze" /> Upvotes
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={boostForm.upvotes}
+                    onChange={e => setBoostForm({ ...boostForm, upvotes: Number(e.target.value) })}
+                    className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2 rounded-sm text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1 flex items-center gap-1">
+                    <Eye size={12} /> Total Views
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={boostForm.views_count}
+                    onChange={e => setBoostForm({ ...boostForm, views_count: Number(e.target.value) })}
+                    className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2 rounded-sm text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-600 dark:text-gray-400 font-medium mb-1 flex items-center gap-1">
+                    <MousePointerClick size={12} /> Link Clicks
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={boostForm.clicks_count}
+                    onChange={e => setBoostForm({ ...boostForm, clicks_count: Number(e.target.value) })}
+                    className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2 rounded-sm text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-gray-200 dark:border-white/10 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBoostingItem(null)}
+                  className="px-4 py-2 border border-gray-300 dark:border-white/15 text-gray-700 dark:text-gray-300 rounded-sm hover:bg-gray-50 dark:hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={boostSaving}
+                  onClick={handleSaveBoost}
+                  className="px-6 py-2 bg-bronze text-white text-xs uppercase tracking-editorial font-medium rounded-sm hover:bg-bronze-dark transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Zap size={14} />
+                  <span>{boostSaving ? 'Saving...' : 'Apply Boost'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Editor Modal */}
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-sm border border-gray-200 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-8">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+          <div className="bg-white dark:bg-[#161616] rounded-sm border border-gray-200 dark:border-white/10 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-8">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between bg-gray-50 dark:bg-white/5">
               <div className="flex items-center gap-2">
                 <Flame size={18} className="text-bronze" />
-                <h2 className="font-serif text-lg text-gray-900">
+                <h2 className="font-serif text-lg text-gray-900 dark:text-white">
                   {editingItem.id ? 'Edit Trending Entry' : 'Feature Article / Cultural Spotlight'}
                 </h2>
               </div>
               <button
                 onClick={() => setEditingItem(null)}
-                className="text-gray-400 hover:text-gray-700"
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                 aria-label="Close modal"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 text-xs text-gray-700">
+            <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 text-xs text-gray-700 dark:text-gray-300">
               {/* Top Quick Action: Select Published Article */}
-              <div className="bg-bronze/5 border border-bronze/20 p-4 rounded-sm flex items-center justify-between">
+              <div className="bg-bronze/5 dark:bg-bronze/10 border border-bronze/20 rounded-sm p-4 flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900 text-xs">Feature an existing published article?</p>
-                  <p className="text-[11px] text-gray-500">Pick from your live editorial catalogue to auto-fill details.</p>
+                  <p className="font-medium text-gray-900 dark:text-white text-xs">Feature an existing published article?</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">Pick from your live editorial catalogue to auto-fill details.</p>
                 </div>
                 <button
                   type="button"
@@ -528,7 +716,7 @@ export default function AdminTrending() {
               {/* Title & Slug */}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
+                  <label className="block uppercase tracking-editorial font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Article Title *
                   </label>
                   <input
@@ -536,19 +724,19 @@ export default function AdminTrending() {
                     required
                     value={editingItem.title || ''}
                     onChange={e => setEditingItem({ ...editingItem, title: e.target.value })}
-                    className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
+                    className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
                     placeholder="e.g. The Barrier Repair Masterclass"
                   />
                 </div>
                 <div>
-                  <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
+                  <label className="block uppercase tracking-editorial font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Slug
                   </label>
                   <input
                     type="text"
                     value={editingItem.slug || ''}
                     onChange={e => setEditingItem({ ...editingItem, slug: e.target.value })}
-                    className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
+                    className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
                     placeholder="barrier-repair-masterclass"
                   />
                 </div>
@@ -557,7 +745,7 @@ export default function AdminTrending() {
               {/* Category & Archetype */}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
+                  <label className="block uppercase tracking-editorial font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Category
                   </label>
                   <select
@@ -565,7 +753,7 @@ export default function AdminTrending() {
                     onChange={e =>
                       setEditingItem({ ...editingItem, category: e.target.value as TrendingCategory })
                     }
-                    className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
+                    className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
                   >
                     <option value="skincare">Skincare</option>
                     <option value="fashion">Fashion</option>
@@ -574,7 +762,7 @@ export default function AdminTrending() {
                   </select>
                 </div>
                 <div>
-                  <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
+                  <label className="block uppercase tracking-editorial font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Content Format
                   </label>
                   <select
@@ -582,7 +770,7 @@ export default function AdminTrending() {
                     onChange={e =>
                       setEditingItem({ ...editingItem, item_type: e.target.value as TrendingItemType })
                     }
-                    className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm font-medium"
+                    className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm font-medium"
                   >
                     <option value="article">Editorial Article (Primary)</option>
                     <option value="product">Product Spotlight</option>
@@ -595,7 +783,7 @@ export default function AdminTrending() {
 
               {/* Excerpt */}
               <div>
-                <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
+                <label className="block uppercase tracking-editorial font-medium text-gray-600 dark:text-gray-400 mb-1">
                   Excerpt / Editorial Synopsis *
                 </label>
                 <textarea
@@ -603,21 +791,21 @@ export default function AdminTrending() {
                   required
                   value={editingItem.excerpt || ''}
                   onChange={e => setEditingItem({ ...editingItem, excerpt: e.target.value })}
-                  className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
+                  className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2.5 rounded-sm focus:border-bronze focus:outline-none text-sm"
                   placeholder="Compelling 2-sentence summary of the story..."
                 />
               </div>
 
               {/* Article Specific Metadata Controls */}
-              <div className="bg-gray-50 border border-gray-200 p-4 rounded-sm space-y-3">
-                <div className="flex items-center gap-2 mb-2 text-gray-800 font-medium">
+              <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-4 rounded-sm space-y-3">
+                <div className="flex items-center gap-2 mb-2 text-gray-800 dark:text-white font-medium">
                   <Sparkles size={14} className="text-bronze" />
-                  <span>Trending Badges & Editorial Hook</span>
+                  <span>Trending Badges &amp; Editorial Hook</span>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-gray-600 mb-1">Trending Badge</label>
+                    <label className="block text-gray-600 dark:text-gray-400 mb-1">Trending Badge</label>
                     <input
                       type="text"
                       value={editingItem.metadata?.trending_badge || ''}
@@ -628,11 +816,11 @@ export default function AdminTrending() {
                         })
                       }
                       placeholder="e.g. Trending #1, Viral Story, Editor's Pick"
-                      className="w-full border border-gray-300 p-2 rounded-sm bg-white"
+                      className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2 rounded-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-600 mb-1">Why It's Trending (Angle)</label>
+                    <label className="block text-gray-600 dark:text-gray-400 mb-1">Why It's Trending (Angle)</label>
                     <input
                       type="text"
                       value={editingItem.metadata?.why_trending || ''}
@@ -643,14 +831,14 @@ export default function AdminTrending() {
                         })
                       }
                       placeholder="e.g. Over 4,200 readers engaged in discussion"
-                      className="w-full border border-gray-300 p-2 rounded-sm bg-white"
+                      className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2 rounded-sm"
                     />
                   </div>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-gray-600 mb-1">Author Byline</label>
+                    <label className="block text-gray-600 dark:text-gray-400 mb-1">Author Byline</label>
                     <input
                       type="text"
                       value={editingItem.metadata?.author_name || ''}
@@ -661,18 +849,18 @@ export default function AdminTrending() {
                         })
                       }
                       placeholder="e.g. Emma Vance"
-                      className="w-full border border-gray-300 p-2 rounded-sm bg-white"
+                      className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2 rounded-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-600 mb-1">Read Time (Minutes)</label>
+                    <label className="block text-gray-600 dark:text-gray-400 mb-1">Read Time (Minutes)</label>
                     <input
                       type="number"
                       min={1}
                       max={60}
                       value={editingItem.read_time_minutes || 5}
                       onChange={e => setEditingItem({ ...editingItem, read_time_minutes: Number(e.target.value) })}
-                      className="w-full border border-gray-300 p-2 rounded-sm bg-white"
+                      className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2 rounded-sm"
                     />
                   </div>
                 </div>
@@ -686,10 +874,24 @@ export default function AdminTrending() {
                 folder="articles"
               />
 
+              {/* Destination URL */}
+              <div>
+                <label className="block uppercase tracking-editorial font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Destination URL
+                </label>
+                <input
+                  type="text"
+                  value={editingItem.destination_url || ''}
+                  onChange={e => setEditingItem({ ...editingItem, destination_url: e.target.value })}
+                  placeholder="/article/your-slug or /shop"
+                  className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2.5 rounded-sm focus:border-bronze focus:outline-none"
+                />
+              </div>
+
               {/* Priority & Pinned Controls */}
-              <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-gray-200">
+              <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-gray-200 dark:border-white/10">
                 <div>
-                  <label className="block uppercase tracking-editorial font-medium text-gray-600 mb-1">
+                  <label className="block uppercase tracking-editorial font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Priority Rank (Higher = Top of Leaderboard)
                   </label>
                   <input
@@ -698,7 +900,7 @@ export default function AdminTrending() {
                     onChange={e =>
                       setEditingItem({ ...editingItem, priority_order: Number(e.target.value) })
                     }
-                    className="w-full border border-gray-300 p-2.5 rounded-sm focus:border-bronze focus:outline-none"
+                    className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white p-2.5 rounded-sm focus:border-bronze focus:outline-none"
                   />
                 </div>
                 <div className="flex flex-col justify-center">
@@ -711,20 +913,20 @@ export default function AdminTrending() {
                       }
                       className="h-4 w-4 accent-bronze"
                     />
-                    <span className="font-medium text-gray-900">Pin as #01 Hero Story</span>
+                    <span className="font-medium text-gray-900 dark:text-white">Pin as #01 Hero Story</span>
                   </label>
-                  <span className="text-[11px] text-gray-500 ml-6">
+                  <span className="text-[11px] text-gray-500 dark:text-gray-400 ml-6">
                     Displays in the giant magazine hero banner at top of Trending Index.
                   </span>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-4 border-t border-gray-200 flex items-center justify-end gap-3">
+              <div className="pt-4 border-t border-gray-200 dark:border-white/10 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setEditingItem(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-sm hover:bg-gray-50 text-gray-700 font-medium"
+                  className="px-4 py-2 border border-gray-300 dark:border-white/15 text-gray-700 dark:text-gray-300 rounded-sm hover:bg-gray-50 dark:hover:bg-white/5 font-medium"
                 >
                   Cancel
                 </button>
@@ -744,21 +946,21 @@ export default function AdminTrending() {
       {/* Published Article Picker Drawer / Modal */}
       {showArticlePicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-sm border border-gray-200 shadow-2xl max-w-xl w-full max-h-[80vh] flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+          <div className="bg-white dark:bg-[#161616] rounded-sm border border-gray-200 dark:border-white/10 shadow-2xl max-w-xl w-full max-h-[80vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between bg-gray-50 dark:bg-white/5">
               <div className="flex items-center gap-2">
                 <BookOpen size={18} className="text-bronze" />
-                <h3 className="font-serif text-base text-gray-900">Select Published Article</h3>
+                <h3 className="font-serif text-base text-gray-900 dark:text-white">Select Published Article</h3>
               </div>
               <button
                 onClick={() => setShowArticlePicker(false)}
-                className="text-gray-400 hover:text-gray-700"
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-4 border-b border-gray-200">
+            <div className="p-4 border-b border-gray-200 dark:border-white/10">
               <div className="relative">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -766,7 +968,7 @@ export default function AdminTrending() {
                   value={articleSearch}
                   onChange={e => setArticleSearch(e.target.value)}
                   placeholder="Search articles by title or slug..."
-                  className="w-full border border-gray-300 pl-9 pr-3 py-2 text-xs rounded-sm focus:border-bronze focus:outline-none"
+                  className="w-full border border-gray-300 dark:border-white/15 dark:bg-[#1E1E1E] dark:text-white pl-9 pr-3 py-2 text-xs rounded-sm focus:border-bronze focus:outline-none"
                   autoFocus
                 />
               </div>
@@ -774,15 +976,15 @@ export default function AdminTrending() {
 
             <div className="p-4 overflow-y-auto space-y-2 flex-1">
               {articlesLoading ? (
-                <p className="text-center py-8 text-xs text-gray-500">Loading published articles...</p>
+                <p className="text-center py-8 text-xs text-gray-500 dark:text-gray-400">Loading published articles...</p>
               ) : filteredPickerArticles.length === 0 ? (
-                <p className="text-center py-8 text-xs text-gray-500">No matching articles found.</p>
+                <p className="text-center py-8 text-xs text-gray-500 dark:text-gray-400">No matching articles found.</p>
               ) : (
                 filteredPickerArticles.map(art => (
                   <div
                     key={art.id}
                     onClick={() => handleSelectArticle(art)}
-                    className="p-3 border border-gray-100 hover:border-bronze hover:bg-bronze/5 rounded-sm flex items-center gap-3 cursor-pointer transition-all group"
+                    className="p-3 border border-gray-100 dark:border-white/10 hover:border-bronze hover:bg-bronze/5 rounded-sm flex items-center gap-3 cursor-pointer transition-all group"
                   >
                     {art.cover_image ? (
                       <img
@@ -791,29 +993,29 @@ export default function AdminTrending() {
                         className="w-12 h-12 object-cover rounded-sm flex-shrink-0"
                       />
                     ) : (
-                      <div className="w-12 h-12 bg-gray-100 rounded-sm flex items-center justify-center flex-shrink-0 text-gray-400">
+                      <div className="w-12 h-12 bg-gray-100 dark:bg-white/10 rounded-sm flex items-center justify-center flex-shrink-0 text-gray-400">
                         <BookOpen size={16} />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-900 group-hover:text-bronze transition-colors line-clamp-1">
+                      <p className="text-xs font-medium text-gray-900 dark:text-white group-hover:text-bronze transition-colors line-clamp-1">
                         {art.title}
                       </p>
-                      <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
                         {art.category?.name || 'Editorial'} · By {art.author?.name || 'Staff'} · {art.reading_time_minutes || 5} min read
                       </p>
                     </div>
-                    <Check size={16} className="text-gray-300 group-hover:text-bronze flex-shrink-0" />
+                    <Check size={16} className="text-gray-300 dark:text-gray-600 group-hover:text-bronze flex-shrink-0" />
                   </div>
                 ))
               )}
             </div>
 
-            <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+            <div className="px-6 py-3 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowArticlePicker(false)}
-                className="px-4 py-1.5 border border-gray-300 text-xs text-gray-600 rounded-sm hover:bg-gray-100"
+                className="px-4 py-1.5 border border-gray-300 dark:border-white/15 text-xs text-gray-600 dark:text-gray-300 rounded-sm hover:bg-gray-100 dark:hover:bg-white/10"
               >
                 Close
               </button>

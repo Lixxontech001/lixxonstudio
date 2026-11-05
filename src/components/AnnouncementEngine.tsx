@@ -171,6 +171,41 @@ export default function AnnouncementEngine() {
     markAnnouncementDismissed(activeAnnouncement.id);
     setIsOpen(false);
 
+    if (url.startsWith('fn:')) {
+      const fnName = url.replace('fn:', '');
+      if (fnName === 'enable_notifications') {
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+              alert('Notifications enabled! You will now receive editorial dispatches and salon alerts.');
+            }
+          });
+        }
+        return;
+      }
+      if (fnName === 'open_salon') {
+        navigate({ name: 'salon' as never });
+        return;
+      }
+      if (fnName === 'open_search') {
+        window.dispatchEvent(new CustomEvent('lixxon:open_search'));
+        return;
+      }
+      if (fnName === 'open_formulation_analyzer') {
+        navigate({ name: 'formulation' as never });
+        return;
+      }
+      if (fnName.startsWith('copy_promo_code:')) {
+        const code = fnName.replace('copy_promo_code:', '');
+        if (navigator?.clipboard) {
+          navigator.clipboard.writeText(code);
+          alert(`Exclusive code "${code}" copied to clipboard!`);
+        }
+        return;
+      }
+      return;
+    }
+
     if (url.startsWith('http')) {
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {

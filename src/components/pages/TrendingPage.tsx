@@ -181,30 +181,30 @@ export default function TrendingPage() {
   };
 
   return (
-    <div className="bg-[#FAF8F5] min-h-screen py-10 md:py-16 text-[#2B2B2B]">
+    <div className="bg-[#FAF8F5] dark:bg-[#0E0E0E] min-h-screen py-10 md:py-16 text-[#2B2B2B] dark:text-[#E8E2D9] transition-colors duration-300">
       {/* Header & Sub-Navigation */}
       <div className="container-wide max-w-6xl mx-auto px-4 sm:px-6 mb-10">
         <div className="text-center max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#9C6647]/10 text-[#9C6647] rounded-full text-xs font-medium tracking-editorial uppercase mb-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#9C6647]/10 dark:bg-bronze/20 text-[#9C6647] dark:text-bronze-light rounded-full text-xs font-medium tracking-editorial uppercase mb-4">
             <Flame size={14} className="animate-pulse" />
             <span>Editorial Cultural Radar</span>
           </div>
-          <h1 className="font-serif text-3xl sm:text-5xl md:text-6xl font-light text-[#1F1F1F] mb-4 tracking-tight">
+          <h1 className="font-serif text-3xl sm:text-5xl md:text-6xl font-light text-[#1F1F1F] dark:text-white mb-4 tracking-tight">
             The Trending Index
           </h1>
-          <p className="text-sm sm:text-base text-[#666666] leading-relaxed">
+          <p className="text-sm sm:text-base text-[#666666] dark:text-gray-400 leading-relaxed">
             The most widely read editorial deep dives, cultural discussions, and verified industry updates across Lixxon Studio.
           </p>
         </div>
 
         {/* Format Switcher Tabs */}
-        <div className="mt-8 flex items-center justify-center gap-1 sm:gap-2 border-b border-[#E8E2D9] pb-4 overflow-x-auto no-scrollbar">
+        <div className="mt-8 flex items-center justify-center gap-1 sm:gap-2 border-b border-[#E8E2D9] dark:border-white/10 pb-4 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveFormat('articles')}
             className={`px-4 py-2 text-xs uppercase tracking-editorial font-medium rounded-full transition-all duration-300 flex items-center gap-1.5 ${
               activeFormat === 'articles'
-                ? 'bg-[#1F1F1F] text-white shadow-sm'
-                : 'text-[#666666] hover:text-[#1F1F1F] hover:bg-white'
+                ? 'bg-[#1F1F1F] dark:bg-bronze text-white shadow-sm'
+                : 'text-[#666666] dark:text-gray-300 hover:text-[#1F1F1F] dark:hover:text-white hover:bg-white dark:hover:bg-white/10'
             }`}
           >
             <BookOpen size={13} />
@@ -215,8 +215,8 @@ export default function TrendingPage() {
             onClick={() => setActiveFormat('all')}
             className={`px-4 py-2 text-xs uppercase tracking-editorial font-medium rounded-full transition-all duration-300 ${
               activeFormat === 'all'
-                ? 'bg-[#1F1F1F] text-white shadow-sm'
-                : 'text-[#666666] hover:text-[#1F1F1F] hover:bg-white'
+                ? 'bg-[#1F1F1F] dark:bg-bronze text-white shadow-sm'
+                : 'text-[#666666] dark:text-gray-300 hover:text-[#1F1F1F] dark:hover:text-white hover:bg-white dark:hover:bg-white/10'
             }`}
           >
             All Trending
@@ -225,19 +225,19 @@ export default function TrendingPage() {
             onClick={() => setActiveFormat('debates')}
             className={`px-4 py-2 text-xs uppercase tracking-editorial font-medium rounded-full transition-all duration-300 flex items-center gap-1.5 ${
               activeFormat === 'debates'
-                ? 'bg-[#1F1F1F] text-white shadow-sm'
-                : 'text-[#666666] hover:text-[#1F1F1F] hover:bg-white'
+                ? 'bg-[#1F1F1F] dark:bg-bronze text-white shadow-sm'
+                : 'text-[#666666] dark:text-gray-300 hover:text-[#1F1F1F] dark:hover:text-white hover:bg-white dark:hover:bg-white/10'
             }`}
           >
             <MessageCircle size={13} />
-            <span>Debates & Wire</span>
+            <span>Debates &amp; Wire</span>
           </button>
           <button
             onClick={() => setActiveFormat('products')}
             className={`px-4 py-2 text-xs uppercase tracking-editorial font-medium rounded-full transition-all duration-300 flex items-center gap-1.5 ${
               activeFormat === 'products'
-                ? 'bg-[#1F1F1F] text-white shadow-sm'
-                : 'text-[#666666] hover:text-[#1F1F1F] hover:bg-white'
+                ? 'bg-[#1F1F1F] dark:bg-bronze text-white shadow-sm'
+                : 'text-[#666666] dark:text-gray-300 hover:text-[#1F1F1F] dark:hover:text-white hover:bg-white dark:hover:bg-white/10'
             }`}
           >
             <Sparkles size={13} />
@@ -247,11 +247,11 @@ export default function TrendingPage() {
             onClick={() => setActiveFormat('science')}
             className={`px-4 py-2 text-xs uppercase tracking-editorial font-medium rounded-full transition-all duration-300 ${
               activeFormat === 'science'
-                ? 'bg-[#1F1F1F] text-white shadow-sm'
-                : 'text-[#666666] hover:text-[#1F1F1F] hover:bg-white'
+                ? 'bg-[#1F1F1F] dark:bg-bronze text-white shadow-sm'
+                : 'text-[#666666] dark:text-gray-300 hover:text-[#1F1F1F] dark:hover:text-white hover:bg-white dark:hover:bg-white/10'
             }`}
           >
-            Science & Clinical
+            Science &amp; Clinical
           </button>
         </div>
 
@@ -265,7 +265,7 @@ export default function TrendingPage() {
                 className={`px-3.5 py-1.5 text-xs tracking-editorial uppercase font-medium rounded-full transition-all duration-300 ${
                   activeCategory === cat.value
                     ? 'bg-[#9C6647] text-white shadow-sm'
-                    : 'bg-white text-[#666666] hover:bg-[#EFEAE2] hover:text-[#1F1F1F] border border-[#E8E2D9]'
+                    : 'bg-white dark:bg-[#1A1A1A] text-[#666666] dark:text-gray-300 hover:bg-[#EFEAE2] dark:hover:bg-white/10 hover:text-[#1F1F1F] dark:hover:text-white border border-[#E8E2D9] dark:border-white/15'
                 }`}
               >
                 {cat.label}
@@ -274,14 +274,14 @@ export default function TrendingPage() {
           </div>
 
           <div className="relative w-full md:w-72">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#999999]" />
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#999999] dark:text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search trending stories..."
               aria-label="Search trending stories"
-              className="w-full bg-white border border-[#E8E2D9] pl-10 pr-4 py-2 text-xs rounded-full text-[#1F1F1F] placeholder:text-[#999999] focus:outline-none focus:border-[#9C6647] transition-colors shadow-sm"
+              className="w-full bg-white dark:bg-[#161616] border border-[#E8E2D9] dark:border-white/15 pl-10 pr-4 py-2 text-xs rounded-full text-[#1F1F1F] dark:text-white placeholder:text-[#999999] dark:placeholder:text-gray-400 focus:outline-none focus:border-[#9C6647] dark:focus:border-bronze transition-colors shadow-sm"
             />
           </div>
         </div>
@@ -290,20 +290,20 @@ export default function TrendingPage() {
       <div className="container-wide max-w-6xl mx-auto px-4 sm:px-6">
         {loading ? (
           <div className="space-y-8 animate-pulse">
-            <div className="bg-white border border-[#E8E2D9] rounded-sm p-8 h-96" />
+            <div className="bg-white dark:bg-[#161616] border border-[#E8E2D9] dark:border-white/10 rounded-sm p-8 h-96" />
             <div className="grid md:grid-cols-2 gap-8">
               {[1, 2, 3, 4].map(n => (
-                <div key={n} className="bg-white border border-[#E8E2D9] p-6 rounded-sm h-64" />
+                <div key={n} className="bg-white dark:bg-[#161616] border border-[#E8E2D9] dark:border-white/10 p-6 rounded-sm h-64" />
               ))}
             </div>
           </div>
         ) : error ? (
-          <div className="text-center py-16 bg-white border border-[#E8E2D9] rounded-sm p-8">
+          <div className="text-center py-16 bg-white dark:bg-[#161616] border border-[#E8E2D9] dark:border-white/10 rounded-sm p-8">
             <AlertCircle size={32} className="mx-auto text-amber-600 mb-3" />
-            <p className="text-sm text-[#666666] mb-4">{error}</p>
+            <p className="text-sm text-[#666666] dark:text-gray-300 mb-4">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[#1F1F1F] text-white text-xs uppercase tracking-editorial rounded-sm hover:bg-[#9C6647] transition-colors"
+              className="px-4 py-2 bg-[#1F1F1F] dark:bg-bronze text-white text-xs uppercase tracking-editorial rounded-sm hover:bg-[#9C6647] dark:hover:bg-bronze-dark transition-colors"
             >
               Retry
             </button>
@@ -314,14 +314,14 @@ export default function TrendingPage() {
             {heroArticle && !searchQuery.trim() && (activeFormat === 'articles' || activeFormat === 'all') && (
               <div className="mb-14">
                 <div className="flex items-center gap-2 mb-4">
-                  <Flame size={16} className="text-[#9C6647]" />
-                  <span className="text-[11px] tracking-ultra-wide uppercase font-semibold text-[#9C6647]">
+                  <Flame size={16} className="text-[#9C6647] dark:text-bronze-light" />
+                  <span className="text-[11px] tracking-ultra-wide uppercase font-semibold text-[#9C6647] dark:text-bronze-light">
                     #01 Most Read Story Right Now
                   </span>
-                  <div className="flex-1 h-[1px] bg-[#E8E2D9]" />
+                  <div className="flex-1 h-[1px] bg-[#E8E2D9] dark:bg-white/10" />
                 </div>
 
-                <div className="bg-white border border-[#E8E2D9] rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500 group">
+                <div className="bg-white dark:bg-[#161616] border border-[#E8E2D9] dark:border-white/10 rounded-sm overflow-hidden luxury-shadow hover:luxury-shadow-lg transition-all duration-500 group">
                   <div className="grid lg:grid-cols-12 gap-0">
                     {/* Visual Media Column */}
                     <div
@@ -354,49 +354,49 @@ export default function TrendingPage() {
                     <div className="lg:col-span-5 p-7 sm:p-9 flex flex-col justify-between">
                       <div>
                         <div className="flex items-center gap-3 mb-3 text-xs">
-                          <span className="text-[10px] tracking-editorial uppercase font-bold text-[#9C6647]">
+                          <span className="text-[10px] tracking-editorial uppercase font-bold text-[#9C6647] dark:text-bronze-light">
                             {heroArticle.category}
                           </span>
-                          <span className="text-[#CCCCCC]">·</span>
-                          <span className="text-[#777777] flex items-center gap-1">
+                          <span className="text-[#CCCCCC] dark:text-gray-600">·</span>
+                          <span className="text-[#777777] dark:text-gray-400 flex items-center gap-1">
                             <Clock size={12} /> {heroArticle.read_time_minutes} min read
                           </span>
                           {heroArticle.views_count > 0 && (
                             <>
-                              <span className="text-[#CCCCCC]">·</span>
-                              <span className="text-[#777777]">{heroArticle.views_count.toLocaleString()} reads</span>
+                              <span className="text-[#CCCCCC] dark:text-gray-600">·</span>
+                              <span className="text-[#777777] dark:text-gray-400">{heroArticle.views_count.toLocaleString()} reads</span>
                             </>
                           )}
                         </div>
 
                         <h2
                           onClick={() => handleOpenArticle(heroArticle)}
-                          className="font-serif text-2xl sm:text-3xl lg:text-4xl text-[#1F1F1F] leading-tight font-normal mb-4 cursor-pointer hover:text-[#9C6647] transition-colors"
+                          className="font-serif text-2xl sm:text-3xl lg:text-4xl text-[#1F1F1F] dark:text-white leading-tight font-normal mb-4 cursor-pointer hover:text-[#9C6647] dark:hover:text-bronze-light transition-colors"
                         >
                           {heroArticle.title}
                         </h2>
 
-                        <p className="text-sm text-[#555555] leading-relaxed mb-6 line-clamp-3">
+                        <p className="text-sm text-[#555555] dark:text-gray-300 leading-relaxed mb-6 line-clamp-3">
                           {heroArticle.excerpt}
                         </p>
 
                         {/* Author Byline */}
                         {heroArticle.metadata?.author_name && (
-                          <div className="flex items-center gap-3 mb-6 pb-6 border-b border-[#EFEAE2]">
+                          <div className="flex items-center gap-3 mb-6 pb-6 border-b border-[#EFEAE2] dark:border-white/10">
                             {heroArticle.metadata.author_avatar ? (
                               <img
                                 src={heroArticle.metadata.author_avatar}
                                 alt={heroArticle.metadata.author_name}
-                                className="w-9 h-9 rounded-full object-cover border border-[#E8E2D9]"
+                                className="w-9 h-9 rounded-full object-cover border border-[#E8E2D9] dark:border-white/10"
                               />
                             ) : (
-                              <div className="w-9 h-9 rounded-full bg-[#EFEAE2] text-[#9C6647] flex items-center justify-center text-xs font-serif font-bold">
+                              <div className="w-9 h-9 rounded-full bg-[#EFEAE2] dark:bg-white/10 text-[#9C6647] dark:text-bronze-light flex items-center justify-center text-xs font-serif font-bold">
                                 {heroArticle.metadata.author_name.charAt(0)}
                               </div>
                             )}
                             <div>
-                              <p className="text-xs font-medium text-[#1F1F1F]">{heroArticle.metadata.author_name}</p>
-                              <p className="text-[11px] text-[#888888]">
+                              <p className="text-xs font-medium text-[#1F1F1F] dark:text-white">{heroArticle.metadata.author_name}</p>
+                              <p className="text-[11px] text-[#888888] dark:text-gray-400">
                                 {heroArticle.metadata.author_role || 'Editorial Contributor'}
                               </p>
                             </div>
@@ -408,7 +408,7 @@ export default function TrendingPage() {
                       <div className="flex items-center justify-between gap-3 pt-2">
                         <button
                           onClick={() => handleOpenArticle(heroArticle)}
-                          className="inline-flex items-center gap-2 px-6 py-3 bg-[#1F1F1F] text-white text-xs uppercase tracking-editorial font-medium rounded-sm hover:bg-[#9C6647] transition-all duration-300 shadow-sm"
+                          className="inline-flex items-center gap-2 px-6 py-3 bg-[#1F1F1F] dark:bg-bronze text-white text-xs uppercase tracking-editorial font-medium rounded-sm hover:bg-[#9C6647] dark:hover:bg-bronze-dark transition-all duration-300 shadow-sm"
                         >
                           <span>Read Full Story</span>
                           <ArrowRight size={14} />
@@ -421,7 +421,7 @@ export default function TrendingPage() {
                             className={`p-2.5 rounded-full border transition-all ${
                               bookmarkedSlugs.has(heroArticle.metadata?.post_slug || heroArticle.slug)
                                 ? 'bg-[#9C6647] text-white border-[#9C6647]'
-                                : 'bg-[#FAF8F5] text-[#666666] border-[#E8E2D9] hover:text-[#1F1F1F]'
+                                : 'bg-[#FAF8F5] dark:bg-white/5 text-[#666666] dark:text-gray-300 border-[#E8E2D9] dark:border-white/10 hover:text-[#1F1F1F] dark:hover:text-white'
                             }`}
                             title="Save for later"
                           >
@@ -431,20 +431,20 @@ export default function TrendingPage() {
                           <button
                             onClick={() => handleUpvote(heroArticle)}
                             aria-label="Upvote story"
-                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#FAF8F5] border border-[#E8E2D9] text-[#1F1F1F] rounded-full text-xs font-medium hover:bg-[#9C6647] hover:text-white hover:border-[#9C6647] transition-all"
+                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#FAF8F5] dark:bg-white/5 border border-[#E8E2D9] dark:border-white/10 text-[#1F1F1F] dark:text-white rounded-full text-xs font-medium hover:bg-[#9C6647] hover:text-white hover:border-[#9C6647] transition-all"
                             title="Upvote story"
                           >
-                            <Flame size={14} className="text-[#9C6647]" />
+                            <Flame size={14} className="text-[#9C6647] dark:text-bronze-light" />
                             <span>{heroArticle.upvotes}</span>
                           </button>
 
                           <button
                             onClick={() => handleCopyLink(heroArticle)}
                             aria-label="Share story"
-                            className="p-2.5 rounded-full border border-[#E8E2D9] bg-[#FAF8F5] text-[#666666] hover:text-[#1F1F1F] transition-all"
+                            className="p-2.5 rounded-full border border-[#E8E2D9] dark:border-white/10 bg-[#FAF8F5] dark:bg-white/5 text-[#666666] dark:text-gray-300 hover:text-[#1F1F1F] dark:hover:text-white transition-all"
                             title="Share story"
                           >
-                            {copiedId === heroArticle.id ? <Check size={15} className="text-green-600" /> : <Share2 size={15} />}
+                            {copiedId === heroArticle.id ? <Check size={15} className="text-green-600 dark:text-green-400" /> : <Share2 size={15} />}
                           </button>
                         </div>
                       </div>
@@ -458,7 +458,7 @@ export default function TrendingPage() {
             <div className="mb-14">
               <div className="flex items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-2">
-                  <h2 className="font-serif text-2xl text-[#1F1F1F] font-normal">
+                  <h2 className="font-serif text-2xl text-[#1F1F1F] dark:text-white font-normal">
                     {activeFormat === 'articles'
                       ? 'Trending Stories Leaderboard'
                       : activeFormat === 'debates'
@@ -467,15 +467,15 @@ export default function TrendingPage() {
                       ? 'Curated Product Spotlight'
                       : 'All Trending Topics'}
                   </h2>
-                  <span className="text-xs text-[#888888]">({listItems.length})</span>
+                  <span className="text-xs text-[#888888] dark:text-gray-400">({listItems.length})</span>
                 </div>
               </div>
 
               {listItems.length === 0 ? (
-                <div className="text-center py-20 bg-white border border-[#E8E2D9] rounded-sm p-8">
-                  <Sparkles size={32} className="mx-auto text-[#9C6647] mb-3" />
-                  <h3 className="font-serif text-xl text-[#1F1F1F] mb-2">No trending stories found</h3>
-                  <p className="text-xs text-[#666666] max-w-md mx-auto">
+                <div className="text-center py-20 bg-white dark:bg-[#161616] border border-[#E8E2D9] dark:border-white/10 rounded-sm p-8">
+                  <Sparkles size={32} className="mx-auto text-[#9C6647] dark:text-bronze-light mb-3" />
+                  <h3 className="font-serif text-xl text-[#1F1F1F] dark:text-white mb-2">No trending stories found</h3>
+                  <p className="text-xs text-[#666666] dark:text-gray-400 max-w-md mx-auto">
                     Try clearing your search query or selecting "All Categories".
                   </p>
                 </div>
@@ -504,19 +504,19 @@ export default function TrendingPage() {
 
             {/* CURATED CULTURAL HIGHLIGHTS & DEBATES (if on articles view) */}
             {activeFormat === 'articles' && spotlights.length > 0 && !searchQuery.trim() && (
-              <div className="pt-10 border-t border-[#E8E2D9] mb-12">
+              <div className="pt-10 border-t border-[#E8E2D9] dark:border-white/10 mb-12">
                 <div className="flex items-center justify-between mb-8">
                   <div>
-                    <span className="text-[10px] tracking-ultra-wide uppercase font-semibold text-[#9C6647]">
+                    <span className="text-[10px] tracking-ultra-wide uppercase font-semibold text-[#9C6647] dark:text-bronze-light">
                       Cultural Curation
                     </span>
-                    <h3 className="font-serif text-2xl text-[#1F1F1F] mt-1">
-                      Debates, Science Consensus & Product Radar
+                    <h3 className="font-serif text-2xl text-[#1F1F1F] dark:text-white mt-1">
+                      Debates, Science Consensus &amp; Product Radar
                     </h3>
                   </div>
                   <button
                     onClick={() => setActiveFormat('debates')}
-                    className="text-xs tracking-editorial uppercase font-medium text-[#9C6647] hover:text-[#1F1F1F] flex items-center gap-1 transition-colors"
+                    className="text-xs tracking-editorial uppercase font-medium text-[#9C6647] dark:text-bronze-light hover:text-[#1F1F1F] dark:hover:text-white flex items-center gap-1 transition-colors"
                   >
                     <span>View all curations</span>
                     <ChevronRight size={14} />
@@ -570,13 +570,13 @@ function TrendingStoryCard({
     <article
       id={item.slug}
       onMouseEnter={onVisible}
-      className="bg-white border border-[#E8E2D9] rounded-sm flex flex-col justify-between hover:border-[#9C6647]/50 luxury-shadow hover:luxury-shadow-lg transition-all duration-300 group overflow-hidden"
+      className="bg-white dark:bg-[#161616] border border-[#E8E2D9] dark:border-white/10 rounded-sm flex flex-col justify-between hover:border-[#9C6647]/50 dark:hover:border-bronze/50 luxury-shadow hover:luxury-shadow-lg transition-all duration-300 group overflow-hidden"
     >
       <div>
         {/* Cover Image & Rank Badge */}
         <div
           onClick={onClick}
-          className="aspect-[16/10] overflow-hidden relative cursor-pointer bg-[#EFEAE2]"
+          className="aspect-[16/10] overflow-hidden relative cursor-pointer bg-[#EFEAE2] dark:bg-white/5"
         >
           {item.cover_image && (
             <SmartImage
@@ -587,7 +587,7 @@ function TrendingStoryCard({
             />
           )}
           {/* Rank Badge */}
-          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-sm bg-[#1F1F1F]/80 backdrop-blur-md text-white font-serif text-xs font-light tracking-widest shadow-md">
+          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-sm bg-[#1F1F1F]/80 dark:bg-black/80 backdrop-blur-md text-white font-serif text-xs font-light tracking-widest shadow-md">
             {rank}
           </div>
           {item.metadata?.trending_badge && (
@@ -600,49 +600,49 @@ function TrendingStoryCard({
         {/* Content Body */}
         <div className="p-5">
           <div className="flex items-center justify-between text-xs mb-2">
-            <span className="text-[10px] tracking-editorial uppercase font-semibold text-[#9C6647]">
+            <span className="text-[10px] tracking-editorial uppercase font-semibold text-[#9C6647] dark:text-bronze-light">
               {item.category}
             </span>
-            <span className="text-[#888888] flex items-center gap-1 text-[11px]">
+            <span className="text-[#888888] dark:text-gray-400 flex items-center gap-1 text-[11px]">
               <Clock size={11} /> {item.read_time_minutes}m read
             </span>
           </div>
 
           <h3
             onClick={onClick}
-            className="font-serif text-lg text-[#1F1F1F] leading-snug font-normal group-hover:text-[#9C6647] transition-colors cursor-pointer line-clamp-2 mb-2"
+            className="font-serif text-lg text-[#1F1F1F] dark:text-white leading-snug font-normal group-hover:text-[#9C6647] dark:group-hover:text-bronze-light transition-colors cursor-pointer line-clamp-2 mb-2"
           >
             {item.title}
           </h3>
 
-          <p className="text-xs text-[#666666] leading-relaxed line-clamp-2 mb-4">
+          <p className="text-xs text-[#666666] dark:text-gray-300 leading-relaxed line-clamp-2 mb-4">
             {item.excerpt}
           </p>
 
           {item.metadata?.why_trending && (
-            <div className="p-2.5 bg-[#FAF8F5] border border-[#EFEAE2] rounded-sm text-[11px] text-[#555555] mb-2 flex items-center gap-1.5">
-              <Flame size={12} className="text-[#9C6647] flex-shrink-0" />
+            <div className="p-2.5 bg-[#FAF8F5] dark:bg-white/5 border border-[#EFEAE2] dark:border-white/10 rounded-sm text-[11px] text-[#555555] dark:text-gray-300 mb-2 flex items-center gap-1.5">
+              <Flame size={12} className="text-[#9C6647] dark:text-bronze-light flex-shrink-0" />
               <span className="line-clamp-1 italic">{item.metadata.why_trending}</span>
             </div>
           )}
 
           {item.metadata?.author_name && (
-            <p className="text-[11px] text-[#888888] mt-2">
-              By <span className="font-medium text-[#444444]">{item.metadata.author_name}</span>
+            <p className="text-[11px] text-[#888888] dark:text-gray-400 mt-2">
+              By <span className="font-medium text-[#444444] dark:text-gray-200">{item.metadata.author_name}</span>
             </p>
           )}
         </div>
       </div>
 
       {/* Footer Controls */}
-      <div className="px-5 py-3 border-t border-[#E8E2D9] bg-[#FAF8F5]/50 flex items-center justify-between gap-2">
+      <div className="px-5 py-3 border-t border-[#E8E2D9] dark:border-white/10 bg-[#FAF8F5]/50 dark:bg-white/[0.03] flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <button
             onClick={onUpvote}
             aria-label={`Upvote ${item.title}`}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white border border-[#E8E2D9] text-[#1F1F1F] hover:bg-[#9C6647] hover:text-white hover:border-[#9C6647] transition-all"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white dark:bg-white/10 border border-[#E8E2D9] dark:border-white/15 text-[#1F1F1F] dark:text-white hover:bg-[#9C6647] hover:text-white hover:border-[#9C6647] transition-all"
           >
-            <Flame size={13} className="text-[#9C6647]" />
+            <Flame size={13} className="text-[#9C6647] dark:text-bronze-light" />
             <span>{item.upvotes}</span>
           </button>
 
@@ -652,7 +652,7 @@ function TrendingStoryCard({
             className={`p-1.5 rounded-full border transition-all ${
               isBookmarked
                 ? 'bg-[#9C6647] text-white border-[#9C6647]'
-                : 'bg-white text-[#888888] border-[#E8E2D9] hover:text-[#1F1F1F]'
+                : 'bg-white dark:bg-white/10 text-[#888888] dark:text-gray-300 border-[#E8E2D9] dark:border-white/15 hover:text-[#1F1F1F] dark:hover:text-white'
             }`}
             title="Bookmark"
           >
@@ -662,16 +662,16 @@ function TrendingStoryCard({
           <button
             onClick={onShare}
             aria-label="Share story"
-            className="p-1.5 bg-white text-[#888888] hover:text-[#1F1F1F] rounded-full border border-[#E8E2D9] transition-all"
+            className="p-1.5 bg-white dark:bg-white/10 text-[#888888] dark:text-gray-300 hover:text-[#1F1F1F] dark:hover:text-white rounded-full border border-[#E8E2D9] dark:border-white/15 transition-all"
             title="Share"
           >
-            {isCopied ? <Check size={13} className="text-green-600" /> : <Share2 size={13} />}
+            {isCopied ? <Check size={13} className="text-green-600 dark:text-green-400" /> : <Share2 size={13} />}
           </button>
         </div>
 
         <button
           onClick={onClick}
-          className="inline-flex items-center gap-1 text-[11px] tracking-editorial uppercase font-medium text-[#9C6647] hover:text-[#1F1F1F] transition-colors"
+          className="inline-flex items-center gap-1 text-[11px] tracking-editorial uppercase font-medium text-[#9C6647] dark:text-bronze-light hover:text-[#1F1F1F] dark:hover:text-white transition-colors"
         >
           <span>Read Story</span>
           <ArrowRight size={12} />
@@ -696,18 +696,18 @@ function SpotlightMiniCard({
     TrendingItemType,
     { label: string; icon: typeof Flame; color: string; bg: string }
   > = {
-    article: { label: 'Article', icon: BookOpen, color: 'text-[#9C6647]', bg: 'bg-[#9C6647]/10' },
-    product: { label: 'Product Spotlight', icon: Sparkles, color: 'text-[#9C6647]', bg: 'bg-[#9C6647]/10' },
-    debate: { label: 'Community Debate', icon: MessageCircle, color: 'text-[#3E5C76]', bg: 'bg-[#3E5C76]/10' },
-    ingredient: { label: 'Clinical Argument', icon: BookOpen, color: 'text-[#47624B]', bg: 'bg-[#47624B]/10' },
-    update: { label: 'Editorial Flash', icon: Flame, color: 'text-[#8C4A32]', bg: 'bg-[#8C4A32]/10' },
+    article: { label: 'Article', icon: BookOpen, color: 'text-[#9C6647] dark:text-bronze-light', bg: 'bg-[#9C6647]/10 dark:bg-bronze/20' },
+    product: { label: 'Product Spotlight', icon: Sparkles, color: 'text-[#9C6647] dark:text-amber-300', bg: 'bg-[#9C6647]/10 dark:bg-amber-950/40' },
+    debate: { label: 'Community Debate', icon: MessageCircle, color: 'text-[#3E5C76] dark:text-blue-300', bg: 'bg-[#3E5C76]/10 dark:bg-blue-950/40' },
+    ingredient: { label: 'Clinical Argument', icon: BookOpen, color: 'text-[#47624B] dark:text-emerald-300', bg: 'bg-[#47624B]/10 dark:bg-emerald-950/40' },
+    update: { label: 'Editorial Flash', icon: Flame, color: 'text-[#8C4A32] dark:text-red-300', bg: 'bg-[#8C4A32]/10 dark:bg-red-950/40' },
   };
 
   const currentType = typeConfig[item.item_type] || typeConfig.article;
   const TypeIcon = currentType.icon;
 
   return (
-    <div className="bg-white border border-[#E8E2D9] rounded-sm p-5 flex flex-col justify-between hover:border-[#9C6647]/40 transition-all">
+    <div className="bg-white dark:bg-[#161616] border border-[#E8E2D9] dark:border-white/10 rounded-sm p-5 flex flex-col justify-between hover:border-[#9C6647]/40 dark:hover:border-bronze/40 transition-all">
       <div>
         <div className="flex items-center justify-between gap-2 mb-2">
           <span
@@ -716,46 +716,46 @@ function SpotlightMiniCard({
             <TypeIcon size={11} />
             {currentType.label}
           </span>
-          <span className="text-[10px] uppercase text-[#888888] tracking-editorial">
+          <span className="text-[10px] uppercase text-[#888888] dark:text-gray-400 tracking-editorial">
             {item.category}
           </span>
         </div>
 
         <h4
           onClick={onClick}
-          className="font-serif text-base text-[#1F1F1F] hover:text-[#9C6647] cursor-pointer transition-colors leading-snug mb-2 font-normal"
+          className="font-serif text-base text-[#1F1F1F] dark:text-white hover:text-[#9C6647] dark:hover:text-bronze-light cursor-pointer transition-colors leading-snug mb-2 font-normal"
         >
           {item.title}
         </h4>
 
-        <p className="text-xs text-[#666666] leading-relaxed mb-4 line-clamp-2">
+        <p className="text-xs text-[#666666] dark:text-gray-300 leading-relaxed mb-4 line-clamp-2">
           {item.excerpt}
         </p>
 
         {item.item_type === 'product' && item.metadata?.brand && (
-          <p className="text-xs text-[#9C6647] font-medium mb-3">
+          <p className="text-xs text-[#9C6647] dark:text-bronze-light font-medium mb-3">
             Brand: {item.metadata.brand} {item.metadata.rating_score && `(Score: ${item.metadata.rating_score}/100)`}
           </p>
         )}
         {item.item_type === 'debate' && item.metadata?.community_takeaway && (
-          <p className="text-xs text-[#3E5C76] italic mb-3">
+          <p className="text-xs text-[#3E5C76] dark:text-blue-300 italic mb-3">
             Takeaway: {item.metadata.community_takeaway}
           </p>
         )}
       </div>
 
-      <div className="pt-3 border-t border-[#EFEAE2] flex items-center justify-between">
+      <div className="pt-3 border-t border-[#EFEAE2] dark:border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={onUpvote}
-            className="inline-flex items-center gap-1 text-xs text-[#666666] hover:text-[#9C6647]"
+            className="inline-flex items-center gap-1 text-xs text-[#666666] dark:text-gray-400 hover:text-[#9C6647] dark:hover:text-bronze-light"
           >
-            <Flame size={13} className="text-[#9C6647]" />
+            <Flame size={13} className="text-[#9C6647] dark:text-bronze-light" />
             <span>{item.upvotes}</span>
           </button>
           <button
             onClick={onCopy}
-            className="text-xs text-[#888888] hover:text-[#1F1F1F] p-1"
+            className="text-xs text-[#888888] dark:text-gray-400 hover:text-[#1F1F1F] dark:hover:text-white p-1"
             title="Share"
           >
             <Share2 size={12} />
@@ -764,7 +764,7 @@ function SpotlightMiniCard({
 
         <button
           onClick={onClick}
-          className="text-xs uppercase tracking-editorial font-medium text-[#9C6647] hover:text-[#1F1F1F] inline-flex items-center gap-1"
+          className="text-xs uppercase tracking-editorial font-medium text-[#9C6647] dark:text-bronze-light hover:text-[#1F1F1F] dark:hover:text-white inline-flex items-center gap-1"
         >
           <span>Explore</span>
           <ArrowRight size={12} />

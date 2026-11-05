@@ -68,6 +68,11 @@ export interface ArticleSeries {
 }
 
 export interface GlossaryTerm {
+  pronunciation?: string | null;
+  skin_suitability?: string | null;
+  synergies?: string | null;
+  concern_tags?: string[] | null;
+  related_article_slug?: string | null;
   id: string;
   term: string;
   slug: string;
