@@ -528,7 +528,7 @@ export function QualityPanel({ report, loading, onFix, onRefresh }: {
         <div className="text-xs text-gray-500 space-y-0.5">
           <p><strong className="text-gray-700">{m.words ?? 0}</strong> words · {fmt(m.reading_time_minutes)} min read</p>
           <p>{fmt(m.h2)} sections · {fmt(m.internal_links)} internal links · {fmt(m.images)} images</p>
-          <p>Flesch {fmt(m.flesch_reading_ease)} · avg sentence {fmt(m.avg_sentence_words)} words</p>
+          <p>{(m.flesch_reading_ease as number) >= 60 ? '✓ Easy to read' : (m.flesch_reading_ease as number) >= 40 ? 'Could be simpler' : '⚠ Hard to read — try shorter sentences'}</p>
           {Boolean(m.keyword) && <p>“{String(m.keyword)}” × {fmt(m.keyword_count)} ({fmt(m.keyword_density)}%)</p>}
         </div>
         {onRefresh && (

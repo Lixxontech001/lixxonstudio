@@ -7,6 +7,8 @@ import type {
   InciReport,
   InciIngredientDetail,
   VanityItem,
+  ExtendedSkinProfile,
+  FormulationDiagnosis,
 } from '../types/salon';
 import { supabase } from './supabaseClient';
 import { getFingerprint } from '../hooks/useFeatures';
@@ -538,5 +540,153 @@ export function saveLocalVanity(items: VanityItem[]): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * Generates a detailed clinical formulation diagnosis based on an extended skin profile.
+ * Pure client-side — no network calls.
+ */
+export function generateFormulationDiagnosis(profile: ExtendedSkinProfile): FormulationDiagnosis {
+  const { barrierStatus, sensitivityLevel, activeTolerance, pollutionLevel, primaryGoal, concerns } = profile;
+
+  // Compatibility score: starts high and decrements based on risk factors
+  let score = 99;
+  if (barrierStatus === 'compromised' || barrierStatus === 'post_peel') score -= 6;
+  else if (barrierStatus === 'stressed') score -= 3;
+  if (sensitivityLevel === 'neuro_reactive') score -= 5;
+  else if (sensitivityLevel === 'rosacea') score -= 3;
+  if (activeTolerance === 'novice') score -= 4;
+  if (pollutionLevel === 'high_urban') score -= 2;
+  const compatibilityScore = Math.max(85, Math.min(99, score));
+
+  // Conflict warnings based on profile
+  const conflictWarnings: string[] = [];
+  if (barrierStatus === 'post_peel') {
+    conflictWarnings.push('Post-peel status: avoid all exfoliating acids (AHA/BHA) for minimum 7 days');
+    conflictWarnings.push('Retinoids contraindicated until barrier is fully re-epithelialized');
+  }
+  if (barrierStatus === 'compromised' || barrierStatus === 'stressed') {
+    conflictWarnings.push('Compromised barrier: separate vitamin C (pH 2.5–3.5) and niacinamide by AM/PM to prevent nicotinic acid flush');
+  }
+  if (sensitivityLevel === 'rosacea' || sensitivityLevel === 'neuro_reactive') {
+    conflictWarnings.push('Rosacea/reactive: glycolic acid may trigger erythema — substitute with lactic acid ≤5% or azelaic acid');
+    conflictWarnings.push('Avoid high-concentration alcohol denat in toners — opt for aqueous or hydrogel formulas');
+  }
+  if (activeTolerance === 'novice') {
+    conflictWarnings.push('Novice active tolerance: introduce one new active every 3 weeks; never layer retinoids with AHAs in the same application');
+  }
+  if (pollutionLevel === 'high_urban') {
+    conflictWarnings.push('High urban pollution: antioxidant layering (vitamin C + tocopherol + ferulic) is mandatory in AM to neutralise PM2.5 oxidative stress');
+  }
+  if (conflictWarnings.length === 0) {
+    conflictWarnings.push('No significant ingredient conflicts detected for this profile — proceed with the full protocol');
+  }
+
+  // pH Sequence
+  const pHSequence: FormulationDiagnosis['pHSequence'] = [
+    { step: 'Cleanse', ph: '5.0–5.5', waitMinutes: 0 },
+    { step: 'Exfoliating toner / acid (if used)', ph: '3.0–4.5', waitMinutes: barrierStatus === 'resilient' ? 5 : 10 },
+    { step: 'Vitamin C serum (AM only)', ph: '2.5–3.5', waitMinutes: 8 },
+    { step: 'Niacinamide / hydrating serum', ph: '5.5–7.0', waitMinutes: 2 },
+    { step: 'Moisturiser / barrier seal', ph: '5.5–6.5', waitMinutes: 1 },
+  ];
+
+  // AM Routine
+  const amRoutine: FormulationDiagnosis['amRoutine'] = [
+    {
+      step: 1,
+      product: sensitivityLevel !== 'none' ? 'Micellar cleansing water or milky cleanser (pH 5.0–5.5)' : 'Amino acid gel cleanser (pH 5.0–5.5)',
+      note: 'Preserves overnight microbiome; avoid hot water (>38 °C) which degrades ceramide matrix',
+    },
+    {
+      step: 2,
+      product: pollutionLevel === 'high_urban'
+        ? 'L-Ascorbic Acid 15% + Ferulic Acid 0.5% (pH 3.0)'
+        : 'Niacinamide 5% + Zinc PCA serum (pH 5.5–6.0)',
+      note: pollutionLevel === 'high_urban'
+        ? 'Apply to damp skin; antioxidant shield against urban particulates and UV synergy'
+        : 'Regulates sebum, fades post-inflammatory marks, and reinforces ceramide synthesis',
+    },
+    {
+      step: 3,
+      product: 'Hyaluronic acid + polyglutamic acid hydrating serum (pH 5.5)',
+      note: 'Apply to slightly damp skin for maximum trans-epidermal water binding',
+    },
+    {
+      step: 4,
+      product: barrierStatus === 'compromised' || barrierStatus === 'post_peel'
+        ? 'Multi-ceramide (NP/AP/EOP) + cholesterol + squalane barrier cream'
+        : 'Lightweight gel-cream moisturiser with panthenol and ectoin',
+      note: 'Locks in all previous layers; never skip — moisturiser is the barrier seal',
+    },
+    {
+      step: 5,
+      product: sensitivityLevel === 'none' || sensitivityLevel === 'flushing'
+        ? 'Broad-spectrum SPF 50+ PA++++ fluid (chemical/mineral hybrid)'
+        : 'Pure mineral zinc oxide SPF 50+ (non-nano, fragrance-free)',
+      note: 'Two finger-lengths per application; reapply every 90 min under UV index ≥3',
+    },
+  ];
+
+  // PM Routine
+  const usesRetinoid = activeTolerance !== 'novice' && barrierStatus !== 'post_peel' && barrierStatus !== 'compromised';
+  const pmRoutine: FormulationDiagnosis['pmRoutine'] = [
+    {
+      step: 1,
+      product: 'Oil-based cleansing balm or micellar oil (emulsifying)',
+      note: 'First cleanse: dissolves SPF, silicone pigments, and PM2.5 particulates without mechanical friction',
+    },
+    {
+      step: 2,
+      product: 'pH-balanced gentle surfactant cleanser (pH 5.0–5.5)',
+      note: 'Second cleanse: lifts remaining residue cleanly; ensures skin pH is optimal for actives',
+    },
+    {
+      step: 3,
+      product: primaryGoal === 'hyperpigmentation' || concerns.includes('hyperpigmentation')
+        ? 'Tranexamic acid 5% + kojic acid 1% + niacinamide 4% evening serum'
+        : primaryGoal === 'acne' || concerns.includes('acne_blemishes')
+        ? 'Salicylic acid 2% + azelaic acid 10% blemish serum (pH 3.8)'
+        : 'Peptide remodeling serum: Argireline 5% + Leuphasyl 4% + GHK-Cu 1%',
+      note: 'Primary active layer — apply to dry skin for maximum potency',
+    },
+    {
+      step: 4,
+      product: usesRetinoid
+        ? activeTolerance === 'advanced'
+          ? 'Microencapsulated retinaldehyde 0.1% (applied every 2nd night, skin cycling)'
+          : 'Encapsulated retinol 0.3% in ceramide base (applied every 3rd night)'
+        : 'Copper tripeptide-1 (GHK-Cu) 1% + centella asiatica recovery serum',
+      note: usesRetinoid
+        ? 'Apply to fully dry skin; wait 10 min after previous step; use sandwich method on first weeks'
+        : 'Non-retinoid remodeling path; activates wound-healing cascade and extracellular matrix synthesis',
+    },
+    {
+      step: 5,
+      product: 'Bio-identical lipid barrier balm: ceramide NP/AP/EOP + cholesterol + fatty acids (3:1:1 ratio)',
+      note: 'Final occlusive seal; supports circadian skin repair cycle (11 PM–3 AM peak collagen synthesis window)',
+    },
+  ];
+
+  // Milestone timeline
+  const milestones: FormulationDiagnosis['milestones'] = [
+    { week: 1, expectation: 'Skin feels calmer and more comfortable; initial purging possible if exfoliants or retinoids introduced — expected and transient' },
+    { week: 3, expectation: 'Surface texture smooths noticeably; hydration levels improve; any retinoid-related flaking peaks then subsides' },
+    { week: 6, expectation: 'Hyperpigmentation begins to fade; pores appear visibly refined; barrier integrity measurably strengthened (TEWL reduction)' },
+    { week: 12, expectation: 'Full collagen remodeling cycle completes; lines soften; skin tone is significantly more even — photograph results for before/after comparison' },
+  ];
+
+  const contingencyProtocol =
+    'If irritation occurs: apply moisturiser first, then active (sandwich method). Reduce frequency to every 3rd night. If redness persists beyond 48 h, discontinue that active and restore with ceramide-only routine for 5 days before re-introducing at a lower concentration.';
+
+  return {
+    compatibilityScore,
+    conflictWarnings,
+    pHSequence,
+    amRoutine,
+    pmRoutine,
+    milestones,
+    contingencyProtocol,
+  };
 }
 

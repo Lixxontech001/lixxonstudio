@@ -10,6 +10,40 @@ export type SkinConcern =
   | 'dullness'
   | 'deep_hydration';
 
+export type BarrierStatus = 'resilient' | 'stressed' | 'compromised' | 'post_peel';
+export type SensitivityLevel = 'none' | 'flushing' | 'rosacea' | 'neuro_reactive';
+export type ActiveTolerance = 'novice' | 'intermediate' | 'advanced';
+export type PollutionLevel = 'low' | 'moderate' | 'high_urban';
+
+export interface ExtendedSkinProfile {
+  skinType: string;
+  barrierStatus: BarrierStatus;
+  sensitivityLevel: SensitivityLevel;
+  activeTolerance: ActiveTolerance;
+  climate: string;
+  pollutionLevel: PollutionLevel;
+  primaryGoal: string;
+  secondaryGoal: string;
+  concerns: string[];
+}
+
+export interface ReasoningStep {
+  phase: string;
+  title: string;
+  detail: string;
+  status: 'pending' | 'running' | 'done';
+}
+
+export interface FormulationDiagnosis {
+  compatibilityScore: number;
+  conflictWarnings: string[];
+  pHSequence: { step: string; ph: string; waitMinutes: number }[];
+  amRoutine: { step: number; product: string; note: string }[];
+  pmRoutine: { step: number; product: string; note: string }[];
+  milestones: { week: number; expectation: string }[];
+  contingencyProtocol: string;
+}
+
 export interface RegimenStep {
   step: number;
   phase: 'AM' | 'PM';

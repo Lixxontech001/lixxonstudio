@@ -6,7 +6,7 @@ import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
 import {
   Save, Eye, EyeOff, Tag, Star, Sparkles, ArrowLeft, Check, Send, ShieldCheck, FolderTree as Archive,
-  Lightbulb, FileCode, Clock, Grid3x3 as Columns2, CheckCircle2 as Target, Search,
+  Lightbulb, FileCode, Clock, CheckCircle2 as Target, Search,
   Image as ImageIcon, History, Info, Send as Rocket, Gauge as Calculator, Bookmark as Pin,
 } from 'lucide-react';
 import type { PostStatus } from '../../lib/types';
@@ -125,8 +125,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mediaPickerMode, setMediaPickerMode] = useState<'cover' | 'inline' | 'og' | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
-  const [splitView, setSplitView] = useState(false);
+  const [editorTab, setEditorTab] = useState<'write' | 'preview' | 'split'>('write');
   const [focusMode, setFocusMode] = useState(false);
   const [currentPostId, setCurrentPostId] = useState<string | null>(postId || null);
   const [relatedIds, setRelatedIds] = useState<string[]>([]);
@@ -402,8 +401,8 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
       workflow_status: s.workflow_status,
       published_at: status === 'scheduled' && s.scheduled_at ? new Date(s.scheduled_at).toISOString() : new Date(s.published_at).toISOString(),
       scheduled_at: status === 'scheduled' && s.scheduled_at ? new Date(s.scheduled_at).toISOString() : null,
-      seo_title: s.seo_title || null,
-      seo_description: s.seo_description || null,
+      seo_title: s.seo_title || s.title || null,
+      seo_description: s.seo_description || s.excerpt || null,
       canonical_url: s.canonical_url || null,
       focus_keyword: s.focus_keyword ? s.focus_keyword.toLowerCase().trim() : null,
       og_title: s.og_title || null,
@@ -563,7 +562,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
 
   if (loading && !isNew) return <div className="text-gray-400 text-sm">Loading article…</div>;
 
-  const workflowIndex = WORKFLOW.findIndex(w => w.id === state.workflow_status);
+  void WORKFLOW;
   const canPublish = can('content.publish');
   const canWrite = can('content.write');
 
@@ -600,17 +599,17 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
           <button onClick={() => setFocusMode(f => !f)} title="Focus mode" aria-label="Focus mode" className="p-2 border border-gray-200 rounded hover:bg-gray-50">
             {focusMode ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
-          <button onClick={() => setSplitView(s => !s)} title="Split view" aria-label="Split view" className={`p-2 border rounded ${splitView ? 'border-bronze text-bronze' : 'border-gray-200 hover:bg-gray-50'}`}>
-            <Columns2 size={15} />
-          </button>
-          <button onClick={() => setShowPreview(p => !p)} className="inline-flex items-center gap-2 border border-gray-200 px-3 py-2 rounded text-sm hover:bg-gray-50">
-            <Eye size={15} /> {showPreview ? 'Write' : 'Preview'}
-          </button>
+          <div className="inline-flex border border-gray-200 rounded overflow-hidden text-sm">
+            <button onClick={() => setEditorTab('write')} className={`px-3 py-2 ${editorTab === 'write' ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}>✍️ Write</button>
+            <button onClick={() => setEditorTab('preview')} className={`px-3 py-2 border-l border-gray-200 ${editorTab === 'preview' ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}>👁️ Preview</button>
+            <button onClick={() => setEditorTab('split')} className={`px-3 py-2 border-l border-gray-200 ${editorTab === 'split' ? 'bg-gray-100 font-medium' : 'hover:bg-gray-50'}`}>⬛ Split</button>
+          </div>
+          <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-bronze hover:underline">Open on site →</a>
           <button onClick={() => save('draft')} disabled={saving || !canWrite} className="inline-flex items-center gap-2 border border-gray-200 px-3 py-2 rounded text-sm hover:bg-gray-50 disabled:opacity-50">
             <Save size={15} /> Save draft
           </button>
           {canPublish ? (
-            <button onClick={() => runWorkflow('publish')} disabled={saving || workflowBusy} className="inline-flex items-center gap-2 bg-bronze text-white px-3 py-2 rounded text-sm hover:bg-bronze-dark disabled:opacity-50">
+            <button onClick={() => save('published', { workflow_status: 'published' })} disabled={saving || workflowBusy} className="inline-flex items-center gap-2 bg-bronze text-white px-3 py-2 rounded text-sm hover:bg-bronze-dark disabled:opacity-50">
               <Rocket size={15} /> Publish
             </button>
           ) : (
@@ -621,27 +620,19 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
         </div>
       </div>
 
-      {/* workflow trail */}
-      <div className="mb-5 bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap">
-        <ol className="flex items-center gap-1 flex-wrap text-xs">
-          {WORKFLOW.map((w, i) => (
-            <li key={w.id} className="flex items-center gap-1">
-              <span className={`px-2 py-1 rounded-full ${i <= workflowIndex || (workflowIndex === -1 && i === 0) ? 'bg-bronze/10 text-bronze font-medium' : 'text-gray-400'}`}>{w.label}</span>
-              {i < WORKFLOW.length - 1 && <span className="text-gray-300">›</span>}
-            </li>
-          ))}
-        </ol>
-        <div className="flex items-center gap-2 ml-auto flex-wrap">
-          <button onClick={() => runWorkflow('review')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Send for review</button>
-          {canPublish && <button onClick={() => runWorkflow('approve')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Approve</button>}
-          {canPublish && <button onClick={() => runWorkflow('reject')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Request changes</button>}
-          {canPublish && <button onClick={() => runWorkflow('unpublish')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Unpublish</button>}
-          {canPublish && <button onClick={() => runWorkflow('archive')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-1"><Archive size={12} /> Archive</button>}
-          <label className="text-[11px] text-gray-500 inline-flex items-center gap-1 cursor-pointer">
-            <input type="checkbox" checked={autosaveEnabled} onChange={e => setAutosaveEnabled(e.target.checked)} /> autosave
-          </label>
-          {autosavedAt && <span className="text-[11px] text-gray-400 inline-flex items-center gap-1"><Clock size={11} /> last DB autosave {new Date(autosavedAt).toLocaleTimeString()}</span>}
-        </div>
+      {/* status badge */}
+      <div className="mb-5 flex items-center gap-2 flex-wrap">
+        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${state.workflow_status === 'published' ? 'bg-green-100 text-green-800' : state.workflow_status === 'in_review' ? 'bg-amber-100 text-amber-800' : state.workflow_status === 'approved' ? 'bg-blue-100 text-blue-800' : state.workflow_status === 'archived' ? 'bg-gray-200 text-gray-600' : 'bg-gray-100 text-gray-700'}`}>
+          {WORKFLOW.find(w => w.id === state.workflow_status)?.label ?? state.workflow_status}
+        </span>
+        {canPublish && <button onClick={() => runWorkflow('approve')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Approve</button>}
+        {canPublish && <button onClick={() => runWorkflow('reject')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Request changes</button>}
+        {canPublish && <button onClick={() => runWorkflow('unpublish')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Unpublish</button>}
+        {canPublish && <button onClick={() => runWorkflow('archive')} disabled={workflowBusy} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-1"><Archive size={12} /> Archive</button>}
+        <label className="text-[11px] text-gray-500 inline-flex items-center gap-1 cursor-pointer ml-auto">
+          <input type="checkbox" checked={autosaveEnabled} onChange={e => setAutosaveEnabled(e.target.checked)} /> autosave
+        </label>
+        {autosavedAt && <span className="text-[11px] text-gray-400 inline-flex items-center gap-1"><Clock size={11} /> last saved {new Date(autosavedAt).toLocaleTimeString()}</span>}
       </div>
       {state.review_note && state.workflow_status === 'draft' && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-900 flex gap-2">
@@ -690,7 +681,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
           </div>
 
           {/* editor + preview */}
-          <div className={splitView ? 'grid md:grid-cols-2 gap-4 items-start' : ''}>
+          <div className={editorTab === 'split' ? 'grid md:grid-cols-2 gap-4 items-start' : ''}>
             <div className="relative">
               <EditorToolbar
                 editor={editor}
@@ -705,7 +696,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
                 ]}
               />
               <FindReplaceBar editor={editor} content={state.content} />
-              <div className="relative">
+              {editorTab !== 'preview' && <div className="relative">
                 <SlashMenu editor={editor} />
                 <textarea
                   id="content-editor"
@@ -722,7 +713,7 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
                   className="w-full bg-white border border-gray-200 border-t-0 px-4 py-3 rounded-b text-sm text-gray-700 font-mono leading-relaxed focus:outline-none focus:border-bronze focus:ring-1 focus:ring-bronze/30"
                   style={{ minHeight: '420px' }}
                 />
-              </div>
+              </div>}
               {showToc && headingStructure.length > 0 && (
                 <div className="mt-2 border border-gray-200 rounded bg-white p-3">
                   <p className="text-[11px] uppercase tracking-wider text-gray-400 mb-2">Outline</p>
@@ -753,14 +744,14 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
                 </div>
               )}
             </div>
-            {splitView && (
+            {editorTab === 'split' && (
               <div className="md:max-h-[720px] md:overflow-y-auto">
                 <LivePreview content={state.content} title={state.title} excerpt={state.excerpt} cover={state.cover_image} coverAlt={state.cover_image_alt} takeaways={state.takeaways} />
               </div>
             )}
           </div>
 
-          {showPreview && !splitView && (
+          {editorTab === 'preview' && (
             <LivePreview content={state.content} title={state.title} excerpt={state.excerpt} cover={state.cover_image} coverAlt={state.cover_image_alt} takeaways={state.takeaways} />
           )}
 
