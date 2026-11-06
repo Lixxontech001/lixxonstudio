@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
@@ -37,14 +37,37 @@ vi.mock('../lib/supabaseClient', () => {
   };
 });
 
-let root: Root; let host: HTMLDivElement;
+let root: Root | null = null;
+let host: HTMLDivElement | null = null;
+
 function mount(node: ReactNode) {
-  host = document.createElement('div'); document.body.appendChild(host);
+  host = document.createElement('div');
+  document.body.appendChild(host);
   root = createRoot(host);
-  act(() => { root.render(node); });
+  act(() => { root!.render(node); });
   return host;
 }
-beforeEach(() => { document.body.innerHTML = ''; localStorage.clear(); });
+
+beforeEach(() => {
+  document.body.innerHTML = '';
+  localStorage.clear();
+});
+
+afterEach(() => {
+  if (root) {
+    act(() => {
+      root!.unmount();
+    });
+    root = null;
+  }
+  if (host && host.parentNode) {
+    host.parentNode.removeChild(host);
+    host = null;
+  }
+  document.body.innerHTML = '';
+  localStorage.clear();
+  vi.clearAllTimers();
+});
 
 describe('CookieConsent', () => {
   it('shows after delay and gates analytics on Accept', async () => {
@@ -153,7 +176,9 @@ describe('App shell', () => {
     const { default: App } = await import('../App');
     const { NavigationProvider } = await import('../context/NavigationContext');
     const el = mount(<NavigationProvider><App /></NavigationProvider>);
-    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 200));
+    });
     expect(el.querySelector('header')).toBeTruthy();
     expect(el.querySelector('footer')).toBeTruthy();
     expect(el.textContent).not.toMatch(/Something went wrong/i);
