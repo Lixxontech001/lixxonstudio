@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Megaphone, Wrench, ToggleLeft, Loader2, Check, Share2,
-  Palette, ShoppingBag, Cookie, Trophy
+  Palette, ShoppingBag, Cookie, Trophy, FileText
 } from 'lucide-react';
 import { supabase, rows } from '../../lib/supabaseClient';
 import type { SiteSetting } from '../../lib/types';
@@ -48,6 +48,13 @@ type PrivacyConfig = {
   cookie_banner_enabled: boolean;
   cookie_banner_text: string;
 };
+type PublishingConfig = {
+  daily_article_limit: number;
+  min_word_count: number;
+  allow_same_day_publishing: boolean;
+  auto_unpin_expired: boolean;
+  default_status: string;
+};
 
 export default function SiteSettingsPanel() {
   const [ann, setAnn] = useState<Ann>({ enabled: false, text: '', link: '', link_label: '', style: 'bronze' });
@@ -92,6 +99,13 @@ export default function SiteSettingsPanel() {
     cookie_banner_enabled: true,
     cookie_banner_text: 'We use cookies to remember your reading progress and preferences.',
   });
+  const [publishing, setPublishing] = useState<PublishingConfig>({
+    daily_article_limit: 20,
+    min_word_count: 800,
+    allow_same_day_publishing: true,
+    auto_unpin_expired: true,
+    default_status: 'draft',
+  });
 
   const [saving, setSaving] = useState('');
   const [saved, setSaved] = useState('');
@@ -108,6 +122,7 @@ export default function SiteSettingsPanel() {
         if (s.key === 'privilege') setPrivilege(p => ({ ...p, ...(s.value as Partial<PrivilegeConfig>) }));
         if (s.key === 'commerce') setCommerce(c => ({ ...c, ...(s.value as Partial<CommerceConfig>) }));
         if (s.key === 'privacy') setPrivacy(p => ({ ...p, ...(s.value as Partial<PrivacyConfig>) }));
+        if (s.key === 'publishing') setPublishing(p => ({ ...p, ...(s.value as Partial<PublishingConfig>) }));
       });
     });
   }, []);
@@ -407,7 +422,73 @@ export default function SiteSettingsPanel() {
         <Btn k="privacy" v={privacy} />
       </div>
 
-      {/* 8. Maintenance Mode */}
+      {/* 8. Publishing & Editorial Capacity */}
+      <div className="bg-white dark:bg-[#161616] border border-taupe/30 dark:border-white/10 rounded-sm p-6 shadow-xs">
+        <h3 className="text-sm font-medium text-charcoal dark:text-white mb-1 flex items-center gap-2">
+          <FileText size={16} className="text-bronze" /> Publishing &amp; Editorial Capacity
+        </h3>
+        <p className="text-xs text-charcoal-muted dark:text-gray-400 mb-4">
+          Configure daily publication throughput, authoring limits, and schedule cadence across the studio.
+        </p>
+        <div className="grid gap-4 mb-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-charcoal dark:text-white mb-1">
+              Daily Article Publication Limit
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={publishing.daily_article_limit}
+              onChange={e => setPublishing({ ...publishing, daily_article_limit: Math.max(1, parseInt(e.target.value) || 1) })}
+              className={input}
+            />
+            <p className="text-[11px] text-charcoal-muted dark:text-gray-400 mt-1">
+              Maximum published or scheduled articles per studio day (default: 20).
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-charcoal dark:text-white mb-1">
+              Minimum Word Count Guide
+            </label>
+            <input
+              type="number"
+              min={100}
+              max={15000}
+              step={50}
+              value={publishing.min_word_count}
+              onChange={e => setPublishing({ ...publishing, min_word_count: Math.max(100, parseInt(e.target.value) || 100) })}
+              className={input}
+            />
+            <p className="text-[11px] text-charcoal-muted dark:text-gray-400 mt-1">
+              Standard target length for deep-dive articles (e.g. 800–3,500 words).
+            </p>
+          </div>
+          <div className="sm:col-span-2 space-y-2 pt-2 border-t border-taupe/20 dark:border-white/10">
+            <label className="flex items-center gap-2 text-sm text-charcoal dark:text-white cursor-pointer">
+              <input
+                type="checkbox"
+                checked={publishing.allow_same_day_publishing}
+                onChange={e => setPublishing({ ...publishing, allow_same_day_publishing: e.target.checked })}
+                className="accent-bronze"
+              />
+              <span>Allow Immediate Same-Day Publishing</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm text-charcoal dark:text-white cursor-pointer">
+              <input
+                type="checkbox"
+                checked={publishing.auto_unpin_expired}
+                onChange={e => setPublishing({ ...publishing, auto_unpin_expired: e.target.checked })}
+                className="accent-bronze"
+              />
+              <span>Auto-Unpin Expired Featured Articles</span>
+            </label>
+          </div>
+        </div>
+        <Btn k="publishing" v={publishing} />
+      </div>
+
+      {/* 9. Maintenance Mode */}
       <div className="bg-white dark:bg-[#161616] border border-taupe/30 dark:border-white/10 rounded-sm p-6 shadow-xs">
         <h3 className="text-sm font-medium text-charcoal dark:text-white mb-1 flex items-center gap-2">
           <Wrench size={16} className="text-bronze" /> Maintenance Mode

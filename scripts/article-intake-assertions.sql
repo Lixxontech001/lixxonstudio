@@ -119,6 +119,8 @@ BEGIN
   PERFORM set_config('request.jwt.claims', v_editor::text, true);
   PERFORM set_config('request.jwt.claim.sub', v_editor->>'sub', true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  INSERT INTO site_settings (key, value, is_public) VALUES ('publishing', '{"daily_article_limit": 2}'::jsonb, true)
+    ON CONFLICT (key) DO UPDATE SET value = jsonb_set(COALESCE(site_settings.value, '{}'::jsonb), '{daily_article_limit}', '2'::jsonb);
 
   SELECT article_intake_save('71000000-0000-0000-0000-000000000001', 'first.docx', v_source_sha, 3, v_when) INTO v_result;
   IF v_result->>'intake_status' <> 'queued' OR v_result->>'word_count' <> '3' THEN
@@ -189,6 +191,7 @@ BEGIN
   UPDATE posts SET status = 'draft', scheduled_at = NULL WHERE id IN (
     '71000000-0000-0000-0000-000000000004', '71000000-0000-0000-0000-000000000005'
   );
+  UPDATE site_settings SET value = jsonb_set(COALESCE(site_settings.value, '{}'::jsonb), '{daily_article_limit}', '20'::jsonb) WHERE key = 'publishing';
   IF (SELECT count(*) FROM admin_activity_log WHERE entity_type = 'article_intake_items'
         AND action IN ('insert', 'update')) = 0 THEN
     RAISE EXCEPTION 'Article intake metadata changes were not included in the admin audit trail';

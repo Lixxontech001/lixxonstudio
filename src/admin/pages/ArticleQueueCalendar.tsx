@@ -212,7 +212,7 @@ function MetadataDateEditor({ record, canWrite, onSaved }: { record: IntakeRecor
         p_proposed_publish_at: proposed,
       });
       if (saveError) {
-        setError('The proposed date was not saved. It may be in the past or the two-article day limit may be full.');
+        setError('The proposed date was not saved. It may be in the past or the daily publication limit may be full.');
         return;
       }
       setMessage(meta.intake_status === 'rejected' ? 'Date saved and item restored to the queue.' : 'Proposed publication time saved.');
@@ -522,7 +522,7 @@ export default function ArticleQueueCalendar() {
         p_post_id: row.savedPostId,
       });
       if (slotError || !slot?.allowed) {
-        updateDraft(row.id, { attempted: true, saving: false, saveError: 'That date is past, full, or could not be checked on your studio clock. Choose a future day with fewer than two articles.' });
+        updateDraft(row.id, { attempted: true, saving: false, saveError: 'That date is past, full, or could not be checked on your studio clock. Choose a future day with room within your daily publication limit.' });
         return;
       }
 
