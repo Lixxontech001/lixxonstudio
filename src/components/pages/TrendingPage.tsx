@@ -198,7 +198,7 @@ export default function TrendingPage() {
         </div>
 
         {/* Format Switcher Tabs */}
-        <div className="mt-8 flex items-center justify-center gap-1 sm:gap-2 border-b border-[#E8E2D9] dark:border-white/10 pb-4 overflow-x-auto no-scrollbar">
+        <div className="mt-8 flex items-center justify-start sm:justify-center gap-1 sm:gap-2 border-b border-[#E8E2D9] dark:border-white/10 pb-4 overflow-x-auto no-scrollbar px-1">
           <button
             onClick={() => setActiveFormat('articles')}
             className={`px-4 py-2 text-xs uppercase tracking-editorial font-medium rounded-full transition-all duration-300 flex items-center gap-1.5 ${
@@ -257,20 +257,22 @@ export default function TrendingPage() {
 
         {/* Category Pills & Quick Search */}
         <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.value}
-                onClick={() => handleCategoryChange(cat.value)}
-                className={`px-3.5 py-1.5 text-xs tracking-editorial uppercase font-medium rounded-full transition-all duration-300 ${
-                  activeCategory === cat.value
-                    ? 'bg-[#9C6647] text-white shadow-sm'
-                    : 'bg-white dark:bg-[#1A1A1A] text-[#666666] dark:text-gray-300 hover:bg-[#EFEAE2] dark:hover:bg-white/10 hover:text-[#1F1F1F] dark:hover:text-white border border-[#E8E2D9] dark:border-white/15'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
+          <div className="w-full md:w-auto overflow-x-auto no-scrollbar py-1">
+            <div className="flex items-center gap-2 min-w-max md:flex-wrap">
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat.value}
+                  onClick={() => handleCategoryChange(cat.value)}
+                  className={`px-3.5 py-1.5 text-xs tracking-editorial uppercase font-medium rounded-full transition-all duration-300 shrink-0 ${
+                    activeCategory === cat.value
+                      ? 'bg-[#9C6647] text-white shadow-sm'
+                      : 'bg-white dark:bg-[#1A1A1A] text-[#666666] dark:text-gray-300 hover:bg-[#EFEAE2] dark:hover:bg-white/10 hover:text-[#1F1F1F] dark:hover:text-white border border-[#E8E2D9] dark:border-white/15'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="relative w-full md:w-72">
@@ -351,7 +353,7 @@ export default function TrendingPage() {
                     </div>
 
                     {/* Editorial Content Column */}
-                    <div className="lg:col-span-5 p-7 sm:p-9 flex flex-col justify-between">
+                    <div className="lg:col-span-5 p-5 sm:p-9 flex flex-col justify-between">
                       <div>
                         <div className="flex items-center gap-3 mb-3 text-xs">
                           <span className="text-[10px] tracking-editorial uppercase font-bold text-[#9C6647] dark:text-bronze-light">

@@ -241,3 +241,4 @@ BEGIN
    WHERE post_id = p_post_id;
   RETURN true;
 END $$;
+

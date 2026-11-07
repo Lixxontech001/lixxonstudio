@@ -153,10 +153,10 @@ export default function Header() {
           </Link>
 
           {/* Actions right */}
-          <div className="flex items-center gap-3 sm:gap-4 flex-1 justify-end">
+          <div className="flex items-center gap-1 sm:gap-3 flex-1 justify-end">
             <button
               onClick={toggleTheme}
-              className="text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/80 dark:hover:text-bronze-light"
+              className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full text-charcoal hover:text-bronze hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-200 dark:text-white/80 dark:hover:text-bronze-light"
               aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
               aria-pressed={theme === 'dark'}
             >
@@ -164,16 +164,16 @@ export default function Header() {
             </button>
             <button
               onClick={() => setSearchOpen(true)}
-              className="text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/80 dark:hover:text-bronze-light"
+              className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full text-charcoal hover:text-bronze hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-200 dark:text-white/80 dark:hover:text-bronze-light"
               aria-label="Search"
             >
               <Search size={18} strokeWidth={1.5} />
-              <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono text-charcoal-muted bg-taupe-light/80 rounded border border-taupe/40 dark:bg-white/10 dark:text-white/40 dark:border-white/10">⌘K</kbd>
+              <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 ml-1 text-[9px] font-mono text-charcoal-muted bg-taupe-light/80 rounded border border-taupe/40 dark:bg-white/10 dark:text-white/40 dark:border-white/10">⌘K</kbd>
             </button>
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('lixxon:open_salon'))}
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs text-charcoal hover:text-bronze px-2 py-1 rounded-sm border border-taupe/30 hover:border-bronze transition-colors dark:text-white/80 dark:border-white/10"
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs text-charcoal hover:text-bronze px-2.5 py-1.5 rounded-sm border border-taupe/30 hover:border-bronze transition-colors dark:text-white/80 dark:border-white/10"
               title="The Lixxon Salon - Privileges & Formulations"
             >
               <Trophy size={14} className="text-bronze" />
@@ -182,41 +182,41 @@ export default function Header() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('lixxon:open_notifications'))}
-              className="relative text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/80 dark:hover:text-bronze-light"
+              className="relative p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full text-charcoal hover:text-bronze hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-200 dark:text-white/80 dark:hover:text-bronze-light"
               aria-label="Notifications"
             >
               <Bell size={18} strokeWidth={1.5} />
               {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[9px] font-semibold rounded-full w-4 h-4 flex items-center justify-center animate-pulse">
+                <span className="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-semibold rounded-full w-4 h-4 flex items-center justify-center animate-pulse">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
-            <Link to={{ name: 'bookmarks' }} className="relative text-charcoal hover:text-bronze transition-colors duration-300 hidden sm:block dark:text-white/80 dark:hover:text-bronze-light" ariaLabel="Bookmarks">
+            <Link to={{ name: 'bookmarks' }} className="relative p-2 min-w-[40px] min-h-[40px] items-center justify-center rounded-full text-charcoal hover:text-bronze hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-200 hidden sm:flex dark:text-white/80 dark:hover:text-bronze-light" ariaLabel="Bookmarks">
               <Bookmark size={18} strokeWidth={1.5} />
             </Link>
-            <Link to={{ name: 'wishlist' }} className="relative text-charcoal hover:text-bronze transition-colors duration-300 hidden sm:block dark:text-white/80 dark:hover:text-bronze-light" ariaLabel="Wishlist">
+            <Link to={{ name: 'wishlist' }} className="relative p-2 min-w-[40px] min-h-[40px] items-center justify-center rounded-full text-charcoal hover:text-bronze hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-200 hidden sm:flex dark:text-white/80 dark:hover:text-bronze-light" ariaLabel="Wishlist">
               <Heart size={18} strokeWidth={1.5} />
               {wishlistCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-bronze text-white text-[9px] font-medium rounded-full w-4 h-4 flex items-center justify-center">{wishlistCount}</span>
+                <span className="absolute top-1 right-1 bg-bronze text-white text-[9px] font-medium rounded-full w-4 h-4 flex items-center justify-center">{wishlistCount}</span>
               )}
             </Link>
             <button
               onClick={openCart}
-              className="relative text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/80 dark:hover:text-bronze-light"
+              className="relative p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full text-charcoal hover:text-bronze hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-200 dark:text-white/80 dark:hover:text-bronze-light"
               aria-label="Cart"
             >
               <ShoppingBag size={18} strokeWidth={1.5} />
               {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-bronze text-white text-[9px] font-medium rounded-full w-4 h-4 flex items-center justify-center">{cartCount}</span>
+                <span className="absolute top-1 right-1 bg-bronze text-white text-[9px] font-medium rounded-full w-4 h-4 flex items-center justify-center">{cartCount}</span>
               )}
             </button>
-            <Link to={{ name: 'account' }} className="text-charcoal hover:text-bronze transition-colors duration-300 hidden sm:block dark:text-white/80 dark:hover:text-bronze-light" ariaLabel="Account">
+            <Link to={{ name: 'account' }} className="p-2 min-w-[40px] min-h-[40px] items-center justify-center rounded-full text-charcoal hover:text-bronze hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-200 hidden sm:flex dark:text-white/80 dark:hover:text-bronze-light" ariaLabel="Account">
               <User size={18} strokeWidth={1.5} />
             </Link>
             <button
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden text-charcoal hover:text-bronze transition-colors duration-300 dark:text-white/80 dark:hover:text-bronze-light"
+              className="lg:hidden p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full text-charcoal hover:text-bronze hover:bg-black/5 dark:hover:bg-white/10 transition-colors duration-200 dark:text-white/80 dark:hover:text-bronze-light"
               aria-label="Menu"
             >
               <Menu size={20} strokeWidth={1.5} />
@@ -306,7 +306,7 @@ export default function Header() {
           aria-label="Menu"
           aria-hidden={!mobileOpen}
           tabIndex={-1}
-          className={`absolute top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white flex flex-col transition-transform duration-400 outline-none ${mobileOpen ? 'translate-x-0' : 'translate-x-full'} dark:bg-charcoal`}
+          className={`absolute top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white flex flex-col transition-transform duration-400 outline-none overscroll-contain ${mobileOpen ? 'translate-x-0' : 'translate-x-full'} dark:bg-charcoal`}
         >
           <div className="flex items-center justify-between p-6 border-b border-taupe/40 dark:border-white/10">
             <Logo showText={false} />

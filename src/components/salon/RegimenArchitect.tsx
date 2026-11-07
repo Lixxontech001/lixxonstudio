@@ -451,13 +451,13 @@ export default function RegimenArchitect() {
       {diagnosis && (
         <div className="space-y-6">
           {/* Compatibility Score Badge */}
-          <div className={`flex items-center gap-6 p-6 border rounded-sm ${scoreColor(diagnosis.compatibilityScore)}`}>
-            <div className="text-center shrink-0">
-              <div className="text-5xl font-serif font-bold">{diagnosis.compatibilityScore}%</div>
+          <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 p-4 sm:p-6 border rounded-sm ${scoreColor(diagnosis.compatibilityScore)}`}>
+            <div className="text-left sm:text-center shrink-0">
+              <div className="text-4xl sm:text-5xl font-serif font-bold">{diagnosis.compatibilityScore}%</div>
               <div className="text-xs font-semibold tracking-editorial uppercase mt-1">Compatible</div>
             </div>
             <div>
-              <h3 className="font-serif text-lg font-medium mb-1">Formulation Diagnosis Complete</h3>
+              <h3 className="font-serif text-base sm:text-lg font-medium mb-1">Formulation Diagnosis Complete</h3>
               <p className="text-sm opacity-80">
                 Your profile has been analysed across {diagnosis.pHSequence.length} pH checkpoints,{' '}
                 {diagnosis.amRoutine.length + diagnosis.pmRoutine.length} protocol steps, and{' '}
@@ -529,15 +529,19 @@ export default function RegimenArchitect() {
             <h4 className="font-serif text-base text-charcoal font-medium mb-4">pH Gradient Sequence</h4>
             <div className="space-y-2">
               {diagnosis.pHSequence.map((p, i) => (
-                <div key={i} className="flex items-center gap-4 py-2 border-b border-taupe/10 last:border-0">
-                  <span className="text-[10px] font-semibold text-bronze uppercase tracking-editorial w-6">{i + 1}</span>
-                  <span className="text-sm text-charcoal flex-1">{p.step}</span>
-                  <span className="text-xs font-mono text-charcoal-muted">pH {p.ph}</span>
-                  {p.waitMinutes > 0 && (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-sm">
-                      <Clock size={10} /> {p.waitMinutes} min wait
-                    </span>
-                  )}
+                <div key={i} className="flex flex-wrap items-center justify-between gap-2 py-2.5 border-b border-taupe/10 last:border-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span className="text-[10px] font-semibold text-bronze uppercase tracking-editorial w-5 shrink-0">{i + 1}</span>
+                    <span className="text-sm text-charcoal truncate">{p.step}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-mono text-charcoal-muted">pH {p.ph}</span>
+                    {p.waitMinutes > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-sm">
+                        <Clock size={10} /> {p.waitMinutes} min wait
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

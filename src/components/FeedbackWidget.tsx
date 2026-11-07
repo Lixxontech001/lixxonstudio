@@ -108,7 +108,7 @@ export default function FeedbackWidget() {
       {/* Sleek Floating Trigger Button */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 left-6 z-40 px-3.5 py-2.5 rounded-full bg-charcoal text-white flex items-center gap-2 shadow-lg hover:bg-bronze transition-all duration-300 hover:scale-105 border border-white/10 group text-xs tracking-editorial uppercase font-medium"
+        className="fixed bottom-5 left-4 sm:left-6 sm:bottom-6 z-40 px-3.5 py-2.5 rounded-full bg-charcoal text-white flex items-center gap-2 shadow-lg hover:bg-bronze transition-all duration-300 hover:scale-105 border border-white/10 group text-xs tracking-editorial uppercase font-medium"
         aria-label="Open Interactive Feedback Desk"
       >
         <MessageSquare size={16} className="text-bronze-light group-hover:text-white transition-colors" />

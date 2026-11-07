@@ -673,7 +673,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
       )}
       {/* Floating Up Next in Trending Peek Drawer */}
       {progress >= 60 && !nextPeekDismissed && recommended.length > 0 && (
-        <div className="fixed bottom-6 right-6 z-40 max-w-sm w-full bg-white/95 backdrop-blur-md border border-taupe/60 rounded-sm luxury-shadow-lg p-4 animate-in fade-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-20 right-4 left-4 sm:left-auto sm:right-6 sm:bottom-24 z-40 sm:max-w-sm bg-white/95 dark:bg-[#1E1E1E]/95 backdrop-blur-md border border-taupe/60 dark:border-white/10 rounded-sm luxury-shadow-lg p-4 animate-in fade-in slide-in-from-bottom-5 duration-300">
           <div className="flex items-center justify-between mb-2">
             <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-editorial font-bold text-bronze">
               <Flame size={12} className="text-bronze" /> Up Next in Trending
@@ -690,7 +690,7 @@ export default function ArticleReader({ slug }: { slug: string }) {
             to={{ name: 'article', slug: recommended[0].slug }}
             className="group block"
           >
-            <h4 className="font-serif text-sm font-medium text-charcoal group-hover:text-bronze line-clamp-2 leading-snug transition-colors">
+            <h4 className="font-serif text-sm font-medium text-charcoal dark:text-white group-hover:text-bronze dark:group-hover:text-bronze-light line-clamp-2 leading-snug transition-colors">
               {recommended[0].title}
             </h4>
             <p className="text-[11px] text-charcoal-muted mt-1 flex items-center gap-2">

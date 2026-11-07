@@ -165,14 +165,14 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
 
         {/* Web Push Subscription Banner */}
         {!isSubscribed && (
-          <div className="bg-gradient-to-r from-bronze/10 via-taupe-light/40 to-bronze/10 dark:from-bronze/20 dark:to-white/5 p-4 border-b border-taupe/30 dark:border-white/10 flex items-center justify-between gap-3">
+          <div className="bg-gradient-to-r from-bronze/10 via-taupe-light/40 to-bronze/10 dark:from-bronze/20 dark:to-white/5 p-4 border-b border-taupe/30 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <Smartphone size={18} className="text-bronze flex-shrink-0" />
               <div className="min-w-0">
-                <p className="text-xs font-medium text-charcoal dark:text-white truncate">
+                <p className="text-xs font-medium text-charcoal dark:text-white">
                   Get Phone &amp; Desktop Alerts
                 </p>
-                <p className="text-[11px] text-charcoal-muted dark:text-white/60 truncate">
+                <p className="text-[11px] text-charcoal-muted dark:text-white/60">
                   Receive breaking stories &amp; daily reset dispatches directly
                 </p>
               </div>
@@ -181,7 +181,7 @@ export default function NotificationCenterModal({ isOpen, onClose }: Notificatio
               type="button"
               onClick={subscribeToPush}
               disabled={subscribing}
-              className="px-3.5 py-1.5 bg-bronze text-white text-[11px] tracking-editorial uppercase font-semibold rounded-sm hover:bg-bronze-dark transition-all disabled:opacity-50 flex-shrink-0 shadow-xs"
+              className="w-full sm:w-auto text-center px-3.5 py-2 sm:py-1.5 bg-bronze text-white text-[11px] tracking-editorial uppercase font-semibold rounded-sm hover:bg-bronze-dark transition-all disabled:opacity-50 flex-shrink-0 shadow-xs"
             >
               {subscribing ? 'Connecting...' : 'Enable Alerts'}
             </button>

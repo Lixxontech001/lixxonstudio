@@ -29,7 +29,7 @@ export default function FloatingAchievementBadge({ onOpenSalon }: FloatingAchiev
       <button
         type="button"
         onClick={() => setMinimized(false)}
-        className="fixed bottom-6 right-6 z-40 w-11 h-11 rounded-full bg-charcoal text-white dark:bg-white dark:text-charcoal border border-white/20 shadow-2xl flex items-center justify-center hover:bg-bronze transition-all hover:scale-105"
+        className="fixed bottom-16 right-4 sm:bottom-6 sm:right-20 z-40 w-11 h-11 rounded-full bg-charcoal text-white dark:bg-white dark:text-charcoal border border-white/20 shadow-2xl flex items-center justify-center hover:bg-bronze transition-all hover:scale-105"
         title="Open Reader Privileges & Points"
         aria-label="Open Reader Privileges & Points"
       >
@@ -39,7 +39,7 @@ export default function FloatingAchievementBadge({ onOpenSalon }: FloatingAchiev
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2 pointer-events-auto">
+    <div className="fixed bottom-16 right-4 sm:bottom-6 sm:right-20 z-40 flex flex-col items-end gap-2 pointer-events-auto max-w-[calc(100vw-2rem)]">
       {/* Celebration Notification Toast */}
       {recentUnlock && (
         <div className="bg-bronze text-white px-4 py-2.5 rounded-sm shadow-xl border border-bronze-light/30 flex items-center gap-2 text-xs animate-in slide-in-from-bottom-2 fade-in duration-300">

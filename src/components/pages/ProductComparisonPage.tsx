@@ -39,44 +39,49 @@ export default function ProductComparisonPage() {
       {products.length === 0 ? (
         <EmptyState message="Nothing to compare yet. Use “Compare” on any product page." />
       ) : (
-        <div className="overflow-x-auto -mx-4 px-4">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="text-left align-bottom p-3 text-[10px] tracking-editorial uppercase text-charcoal-muted font-normal w-40">Product</th>
-                {products.map(p => (
-                  <th key={p.id} className="p-3 align-top text-left font-normal border-l border-taupe/40">
-                    <div className="relative">
-                      <button onClick={() => remove(p.id)} aria-label={`Remove ${p.name}`} className="absolute -top-1 right-0 p-1 text-charcoal-muted hover:text-red-600"><X size={14} /></button>
-                      <div className="aspect-square w-full max-w-[180px] bg-taupe-light rounded-sm overflow-hidden mb-3">{p.image_url && <img src={displayImageUrl(p.image_url)} alt={p.name} className="w-full h-full object-cover" />}</div>
-                      <Link to={{ name: 'shop-product', slug: p.slug || p.id }} className="font-serif text-lg text-charcoal hover:text-bronze leading-tight">{p.name}</Link>
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => (
-                <tr key={r.label} className="border-t border-taupe/40">
-                  <th scope="row" className="p-3 text-left text-[11px] tracking-editorial uppercase text-charcoal-muted font-normal align-top capitalize">{r.label}</th>
-                  {products.map(p => <td key={p.id} className="p-3 align-top border-l border-taupe/40 text-charcoal-light leading-relaxed">{r.get(p)}</td>)}
+        <>
+          <div className="sm:hidden flex items-center justify-center gap-1.5 text-[11px] text-bronze uppercase tracking-editorial font-medium mb-3">
+            <span>← Swipe horizontally to compare →</span>
+          </div>
+          <div className="overflow-x-auto -mx-4 px-4">
+            <table className="w-full min-w-[640px] border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="text-left align-bottom p-3 text-[10px] tracking-editorial uppercase text-charcoal-muted font-normal w-40">Product</th>
+                  {products.map(p => (
+                    <th key={p.id} className="p-3 align-top text-left font-normal border-l border-taupe/40">
+                      <div className="relative">
+                        <button onClick={() => remove(p.id)} aria-label={`Remove ${p.name}`} className="absolute -top-1 right-0 p-1 text-charcoal-muted hover:text-red-600"><X size={14} /></button>
+                        <div className="aspect-square w-full max-w-[180px] bg-taupe-light rounded-sm overflow-hidden mb-3">{p.image_url && <img src={displayImageUrl(p.image_url)} alt={p.name} className="w-full h-full object-cover" />}</div>
+                        <Link to={{ name: 'shop-product', slug: p.slug || p.id }} className="font-serif text-lg text-charcoal hover:text-bronze leading-tight">{p.name}</Link>
+                      </div>
+                    </th>
+                  ))}
                 </tr>
-              ))}
-              <tr className="border-t border-taupe/40">
-                <th scope="row" className="p-3" />
-                {products.map(p => (
-                  <td key={p.id} className="p-3 border-l border-taupe/40">
-                    {(p.product_type === 'digital' || p.is_digital) && parsePrice(p.price) > 0 ? (
-                      <button onClick={() => { addItem({ id: p.id, name: p.name, slug: p.slug || p.id, price: parsePrice(p.price), image_url: p.image_url, is_digital: true }); openCart(); }} className="inline-flex items-center gap-2 px-4 py-2.5 bg-bronze text-white text-[11px] tracking-editorial uppercase rounded-sm hover:bg-bronze-dark"><ShoppingBag size={14} /> Add to cart</button>
-                    ) : p.affiliate_url && p.affiliate_url !== '#' ? (
-                      <a href={p.affiliate_url} target="_blank" rel="noopener noreferrer sponsored" className="inline-flex px-4 py-2.5 border border-charcoal text-charcoal text-[11px] tracking-editorial uppercase rounded-sm hover:bg-charcoal hover:text-white">Shop now</a>
-                    ) : null}
-                  </td>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.label} className="border-t border-taupe/40">
+                    <th scope="row" className="p-3 text-left text-[11px] tracking-editorial uppercase text-charcoal-muted font-normal align-top capitalize">{r.label}</th>
+                    {products.map(p => <td key={p.id} className="p-3 align-top border-l border-taupe/40 text-charcoal-light leading-relaxed">{r.get(p)}</td>)}
+                  </tr>
                 ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                <tr className="border-t border-taupe/40">
+                  <th scope="row" className="p-3" />
+                  {products.map(p => (
+                    <td key={p.id} className="p-3 border-l border-taupe/40">
+                      {(p.product_type === 'digital' || p.is_digital) && parsePrice(p.price) > 0 ? (
+                        <button onClick={() => { addItem({ id: p.id, name: p.name, slug: p.slug || p.id, price: parsePrice(p.price), image_url: p.image_url, is_digital: true }); openCart(); }} className="inline-flex items-center gap-2 px-4 py-2.5 bg-bronze text-white text-[11px] tracking-editorial uppercase rounded-sm hover:bg-bronze-dark"><ShoppingBag size={14} /> Add to cart</button>
+                      ) : p.affiliate_url && p.affiliate_url !== '#' ? (
+                        <a href={p.affiliate_url} target="_blank" rel="noopener noreferrer sponsored" className="inline-flex px-4 py-2.5 border border-charcoal text-charcoal text-[11px] tracking-editorial uppercase rounded-sm hover:bg-charcoal hover:text-white">Shop now</a>
+                      ) : null}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </main>
   );

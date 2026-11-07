@@ -39,8 +39,8 @@ export default function GiftCardsPage() {
         </p>
       </header>
 
-      <form onSubmit={submit} className="grid md:grid-cols-5 gap-10 items-start">
-        <div className="md:col-span-3 space-y-8">
+      <form onSubmit={submit} className="grid md:grid-cols-5 gap-8 md:gap-10 items-start">
+        <div className="md:col-span-3 space-y-8 order-2 md:order-1">
           <fieldset>
             <legend className="text-[11px] tracking-editorial uppercase text-charcoal-muted dark:text-gray-400 mb-3 font-medium">
               Amount (USD)
@@ -127,14 +127,14 @@ export default function GiftCardsPage() {
         </div>
 
         {/* Live Luxury Digital Gift Card Preview */}
-        <aside className="md:col-span-2">
-          <div className="sticky top-28 space-y-3">
+        <aside className="md:col-span-2 order-1 md:order-2">
+          <div className="md:sticky md:top-28 space-y-3">
             <p className="text-[11px] uppercase tracking-editorial font-semibold text-charcoal-muted dark:text-gray-400 flex items-center gap-1.5">
               <Sparkles size={13} className="text-bronze" /> Live Card Preview
             </p>
 
             <div
-              className="relative aspect-[1.6/1] rounded-md text-cream p-6 flex flex-col justify-between shadow-2xl overflow-hidden border border-amber-500/30 group"
+              className="relative min-h-[220px] aspect-auto sm:aspect-[1.6/1] rounded-md text-cream p-5 sm:p-6 flex flex-col justify-between shadow-2xl overflow-hidden border border-amber-500/30 group"
               style={{
                 background: 'linear-gradient(135deg, #161616 0%, #2A2016 50%, #3D2D1B 100%)',
               }}

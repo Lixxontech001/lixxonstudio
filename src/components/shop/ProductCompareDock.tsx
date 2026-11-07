@@ -64,7 +64,7 @@ export default function ProductCompareDock() {
           onClick={handleGoToCompare}
           className="px-3.5 py-1.5 bg-bronze text-white text-[11px] tracking-editorial uppercase font-medium rounded-full hover:bg-bronze-dark transition-colors flex items-center gap-1 shadow-sm"
         >
-          <span>View Comparison</span>
+          <span className="hidden sm:inline">View Comparison</span><span className="sm:hidden">View</span>
           <ArrowRight size={12} />
         </button>
 
