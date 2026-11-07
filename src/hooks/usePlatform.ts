@@ -684,38 +684,7 @@ export function useAdminSocialShares() {
 }
 
 // ==================== TAG SUGGESTIONS ====================
-const COMMON_TAGS = [
-  'skincare', 'retinol', 'vitamin c', 'hyaluronic acid', 'sunscreen', 'cleanser',
-  'moisturizer', 'serum', 'exfoliation', 'acne', 'anti-aging', 'hydration',
-  'style', 'capsule wardrobe', 'minimalist', 'sustainable', 'fashion', 'outfit',
-  'wellness', 'sleep', 'nutrition', 'mindfulness', 'meditation', 'exercise',
-  'stress', 'mental health', 'self-care', 'routine', 'morning routine', 'evening routine',
-  'ingredients', 'dermatology', 'beauty', 'lifestyle', 'intentional living', 'slow living',
-];
-
-export function suggestTags(content: string, existingTags: string[]): string[] {
-  const lower = content.toLowerCase();
-  const words = lower.split(/\s+/);
-  const wordFreq: Record<string, number> = {};
-  words.forEach(w => {
-    const clean = w.replace(/[^a-z]/g, '');
-    if (clean.length > 3) wordFreq[clean] = (wordFreq[clean] || 0) + 1;
-  });
-
-  const suggested = COMMON_TAGS.filter(tag => {
-    if (existingTags.includes(tag)) return false;
-    return lower.includes(tag);
-  });
-
-  const freqTags = Object.entries(wordFreq)
-    .filter(([, freq]) => freq >= 3)
-    .filter(([word]) => !existingTags.includes(word) && word.length > 4)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([word]) => word);
-
-  return [...new Set([...suggested, ...freqTags])].slice(0, 10);
-}
+export { suggestTags } from '../lib/editorialKeywords';
 
 // ==================== MOST READ THIS WEEK ====================
 export function useMostReadThisWeek() {

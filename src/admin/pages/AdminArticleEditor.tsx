@@ -1,7 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useCategories, useAdminPost, useAdminAuthors, useAdminMedia } from '../../hooks/useSupabase';
-import { useContentTemplates, suggestTags } from '../../hooks/usePlatform';
+import { useContentTemplates } from '../../hooks/usePlatform';
+import {
+  extractEditorialKeywords,
+  extractKeyTakeaways,
+  extractFaqItems,
+  cleanMarkdownContent,
+  generateSmartExcerpt,
+  stripMarkdown,
+} from '../../lib/editorialKeywords';
 import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -169,7 +177,41 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
       const level = (l.trim().match(/^#+/) || [''])[0].length;
       return { level, text: l.trim().replace(/^#+\s/, '') };
     }), [state.content]);
-  const tagSuggestions = useMemo(() => suggestTags(state.content + ' ' + state.title, state.tags), [state.content, state.title, state.tags]);
+  // Sharp keyword & tag extraction
+  const keywordAnalysis = useMemo(() => {
+    return extractEditorialKeywords(state.content, state.title, state.tags);
+  }, [state.content, state.title, state.tags]);
+
+  const tagSuggestions = keywordAnalysis.suggestedTags;
+
+  // Live Focus Keyword Health Diagnostic
+  const focusMetrics = useMemo(() => {
+    const kw = state.focus_keyword.trim().toLowerCase();
+    if (!kw) return null;
+    const titleLower = state.title.toLowerCase();
+    const contentLower = state.content.toLowerCase();
+    const plainText = stripMarkdown(state.content).toLowerCase();
+    const words = plainText.split(/\s+/).filter(Boolean);
+    const totalWords = Math.max(words.length, 1);
+
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx = new RegExp(`\\b${escaped}\\b`, 'gi');
+    const count = (contentLower.match(rx) || []).length;
+    const inTitle = titleLower.includes(kw);
+    const inIntro = words.slice(0, 150).join(' ').includes(kw);
+    const headings = Array.from(state.content.matchAll(/^#{1,6}\s+(.+)$/gm)).map(m => m[1].toLowerCase());
+    const inHeadings = headings.some(h => h.includes(kw));
+    const density = Math.round((count / totalWords) * 1000) / 10;
+
+    return {
+      count,
+      density,
+      inTitle,
+      inIntro,
+      inHeadings,
+      optimal: density >= 0.5 && density <= 2.5 && inTitle && inIntro,
+    };
+  }, [state.focus_keyword, state.title, state.content]);
   const linkSuggestions = useMemo(() => state.content
     .split('\n')
     .flatMap(l => Array.from(l.matchAll(/\]\((\/[^)]+)\)/g)).map(m => m[1]))
@@ -667,17 +709,96 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
               <input id="slug-input" value={state.slug} onChange={e => update('slug', slugify(e.target.value))} placeholder="article-url-slug" className="w-full bg-white border border-gray-200 px-3 py-2 rounded text-sm font-mono text-gray-700" />
             </div>
             <div>
-              <label htmlFor="focus-keyword" className="block text-xs text-gray-500 mb-1 uppercase tracking-wider">Focus keyword</label>
-              <input id="focus-keyword" value={state.focus_keyword} onChange={e => update('focus_keyword', e.target.value)} placeholder="e.g. niacinamide serum" className="w-full bg-white border border-gray-200 px-3 py-2 rounded text-sm" />
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="focus-keyword" className="block text-xs text-gray-500 uppercase tracking-wider font-medium">Focus keyword</label>
+                {focusMetrics && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                    focusMetrics.optimal ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {focusMetrics.density}% density ({focusMetrics.count}x)
+                  </span>
+                )}
+              </div>
+              <input
+                id="focus-keyword"
+                value={state.focus_keyword}
+                onChange={e => update('focus_keyword', e.target.value)}
+                placeholder="e.g. niacinamide serum"
+                className="w-full bg-white border border-gray-200 px-3 py-2 rounded text-sm focus:outline-none focus:border-bronze"
+              />
+
+              {/* Real-time Focus Keyword Diagnostic Indicators */}
+              {focusMetrics && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                    focusMetrics.inTitle ? 'bg-green-50 text-green-700 border-green-200 font-medium' : 'bg-gray-50 text-gray-500 border-gray-200'
+                  }`}>
+                    {focusMetrics.inTitle ? '✓ In Title' : '○ Title missing'}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                    focusMetrics.inIntro ? 'bg-green-50 text-green-700 border-green-200 font-medium' : 'bg-gray-50 text-gray-500 border-gray-200'
+                  }`}>
+                    {focusMetrics.inIntro ? '✓ In Intro' : '○ Intro missing'}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                    focusMetrics.inHeadings ? 'bg-green-50 text-green-700 border-green-200 font-medium' : 'bg-gray-50 text-gray-500 border-gray-200'
+                  }`}>
+                    {focusMetrics.inHeadings ? '✓ In Headings' : '○ Headings missing'}
+                  </span>
+                </div>
+              )}
+
+              {/* Suggested Focus Keywords from Article */}
+              {keywordAnalysis.focusCandidates.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">
+                    Suggested keyphrases:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {keywordAnalysis.focusCandidates.slice(0, 4).map(cand => (
+                      <button
+                        key={cand.phrase}
+                        type="button"
+                        onClick={() => update('focus_keyword', cand.phrase)}
+                        className={`text-xs px-2.5 py-1 rounded-sm border transition-colors ${
+                          state.focus_keyword.toLowerCase() === cand.phrase.toLowerCase()
+                            ? 'bg-bronze text-white border-bronze font-medium'
+                            : 'border-bronze/30 text-bronze hover:bg-bronze/10'
+                        }`}
+                      >
+                        + {cand.phrase}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor="excerpt-input" className="text-xs text-gray-500 uppercase tracking-wider">Excerpt</label>
+              <div className="flex items-center gap-2">
+                <label htmlFor="excerpt-input" className="text-xs text-gray-500 uppercase tracking-wider font-medium">Excerpt</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const generated = generateSmartExcerpt(state.content);
+                    if (generated) {
+                      update('excerpt', generated);
+                      setNotice('Generated excerpt from article introduction.');
+                    } else {
+                      setError('Enter or paste content first to generate an excerpt.');
+                    }
+                  }}
+                  className="text-[11px] text-bronze hover:underline flex items-center gap-1"
+                  title="Extract thesis sentence from article introduction"
+                >
+                  <Sparkles size={11} /> Auto-generate
+                </button>
+              </div>
               <CharCount value={state.excerpt} min={110} max={170} />
             </div>
-            <textarea id="excerpt-input" value={state.excerpt} onChange={e => update('excerpt', e.target.value)} rows={2} placeholder="One or two sentences that make someone click…" className="w-full bg-white border border-gray-200 px-3 py-2 rounded text-sm" />
+            <textarea id="excerpt-input" value={state.excerpt} onChange={e => update('excerpt', e.target.value)} rows={2} placeholder="One or two sentences that make someone click…" className="w-full bg-white border border-gray-200 px-3 py-2 rounded text-sm focus:outline-none focus:border-bronze" />
           </div>
 
           {/* editor + preview */}
@@ -687,6 +808,17 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
                 editor={editor}
                 onAction={action => (action === 'link' ? openLinkDialog() : setMediaPickerMode('inline'))}
                 extra={[
+                  {
+                    id: 'clean',
+                    label: 'Clean formatting',
+                    icon: Sparkles,
+                    run: () => {
+                      if (!state.content.trim()) { setError('No content to clean.'); return; }
+                      const cleaned = cleanMarkdownContent(state.content);
+                      update('content', cleaned);
+                      setNotice('Markdown formatted: removed junk HTML, smart quotes & extra blank lines.');
+                    },
+                  },
                   { id: 'toc', label: 'Outline', icon: FileCode, run: () => setShowToc(t => !t) },
                   { id: 'rev', label: 'Snapshot', icon: History, run: async () => {
                     if (!currentPostId) { setError('Save the article before snapshotting.'); return; }
@@ -860,9 +992,18 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
               </div>
               {tagSuggestions.length > 0 && (
                 <div className="border-t border-gray-100 pt-3">
-                  <p className="text-xs text-gray-400 flex items-center gap-1 mb-2"><Lightbulb size={11} /> Suggested from the text</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-gray-400 flex items-center gap-1"><Lightbulb size={11} /> Suggested from the text</p>
+                    <button
+                      type="button"
+                      onClick={() => update('tags', [...new Set([...state.tags, ...tagSuggestions])])}
+                      className="text-xs text-bronze hover:underline font-medium"
+                    >
+                      + Add all ({tagSuggestions.length})
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {tagSuggestions.map(tag => (
+                    {tagSuggestions.map((tag: string) => (
                       <button key={tag} onClick={() => update('tags', [...state.tags, tag])} className="text-xs px-2 py-1 rounded-full border border-bronze/30 text-bronze hover:bg-bronze/5">+ {tag}</button>
                     ))}
                   </div>
@@ -939,11 +1080,47 @@ export default function AdminArticleEditor({ postId, isNew }: AdminArticleEditor
 
             <SideSection title="Reader extras" icon={Calculator} defaultOpen={false}>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Key takeaways (one per line)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs text-gray-500 font-medium">Key takeaways (one per line)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const items = extractKeyTakeaways(state.content);
+                      if (items.length > 0) {
+                        update('takeaways', items);
+                        setNotice(`Extracted ${items.length} takeaways from content.`);
+                      } else {
+                        setError('No "Key Takeaways" bulleted list found in content.');
+                      }
+                    }}
+                    className="text-[11px] text-bronze hover:underline flex items-center gap-1"
+                    title="Auto-extract bullet points under ## Key Takeaways"
+                  >
+                    <Sparkles size={11} /> Extract from content
+                  </button>
+                </div>
                 <textarea value={state.takeaways.join('\n')} onChange={e => update('takeaways', e.target.value.split('\n'))} rows={3} placeholder="Shown in a box above the article" className="w-full border border-gray-200 px-3 py-2 rounded text-sm" />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">FAQ (rendered + FAQPage schema)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs text-gray-500 font-medium">FAQ (rendered + FAQPage schema)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const items = extractFaqItems(state.content);
+                      if (items.length > 0) {
+                        update('faq', items);
+                        setNotice(`Extracted ${items.length} FAQ questions from content.`);
+                      } else {
+                        setError('No "Frequently Asked Questions" section found in content.');
+                      }
+                    }}
+                    className="text-[11px] text-bronze hover:underline flex items-center gap-1"
+                    title="Auto-extract Q&A from ## FAQ section"
+                  >
+                    <Sparkles size={11} /> Extract FAQ from content
+                  </button>
+                </div>
                 {state.faq.map((f, i) => (
                   <div key={i} className="mb-2 p-2 border border-gray-100 rounded">
                     <input value={f.q} onChange={e => update('faq', state.faq.map((x, k) => (k === i ? { ...x, q: e.target.value } : x)))} placeholder="Question" className="w-full border border-gray-200 px-2 py-1.5 rounded text-sm mb-1" />

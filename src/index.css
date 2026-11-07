@@ -250,6 +250,27 @@
     @apply bg-taupe-light px-2 py-0.5 rounded-sm text-sm font-mono text-charcoal;
   }
 
+  .article-prose a,
+  .article-inline-link {
+    color: #9C6647;
+    text-decoration: underline;
+    text-decoration-color: rgba(156, 102, 71, 0.45);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+    border-radius: 2px;
+    padding: 1px 3px;
+    background-color: rgba(156, 102, 71, 0.07);
+  }
+
+  .article-prose a:hover,
+  .article-inline-link:hover {
+    color: #7A4B31;
+    background-color: rgba(156, 102, 71, 0.16);
+    text-decoration-color: #7A4B31;
+  }
+
   .article-prose img {
     @apply w-full rounded-sm my-8;
     box-shadow: 0 2px 8px rgba(26,26,26,0.04), 0 12px 40px rgba(26,26,26,0.10);
@@ -321,6 +342,19 @@
 .dark .article-prose strong { color: #F2EDE7; }
 .dark .article-prose blockquote { color: #F2EDE7; border-color: #C48B71; }
 .dark .article-prose code { background: #2D2D2D; color: #F2EDE7; }
+.dark .article-prose a,
+.dark .article-inline-link {
+  color: #D9A88E;
+  text-decoration-color: rgba(217, 168, 142, 0.55);
+  background-color: rgba(217, 168, 142, 0.12);
+  font-weight: 500;
+}
+.dark .article-prose a:hover,
+.dark .article-inline-link:hover {
+  color: #FFFFFF;
+  background-color: rgba(217, 168, 142, 0.25);
+  text-decoration-color: #FFFFFF;
+}
 
 @media print {
   body { background: #fff; color: #000; overflow: visible; }

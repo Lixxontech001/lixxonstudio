@@ -68,7 +68,11 @@ export function renderMarkdown(content: string | null | undefined, opts: { gloss
         ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" }[entity] || entity));
       return keep(`<img src="${escapeHtml(displayImageUrl(rawSrc) ?? '')}" alt="${alt}" loading="lazy" decoding="async" />`);
     });
-    t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text, href) => keep(`<a href="${href}">${text}</a>`));
+    t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text, href) => {
+      const isExternal = href.startsWith('http://') || href.startsWith('https://');
+      const extAttrs = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
+      return keep(`<a href="${href}" class="article-inline-link"${extAttrs}>${text}</a>`);
+    });
     t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
          .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
          .replace(/~~(.+?)~~/g, '<s>$1</s>')
